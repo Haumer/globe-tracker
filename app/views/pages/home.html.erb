@@ -10,31 +10,145 @@
     </div>
     <div class="layer-panel-items">
       <label class="layer-item">
-        <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights" checked>
+        <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
         <span class="layer-dot" style="--dot-color: #4fc3f7;"></span>
         Flights
       </label>
-      <label class="layer-item">
+      <label class="layer-item layer-sub">
         <input type="checkbox" data-globe-target="trailsToggle" data-action="change->globe#toggleTrails">
         <span class="layer-dot" style="--dot-color: #4fc3f7; opacity: 0.5;"></span>
-        Trails
+        Flight Trails
+      </label>
+
+      <div class="layer-divider"></div>
+
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="satStationsToggle" data-action="change->globe#toggleSatCategory" data-category="stations">
+        <span class="layer-dot" style="--dot-color: #ff5252;"></span>
+        ISS / Stations
       </label>
       <label class="layer-item">
-        <input type="checkbox" data-globe-target="satellitesToggle" data-action="change->globe#toggleSatellites" checked>
+        <input type="checkbox" data-globe-target="satStarlinkToggle" data-action="change->globe#toggleSatCategory" data-category="starlink">
         <span class="layer-dot" style="--dot-color: #ab47bc;"></span>
-        Satellites
+        Starlink
       </label>
       <label class="layer-item">
-        <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains">
+        <input type="checkbox" data-globe-target="satGpsToggle" data-action="change->globe#toggleSatCategory" data-category="gps-ops">
         <span class="layer-dot" style="--dot-color: #66bb6a;"></span>
-        Trains
+        GPS
       </label>
       <label class="layer-item">
-        <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras">
+        <input type="checkbox" data-globe-target="satWeatherToggle" data-action="change->globe#toggleSatCategory" data-category="weather">
         <span class="layer-dot" style="--dot-color: #ffa726;"></span>
-        Cameras
+        Weather
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="resource">
+        <span class="layer-dot" style="--dot-color: #29b6f6;"></span>
+        Earth Resources
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="science">
+        <span class="layer-dot" style="--dot-color: #ec407a;"></span>
+        Science
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="military">
+        <span class="layer-dot" style="--dot-color: #ef5350;"></span>
+        Military
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="geo">
+        <span class="layer-dot" style="--dot-color: #78909c;"></span>
+        Geostationary
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="iridium">
+        <span class="layer-dot" style="--dot-color: #26c6da;"></span>
+        Iridium
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="oneweb">
+        <span class="layer-dot" style="--dot-color: #7e57c2;"></span>
+        OneWeb
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="planet">
+        <span class="layer-dot" style="--dot-color: #8d6e63;"></span>
+        Planet Labs
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="spire">
+        <span class="layer-dot" style="--dot-color: #9ccc65;"></span>
+        Spire
+      </label>
+      <label class="layer-item layer-sub">
+        <input type="checkbox" data-globe-target="satOrbitsToggle" data-action="change->globe#toggleSatOrbits">
+        <span class="layer-dot" style="--dot-color: #ab47bc; opacity: 0.5;"></span>
+        Orbit Trails
+      </label>
+      <label class="layer-item layer-sub">
+        <input type="checkbox" data-globe-target="satHeatmapToggle" data-action="change->globe#toggleSatHeatmap">
+        <span class="layer-dot" style="--dot-color: #66bb6a; opacity: 0.5;"></span>
+        Coverage Heatmap
+      </label>
+
+      <div class="layer-divider"></div>
+
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
+        <span class="layer-dot" style="--dot-color: #26c6da;"></span>
+        Ships
+      </label>
+
+      <div class="layer-divider"></div>
+
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
+        <span class="layer-dot" style="--dot-color: #4fc3f7; opacity: 0.4;"></span>
+        Country Borders
+      </label>
+      <div class="layer-item layer-sub layer-tool-btn" id="country-select-btn" data-action="click->globe#toggleCountrySelect">
+        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.5;"></span>
+        <i class="fa-solid fa-hand-pointer" style="font-size: 10px; opacity: 0.5;"></i>
+        Select Countries
+      </div>
+      <div class="layer-item layer-sub layer-tool-btn" data-action="click->globe#enterDrawMode">
+        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.5;"></span>
+        <i class="fa-solid fa-circle-dot" style="font-size: 10px; opacity: 0.5;"></i>
+        Draw Select
+      </div>
+
+      <div class="layer-divider"></div>
+
+      <label class="layer-item layer-disabled">
+        <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains" disabled>
+        <span class="layer-dot" style="--dot-color: #66bb6a; opacity: 0.3;"></span>
+        Trains (soon)
+      </label>
+      <label class="layer-item layer-disabled">
+        <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras" disabled>
+        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.3;"></span>
+        Cameras (soon)
       </label>
     </div>
+  </div>
+
+  <div id="entity-list-panel" data-globe-target="entityListPanel" style="display: none;">
+    <button class="detail-close" data-action="click->globe#closeEntityList">&times;</button>
+    <div class="entity-list-header" data-globe-target="entityListHeader"></div>
+    <div class="entity-list-tabs">
+      <button class="entity-tab active" data-action="click->globe#switchEntityTab" data-tab="flights">
+        <i class="fa-solid fa-plane"></i> <span data-globe-target="entityFlightCount">0</span>
+      </button>
+      <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="ships">
+        <i class="fa-solid fa-ship"></i> <span data-globe-target="entityShipCount">0</span>
+      </button>
+      <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="satellites">
+        <i class="fa-solid fa-satellite"></i> <span data-globe-target="entitySatCount">0</span>
+      </button>
+    </div>
+    <div class="entity-list-content" data-globe-target="entityListContent"></div>
   </div>
 
   <div id="detail-panel" data-globe-target="detailPanel" style="display: none;">
@@ -43,4 +157,29 @@
   </div>
 
   <div id="flight-count" data-globe-target="flightCount"></div>
+
+  <div id="controls-panel">
+    <button class="control-btn" data-action="click->globe#resetView" title="Reset to default view">
+      <i class="fa-solid fa-globe"></i>
+    </button>
+    <button class="control-btn" data-action="click->globe#viewTopDown" title="Top-down view">
+      <i class="fa-solid fa-arrow-down"></i>
+    </button>
+    <button class="control-btn" data-action="click->globe#resetTilt" title="Reset tilt">
+      <i class="fa-solid fa-arrows-up-down"></i>
+    </button>
+    <button class="control-btn" data-action="click->globe#zoomIn" title="Zoom in">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+    <button class="control-btn" data-action="click->globe#zoomOut" title="Zoom out">
+      <i class="fa-solid fa-minus"></i>
+    </button>
+  </div>
+
+  <div id="controls-hint">
+    <span>Scroll: zoom</span>
+    <span>Drag: rotate</span>
+    <span>Right-drag: tilt</span>
+    <span>Middle-drag: pan</span>
+  </div>
 </div>

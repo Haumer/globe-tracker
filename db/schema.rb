@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_10_005646) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_10_071636) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -40,6 +40,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_10_005646) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["norad_id"], name: "index_satellites_on_norad_id", unique: true
+  end
+
+  create_table "ships", force: :cascade do |t|
+    t.string "mmsi"
+    t.string "name"
+    t.integer "ship_type"
+    t.float "latitude"
+    t.float "longitude"
+    t.float "speed"
+    t.float "heading"
+    t.float "course"
+    t.string "destination"
+    t.string "flag"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["mmsi"], name: "index_ships_on_mmsi", unique: true
   end
 
   create_table "users", force: :cascade do |t|

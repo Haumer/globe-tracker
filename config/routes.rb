@@ -5,6 +5,7 @@ Rails.application.routes.draw do
   namespace :api do
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index]
+    resources :ships, only: [:index]
   end
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

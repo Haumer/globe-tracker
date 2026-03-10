@@ -99,6 +99,262 @@
     &:has(input:not(:checked)) {
       color: rgba(255, 255, 255, 0.3);
     }
+
+    &.layer-sub {
+      padding-left: 18px;
+      font-size: 12px;
+    }
+
+    &.layer-disabled {
+      opacity: 0.35;
+      cursor: default;
+
+      &:hover {
+        background: none;
+        color: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+
+  .layer-tool-btn {
+    cursor: pointer;
+    gap: 6px;
+
+    &:hover {
+      background: rgba(255, 166, 38, 0.1);
+      color: #ffa726;
+    }
+
+    &.active {
+      background: rgba(255, 166, 38, 0.15);
+      color: #ffa726;
+    }
+  }
+
+  .layer-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 6px 0;
+  }
+}
+
+// ─── Entity list panel ─── right side, scrollable list
+#entity-list-panel {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  z-index: 50;
+  background: rgba(10, 10, 14, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 280px;
+  max-height: calc(100vh - 120px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: detail-in 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+
+  .detail-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    z-index: 1;
+    transition: color 0.15s;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+
+  .entity-list-header {
+    padding: 14px 18px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 36px;
+  }
+
+  .entity-list-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 12px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .entity-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    &.active {
+      background: rgba(79, 195, 247, 0.15);
+      color: #4fc3f7;
+    }
+
+    i {
+      font-size: 10px;
+    }
+  }
+
+  .entity-list-content {
+    overflow-y: auto;
+    max-height: calc(100vh - 240px);
+    padding: 4px 0;
+  }
+
+  .entity-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background 0.12s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+
+  .entity-icon {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .entity-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .entity-detail {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .entity-military {
+    background: rgba(239, 83, 80, 0.06);
+    border-left: 2px solid rgba(239, 83, 80, 0.4);
+
+    &:hover {
+      background: rgba(239, 83, 80, 0.12);
+    }
+  }
+
+  .entity-badge {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border-radius: 3px;
+    vertical-align: middle;
+
+    &.mil {
+      background: rgba(239, 83, 80, 0.2);
+      color: #ef5350;
+      border: 1px solid rgba(239, 83, 80, 0.3);
+    }
+  }
+
+  .entity-select-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+    transition: all 0.15s;
+
+    &.active {
+      background: #ffa726;
+      border-color: #ffa726;
+      box-shadow: 0 0 6px rgba(255, 166, 38, 0.4);
+    }
+  }
+
+  .entity-selected {
+    background: rgba(255, 166, 38, 0.06);
+    border-left: 2px solid rgba(255, 166, 38, 0.4);
+
+    &:hover {
+      background: rgba(255, 166, 38, 0.1);
+    }
+  }
+
+  .entity-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #ffa726;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid rgba(255, 166, 38, 0.15);
+  }
+
+  .entity-clear-btn {
+    background: rgba(255, 166, 38, 0.1);
+    border: 1px solid rgba(255, 166, 38, 0.25);
+    color: #ffa726;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(255, 166, 38, 0.2);
+      border-color: rgba(255, 166, 38, 0.5);
+    }
+  }
+
+  .entity-empty {
+    padding: 20px 14px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.25);
   }
 }
 
@@ -224,6 +480,53 @@
     }
   }
 
+  .detail-regions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .region-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      color: #fff;
+      border-color: rgba(255, 166, 38, 0.4);
+      background: rgba(255, 166, 38, 0.1);
+    }
+
+    &.active {
+      color: #ffa726;
+      border-color: rgba(255, 166, 38, 0.5);
+      background: rgba(255, 166, 38, 0.15);
+    }
+  }
+
+  .detail-country-list {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1.5;
+    max-height: 120px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+  }
+
+  .detail-border-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   .detail-track-btn {
     display: block;
     width: 100%;
@@ -261,6 +564,69 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+// ─── Controls panel ─── bottom-right above detail panel
+#controls-panel {
+  position: fixed;
+  bottom: 24px;
+  right: 320px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(10, 10, 14, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  .control-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+  }
+}
+
+// ─── Controls hint ─── bottom center, fades out
+#controls-hint {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+  animation: hint-fade 8s ease-out forwards;
+
+  span {
+    white-space: nowrap;
+  }
+}
+
+@keyframes hint-fade {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 // ─── Flight count badge ─── top-right subtle

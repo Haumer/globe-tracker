@@ -1,14 +1,20 @@
-require "net/http"
-
 class CelestrakService
   BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
-  CACHE_TTL = 6.hours
+  CACHE_TTL = 6 * 3600 # 6 hours in seconds
 
   CATEGORY_GROUPS = {
     "stations" => "stations",
     "starlink" => "starlink",
     "gps-ops" => "gps-ops",
-    "weather" => "weather"
+    "weather" => "weather",
+    "resource" => "resource",
+    "science" => "science",
+    "military" => "military",
+    "geo" => "geo",
+    "iridium" => "iridium",
+    "oneweb" => "oneweb",
+    "planet" => "planet",
+    "spire" => "spire"
   }.freeze
 
   class << self
@@ -23,8 +29,10 @@ class CelestrakService
     private
 
     def refresh_data_if_needed(category)
+      @fetch_times ||= {}
       cache_key = cache_key_for(category)
-      return if Rails.cache.read(cache_key)
+      last = @fetch_times[cache_key]
+      return if last && (Time.now.to_f - last) < CACHE_TTL
 
       if category.present? && CATEGORY_GROUPS.key?(category)
         fetch_and_upsert(group: CATEGORY_GROUPS[category], category: category)
@@ -35,7 +43,7 @@ class CelestrakService
         end
       end
 
-      Rails.cache.write(cache_key, true, expires_in: CACHE_TTL)
+      @fetch_times[cache_key] = Time.now.to_f
     end
 
     def cache_key_for(category)

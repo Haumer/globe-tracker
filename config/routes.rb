@@ -6,6 +6,7 @@ Rails.application.routes.draw do
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index]
     resources :ships, only: [:index]
+    resources :webcams, only: [:index]
     resource :preferences, only: [:show, :update]
   end
 

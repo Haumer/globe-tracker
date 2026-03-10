@@ -1,105 +1,88 @@
-# Globe Tracker — Future Data Layers
+# Globe Tracker — Features
 
-## Transportation
+## Implemented
 
-### Ships / Maritime (Priority: HIGH)
-- **API:** MarineTraffic or AIS data feeds
-- **Display:** Ship icons with vessel name, type (cargo, tanker, cruise), speed, heading
-- **Update frequency:** Poll every 30 seconds
-- **Rails backend:** `GET /api/ships`
+### Flights (OpenSky Network)
+- Live flights with position interpolation, callsign labels
+- Flight trails, airline filtering (ICAO codes), military detection
+- Airline name lookup (~80 major airlines)
 
-### Space Launches (Priority: LOW)
-- **API:** RocketLaunch.Live or Launch Library 2 API
-- **Display:** Launch site markers with countdown timers, trajectory lines for active launches
-- **Rails backend:** `GET /api/launches`
+### Satellites (CelesTrak TLEs)
+- 12 categories: ISS/Stations, Starlink, GPS, Weather, Earth Resources, Science, Military, Geostationary, Iridium, OneWeb, Planet Labs, Spire
+- Orbit trails, hex footprint (0.12° grid), coverage heatmap, build heatmap on countries
 
-### Air Traffic Control Zones (Priority: LOW)
-- **Display:** ARTCC/FIR boundary polygons overlaid on the globe
-- **Data:** Static GeoJSON boundaries, loaded once
+### Maritime (AIS)
+- Live vessel positions with ship type icons
 
-## Weather & Environment
+### Geography
+- Cities with population data, country borders
+- Country selection (click or draw circle), filtering by region
 
-### Earthquakes (Priority: HIGH)
-- **API:** USGS Earthquake Hazards API (free, no auth required)
-- **Endpoint:** `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson`
-- **Display:** Pulsing circles sized by magnitude, colored by depth
-- **Update frequency:** Poll every 60 seconds
-- **Rails backend:** `GET /api/earthquakes`
+### Events
+- **Earthquakes** — USGS real-time feed (M2.5+ last 24h), magnitude-colored markers with impact rings, detail panel with depth/magnitude/alert
+- **Natural Events** — NASA EONET (wildfires, volcanoes, storms, floods, ice, etc.), category-colored markers with event trails, source links
+- **Live Cameras** — Windy Webcams API (70k+ worldwide), viewport-aware loading, thumbnail preview in detail panel, "Watch Live" link, re-fetches on camera move
 
-### Volcanoes (Priority: MEDIUM)
-- **API:** Smithsonian Global Volcanism Program (GVP)
-- **Display:** Volcano markers with eruption status (active, warning, dormant)
-- **Data:** Refreshed daily
-- **Rails backend:** `GET /api/volcanoes`
+### Infrastructure
+- Collapsible sidebar with organized sections
+- Stats bar (flights, satellites, ships, events, UTC clock)
+- Search across all entity types
+- User preferences (camera, layers, countries, airline filter) saved to DB
+- Hot reload in development (hotwire-livereload)
 
-### Wildfires (Priority: MEDIUM)
-- **API:** NASA FIRMS (Fire Information for Resource Management System), free
-- **Display:** Fire hotspot clusters with intensity coloring
-- **Update frequency:** Every 15 minutes
-- **Rails backend:** `GET /api/wildfires`
+---
 
-### Storms / Hurricanes (Priority: MEDIUM)
-- **API:** NOAA National Hurricane Center / IBTrACS
-- **Display:** Storm tracks with forecast cones, wind speed rings
-- **Rails backend:** `GET /api/storms`
+## Planned
 
-### Lightning Strikes (Priority: LOW)
-- **API:** Blitzortung or similar real-time lightning network
-- **Display:** Flash animations at strike locations
-- **Update frequency:** Real-time via WebSocket if available
-- **Rails backend:** `GET /api/lightning`
+### GDELT Geotagged News
+- Source: `api.gdeltproject.org`
+- Geotagged news articles from worldwide media
+- Pin headlines to locations with category coloring (conflict, politics, disaster, economy)
+- Click for article summary + source link
+- Rate limits: generous, no key needed
 
-### Ocean Currents & Sea Temperature (Priority: LOW)
-- **API:** NOAA / Copernicus Marine Service
-- **Display:** Animated flow lines for currents, heatmap for sea surface temperature
-- **Rails backend:** `GET /api/ocean`
+### Space Launches
+- Source: `ll.thespacedevs.com` (Launch Library 2)
+- Upcoming and recent launches pinned to launch pads
+- Countdown timers, rocket type, mission details
+- Rate limits: 300 requests/day, no key needed
 
-## Space
+### Trains (Real-Time)
+- Digitraffic Finland: `rata.digitraffic.fi/api/v1` — Finnish rail network, free
+- Amtraker: `api.amtraker.com` — US Amtrak trains, free
 
-### Space Debris (Priority: MEDIUM)
-- **API:** CelesTrak catalogued debris TLEs
-- **Display:** Dot cloud of tracked debris objects, computed client-side like satellites
-- **Rails backend:** `GET /api/debris`
+### Weather Overlay
+- OpenWeatherMap tile layers for temperature, precipitation, wind
+- Storm tracking integration with EONET severe storms
 
-### Asteroid Close Approaches (Priority: LOW)
-- **API:** NASA NEO (Near Earth Object) API (free, key required)
-- **Display:** Markers for upcoming close approaches with distance and size info
-- **Rails backend:** `GET /api/asteroids`
+### ISS Live Feed
+- Embed NASA ISS live stream when ISS satellite is selected
+- Crew information overlay
 
-### ISS Live Camera (Priority: LOW)
-- **Display:** Clickable ISS icon that opens the live NASA stream
-- **Data:** ISS position already available from satellite TLEs
+### Submarine Cables
+- TeleGeography submarine cable GeoJSON (static dataset)
+- Cable lines on ocean floor with landing points
 
-## Infrastructure & Connectivity
+### Space Debris
+- CelesTrak catalogued debris TLEs
+- Dot cloud of tracked debris objects
 
-### Submarine Cables (Priority: MEDIUM)
-- **Data:** TeleGeography submarine cable GeoJSON (static dataset)
-- **Display:** Cable lines on the ocean floor with landing points, click for cable details
-- **Rails backend:** `GET /api/cables`
+### Asteroid Close Approaches
+- NASA NEO API (free, key required)
+- Markers for upcoming close approaches with distance and size
 
-### Internet Outages (Priority: LOW)
-- **API:** Cloudflare Radar or IODA (Internet Outage Detection and Analysis)
-- **Display:** Country/region highlights showing connectivity drops
-- **Rails backend:** `GET /api/outages`
+### Internet Outages
+- Cloudflare Radar or IODA
+- Country/region highlights showing connectivity drops
 
-### Power Grid / Blackouts (Priority: LOW)
-- **API:** Publicly available grid status feeds (varies by region)
-- **Display:** Regional overlay showing grid stress or outage areas
-- **Rails backend:** `GET /api/power`
+### Lightning Strikes
+- Blitzortung real-time lightning network
+- Flash animations at strike locations
 
-## Social / Activity
+### Radio Stations
+- Radio Garden or similar
+- Radio icons on globe, click to play live audio
 
-### Live Streams (Priority: LOW)
-- **API:** Twitch / YouTube geotagged live streams
-- **Display:** Stream icons on globe, click to open embed
-- **Rails backend:** `GET /api/streams`
-
-### Geolocated News (Priority: LOW)
-- **API:** GDELT Project or MediaStack
-- **Display:** News event markers clustered by region, click for headlines
-- **Rails backend:** `GET /api/news`
-
-### Radio Stations (Priority: LOW)
-- **API:** Radio Garden or similar
-- **Display:** Radio icons on globe, click to play live audio stream
-- **Rails backend:** `GET /api/radio`
+### Geolocated Live Streams
+- Twitch / YouTube geotagged streams
+- Stream icons on globe, click to open embed

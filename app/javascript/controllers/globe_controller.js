@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips"]
 
   connect() {
     this.flightsVisible = false
@@ -30,6 +30,9 @@ export default class extends Controller {
     this._heatmapLastUpdate = 0         // throttle: timestamp of last computation
     this._sweepEntities = []             // live satellite footprint hexes on country
     this._lastSatPositions = []          // cached for sweep rendering between recomputes
+    this._buildHeatmapActive = false     // "Build Heatmap" mode — country hex grid that accumulates
+    this._buildHeatmapBaseEntities = []  // flat hex grid entities covering selected countries
+    this._buildHeatmapGrid = new Map()   // key "row,col" → { lat, lng, hits: 0, entity: null }
     this.shipsVisible = false
     this.shipData = new Map()
     this.shipInterval = null
@@ -45,6 +48,19 @@ export default class extends Controller {
     this._urbanAreas = []
     this._citiesLoaded = false
     this._cityEntities = []
+    this.earthquakesVisible = false
+    this._earthquakeData = []
+    this._earthquakeEntities = []
+    this.naturalEventsVisible = false
+    this._naturalEventData = []
+    this._naturalEventEntities = []
+    this._eventsInterval = null
+    this.camerasVisible = false
+    this.airportsVisible = false
+    this._airportEntities = []
+    this._webcamData = []
+    this._webcamEntities = []
+    this._webcamLastFetchCenter = null
     this.countrySelectMode = false
     this.drawMode = false
     this._drawCenter = null
@@ -101,8 +117,8 @@ export default class extends Controller {
 
     Cesium.Ion.defaultAccessToken = this.cesiumTokenValue
 
+    this.terrainEnabled = false
     this.viewer = new Cesium.Viewer("cesium-viewer", {
-      terrain: Cesium.Terrain.fromWorldTerrain(),
       baseLayerPicker: false,
       geocoder: false,
       homeButton: false,
@@ -195,6 +211,26 @@ export default class extends Controller {
             this.showSatelliteDetail(satData)
             return
           }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("airport-")) {
+          const icao = entityId.replace("airport-", "")
+          this.showAirportDetail(icao)
+          return
+        }
+        if (typeof entityId === "string" && entityId.startsWith("eq-")) {
+          const eqId = entityId.replace("eq-", "")
+          const eq = this._earthquakeData.find(e => e.id === eqId)
+          if (eq) { this.showEarthquakeDetail(eq); return }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("eonet-")) {
+          const eoId = entityId.replace("eonet-", "")
+          const ev = this._naturalEventData.find(e => e.id === eoId)
+          if (ev) { this.showNaturalEventDetail(ev); return }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("cam-")) {
+          const camId = entityId.replace("cam-", "")
+          const cam = this._webcamData.find(c => String(c.id) === camId)
+          if (cam) { this.showWebcamDetail(cam); return }
         }
       }
 
@@ -765,8 +801,7 @@ export default class extends Controller {
   }
 
   showDetail(id, data) {
-    const labelText = data.entity.label?.text
-    const callsign = (typeof labelText === "string" ? labelText : labelText?._value) || id
+    const callsign = data.callsign || id
     const alt = data.currentAlt
     const speed = data.speed
     const heading = data.heading
@@ -833,39 +868,216 @@ export default class extends Controller {
 
     this.detailPanelTarget.style.display = ""
 
-    // Fetch route info async
-    if (callsign) {
+    // Show cached route immediately, or fetch async
+    const cached = this._routeCache && this._routeCache[callsign]
+    const routeEl = document.getElementById("detail-route")
+    if (cached && routeEl) {
+      routeEl.innerHTML = `
+        <span class="route-airport">${cached.originLabel}</span>
+        <span class="route-arrow">→</span>
+        <span class="route-airport">${cached.destLabel}</span>
+      `
+      if (cached.origin && cached.dest) {
+        this._drawFlightRoute(callsign, cached.origin, cached.dest)
+      }
+    } else if (callsign) {
       this.fetchRoute(callsign)
-    } else {
-      document.getElementById("detail-route").textContent = ""
     }
   }
 
+  get airportDatabase() {
+    return {
+      // North America
+      KATL:{lat:33.64,lng:-84.43,name:"Atlanta"},KLAX:{lat:33.94,lng:-118.41,name:"Los Angeles"},KORD:{lat:41.97,lng:-87.91,name:"Chicago O'Hare"},KDFW:{lat:32.90,lng:-97.04,name:"Dallas/Fort Worth"},KDEN:{lat:39.86,lng:-104.67,name:"Denver"},KJFK:{lat:40.64,lng:-73.78,name:"New York JFK"},KSFO:{lat:37.62,lng:-122.38,name:"San Francisco"},KLAS:{lat:36.08,lng:-115.15,name:"Las Vegas"},KSEA:{lat:47.45,lng:-122.31,name:"Seattle"},KMCO:{lat:28.43,lng:-81.31,name:"Orlando"},KEWR:{lat:40.69,lng:-74.17,name:"Newark"},KMIA:{lat:25.80,lng:-80.29,name:"Miami"},KPHX:{lat:33.44,lng:-112.01,name:"Phoenix"},KIAH:{lat:29.98,lng:-95.34,name:"Houston IAH"},KBOS:{lat:42.36,lng:-71.01,name:"Boston"},KMSP:{lat:44.88,lng:-93.22,name:"Minneapolis"},KFLL:{lat:26.07,lng:-80.15,name:"Fort Lauderdale"},KDTW:{lat:42.21,lng:-83.35,name:"Detroit"},KPHL:{lat:39.87,lng:-75.24,name:"Philadelphia"},KLGA:{lat:40.77,lng:-73.87,name:"New York LaGuardia"},KBWI:{lat:39.18,lng:-76.67,name:"Baltimore"},KSLC:{lat:40.79,lng:-111.98,name:"Salt Lake City"},KDCA:{lat:38.85,lng:-77.04,name:"Washington Reagan"},KIAD:{lat:38.94,lng:-77.46,name:"Washington Dulles"},KTPA:{lat:27.98,lng:-82.53,name:"Tampa"},KSAN:{lat:32.73,lng:-117.19,name:"San Diego"},KPDX:{lat:45.59,lng:-122.60,name:"Portland"},KSTL:{lat:38.75,lng:-90.37,name:"St. Louis"},KHNL:{lat:21.32,lng:-157.92,name:"Honolulu"},PANC:{lat:61.17,lng:-150.00,name:"Anchorage"},CYYZ:{lat:43.68,lng:-79.63,name:"Toronto Pearson"},CYUL:{lat:45.47,lng:-73.74,name:"Montreal"},CYVR:{lat:49.19,lng:-123.18,name:"Vancouver"},CYOW:{lat:45.32,lng:-75.67,name:"Ottawa"},CYCG:{lat:51.11,lng:-114.02,name:"Calgary"},MMMX:{lat:19.44,lng:-99.07,name:"Mexico City"},MMUN:{lat:21.04,lng:-86.87,name:"Cancun"},
+      // Europe
+      EGLL:{lat:51.47,lng:-0.46,name:"London Heathrow"},LFPG:{lat:49.01,lng:2.55,name:"Paris CDG"},EHAM:{lat:52.31,lng:4.77,name:"Amsterdam"},EDDF:{lat:50.03,lng:8.57,name:"Frankfurt"},LEMD:{lat:40.47,lng:-3.56,name:"Madrid"},LEBL:{lat:41.30,lng:2.08,name:"Barcelona"},LIRF:{lat:41.80,lng:12.25,name:"Rome Fiumicino"},EDDM:{lat:48.35,lng:11.79,name:"Munich"},EGKK:{lat:51.15,lng:-0.18,name:"London Gatwick"},LSZH:{lat:47.46,lng:8.55,name:"Zurich"},LOWW:{lat:48.11,lng:16.57,name:"Vienna"},EKCH:{lat:55.62,lng:12.66,name:"Copenhagen"},ENGM:{lat:60.19,lng:11.10,name:"Oslo"},ESSA:{lat:59.65,lng:17.94,name:"Stockholm Arlanda"},EFHK:{lat:60.32,lng:24.96,name:"Helsinki"},EIDW:{lat:53.42,lng:-6.27,name:"Dublin"},EBBR:{lat:50.90,lng:4.48,name:"Brussels"},LPPT:{lat:38.77,lng:-9.13,name:"Lisbon"},LGAV:{lat:37.94,lng:23.94,name:"Athens"},LTFM:{lat:41.26,lng:28.74,name:"Istanbul"},UUEE:{lat:55.97,lng:37.41,name:"Moscow SVO"},EPWA:{lat:52.17,lng:20.97,name:"Warsaw"},LKPR:{lat:50.10,lng:14.26,name:"Prague"},LHBP:{lat:47.44,lng:19.26,name:"Budapest"},LROP:{lat:44.57,lng:26.08,name:"Bucharest"},EDDL:{lat:51.29,lng:6.77,name:"Dusseldorf"},EDDB:{lat:52.36,lng:13.51,name:"Berlin"},EGPH:{lat:55.95,lng:-3.37,name:"Edinburgh"},EGCC:{lat:53.35,lng:-2.28,name:"Manchester"},LFPO:{lat:48.72,lng:2.36,name:"Paris Orly"},
+      // Middle East
+      OMDB:{lat:25.25,lng:55.36,name:"Dubai"},OEJN:{lat:21.68,lng:39.16,name:"Jeddah"},OERK:{lat:24.96,lng:46.70,name:"Riyadh"},OTHH:{lat:25.27,lng:51.61,name:"Doha"},OMAA:{lat:24.44,lng:54.65,name:"Abu Dhabi"},OBBI:{lat:26.27,lng:50.63,name:"Bahrain"},LLBG:{lat:32.01,lng:34.89,name:"Tel Aviv"},OIIE:{lat:35.41,lng:51.15,name:"Tehran"},OKBK:{lat:29.23,lng:47.97,name:"Kuwait"},OOMS:{lat:23.59,lng:58.28,name:"Muscat"},
+      // Asia
+      RJTT:{lat:35.55,lng:139.78,name:"Tokyo Haneda"},RJAA:{lat:35.76,lng:140.39,name:"Tokyo Narita"},VHHH:{lat:22.31,lng:113.91,name:"Hong Kong"},WSSS:{lat:1.36,lng:103.99,name:"Singapore"},RKSI:{lat:37.46,lng:126.44,name:"Seoul Incheon"},ZBAA:{lat:40.08,lng:116.58,name:"Beijing"},ZSPD:{lat:31.14,lng:121.81,name:"Shanghai Pudong"},VTBS:{lat:13.69,lng:100.75,name:"Bangkok"},RPLL:{lat:14.51,lng:121.02,name:"Manila"},WMKK:{lat:2.75,lng:101.71,name:"Kuala Lumpur"},VABB:{lat:19.09,lng:72.87,name:"Mumbai"},VIDP:{lat:28.57,lng:77.10,name:"Delhi"},VECC:{lat:22.65,lng:88.45,name:"Kolkata"},VOBL:{lat:13.20,lng:77.71,name:"Bangalore"},VOMM:{lat:12.99,lng:80.17,name:"Chennai"},ZGGG:{lat:23.39,lng:113.30,name:"Guangzhou"},ZUUU:{lat:30.58,lng:103.95,name:"Chengdu"},RCTP:{lat:25.08,lng:121.23,name:"Taipei"},WIII:{lat:-6.13,lng:106.66,name:"Jakarta"},VNKT:{lat:27.70,lng:85.36,name:"Kathmandu"},
+      // Oceania
+      YSSY:{lat:-33.95,lng:151.18,name:"Sydney"},YMML:{lat:-37.67,lng:144.84,name:"Melbourne"},YBBN:{lat:-27.38,lng:153.12,name:"Brisbane"},NZAA:{lat:-37.01,lng:174.79,name:"Auckland"},NZWN:{lat:-41.33,lng:174.81,name:"Wellington"},
+      // Africa
+      FAOR:{lat:-26.14,lng:28.25,name:"Johannesburg"},HECA:{lat:30.12,lng:31.41,name:"Cairo"},GMMN:{lat:33.37,lng:-7.59,name:"Casablanca"},DNMM:{lat:6.58,lng:3.32,name:"Lagos"},HKJK:{lat:-1.32,lng:36.93,name:"Nairobi"},HAAB:{lat:8.98,lng:38.80,name:"Addis Ababa"},FALE:{lat:-29.61,lng:31.12,name:"Durban"},FACT:{lat:-33.96,lng:18.60,name:"Cape Town"},DTTA:{lat:36.85,lng:10.23,name:"Tunis"},
+      // South America
+      SBGR:{lat:-23.43,lng:-46.47,name:"Sao Paulo GRU"},SCEL:{lat:-33.39,lng:-70.79,name:"Santiago"},SKBO:{lat:4.70,lng:-74.15,name:"Bogota"},SEQM:{lat:-0.13,lng:-78.49,name:"Quito"},SPJC:{lat:-12.02,lng:-77.11,name:"Lima"},SAEZ:{lat:-34.82,lng:-58.54,name:"Buenos Aires EZE"},SBBR:{lat:-15.87,lng:-47.92,name:"Brasilia"},SBGL:{lat:-22.81,lng:-43.25,name:"Rio de Janeiro GIG"},SVMI:{lat:10.60,lng:-66.99,name:"Caracas"},
+    }
+  }
+
+  _getAirport(icao) {
+    return this.airportDatabase[icao] || null
+  }
+
   async fetchRoute(callsign) {
-    const routeEl = document.getElementById("detail-route")
-    if (!routeEl) return
+    // Store which callsign we're fetching for — if it changes, discard stale results
+    this._fetchingRouteFor = callsign
 
     try {
       const response = await fetch(`/api/flights/${encodeURIComponent(callsign)}`)
+      if (this._fetchingRouteFor !== callsign) return
+
+      const el = document.getElementById("detail-route")
+
       if (!response.ok) {
-        routeEl.textContent = ""
+        console.warn("Route API error:", response.status)
+        if (el) el.innerHTML = `<span class="route-unavailable">Route unavailable</span>`
         return
       }
 
       const data = await response.json()
       if (data.error || !data.route || data.route.length < 2) {
-        routeEl.textContent = ""
+        console.warn("No route data:", data)
+        if (el) el.innerHTML = `<span class="route-unavailable">Route not found</span>`
         return
       }
 
-      routeEl.innerHTML = `
-        <span class="route-airport">${data.route[0]}</span>
-        <span class="route-arrow">→</span>
-        <span class="route-airport">${data.route[data.route.length - 1]}</span>
-      `
-    } catch {
-      routeEl.textContent = ""
+      const originIcao = data.route[0]
+      const destIcao = data.route[data.route.length - 1]
+      const origin = this._getAirport(originIcao)
+      const dest = this._getAirport(destIcao)
+
+      const originLabel = origin ? `${origin.name} (${originIcao})` : originIcao
+      const destLabel = dest ? `${dest.name} (${destIcao})` : destIcao
+
+      // Cache route for this callsign
+      if (!this._routeCache) this._routeCache = {}
+      this._routeCache[callsign] = { originIcao, destIcao, origin, dest, originLabel, destLabel }
+
+      // Update the route element if still in DOM
+      if (el) {
+        el.innerHTML = `
+          <span class="route-airport">${originLabel}</span>
+          <span class="route-arrow">→</span>
+          <span class="route-airport">${destLabel}</span>
+        `
+      }
+
+      // Draw route arc on globe
+      if (origin && dest) {
+        this._drawFlightRoute(callsign, origin, dest)
+      }
+    } catch (e) {
+      console.warn("Route fetch failed:", e)
+      const el = document.getElementById("detail-route")
+      if (el) el.innerHTML = `<span class="route-unavailable">Route unavailable</span>`
     }
+  }
+
+  _drawFlightRoute(callsign, origin, dest) {
+    const Cesium = window.Cesium
+    const dataSource = this.getFlightsDataSource()
+
+    // Remove previous route arc
+    this._clearFlightRoute()
+
+    this._flightRouteEntities = []
+
+    // Build great-circle arc with intermediate points
+    const points = this._greatCirclePoints(origin.lat, origin.lng, dest.lat, dest.lng, 80)
+    const positions = points.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, 0))
+
+    // Route arc line
+    const arc = dataSource.entities.add({
+      id: `route-arc-${callsign}`,
+      polyline: {
+        positions,
+        width: 2,
+        material: new Cesium.PolylineDashMaterialProperty({
+          color: Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.5),
+          dashLength: 12,
+        }),
+        clampToGround: true,
+      },
+    })
+    this._flightRouteEntities.push(arc)
+
+    // Origin airport marker
+    const originEntity = dataSource.entities.add({
+      id: `route-origin-${callsign}`,
+      position: Cesium.Cartesian3.fromDegrees(origin.lng, origin.lat, 0),
+      point: {
+        pixelSize: 8,
+        color: Cesium.Color.fromCssColorString("#66bb6a").withAlpha(0.9),
+        outlineColor: Cesium.Color.fromCssColorString("#66bb6a").withAlpha(0.3),
+        outlineWidth: 4,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: origin.name,
+        font: "10px JetBrains Mono, monospace",
+        fillColor: Cesium.Color.fromCssColorString("#66bb6a"),
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.TOP,
+        pixelOffset: new Cesium.Cartesian2(0, 10),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
+      },
+    })
+    this._flightRouteEntities.push(originEntity)
+
+    // Destination airport marker
+    const destEntity = dataSource.entities.add({
+      id: `route-dest-${callsign}`,
+      position: Cesium.Cartesian3.fromDegrees(dest.lng, dest.lat, 0),
+      point: {
+        pixelSize: 8,
+        color: Cesium.Color.fromCssColorString("#ef5350").withAlpha(0.9),
+        outlineColor: Cesium.Color.fromCssColorString("#ef5350").withAlpha(0.3),
+        outlineWidth: 4,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: dest.name,
+        font: "10px JetBrains Mono, monospace",
+        fillColor: Cesium.Color.fromCssColorString("#ef5350"),
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.TOP,
+        pixelOffset: new Cesium.Cartesian2(0, 10),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
+      },
+    })
+    this._flightRouteEntities.push(destEntity)
+  }
+
+  _clearFlightRoute() {
+    if (!this._flightRouteEntities) return
+    const ds = this._flightsDataSource
+    if (ds) {
+      this._flightRouteEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._flightRouteEntities = []
+  }
+
+  _greatCirclePoints(lat1, lng1, lat2, lng2, numPoints) {
+    const toRad = d => d * Math.PI / 180
+    const toDeg = r => r * 180 / Math.PI
+    const φ1 = toRad(lat1), λ1 = toRad(lng1)
+    const φ2 = toRad(lat2), λ2 = toRad(lng2)
+
+    const d = 2 * Math.asin(Math.sqrt(
+      Math.sin((φ2 - φ1) / 2) ** 2 +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin((λ2 - λ1) / 2) ** 2
+    ))
+
+    const points = []
+    for (let i = 0; i <= numPoints; i++) {
+      const f = i / numPoints
+      const A = Math.sin((1 - f) * d) / Math.sin(d)
+      const B = Math.sin(f * d) / Math.sin(d)
+      const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2)
+      const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2)
+      const z = A * Math.sin(φ1) + B * Math.sin(φ2)
+      points.push({
+        lat: toDeg(Math.atan2(z, Math.sqrt(x * x + y * y))),
+        lng: toDeg(Math.atan2(y, x)),
+      })
+    }
+    return points
   }
 
   showSatelliteDetail(satData) {
@@ -940,6 +1152,7 @@ export default class extends Controller {
     this.detailPanelTarget.style.display = "none"
     this.stopTracking()
     this.clearSatFootprint()
+    this._clearFlightRoute()
   }
 
   // ── Entity List Panel ─────────────────────────────────────
@@ -1337,6 +1550,82 @@ export default class extends Controller {
       }
     }
 
+    // Search earthquakes
+    for (const eq of this._earthquakeData) {
+      if (results.length >= MAX) break
+      const title = (eq.title || "").toLowerCase()
+      if (title.includes(q) || `m${eq.mag}`.includes(q)) {
+        results.push({
+          type: "earthquake",
+          icon: "fa-house-crack",
+          color: "#ff7043",
+          name: `M${eq.mag.toFixed(1)}`,
+          detail: eq.title,
+          lat: eq.lat,
+          lng: eq.lng,
+          alt: 500000,
+        })
+      }
+    }
+
+    // Search natural events
+    for (const ev of this._naturalEventData) {
+      if (results.length >= MAX) break
+      const title = (ev.title || "").toLowerCase()
+      const cat = (ev.categoryTitle || "").toLowerCase()
+      if (title.includes(q) || cat.includes(q)) {
+        const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
+        results.push({
+          type: "event",
+          icon: `fa-${catInfo.icon}`,
+          color: catInfo.color,
+          name: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
+          detail: ev.categoryTitle,
+          lat: ev.lat,
+          lng: ev.lng,
+          alt: 500000,
+        })
+      }
+    }
+
+    // Search airports
+    if (this.airportsVisible) {
+      for (const [icao, ap] of Object.entries(this.airportDatabase)) {
+        if (results.length >= MAX) break
+        if (icao.toLowerCase().includes(q) || ap.name.toLowerCase().includes(q)) {
+          results.push({
+            type: "airport",
+            icon: "fa-plane-departure",
+            color: "#ffd54f",
+            name: ap.name,
+            detail: icao,
+            lat: ap.lat,
+            lng: ap.lng,
+            alt: 200000,
+          })
+        }
+      }
+    }
+
+    // Search webcams
+    for (const w of this._webcamData) {
+      if (results.length >= MAX) break
+      const title = (w.title || "").toLowerCase()
+      const city = (w.city || "").toLowerCase()
+      if (title.includes(q) || city.includes(q)) {
+        results.push({
+          type: "webcam",
+          icon: "fa-video",
+          color: "#29b6f6",
+          name: w.title.length > 30 ? w.title.substring(0, 28) + "…" : w.title,
+          detail: [w.city, w.country].filter(Boolean).join(", "),
+          lat: w.lat,
+          lng: w.lng,
+          alt: 50000,
+        })
+      }
+    }
+
     // Search cities
     for (const c of this._citiesData) {
       if (results.length >= MAX) break
@@ -1556,6 +1845,15 @@ export default class extends Controller {
       this.renderSatHeatmap()
     }
 
+    // Update build heatmap (uses _lastSatPositions computed by renderSatHeatmap or standalone)
+    if (this._buildHeatmapActive && this._buildHeatmapGrid.size > 0) {
+      // Compute sat positions if heatmap isn't doing it
+      if (!this.satHeatmapVisible && (Date.now() - this._heatmapLastUpdate) > 10000) {
+        this._computeSatPositions()
+      }
+      this._updateBuildHeatmap()
+    }
+
     this._updateStats()
   }
 
@@ -1741,6 +2039,160 @@ export default class extends Controller {
       this._sweepEntities.forEach(e => ds.entities.remove(e))
     }
     this._sweepEntities = []
+  }
+
+  _computeSatPositions() {
+    const sat = window.satellite
+    if (!sat || this.satelliteData.length === 0) return
+
+    const nowMs = Date.now()
+    this._heatmapLastUpdate = nowMs
+    const now = new Date(nowMs)
+    const gmst = sat.gstime(now)
+
+    const positions = []
+    for (const s of this.satelliteData) {
+      if (!this.satCategoryVisible[s.category]) continue
+      if (positions.length >= 200) break
+      try {
+        const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
+        const posVel = sat.propagate(satrec, now)
+        if (!posVel.position) continue
+        const posGd = sat.eciToGeodetic(posVel.position, gmst)
+        const sLng = sat.degreesLong(posGd.longitude)
+        const sLat = sat.degreesLat(posGd.latitude)
+        const altKm = posGd.height
+        if (isNaN(sLng) || isNaN(sLat) || isNaN(altKm)) continue
+        const R = 6371
+        const scanRadiusKm = R * Math.acos(R / (R + altKm))
+        const color = this.satCategoryColors[s.category] || "#ab47bc"
+        positions.push({ lat: sLat, lng: sLng, radiusKm: scanRadiusKm, color })
+      } catch { /* skip */ }
+    }
+
+    this._lastSatPositions = positions
+    return positions
+  }
+
+  // ── Build Heatmap ─────────────────────────────────────────
+  // Projects a full hex grid onto selected countries, then accumulates
+  // satellite sweep hits onto those hexes over time.
+
+  toggleBuildHeatmap() {
+    this._buildHeatmapActive = this.hasBuildHeatmapToggleTarget && this.buildHeatmapToggleTarget.checked
+    if (!this._buildHeatmapActive) {
+      this._clearBuildHeatmap()
+    } else {
+      this._initBuildHeatmap()
+    }
+    this._savePrefs()
+  }
+
+  _initBuildHeatmap() {
+    this._clearBuildHeatmap()
+    if (this.selectedCountries.size === 0 || !this._selectedCountriesBbox) return
+
+    const Cesium = window.Cesium
+    const dataSource = this.getSatellitesDataSource()
+    const bb = this._selectedCountriesBbox
+
+    const S = 0.12
+    const rowStep = S * 1.5
+    const colStep = S * Math.sqrt(3)
+    let rendered = 0
+
+    for (let la = bb.minLat; la <= bb.maxLat; la += rowStep) {
+      for (let ln = bb.minLng; ln <= bb.maxLng; ln += colStep) {
+        if (rendered >= 8000) break
+        const cell = this._snapToHexGrid(la, ln)
+        if (this._buildHeatmapGrid.has(cell.key)) continue
+        if (!this._pointInSelectedCountries(cell.lat, cell.lng)) continue
+
+        const verts = this._buildHexVerts(cell.lat, cell.lng, S)
+        const entity = dataSource.entities.add({
+          polygon: {
+            hierarchy: verts,
+            material: Cesium.Color.fromCssColorString("#0d47a1").withAlpha(0.06),
+            outline: true,
+            outlineColor: Cesium.Color.fromCssColorString("#0d47a1").withAlpha(0.15),
+            outlineWidth: 1,
+            height: 0,
+          },
+        })
+        this._buildHeatmapGrid.set(cell.key, { lat: cell.lat, lng: cell.lng, hits: 0, entity })
+        this._buildHeatmapBaseEntities.push(entity)
+        rendered++
+      }
+    }
+  }
+
+  _clearBuildHeatmap() {
+    const ds = this._satellitesDataSource
+    if (ds) {
+      this._buildHeatmapBaseEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._buildHeatmapBaseEntities = []
+    this._buildHeatmapGrid.clear()
+  }
+
+  _updateBuildHeatmap() {
+    if (!this._buildHeatmapActive || this._buildHeatmapGrid.size === 0) return
+
+    const Cesium = window.Cesium
+    const positions = this._lastSatPositions || []
+    if (positions.length === 0) return
+
+    const S = 0.12
+    const rowStep = S * 1.5
+    const colStep = S * Math.sqrt(3)
+
+    // For each satellite, stamp hits on base grid cells within its scan radius
+    for (const sp of positions) {
+      const radiusDeg = sp.radiusKm / 111.32
+      const cosCenter = Math.cos(sp.lat * Math.PI / 180) || 0.01
+
+      for (let la = sp.lat - radiusDeg; la <= sp.lat + radiusDeg; la += rowStep) {
+        for (let ln = sp.lng - radiusDeg; ln <= sp.lng + radiusDeg; ln += colStep) {
+          const cell = this._snapToHexGrid(la, ln)
+          const gridCell = this._buildHeatmapGrid.get(cell.key)
+          if (!gridCell) continue
+
+          const dLat = (gridCell.lat - sp.lat) * 111.32
+          const dLng = (gridCell.lng - sp.lng) * 111.32 * cosCenter
+          const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+          if (distKm > sp.radiusKm) continue
+
+          gridCell.hits++
+        }
+      }
+    }
+
+    // Update visuals based on hit count
+    let maxHits = 1
+    for (const cell of this._buildHeatmapGrid.values()) {
+      if (cell.hits > maxHits) maxHits = cell.hits
+    }
+
+    for (const cell of this._buildHeatmapGrid.values()) {
+      if (cell.hits === 0) continue
+      const t = Math.min(cell.hits / Math.max(maxHits, 1), 1)
+
+      let color
+      if (t < 0.2) color = Cesium.Color.fromCssColorString("#0d47a1")
+      else if (t < 0.4) color = Cesium.Color.fromCssColorString("#00838f")
+      else if (t < 0.6) color = Cesium.Color.fromCssColorString("#2e7d32")
+      else if (t < 0.8) color = Cesium.Color.fromCssColorString("#f9a825")
+      else color = Cesium.Color.fromCssColorString("#e65100")
+
+      const alpha = 0.15 + t * 0.45
+      const extHeight = 100 + cell.hits * 1500
+
+      if (cell.entity && cell.entity.polygon) {
+        cell.entity.polygon.material = color.withAlpha(alpha)
+        cell.entity.polygon.outlineColor = color.withAlpha(Math.min(alpha + 0.15, 0.8))
+        cell.entity.polygon.extrudedHeight = extHeight
+      }
+    }
   }
 
   // Snap lat/lng to nearest hex cell on a fixed global grid
@@ -1986,64 +2438,43 @@ export default class extends Controller {
       return
     }
 
-    // Default: radial hex footprint around nadir
-    const numRings = 4
-    const hexSize = scanRadiusKm / (numRings + 0.5)
-    const sqrt3 = Math.sqrt(3)
-    const cosLat = Math.cos(lat * Math.PI / 180)
+    // Default: radial hex footprint using 0.12° snapped grid (matches heatmap)
+    const S = 0.12
+    const rowStep = S * 1.5
+    const colStep = S * Math.sqrt(3)
+    const cosCenter = Math.cos(lat * Math.PI / 180) || 0.01
+    let rendered = 0
 
-    const hexCenters = [{ q: 0, r: 0 }]
-    const cubeDirs = [
-      { q: 1, r: 0 },  { q: 1, r: -1 }, { q: 0, r: -1 },
-      { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 },
-    ]
+    for (let la = lat - scanRadiusDeg; la <= lat + scanRadiusDeg; la += rowStep) {
+      for (let ln = lng - scanRadiusDeg / cosCenter; ln <= lng + scanRadiusDeg / cosCenter; ln += colStep) {
+        if (rendered >= 500) break
+        const cell = this._snapToHexGrid(la, ln)
+        const dLat = (cell.lat - lat) * 111.32
+        const dLng = (cell.lng - lng) * 111.32 * cosCenter
+        const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+        if (distKm > scanRadiusKm) continue
 
-    for (let ring = 1; ring <= numRings; ring++) {
-      let q = ring, r = 0
-      for (let d = 0; d < 6; d++) {
-        for (let s = 0; s < ring; s++) {
-          hexCenters.push({ q, r })
-          q += cubeDirs[(d + 2) % 6].q
-          r += cubeDirs[(d + 2) % 6].r
-        }
+        const verts = this._buildHexVerts(cell.lat, cell.lng, S)
+        const falloff = Math.max(0, 1 - distKm / scanRadiusKm)
+        const fillAlpha = 0.08 + falloff * 0.25
+        const outlineAlpha = 0.25 + falloff * 0.55
+        const extHeight = falloff * 800
+
+        const entity = dataSource.entities.add({
+          polygon: {
+            hierarchy: verts,
+            material: baseColor.withAlpha(fillAlpha),
+            outline: true,
+            outlineColor: baseColor.withAlpha(outlineAlpha),
+            outlineWidth: 1.5,
+            height: 0,
+            extrudedHeight: extHeight,
+          },
+        })
+        this._satFootprintEntities.push(entity)
+        rendered++
       }
     }
-
-    hexCenters.forEach(({ q, r }) => {
-      const cx = hexSize * 1.5 * q
-      const cy = hexSize * sqrt3 * (r + q / 2)
-      const dist = Math.sqrt(cx * cx + cy * cy)
-      if (dist > scanRadiusKm * 1.05) return
-
-      const verts = []
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i
-        const vx = cx + hexSize * 0.93 * Math.cos(angle)
-        const vy = cy + hexSize * 0.93 * Math.sin(angle)
-        verts.push(Cesium.Cartesian3.fromDegrees(
-          lng + vx / (111.32 * cosLat),
-          lat + vy / 111.32,
-          0
-        ))
-      }
-
-      const falloff = Math.max(0, 1 - dist / scanRadiusKm)
-      const fillAlpha = 0.08 + falloff * 0.25
-      const outlineAlpha = 0.25 + falloff * 0.55
-      const extHeight = falloff * 800
-      const entity = dataSource.entities.add({
-        polygon: {
-          hierarchy: verts,
-          material: baseColor.withAlpha(fillAlpha),
-          outline: true,
-          outlineColor: baseColor.withAlpha(outlineAlpha),
-          outlineWidth: 1.5,
-          height: 0,
-          extrudedHeight: extHeight,
-        },
-      })
-      this._satFootprintEntities.push(entity)
-    })
 
     // Nadir line
     this._satFootprintEntities.push(dataSource.entities.add({
@@ -2180,6 +2611,720 @@ export default class extends Controller {
       const satData = this.satelliteData.find(s => s.norad_id === this.selectedSatNoradId)
       if (satData) this.showSatelliteDetail(satData)
     }
+  }
+
+  // ── Airports ────────────────────────────────────────────
+
+  getAirportsDataSource() {
+    const Cesium = window.Cesium
+    if (!this._airportsDataSource) {
+      this._airportsDataSource = new Cesium.CustomDataSource("airports")
+      this.viewer.dataSources.add(this._airportsDataSource)
+    }
+    return this._airportsDataSource
+  }
+
+  toggleAirports() {
+    this.airportsVisible = this.hasAirportsToggleTarget && this.airportsToggleTarget.checked
+    if (this.airportsVisible) {
+      this.renderAirports()
+    } else {
+      this._clearAirportEntities()
+    }
+    this._savePrefs()
+  }
+
+  renderAirports() {
+    const Cesium = window.Cesium
+    this._clearAirportEntities()
+    if (!this.airportsVisible) return
+
+    const dataSource = this.getAirportsDataSource()
+    dataSource.show = true
+    const hasFilter = this.hasActiveFilter()
+
+    let entries = Object.entries(this.airportDatabase)
+
+    // Filter to selected countries if active (match by checking if airport is inside selected country polygons)
+    if (hasFilter) {
+      entries = entries.filter(([, ap]) => this.pointPassesFilter(ap.lat, ap.lng))
+    }
+
+    const accentColor = Cesium.Color.fromCssColorString("#ffd54f")
+
+    for (const [icao, ap] of entries) {
+      const entity = dataSource.entities.add({
+        id: `airport-${icao}`,
+        position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 100),
+        point: {
+          pixelSize: 6,
+          color: accentColor.withAlpha(0.9),
+          outlineColor: accentColor.withAlpha(0.35),
+          outlineWidth: 4,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 1e7, 0.4),
+        },
+        label: {
+          text: icao,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: accentColor.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          pixelOffset: new Cesium.Cartesian2(0, 10),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+        },
+      })
+      this._airportEntities.push(entity)
+    }
+  }
+
+  _clearAirportEntities() {
+    const ds = this._airportsDataSource
+    if (ds) this._airportEntities.forEach(e => ds.entities.remove(e))
+    this._airportEntities = []
+  }
+
+  showAirportDetail(icao) {
+    const ap = this._getAirport(icao)
+    if (!ap) return
+
+    // Count flights using this airport
+    let departures = 0, arrivals = 0
+    // Check cached route data if available
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign"><i class="fa-solid fa-plane-departure" style="color: #ffd54f;"></i> ${ap.name}</div>
+      <div class="detail-country">${icao}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">ICAO</span>
+          <span class="detail-value">${icao}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Coordinates</span>
+          <span class="detail-value">${ap.lat.toFixed(2)}°, ${ap.lng.toFixed(2)}°</span>
+        </div>
+      </div>
+    `
+    this.detailPanelTarget.style.display = ""
+
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 200000),
+      duration: 1.5,
+    })
+  }
+
+  // ── Events (Earthquakes + NASA EONET) ────────────────────
+
+  getEventsDataSource() {
+    const Cesium = window.Cesium
+    if (!this._eventsDataSource) {
+      this._eventsDataSource = new Cesium.CustomDataSource("events")
+      this.viewer.dataSources.add(this._eventsDataSource)
+    }
+    return this._eventsDataSource
+  }
+
+  toggleEarthquakes() {
+    this.earthquakesVisible = this.hasEarthquakesToggleTarget && this.earthquakesToggleTarget.checked
+    if (this.earthquakesVisible) {
+      this.fetchEarthquakes()
+    } else {
+      this._clearEarthquakeEntities()
+      this._earthquakeData = []
+    }
+    this._startEventsRefresh()
+    this._updateStats()
+    this._savePrefs()
+  }
+
+  toggleNaturalEvents() {
+    this.naturalEventsVisible = this.hasNaturalEventsToggleTarget && this.naturalEventsToggleTarget.checked
+    if (this.naturalEventsVisible) {
+      this.fetchNaturalEvents()
+    } else {
+      this._clearNaturalEventEntities()
+      this._naturalEventData = []
+    }
+    this._startEventsRefresh()
+    this._updateStats()
+    this._savePrefs()
+  }
+
+  _startEventsRefresh() {
+    if (this._eventsInterval) clearInterval(this._eventsInterval)
+    if (this.earthquakesVisible || this.naturalEventsVisible) {
+      this._eventsInterval = setInterval(() => {
+        if (this.earthquakesVisible) this.fetchEarthquakes()
+        if (this.naturalEventsVisible) this.fetchNaturalEvents()
+      }, 300000) // refresh every 5 min
+    }
+  }
+
+  async fetchEarthquakes() {
+    try {
+      const resp = await fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson")
+      if (!resp.ok) return
+      const data = await resp.json()
+      this._earthquakeData = data.features.map(f => ({
+        id: f.id,
+        title: f.properties.place || "Unknown",
+        mag: f.properties.mag,
+        magType: f.properties.magType || "",
+        lat: f.geometry.coordinates[1],
+        lng: f.geometry.coordinates[0],
+        depth: f.geometry.coordinates[2],
+        time: f.properties.time,
+        url: f.properties.url,
+        tsunami: f.properties.tsunami,
+        alert: f.properties.alert,
+      }))
+      this.renderEarthquakes()
+      this._updateStats()
+    } catch (e) {
+      console.error("Failed to fetch earthquakes:", e)
+    }
+  }
+
+  renderEarthquakes() {
+    const Cesium = window.Cesium
+    this._clearEarthquakeEntities()
+    const dataSource = this.getEventsDataSource()
+
+    this._earthquakeData.forEach(eq => {
+      if (this.hasActiveFilter() && !this.pointPassesFilter(eq.lat, eq.lng)) return
+
+      const mag = eq.mag || 0
+      // Size and color by magnitude
+      const t = Math.min(Math.max((mag - 2.5) / 5.5, 0), 1) // 2.5–8.0 range
+      const pixelSize = 6 + t * 14
+      const pulseScale = 2 + t * 4
+
+      let color
+      if (mag < 3) color = Cesium.Color.fromCssColorString("#66bb6a")
+      else if (mag < 4) color = Cesium.Color.fromCssColorString("#ffa726")
+      else if (mag < 5) color = Cesium.Color.fromCssColorString("#ff7043")
+      else if (mag < 6) color = Cesium.Color.fromCssColorString("#ef5350")
+      else color = Cesium.Color.fromCssColorString("#d50000")
+
+      // Outer pulse ring
+      const ring = dataSource.entities.add({
+        id: `eq-ring-${eq.id}`,
+        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 0),
+        ellipse: {
+          semiMinorAxis: mag * 15000,
+          semiMajorAxis: mag * 15000,
+          material: color.withAlpha(0.08),
+          outline: true,
+          outlineColor: color.withAlpha(0.25),
+          outlineWidth: 1,
+          height: 0,
+        },
+      })
+      this._earthquakeEntities.push(ring)
+
+      // Center point
+      const entity = dataSource.entities.add({
+        id: `eq-${eq.id}`,
+        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 0),
+        point: {
+          pixelSize,
+          color: color.withAlpha(0.85),
+          outlineColor: color.withAlpha(0.4),
+          outlineWidth: pulseScale,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: `M${mag.toFixed(1)}`,
+          font: "11px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -pixelSize - 4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0.4),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+        },
+      })
+      this._earthquakeEntities.push(entity)
+    })
+  }
+
+  _clearEarthquakeEntities() {
+    const ds = this._eventsDataSource
+    if (ds) this._earthquakeEntities.forEach(e => ds.entities.remove(e))
+    this._earthquakeEntities = []
+  }
+
+  showEarthquakeDetail(eq) {
+    const date = new Date(eq.time)
+    const ago = this._timeAgo(date)
+    const alertBadge = eq.alert ? `<span class="event-alert event-alert-${eq.alert}">${eq.alert.toUpperCase()}</span>` : ""
+    const tsunamiBadge = eq.tsunami ? `<span class="event-alert event-alert-tsunami">TSUNAMI</span>` : ""
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign">M${eq.mag.toFixed(1)} Earthquake</div>
+      <div class="detail-country">${eq.title}</div>
+      <div class="event-badges">${alertBadge}${tsunamiBadge}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Magnitude</span>
+          <span class="detail-value">${eq.mag.toFixed(1)} ${eq.magType}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Depth</span>
+          <span class="detail-value">${eq.depth.toFixed(1)} km</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Time</span>
+          <span class="detail-value">${ago}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Coordinates</span>
+          <span class="detail-value">${eq.lat.toFixed(2)}°, ${eq.lng.toFixed(2)}°</span>
+        </div>
+      </div>
+      ${typeof eq.url === "string" && eq.url.startsWith("http") ? `<a href="${eq.url}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
+    `
+    this.detailPanelTarget.style.display = ""
+
+    // Fly to earthquake
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 500000),
+      duration: 1.5,
+    })
+  }
+
+  // ── NASA EONET Natural Events ──
+
+  get eonetCategoryIcons() {
+    return {
+      "wildfires": { icon: "fire", color: "#ff5722" },
+      "volcanoes": { icon: "volcano", color: "#e53935" },
+      "severeStorms": { icon: "hurricane", color: "#5c6bc0" },
+      "seaLakeIce": { icon: "snowflake", color: "#4fc3f7" },
+      "floods": { icon: "water", color: "#29b6f6" },
+      "drought": { icon: "sun", color: "#ffb300" },
+      "dustHaze": { icon: "smog", color: "#8d6e63" },
+      "earthquakes": { icon: "house-crack", color: "#ff7043" },
+      "landslides": { icon: "hill-rockslide", color: "#795548" },
+      "snow": { icon: "snowflake", color: "#e0e0e0" },
+      "tempExtremes": { icon: "temperature-high", color: "#ff8f00" },
+      "waterColor": { icon: "droplet", color: "#26c6da" },
+      "manmade": { icon: "industry", color: "#78909c" },
+    }
+  }
+
+  async fetchNaturalEvents() {
+    try {
+      const resp = await fetch("https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=100")
+      if (!resp.ok) return
+      const data = await resp.json()
+      this._naturalEventData = data.events.map(ev => {
+        const geo = ev.geometry && ev.geometry.length > 0 ? ev.geometry[0] : null
+        const cat = ev.categories && ev.categories.length > 0 ? ev.categories[0] : {}
+        return {
+          id: ev.id,
+          title: ev.title,
+          categoryId: cat.id || "unknown",
+          categoryTitle: cat.title || "Unknown",
+          lat: geo ? geo.coordinates[1] : null,
+          lng: geo ? geo.coordinates[0] : null,
+          date: geo ? geo.date : null,
+          magnitudeValue: geo ? geo.magnitudeValue : null,
+          magnitudeUnit: geo ? geo.magnitudeUnit : null,
+          link: typeof ev.link === "string" ? ev.link : null,
+          sources: ev.sources || [],
+          geometryPoints: ev.geometry || [],
+        }
+      }).filter(ev => ev.lat !== null && ev.lng !== null)
+      this.renderNaturalEvents()
+      this._updateStats()
+    } catch (e) {
+      console.error("Failed to fetch EONET events:", e)
+    }
+  }
+
+  renderNaturalEvents() {
+    const Cesium = window.Cesium
+    this._clearNaturalEventEntities()
+    const dataSource = this.getEventsDataSource()
+
+    this._naturalEventData.forEach(ev => {
+      if (this.hasActiveFilter() && !this.pointPassesFilter(ev.lat, ev.lng)) return
+
+      const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
+      const color = Cesium.Color.fromCssColorString(catInfo.color)
+
+      // Render event trail if multiple geometry points
+      if (ev.geometryPoints.length > 1) {
+        const trailPositions = ev.geometryPoints
+          .filter(g => g.coordinates && g.coordinates.length >= 2)
+          .map(g => Cesium.Cartesian3.fromDegrees(g.coordinates[0], g.coordinates[1], 0))
+        if (trailPositions.length > 1) {
+          const trail = dataSource.entities.add({
+            polyline: {
+              positions: trailPositions,
+              width: 2,
+              material: color.withAlpha(0.4),
+              clampToGround: true,
+            },
+          })
+          this._naturalEventEntities.push(trail)
+        }
+      }
+
+      // Impact area ring
+      const ringRadius = ev.magnitudeValue ? Math.min(ev.magnitudeValue * 500, 100000) : 30000
+      const ring = dataSource.entities.add({
+        id: `eonet-ring-${ev.id}`,
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+        ellipse: {
+          semiMinorAxis: ringRadius,
+          semiMajorAxis: ringRadius,
+          material: color.withAlpha(0.06),
+          outline: true,
+          outlineColor: color.withAlpha(0.2),
+          outlineWidth: 1,
+          height: 0,
+        },
+      })
+      this._naturalEventEntities.push(ring)
+
+      // Center point
+      const entity = dataSource.entities.add({
+        id: `eonet-${ev.id}`,
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+        point: {
+          pixelSize: 8,
+          color: color.withAlpha(0.9),
+          outlineColor: color.withAlpha(0.35),
+          outlineWidth: 3,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.85),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 8e6, 0),
+        },
+      })
+      this._naturalEventEntities.push(entity)
+    })
+  }
+
+  _clearNaturalEventEntities() {
+    const ds = this._eventsDataSource
+    if (ds) this._naturalEventEntities.forEach(e => ds.entities.remove(e))
+    this._naturalEventEntities = []
+  }
+
+  showNaturalEventDetail(ev) {
+    const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
+    const date = ev.date ? new Date(ev.date) : null
+    const ago = date ? this._timeAgo(date) : "—"
+    const magStr = ev.magnitudeValue ? `${ev.magnitudeValue} ${ev.magnitudeUnit || ""}` : "—"
+    const sourceLinks = (ev.sources || [])
+      .filter(s => typeof s.url === "string" && s.url.startsWith("http"))
+      .map(s => `<a href="${s.url}" target="_blank" rel="noopener" class="event-source-link">${s.id}</a>`)
+      .join(" ")
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign"><i class="fa-solid fa-${catInfo.icon}" style="color: ${catInfo.color};"></i> ${ev.categoryTitle}</div>
+      <div class="detail-country">${ev.title}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Category</span>
+          <span class="detail-value">${ev.categoryTitle}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Magnitude</span>
+          <span class="detail-value">${magStr}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Time</span>
+          <span class="detail-value">${ago}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Coordinates</span>
+          <span class="detail-value">${ev.lat.toFixed(2)}°, ${ev.lng.toFixed(2)}°</span>
+        </div>
+        ${ev.geometryPoints.length > 1 ? `
+        <div class="detail-field">
+          <span class="detail-label">Track Points</span>
+          <span class="detail-value">${ev.geometryPoints.length}</span>
+        </div>` : ""}
+      </div>
+      ${sourceLinks ? `<div class="event-sources">Sources: ${sourceLinks}</div>` : ""}
+      ${typeof ev.link === "string" && ev.link.startsWith("http") ? `<a href="${ev.link}" target="_blank" rel="noopener" class="detail-track-btn">View on NASA EONET</a>` : ""}
+    `
+    this.detailPanelTarget.style.display = ""
+
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 500000),
+      duration: 1.5,
+    })
+  }
+
+  _timeAgo(date) {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return "just now"
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+    return `${Math.floor(seconds / 86400)}d ago`
+  }
+
+  // Extract a URL from a Windy player field, which can be:
+  //   - a string URL directly
+  //   - an object with { link, embed } properties
+  //   - undefined/null
+  _extractWindyUrl(field, prop = "link") {
+    if (!field) return null
+    if (typeof field === "string" && field.startsWith("http")) return field
+    if (typeof field === "object") {
+      const val = field[prop]
+      if (typeof val === "string" && val.startsWith("http")) return val
+      // Fallback: try the other prop
+      const other = prop === "link" ? "embed" : "link"
+      const val2 = field[other]
+      if (typeof val2 === "string" && val2.startsWith("http")) return val2
+    }
+    return null
+  }
+
+  // ── Live Cameras (Windy Webcams) ──────────────────────────
+
+  toggleCameras() {
+    this.camerasVisible = this.hasCamerasToggleTarget && this.camerasToggleTarget.checked
+    if (this.camerasVisible) {
+      this.fetchWebcams()
+      // Re-fetch when camera moves significantly
+      if (!this._webcamMoveHandler) {
+        this._webcamMoveHandler = () => {
+          if (this.camerasVisible) this._maybeRefetchWebcams()
+        }
+        this.viewer.camera.moveEnd.addEventListener(this._webcamMoveHandler)
+      }
+    } else {
+      this._clearWebcamEntities()
+      this._webcamData = []
+    }
+    this._updateStats()
+    this._savePrefs()
+  }
+
+  _maybeRefetchWebcams() {
+    const center = this._getViewCenter()
+    if (!center) return
+    if (this._webcamLastFetchCenter) {
+      const dLat = Math.abs(center.lat - this._webcamLastFetchCenter.lat)
+      const dLng = Math.abs(center.lng - this._webcamLastFetchCenter.lng)
+      const dHeight = Math.abs(center.height - (this._webcamLastFetchCenter.height || 0))
+      // Refetch if moved significantly or zoomed a lot
+      if (dLat < 0.5 && dLng < 0.5 && dHeight < center.height * 0.3) return
+    }
+    this.fetchWebcams()
+  }
+
+  _getViewCenter() {
+    const Cesium = window.Cesium
+    if (!this.viewer) return null
+
+    // Ray-pick the center of the screen to find what the user is actually looking at
+    const canvas = this.viewer.scene.canvas
+    const center = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2)
+    const ray = this.viewer.camera.getPickRay(center)
+    const intersection = ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
+
+    if (intersection) {
+      const carto = Cesium.Cartographic.fromCartesian(intersection)
+      return {
+        lat: Cesium.Math.toDegrees(carto.latitude),
+        lng: Cesium.Math.toDegrees(carto.longitude),
+        height: this.viewer.camera.positionCartographic.height,
+      }
+    }
+
+    // Fallback: camera's own position (e.g. looking at space)
+    const carto = this.viewer.camera.positionCartographic
+    return {
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      lng: Cesium.Math.toDegrees(carto.longitude),
+      height: carto.height,
+    }
+  }
+
+  _getViewportBbox() {
+    const Cesium = window.Cesium
+    if (!this.viewer) return null
+    const canvas = this.viewer.scene.canvas
+    const corners = [
+      new Cesium.Cartesian2(0, 0),
+      new Cesium.Cartesian2(canvas.clientWidth, 0),
+      new Cesium.Cartesian2(canvas.clientWidth, canvas.clientHeight),
+      new Cesium.Cartesian2(0, canvas.clientHeight),
+    ]
+    let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180
+    let hits = 0
+    for (const corner of corners) {
+      const ray = this.viewer.camera.getPickRay(corner)
+      const pos = ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
+      if (pos) {
+        const carto = Cesium.Cartographic.fromCartesian(pos)
+        const lat = Cesium.Math.toDegrees(carto.latitude)
+        const lng = Cesium.Math.toDegrees(carto.longitude)
+        minLat = Math.min(minLat, lat)
+        maxLat = Math.max(maxLat, lat)
+        minLng = Math.min(minLng, lng)
+        maxLng = Math.max(maxLng, lng)
+        hits++
+      }
+    }
+    if (hits < 2) return null // Too zoomed out or looking at space
+    return { north: maxLat, south: minLat, east: maxLng, west: minLng }
+  }
+
+  async fetchWebcams() {
+    const bbox = this._getViewportBbox()
+    const center = this._getViewCenter()
+    if (!center && !bbox) return
+
+    let url
+    if (bbox) {
+      url = `/api/webcams?north=${bbox.north.toFixed(4)}&south=${bbox.south.toFixed(4)}&east=${bbox.east.toFixed(4)}&west=${bbox.west.toFixed(4)}&limit=50`
+    } else {
+      // Fallback: nearby search
+      const radiusKm = Math.min(Math.max(Math.round(center.height / 5000), 10), 250)
+      url = `/api/webcams?lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}&radius=${radiusKm}&limit=50`
+    }
+
+    try {
+      const resp = await fetch(url)
+      if (!resp.ok) {
+        if (resp.status === 503) console.warn("Windy API key not configured")
+        return
+      }
+      const data = await resp.json()
+      this._webcamData = (data.webcams || []).map(w => ({
+        id: w.webcamId || w.id,
+        title: w.title,
+        lat: w.location?.latitude,
+        lng: w.location?.longitude,
+        city: w.location?.city,
+        region: w.location?.region,
+        country: w.location?.country,
+        thumbnail: w.images?.current?.preview || w.images?.daylight?.preview,
+        thumbnailIcon: w.images?.current?.icon || w.images?.daylight?.icon,
+        playerUrl: this._extractWindyUrl(w.player?.day, "embed") || this._extractWindyUrl(w.player?.live, "embed"),
+        playerLink: this._extractWindyUrl(w.player?.day) || this._extractWindyUrl(w.player?.live) || (typeof w.url === "string" ? w.url : null),
+        lastUpdated: w.lastUpdatedOn,
+        viewCount: w.viewCount,
+      })).filter(w => w.lat != null && w.lng != null)
+
+      this._webcamLastFetchCenter = center
+      this.renderWebcams()
+      this._updateStats()
+    } catch (e) {
+      console.error("Failed to fetch webcams:", e)
+    }
+  }
+
+  renderWebcams() {
+    const Cesium = window.Cesium
+    this._clearWebcamEntities()
+    const dataSource = this.getEventsDataSource()
+
+    this._webcamData.forEach(w => {
+      if (this.hasActiveFilter() && !this.pointPassesFilter(w.lat, w.lng)) return
+
+      const entity = dataSource.entities.add({
+        id: `cam-${w.id}`,
+        position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, 0),
+        point: {
+          pixelSize: 7,
+          color: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.9),
+          outlineColor: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.35),
+          outlineWidth: 3,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.2, 5e6, 0.5),
+        },
+        label: {
+          text: w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.8),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -12),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0),
+        },
+      })
+      this._webcamEntities.push(entity)
+    })
+  }
+
+  _clearWebcamEntities() {
+    const ds = this._eventsDataSource
+    if (ds) this._webcamEntities.forEach(e => ds.entities.remove(e))
+    this._webcamEntities = []
+  }
+
+  showWebcamDetail(cam) {
+    const updated = cam.lastUpdated ? this._timeAgo(new Date(cam.lastUpdated)) : "—"
+    const location = [cam.city, cam.region, cam.country].filter(Boolean).join(", ")
+    const thumbHtml = cam.thumbnail
+      ? `<div class="webcam-thumb"><img src="${cam.thumbnail}" alt="${cam.title}" loading="lazy"></div>`
+      : ""
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign"><i class="fa-solid fa-video" style="color: #29b6f6;"></i> Webcam</div>
+      <div class="detail-country">${cam.title}</div>
+      ${thumbHtml}
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Location</span>
+          <span class="detail-value">${location || "—"}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Updated</span>
+          <span class="detail-value">${updated}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Views</span>
+          <span class="detail-value">${(cam.viewCount || 0).toLocaleString()}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Coordinates</span>
+          <span class="detail-value">${cam.lat.toFixed(3)}°, ${cam.lng.toFixed(3)}°</span>
+        </div>
+      </div>
+      <a href="${typeof cam.playerLink === "string" && cam.playerLink.startsWith("http") ? cam.playerLink : `https://www.windy.com/webcams/${cam.id}`}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-play"></i> Watch Live</a>
+    `
+    this.detailPanelTarget.style.display = ""
+
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, 50000),
+      duration: 1.5,
+    })
   }
 
   // ── Ships ────────────────────────────────────────────────
@@ -2540,6 +3685,12 @@ export default class extends Controller {
     if (this.hasStatShipsTarget) {
       this.statShipsTarget.textContent = this.shipData.size.toLocaleString()
     }
+    if (this.hasStatEventsTarget) {
+      const count = (this.earthquakesVisible ? this._earthquakeData.length : 0) +
+                    (this.naturalEventsVisible ? this._naturalEventData.length : 0) +
+                    (this.camerasVisible ? this._webcamData.length : 0)
+      this.statEventsTarget.textContent = count.toLocaleString()
+    }
   }
 
   _updateClock() {
@@ -2568,8 +3719,15 @@ export default class extends Controller {
       ships: this.shipsVisible,
       borders: this.bordersVisible,
       cities: this.citiesVisible,
+      airports: this.airportsVisible,
       satOrbits: this.satOrbitsVisible,
       satHeatmap: this.satHeatmapVisible,
+      buildHeatmap: this._buildHeatmapActive,
+      earthquakes: this.earthquakesVisible,
+      naturalEvents: this.naturalEventsVisible,
+      cameras: this.camerasVisible,
+      terrain: this.terrainEnabled || false,
+      terrainExaggeration: this.viewer.scene.verticalExaggeration || 1,
       satCategories: { ...this.satCategoryVisible },
     }
 
@@ -2668,6 +3826,10 @@ export default class extends Controller {
         this.citiesToggleTarget.checked = true
         this.toggleCities()
       }
+      if (l.airports && this.hasAirportsToggleTarget) {
+        this.airportsToggleTarget.checked = true
+        this.toggleAirports()
+      }
       if (l.satOrbits && this.hasSatOrbitsToggleTarget) {
         this.satOrbitsToggleTarget.checked = true
         this.toggleSatOrbits()
@@ -2675,6 +3837,31 @@ export default class extends Controller {
       if (l.satHeatmap && this.hasSatHeatmapToggleTarget) {
         this.satHeatmapToggleTarget.checked = true
         this.toggleSatHeatmap()
+      }
+      if (l.buildHeatmap && this.hasBuildHeatmapToggleTarget) {
+        this.buildHeatmapToggleTarget.checked = true
+        // Defer until countries are loaded
+        this._pendingBuildHeatmap = true
+      }
+      if (l.earthquakes && this.hasEarthquakesToggleTarget) {
+        this.earthquakesToggleTarget.checked = true
+        this.toggleEarthquakes()
+      }
+      if (l.naturalEvents && this.hasNaturalEventsToggleTarget) {
+        this.naturalEventsToggleTarget.checked = true
+        this.toggleNaturalEvents()
+      }
+      if (l.cameras && this.hasCamerasToggleTarget) {
+        this.camerasToggleTarget.checked = true
+        this.toggleCameras()
+      }
+      if (l.terrain && this.hasTerrainToggleTarget) {
+        this.terrainToggleTarget.checked = true
+        this.toggleTerrain()
+      }
+      if (l.terrainExaggeration && l.terrainExaggeration > 1 && this.hasTerrainExaggerationTarget) {
+        this.terrainExaggerationTarget.value = l.terrainExaggeration
+        this.setTerrainExaggeration()
       }
 
       // Satellite categories
@@ -3052,6 +4239,39 @@ export default class extends Controller {
     if (btn) btn.classList.toggle("active", this.countrySelectMode)
   }
 
+  // ── Terrain ──────────────────────────────────────────────
+
+  toggleTerrain() {
+    const Cesium = window.Cesium
+    this.terrainEnabled = this.hasTerrainToggleTarget && this.terrainToggleTarget.checked
+    if (this.terrainEnabled) {
+      this.viewer.scene.setTerrain(Cesium.Terrain.fromWorldTerrain({
+        requestWaterMask: true,
+        requestVertexNormals: true,
+      }))
+    } else {
+      this.viewer.scene.setTerrain(new Cesium.Terrain(new Cesium.EllipsoidTerrainProvider()))
+      this.viewer.scene.verticalExaggeration = 1.0
+    }
+    // Reset exaggeration slider to match
+    if (this.hasTerrainExaggerationTarget) {
+      if (!this.terrainEnabled) {
+        this.terrainExaggerationTarget.value = 1
+        const label = this.terrainExaggerationTarget.closest(".sb-slider-row")?.querySelector(".sb-slider-val")
+        if (label) label.textContent = "1×"
+      }
+    }
+    this._savePrefs()
+  }
+
+  setTerrainExaggeration() {
+    const val = this.hasTerrainExaggerationTarget ? parseFloat(this.terrainExaggerationTarget.value) : 1
+    this.viewer.scene.verticalExaggeration = val
+    const label = this.terrainExaggerationTarget?.closest(".sb-slider-row")?.querySelector(".sb-slider-val")
+    if (label) label.textContent = `${val}×`
+    this._savePrefs()
+  }
+
   toggleBorders() {
     this.bordersVisible = this.hasBordersToggleTarget && this.bordersToggleTarget.checked
     if (this.bordersVisible && !this.bordersLoaded) {
@@ -3136,7 +4356,14 @@ export default class extends Controller {
         if (this.flightsVisible) this.fetchFlights()
         if (this.shipsVisible) this.fetchShips()
         if (this.citiesVisible) this.renderCities()
+        if (this.airportsVisible) this.renderAirports()
         this.updateEntityList()
+        // Init build heatmap if it was pending
+        if (this._pendingBuildHeatmap) {
+          this._pendingBuildHeatmap = false
+          this._buildHeatmapActive = true
+          this._initBuildHeatmap()
+        }
       }
     } catch (e) {
       console.error("Failed to load borders:", e)
@@ -3158,6 +4385,8 @@ export default class extends Controller {
     if (this.shipsVisible) this.fetchShips()
     this.updateEntityList()
     if (this.citiesVisible) this.renderCities()
+    if (this.airportsVisible) this.renderAirports()
+    if (this._buildHeatmapActive) this._initBuildHeatmap()
     this._savePrefs()
   }
 
@@ -3338,7 +4567,9 @@ export default class extends Controller {
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     if (this.citiesVisible) this.renderCities()
+    if (this.airportsVisible) this.renderAirports()
     this.updateEntityList()
+    if (this._buildHeatmapActive) this._initBuildHeatmap()
   }
 
   getBordersDataSource() {
@@ -3420,10 +4651,6 @@ export default class extends Controller {
   }
 
   toggleTrains() {
-    // Placeholder
-  }
-
-  toggleCameras() {
     // Placeholder
   }
 

@@ -23,6 +23,11 @@
     </div>
     <div class="stat-sep"></div>
     <div class="stat-cell">
+      <span class="stat-label">EVT</span>
+      <span class="stat-value" data-globe-target="statEvents">0</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-cell">
       <span class="stat-label">UTC</span>
       <span class="stat-value" data-globe-target="statClock">--:--</span>
     </div>
@@ -153,6 +158,11 @@
             <span class="sb-toggle-track"></span>
             <span>Coverage Heatmap</span>
           </label>
+          <label class="sb-toggle sb-indent">
+            <input type="checkbox" data-globe-target="buildHeatmapToggle" data-action="change->globe#toggleBuildHeatmap">
+            <span class="sb-toggle-track"></span>
+            <span>Build Heatmap</span>
+          </label>
         </div>
       </div>
 
@@ -186,10 +196,30 @@
             <span>Cities</span>
           </label>
           <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="airportsToggle" data-action="change->globe#toggleAirports">
+            <span class="sb-toggle-track"></span>
+            <span>Airports</span>
+          </label>
+          <label class="sb-toggle">
             <input type="checkbox" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
             <span class="sb-toggle-track"></span>
             <span>Country Borders</span>
           </label>
+          <div class="sb-mini-divider"></div>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="terrainToggle" data-action="change->globe#toggleTerrain">
+            <span class="sb-toggle-track"></span>
+            <span>3D Terrain</span>
+          </label>
+          <div class="sb-slider-row sb-indent">
+            <span class="sb-slider-label">Exaggeration</span>
+            <input type="range" min="1" max="10" step="0.5" value="1"
+                   class="sb-slider"
+                   data-globe-target="terrainExaggeration"
+                   data-action="input->globe#setTerrainExaggeration">
+            <span class="sb-slider-val">1×</span>
+          </div>
+          <div class="sb-mini-divider"></div>
           <div class="sb-tool-row" data-action="click->globe#toggleCountrySelect" id="country-select-btn">
             <i class="fa-solid fa-hand-pointer"></i>
             <span>Select Countries</span>
@@ -198,6 +228,32 @@
             <i class="fa-solid fa-circle-dot"></i>
             <span>Draw Select</span>
           </div>
+        </div>
+      </div>
+
+      <%# ── Section: Events ── %>
+      <div class="sb-section" data-section="events">
+        <div class="sb-section-head" data-action="click->globe#toggleSection">
+          <span class="sb-section-dot" style="--dot: #ef5350;"></span>
+          <span class="sb-section-title">Events</span>
+          <i class="fa-solid fa-chevron-down sb-chevron"></i>
+        </div>
+        <div class="sb-section-body">
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="earthquakesToggle" data-action="change->globe#toggleEarthquakes">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ff7043;"></span>Earthquakes</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="naturalEventsToggle" data-action="change->globe#toggleNaturalEvents">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #66bb6a;"></span>Natural Events</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #29b6f6;"></span>Live Cameras</span>
+          </label>
         </div>
       </div>
 
@@ -212,11 +268,6 @@
             <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains" disabled>
             <span class="sb-toggle-track"></span>
             <span>Trains</span>
-          </label>
-          <label class="sb-toggle sb-muted">
-            <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras" disabled>
-            <span class="sb-toggle-track"></span>
-            <span>Live Cameras</span>
           </label>
         </div>
       </div>

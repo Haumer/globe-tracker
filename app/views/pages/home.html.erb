@@ -1,159 +1,229 @@
 <div id="globe-container"
      data-controller="globe"
-     data-globe-cesium-token-value="<%= ENV['CESIUM_ION_TOKEN'] %>">
+     data-globe-cesium-token-value="<%= ENV['CESIUM_ION_TOKEN'] %>"
+     data-globe-signed-in-value="<%= user_signed_in? %>"
+     data-globe-saved-prefs-value="<%= (current_user&.preferences || {}).to_json %>">
   <div id="cesium-viewer"></div>
 
-  <div id="search-panel">
-    <div class="search-input-wrap">
-      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+  <%# ── Stats bar ── top edge, telemetry-style ────────────────── %>
+  <div id="stats-bar" data-globe-target="statsBar">
+    <div class="stat-cell">
+      <span class="stat-label">FLT</span>
+      <span class="stat-value" data-globe-target="statFlights">0</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-cell">
+      <span class="stat-label">SAT</span>
+      <span class="stat-value" data-globe-target="statSats">0</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-cell">
+      <span class="stat-label">AIS</span>
+      <span class="stat-value" data-globe-target="statShips">0</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat-cell">
+      <span class="stat-label">UTC</span>
+      <span class="stat-value" data-globe-target="statClock">--:--</span>
+    </div>
+  </div>
+
+  <%# ── Sidebar toggle ── ─────────────────────────────────────── %>
+  <button id="sidebar-toggle" data-action="click->globe#toggleSidebar" title="Toggle panel">
+    <i class="fa-solid fa-bars"></i>
+  </button>
+
+  <%# ── Sidebar ── left side, collapsible sections ────────────── %>
+  <div id="sidebar" data-globe-target="sidebar">
+    <%# Search %>
+    <div class="sb-search">
+      <i class="fa-solid fa-magnifying-glass sb-search-icon"></i>
       <input type="text"
-             class="search-input"
-             placeholder="Search flights, ships, cities, satellites..."
+             class="sb-search-input"
+             placeholder="Search..."
              data-globe-target="searchInput"
              data-action="input->globe#onSearchInput keydown->globe#onSearchKeydown"
              autocomplete="off">
-      <button class="search-clear" data-globe-target="searchClear" data-action="click->globe#clearSearch" style="display:none;">&times;</button>
+      <button class="sb-search-clear" data-globe-target="searchClear" data-action="click->globe#clearSearch" style="display:none;">&times;</button>
     </div>
-    <div class="search-results" data-globe-target="searchResults" style="display:none;"></div>
-  </div>
+    <div class="sb-search-results" data-globe-target="searchResults" style="display:none;"></div>
 
-  <div id="layer-panel">
-    <div class="layer-panel-header">
-      <span class="layer-panel-icon"><i class="fa-solid fa-layer-group"></i></span>
-      <span>Layers</span>
-    </div>
-    <div class="layer-panel-items">
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
-        <span class="layer-dot" style="--dot-color: #4fc3f7;"></span>
-        Flights
-      </label>
-      <label class="layer-item layer-sub">
-        <input type="checkbox" data-globe-target="trailsToggle" data-action="change->globe#toggleTrails">
-        <span class="layer-dot" style="--dot-color: #4fc3f7; opacity: 0.5;"></span>
-        Flight Trails
-      </label>
-
-      <div class="layer-divider"></div>
-
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="satStationsToggle" data-action="change->globe#toggleSatCategory" data-category="stations">
-        <span class="layer-dot" style="--dot-color: #ff5252;"></span>
-        ISS / Stations
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="satStarlinkToggle" data-action="change->globe#toggleSatCategory" data-category="starlink">
-        <span class="layer-dot" style="--dot-color: #ab47bc;"></span>
-        Starlink
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="satGpsToggle" data-action="change->globe#toggleSatCategory" data-category="gps-ops">
-        <span class="layer-dot" style="--dot-color: #66bb6a;"></span>
-        GPS
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="satWeatherToggle" data-action="change->globe#toggleSatCategory" data-category="weather">
-        <span class="layer-dot" style="--dot-color: #ffa726;"></span>
-        Weather
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="resource">
-        <span class="layer-dot" style="--dot-color: #29b6f6;"></span>
-        Earth Resources
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="science">
-        <span class="layer-dot" style="--dot-color: #ec407a;"></span>
-        Science
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="military">
-        <span class="layer-dot" style="--dot-color: #ef5350;"></span>
-        Military
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="geo">
-        <span class="layer-dot" style="--dot-color: #78909c;"></span>
-        Geostationary
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="iridium">
-        <span class="layer-dot" style="--dot-color: #26c6da;"></span>
-        Iridium
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="oneweb">
-        <span class="layer-dot" style="--dot-color: #7e57c2;"></span>
-        OneWeb
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="planet">
-        <span class="layer-dot" style="--dot-color: #8d6e63;"></span>
-        Planet Labs
-      </label>
-      <label class="layer-item">
-        <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="spire">
-        <span class="layer-dot" style="--dot-color: #9ccc65;"></span>
-        Spire
-      </label>
-      <label class="layer-item layer-sub">
-        <input type="checkbox" data-globe-target="satOrbitsToggle" data-action="change->globe#toggleSatOrbits">
-        <span class="layer-dot" style="--dot-color: #ab47bc; opacity: 0.5;"></span>
-        Orbit Trails
-      </label>
-      <label class="layer-item layer-sub">
-        <input type="checkbox" data-globe-target="satHeatmapToggle" data-action="change->globe#toggleSatHeatmap">
-        <span class="layer-dot" style="--dot-color: #66bb6a; opacity: 0.5;"></span>
-        Coverage Heatmap
-      </label>
-
-      <div class="layer-divider"></div>
-
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
-        <span class="layer-dot" style="--dot-color: #26c6da;"></span>
-        Ships
-      </label>
-
-      <div class="layer-divider"></div>
-
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="citiesToggle" data-action="change->globe#toggleCities">
-        <span class="layer-dot" style="--dot-color: #ffd54f;"></span>
-        Cities
-      </label>
-
-      <label class="layer-item">
-        <input type="checkbox" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
-        <span class="layer-dot" style="--dot-color: #4fc3f7; opacity: 0.4;"></span>
-        Country Borders
-      </label>
-      <div class="layer-item layer-sub layer-tool-btn" id="country-select-btn" data-action="click->globe#toggleCountrySelect">
-        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.5;"></span>
-        <i class="fa-solid fa-hand-pointer" style="font-size: 10px; opacity: 0.5;"></i>
-        Select Countries
-      </div>
-      <div class="layer-item layer-sub layer-tool-btn" data-action="click->globe#enterDrawMode">
-        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.5;"></span>
-        <i class="fa-solid fa-circle-dot" style="font-size: 10px; opacity: 0.5;"></i>
-        Draw Select
+    <div class="sb-sections">
+      <%# ── Section: Flights ── %>
+      <div class="sb-section" data-section="flights">
+        <div class="sb-section-head" data-action="click->globe#toggleSection">
+          <span class="sb-section-dot" style="--dot: #4fc3f7;"></span>
+          <span class="sb-section-title">Flights</span>
+          <i class="fa-solid fa-chevron-down sb-chevron"></i>
+        </div>
+        <div class="sb-section-body">
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
+            <span class="sb-toggle-track"></span>
+            <span>Live Flights</span>
+          </label>
+          <label class="sb-toggle sb-indent">
+            <input type="checkbox" data-globe-target="trailsToggle" data-action="change->globe#toggleTrails">
+            <span class="sb-toggle-track"></span>
+            <span>Flight Trails</span>
+          </label>
+          <div class="sb-airline-filter" data-globe-target="airlineFilter" style="display:none;">
+            <div class="sb-filter-label">AIRLINES</div>
+            <div class="sb-airline-chips" data-globe-target="airlineChips"></div>
+          </div>
+        </div>
       </div>
 
-      <div class="layer-divider"></div>
+      <%# ── Section: Satellites ── %>
+      <div class="sb-section" data-section="satellites">
+        <div class="sb-section-head" data-action="click->globe#toggleSection">
+          <span class="sb-section-dot" style="--dot: #ab47bc;"></span>
+          <span class="sb-section-title">Satellites</span>
+          <i class="fa-solid fa-chevron-down sb-chevron"></i>
+        </div>
+        <div class="sb-section-body">
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="satStationsToggle" data-action="change->globe#toggleSatCategory" data-category="stations">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ff5252;"></span>ISS / Stations</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="satStarlinkToggle" data-action="change->globe#toggleSatCategory" data-category="starlink">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ab47bc;"></span>Starlink</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="satGpsToggle" data-action="change->globe#toggleSatCategory" data-category="gps-ops">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #66bb6a;"></span>GPS</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="satWeatherToggle" data-action="change->globe#toggleSatCategory" data-category="weather">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ffa726;"></span>Weather</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="resource">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #29b6f6;"></span>Earth Res.</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="science">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ec407a;"></span>Science</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="military">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #ef5350;"></span>Military</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="geo">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #78909c;"></span>Geostationary</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="iridium">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #26c6da;"></span>Iridium</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="oneweb">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #7e57c2;"></span>OneWeb</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="planet">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #8d6e63;"></span>Planet Labs</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-action="change->globe#toggleSatCategory" data-category="spire">
+            <span class="sb-toggle-track"></span>
+            <span class="sb-with-dot"><span class="sb-dot" style="--dot: #9ccc65;"></span>Spire</span>
+          </label>
+          <div class="sb-mini-divider"></div>
+          <label class="sb-toggle sb-indent">
+            <input type="checkbox" data-globe-target="satOrbitsToggle" data-action="change->globe#toggleSatOrbits">
+            <span class="sb-toggle-track"></span>
+            <span>Orbit Trails</span>
+          </label>
+          <label class="sb-toggle sb-indent">
+            <input type="checkbox" data-globe-target="satHeatmapToggle" data-action="change->globe#toggleSatHeatmap">
+            <span class="sb-toggle-track"></span>
+            <span>Coverage Heatmap</span>
+          </label>
+        </div>
+      </div>
 
-      <label class="layer-item layer-disabled">
-        <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains" disabled>
-        <span class="layer-dot" style="--dot-color: #66bb6a; opacity: 0.3;"></span>
-        Trains (soon)
-      </label>
-      <label class="layer-item layer-disabled">
-        <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras" disabled>
-        <span class="layer-dot" style="--dot-color: #ffa726; opacity: 0.3;"></span>
-        Cameras (soon)
-      </label>
+      <%# ── Section: Maritime ── %>
+      <div class="sb-section" data-section="maritime">
+        <div class="sb-section-head" data-action="click->globe#toggleSection">
+          <span class="sb-section-dot" style="--dot: #26c6da;"></span>
+          <span class="sb-section-title">Maritime</span>
+          <i class="fa-solid fa-chevron-down sb-chevron"></i>
+        </div>
+        <div class="sb-section-body">
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
+            <span class="sb-toggle-track"></span>
+            <span>AIS Vessels</span>
+          </label>
+        </div>
+      </div>
+
+      <%# ── Section: Geography ── %>
+      <div class="sb-section" data-section="geography">
+        <div class="sb-section-head" data-action="click->globe#toggleSection">
+          <span class="sb-section-dot" style="--dot: #ffd54f;"></span>
+          <span class="sb-section-title">Geography</span>
+          <i class="fa-solid fa-chevron-down sb-chevron"></i>
+        </div>
+        <div class="sb-section-body">
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="citiesToggle" data-action="change->globe#toggleCities">
+            <span class="sb-toggle-track"></span>
+            <span>Cities</span>
+          </label>
+          <label class="sb-toggle">
+            <input type="checkbox" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
+            <span class="sb-toggle-track"></span>
+            <span>Country Borders</span>
+          </label>
+          <div class="sb-tool-row" data-action="click->globe#toggleCountrySelect" id="country-select-btn">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <span>Select Countries</span>
+          </div>
+          <div class="sb-tool-row" data-action="click->globe#enterDrawMode">
+            <i class="fa-solid fa-circle-dot"></i>
+            <span>Draw Select</span>
+          </div>
+        </div>
+      </div>
+
+      <%# ── Section: Coming Soon ── %>
+      <div class="sb-section sb-disabled" data-section="upcoming">
+        <div class="sb-section-head">
+          <span class="sb-section-dot" style="--dot: rgba(255,255,255,0.15);"></span>
+          <span class="sb-section-title">Coming Soon</span>
+        </div>
+        <div class="sb-section-body" style="display:block;">
+          <label class="sb-toggle sb-muted">
+            <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains" disabled>
+            <span class="sb-toggle-track"></span>
+            <span>Trains</span>
+          </label>
+          <label class="sb-toggle sb-muted">
+            <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras" disabled>
+            <span class="sb-toggle-track"></span>
+            <span>Live Cameras</span>
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 
+  <%# ── Entity List Panel ── right side ───────────────────────── %>
   <div id="entity-list-panel" data-globe-target="entityListPanel" style="display: none;">
     <button class="detail-close" data-action="click->globe#closeEntityList">&times;</button>
     <div class="entity-list-header" data-globe-target="entityListHeader"></div>
@@ -168,16 +238,19 @@
         <i class="fa-solid fa-satellite"></i> <span data-globe-target="entitySatCount">0</span>
       </button>
     </div>
+    <div class="entity-airline-bar" data-globe-target="entityAirlineBar" style="display:none;">
+      <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
+    </div>
     <div class="entity-list-content" data-globe-target="entityListContent"></div>
   </div>
 
+  <%# ── Detail Panel ── bottom-right ──────────────────────────── %>
   <div id="detail-panel" data-globe-target="detailPanel" style="display: none;">
     <button class="detail-close" data-action="click->globe#closeDetail">&times;</button>
     <div class="detail-content" data-globe-target="detailContent"></div>
   </div>
 
-  <div id="flight-count" data-globe-target="flightCount"></div>
-
+  <%# ── Controls ── ───────────────────────────────────────────── %>
   <div id="controls-panel">
     <button class="control-btn" data-action="click->globe#resetView" title="Reset to default view">
       <i class="fa-solid fa-globe"></i>

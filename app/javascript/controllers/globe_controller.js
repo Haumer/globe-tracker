@@ -1,8 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static values = { cesiumToken: String }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount"]
+  static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips"]
 
   connect() {
     this.flightsVisible = false
@@ -28,6 +28,8 @@ export default class extends Controller {
     this._heatmapGrid = new Map()       // key "row,col" → { lat, lng, hits: [timestamp, ...] }
     this._heatmapHitLifeSec = 60        // each hit layer lasts 60s
     this._heatmapLastUpdate = 0         // throttle: timestamp of last computation
+    this._sweepEntities = []             // live satellite footprint hexes on country
+    this._lastSatPositions = []          // cached for sweep rendering between recomputes
     this.shipsVisible = false
     this.shipData = new Map()
     this.shipInterval = null
@@ -48,6 +50,17 @@ export default class extends Controller {
     this._drawCenter = null
     this._drawing = false
     this._drawCircleEntity = null
+    // Satellite footprint country mode
+    this._satFootprintCountryMode = false
+    // Airline filter
+    this._airlineFilter = new Set() // active airline ICAO codes (empty = show all)
+    this._detectedAirlines = new Map() // code → count
+    this._pendingCountryRestore = null
+    // Stats clock
+    this._clockInterval = setInterval(() => this._updateClock(), 1000)
+    this._updateClock()
+    // Restore saved preferences
+    this._restorePrefs()
     this.loadCesium()
   }
 
@@ -109,37 +122,40 @@ export default class extends Controller {
     this.viewer.scene.fog.enabled = true
     this.viewer.scene.globe.showGroundAtmosphere = true
 
-    // Restore camera position or use default
-    const saved = sessionStorage.getItem("globe_camera")
-    if (saved) {
-      try {
-        const cam = JSON.parse(saved)
-        this.viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, cam.height),
-          orientation: {
-            heading: cam.heading,
-            pitch: cam.pitch,
-            roll: 0,
-          },
-        })
-      } catch {
+    // Restore camera: prefer DB prefs (signed-in), then sessionStorage, then default
+    const hasDbPrefs = this._restoredPrefs && this._restoredPrefs.camera_lat != null
+    if (!hasDbPrefs) {
+      const saved = sessionStorage.getItem("globe_camera")
+      if (saved) {
+        try {
+          const cam = JSON.parse(saved)
+          this.viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, cam.height),
+            orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
+          })
+        } catch {
+          this.viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000), duration: 0,
+          })
+        }
+      } else {
         this.viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000),
-          duration: 0,
+          destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000), duration: 0,
         })
       }
-    } else {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000),
-        duration: 0,
-      })
     }
 
     this.viewer.scene.skyBox.show = true
     this.viewer.scene.backgroundColor = Cesium.Color.BLACK
 
-    // Save camera position on move
-    this.viewer.camera.moveEnd.addEventListener(() => this.saveCamera())
+    // Apply DB-saved preferences (camera, layers, sections, countries)
+    this._applyRestoredPrefs()
+
+    // Save camera position on move (sessionStorage + DB)
+    this.viewer.camera.moveEnd.addEventListener(() => {
+      this.saveCamera()
+      this._savePrefs()
+    })
 
     // Click handler for custom detail panel
     const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas)
@@ -600,10 +616,9 @@ export default class extends Controller {
       }
     }
 
-    // Update flight count
-    if (this.hasFlightCountTarget) {
-      this.flightCountTarget.textContent = `${this.flightData.size.toLocaleString()} flights`
-    }
+    // Update stats and airline detection
+    this._updateStats()
+    this._detectAirlines()
 
     // Render trails
     if (this.trailsVisible) this.renderTrails()
@@ -893,6 +908,11 @@ export default class extends Controller {
           <span class="detail-value">${satData.category}</span>
         </div>
       </div>
+      ${this.selectedCountries.size > 0 ? `
+      <button class="detail-track-btn ${this._satFootprintCountryMode ? 'tracking' : ''}"
+              data-action="click->globe#toggleSatFootprintCountryMode">
+        ${this._satFootprintCountryMode ? 'Show Radial Footprint' : 'Map to Selected Countries'}
+      </button>` : ''}
     `
     this.detailPanelTarget.style.display = ""
 
@@ -989,17 +1009,30 @@ export default class extends Controller {
     let html = ""
 
     if (tab === "flights") {
+      // Show airline bar in entity list
+      if (this.hasEntityAirlineBarTarget) {
+        this.entityAirlineBarTarget.style.display = data.flights.length > 0 ? "" : "none"
+        this._updateAirlineChips()
+      }
+
       if (this.selectedFlights.size > 0) {
         html = `<div class="entity-selection-bar">
           <span>${this.selectedFlights.size} selected</span>
           <button class="entity-clear-btn" data-action="click->globe#clearFlightSelection">Clear</button>
         </div>`
       }
-      if (data.flights.length === 0) {
+
+      // Apply airline filter
+      let flights = data.flights
+      if (this._airlineFilter.size > 0) {
+        flights = flights.filter(f => this._flightPassesAirlineFilter(f))
+      }
+
+      if (flights.length === 0) {
         html += '<div class="entity-empty">No flights in area</div>'
       } else {
         // Sort: selected first, then military, then by altitude
-        html += data.flights
+        html += flights
           .map(f => ({ ...f, _mil: this._isMilitaryFlight(f), _sel: this.selectedFlights.has(f.id) ? 1 : 0 }))
           .sort((a, b) => (b._sel - a._sel) || (b._mil - a._mil) || (b.altitude || 0) - (a.altitude || 0))
           .map(f => {
@@ -1007,6 +1040,8 @@ export default class extends Controller {
           const vr = f.verticalRate || 0
           const spd = f.speed || 0
           const isMil = f._mil
+          const airlineCode = this._extractAirlineCode(f.callsign)
+          const airlineName = airlineCode ? this._getAirlineName(airlineCode) : ""
 
           // Status icon
           let statusIcon, statusColor
@@ -1037,15 +1072,15 @@ export default class extends Controller {
           const milBadge = isMil ? '<span class="entity-badge mil">MIL</span>' : ''
           const isSelected = this.selectedFlights.has(f.id)
           const selClass = isSelected ? " entity-selected" : ""
+          const airlineLabel = airlineName && airlineName !== airlineCode ? airlineName : ""
 
           return `
           <div class="entity-row${isMil ? " entity-military" : ""}${selClass}" data-action="click->globe#flyToFlight" data-id="${f.id || f.hex}">
             <span class="entity-select-dot ${isSelected ? "active" : ""}"></span>
             <span class="entity-icon" style="color: ${statusColor}"><i class="fa-solid ${statusIcon}"></i></span>
             <span class="entity-name">${f.callsign || f.id || "—"}${milBadge}</span>
+            <span class="entity-detail">${airlineLabel}</span>
             <span class="entity-detail">${altLabel}</span>
-            <span class="entity-detail">${spd > 0 ? Math.round(spd) + " kts" : ""}</span>
-            <span class="entity-detail" style="color: rgba(255,255,255,0.2)">${f.originCountry || ""}</span>
           </div>`
         }).join("")
       }
@@ -1227,19 +1262,21 @@ export default class extends Controller {
     const results = []
     const MAX = 8
 
-    // Search flights
+    // Search flights (by callsign, ICAO, or airline name)
     for (const [id, f] of this.flightData) {
       if (results.length >= MAX) break
       const cs = (f.callsign || "").toLowerCase()
       const ic = (f.id || "").toLowerCase()
-      if (cs.includes(q) || ic.includes(q)) {
+      const airlineCode = this._extractAirlineCode(f.callsign)
+      const airlineName = airlineCode ? this._getAirlineName(airlineCode).toLowerCase() : ""
+      if (cs.includes(q) || ic.includes(q) || airlineName.includes(q)) {
         const isMil = this._isMilitaryFlight(f)
         results.push({
           type: "flight",
           icon: isMil ? "fa-jet-fighter" : "fa-plane",
           color: isMil ? "#ef5350" : "#4fc3f7",
           name: f.callsign || f.id,
-          detail: f.originCountry || "",
+          detail: airlineCode ? this._getAirlineName(airlineCode) : (f.originCountry || ""),
           lat: f.currentLat,
           lng: f.currentLng,
           alt: f.currentAlt || 200000,
@@ -1387,6 +1424,7 @@ export default class extends Controller {
       if (this.flightInterval) { clearInterval(this.flightInterval); this.flightInterval = null }
       if (this._flightCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._flightCameraCb); this._flightCameraCb = null }
     }
+    this._savePrefs()
   }
 
   async fetchSatCategory(cat) {
@@ -1517,6 +1555,8 @@ export default class extends Controller {
     if (this.satHeatmapVisible && (Date.now() - this._heatmapLastUpdate) > 10000) {
       this.renderSatHeatmap()
     }
+
+    this._updateStats()
   }
 
   renderSatOrbits() {
@@ -1641,6 +1681,7 @@ export default class extends Controller {
     } else {
       this.updateSatellitePositions()
     }
+    this._savePrefs()
   }
 
   toggleSatOrbits() {
@@ -1679,8 +1720,13 @@ export default class extends Controller {
       this.clearHeatmap()
       this._heatmapGrid.clear()
       this._heatmapLastUpdate = 0
-    } else if (this.satelliteData.length > 0) {
-      this.renderSatHeatmap()
+    } else {
+      // Start fresh — heatmap builds from scratch via live sweep
+      this._heatmapGrid.clear()
+      this._heatmapLastUpdate = 0
+      if (this.satelliteData.length > 0) {
+        this.renderSatHeatmap()
+      }
     }
   }
 
@@ -1690,10 +1736,15 @@ export default class extends Controller {
       this._heatmapEntities.forEach(e => ds.entities.remove(e))
     }
     this._heatmapEntities = []
+    // Also clear live sweep entities
+    if (ds && this._sweepEntities && this._sweepEntities.length > 0) {
+      this._sweepEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._sweepEntities = []
   }
 
   // Snap lat/lng to nearest hex cell on a fixed global grid
-  // Pointy-top hex: size S = 1.0° (center-to-vertex)
+  // Pointy-top hex: size S = 0.12° (center-to-vertex)
   // Row spacing = S * 1.5, Col spacing = S * sqrt(3)
   _snapToHexGrid(lat, lng) {
     const S = 0.12
@@ -1712,6 +1763,20 @@ export default class extends Controller {
     }
   }
 
+  _buildHexVerts(cellLat, cellLng, S) {
+    const Cesium = window.Cesium
+    const cosLat = Math.cos(cellLat * Math.PI / 180) || 0.01
+    const verts = []
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i + (Math.PI / 6) // pointy-top
+      verts.push(Cesium.Cartesian3.fromDegrees(
+        cellLng + (S * Math.cos(angle)) / cosLat,
+        cellLat + S * Math.sin(angle)
+      ))
+    }
+    return verts
+  }
+
   renderSatHeatmap() {
     const Cesium = window.Cesium
     const sat = window.satellite
@@ -1719,17 +1784,20 @@ export default class extends Controller {
 
     const nowMs = Date.now()
     const hitLifeMs = this._heatmapHitLifeSec * 1000
+    const hasFilter = this.hasActiveFilter()
+    const hasCountries = this.selectedCountries.size > 0 && this._selectedCountriesBbox
 
-    // Throttle: only recompute grid every 10 seconds
+    // Throttle: only recompute every 10 seconds
     const shouldRecompute = (nowMs - this._heatmapLastUpdate) > 10000
 
+    // Compute satellite positions (needed for both stamping and sweep rendering)
+    let satPositions = null
     if (shouldRecompute) {
       this._heatmapLastUpdate = nowMs
       const now = new Date(nowMs)
       const gmst = sat.gstime(now)
 
-      // Compute satellite positions, limit to 200
-      const satPositions = []
+      satPositions = []
       for (const s of this.satelliteData) {
         if (!this.satCategoryVisible[s.category]) continue
         if (satPositions.length >= 200) break
@@ -1744,31 +1812,31 @@ export default class extends Controller {
           if (isNaN(sLng) || isNaN(sLat) || isNaN(altKm)) continue
           const R = 6371
           const scanRadiusKm = R * Math.acos(R / (R + altKm))
-          satPositions.push({ lat: sLat, lng: sLng, radiusKm: scanRadiusKm })
+          const color = this.satCategoryColors[s.category] || "#ab47bc"
+          satPositions.push({ lat: sLat, lng: sLng, radiusKm: scanRadiusKm, color })
         } catch { /* skip */ }
       }
 
-      // Stamp hex cells under each satellite footprint
-      const S = 0.12
-      const sqrt3 = Math.sqrt(3)
-      const rowStep = S * 1.5
-      const colStep = S * sqrt3
+      // Cache for sweep rendering
+      this._lastSatPositions = satPositions
 
-      const hasFilter = this.hasActiveFilter()
+      // Stamp hex cells — only cells inside selected countries (if any)
+      const S = 0.12
+      const rowStep = S * 1.5
+      const colStep = S * Math.sqrt(3)
 
       satPositions.forEach(sp => {
         const radiusDeg = sp.radiusKm / 111.32
+        const cosCenter = Math.cos(sp.lat * Math.PI / 180) || 0.01
 
         for (let la = sp.lat - radiusDeg; la <= sp.lat + radiusDeg; la += rowStep) {
           for (let ln = sp.lng - radiusDeg; ln <= sp.lng + radiusDeg; ln += colStep) {
             const cell = this._snapToHexGrid(la, ln)
             const dLat = (cell.lat - sp.lat) * 111.32
-            const cosLat = Math.cos(sp.lat * Math.PI / 180) || 0.01
-            const dLng = (cell.lng - sp.lng) * 111.32 * cosLat
+            const dLng = (cell.lng - sp.lng) * 111.32 * cosCenter
             const dist = Math.sqrt(dLat * dLat + dLng * dLng)
             if (dist > sp.radiusKm) continue
 
-            // Only stamp cells inside the selected country/circle
             if (hasFilter && !this.pointPassesFilter(cell.lat, cell.lng)) continue
 
             const existing = this._heatmapGrid.get(cell.key)
@@ -1782,7 +1850,7 @@ export default class extends Controller {
       })
     }
 
-    // Prune expired hits and remove empty cells
+    // Prune expired hits
     for (const [key, cell] of this._heatmapGrid) {
       cell.hits = cell.hits.filter(t => (nowMs - t) < hitLifeMs)
       if (cell.hits.length === 0) this._heatmapGrid.delete(key)
@@ -1791,15 +1859,71 @@ export default class extends Controller {
     // ── Render ──
     this.clearHeatmap()
     const dataSource = this.getSatellitesDataSource()
-    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : this.getViewportBounds()
+    const bounds = hasFilter ? this.getFilterBounds() : this.getViewportBounds()
 
+    // ── 1. Live sweep: render each satellite's current footprint on the country ──
+    if (hasCountries) {
+      const positions = this._lastSatPositions || []
+      const bb = this._selectedCountriesBbox
+      const S = 0.12
+      const rowStep = S * 1.5
+      const colStep = S * Math.sqrt(3)
+      let sweepCount = 0
+
+      for (const sp of positions) {
+        if (sweepCount >= 2000) break
+        const radiusDeg = sp.radiusKm / 111.32
+        const cosCenter = Math.cos(sp.lat * Math.PI / 180) || 0.01
+        const sweepColor = Cesium.Color.fromCssColorString(sp.color)
+
+        // Intersection of satellite circle with country bbox
+        const minLat = Math.max(bb.minLat, sp.lat - radiusDeg)
+        const maxLat = Math.min(bb.maxLat, sp.lat + radiusDeg)
+        const lngSpread = radiusDeg / cosCenter
+        const minLng = Math.max(bb.minLng, sp.lng - lngSpread)
+        const maxLng = Math.min(bb.maxLng, sp.lng + lngSpread)
+        if (minLat >= maxLat || minLng >= maxLng) continue
+
+        for (let la = minLat; la <= maxLat; la += rowStep) {
+          for (let ln = minLng; ln <= maxLng; ln += colStep) {
+            if (sweepCount >= 2000) break
+            const cell = this._snapToHexGrid(la, ln)
+            const dLat = (cell.lat - sp.lat) * 111.32
+            const dLng = (cell.lng - sp.lng) * 111.32 * cosCenter
+            const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+            if (distKm > sp.radiusKm) continue
+            if (!this._pointInSelectedCountries(cell.lat, cell.lng)) continue
+
+            // Don't render sweep hex if there's already a heatmap hex (heatmap takes priority)
+            if (this._heatmapGrid.has(cell.key)) continue
+
+            const falloff = Math.max(0, 1 - distKm / sp.radiusKm)
+            const verts = this._buildHexVerts(cell.lat, cell.lng, S)
+            const entity = dataSource.entities.add({
+              polygon: {
+                hierarchy: verts,
+                material: sweepColor.withAlpha(0.04 + falloff * 0.12),
+                outline: true,
+                outlineColor: sweepColor.withAlpha(0.12 + falloff * 0.25),
+                outlineWidth: 1,
+                height: 0,
+              },
+            })
+            this._sweepEntities.push(entity)
+            sweepCount++
+          }
+        }
+      }
+    }
+
+    // ── 2. Accumulated heatmap hexes ──
     let maxHits = 1
     for (const cell of this._heatmapGrid.values()) {
       if (cell.hits.length > maxHits) maxHits = cell.hits.length
     }
 
     const S = 0.12
-    const heightPerHit = 2000  // 2km per satellite pass
+    const heightPerHit = 2000
     let rendered = 0
 
     for (const cell of this._heatmapGrid.values()) {
@@ -1822,17 +1946,8 @@ export default class extends Controller {
 
       const alpha = 0.3 + t * 0.35
       const fillColor = color.withAlpha(alpha)
-
-      const cosLat = Math.cos(cell.lat * Math.PI / 180) || 0.01
-      const verts = []
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i + (Math.PI / 6) // pointy-top
-        const vLat = cell.lat + S * Math.sin(angle)
-        const vLng = cell.lng + (S * Math.cos(angle)) / cosLat
-        verts.push(Cesium.Cartesian3.fromDegrees(vLng, vLat))
-      }
-
-      const extrudedHeight = 100 + count * heightPerHit  // 100m base + 5km per pass
+      const verts = this._buildHexVerts(cell.lat, cell.lng, S)
+      const extrudedHeight = 100 + count * heightPerHit
 
       const entity = dataSource.entities.add({
         polygon: {
@@ -1860,14 +1975,23 @@ export default class extends Controller {
     const baseColor = Cesium.Color.fromCssColorString(color)
     const satPos = Cesium.Cartesian3.fromDegrees(lng, lat, alt)
 
-    const scanRadiusKm = altKm * Math.tan(10 * Math.PI / 180)
+    const R = 6371
+    const scanRadiusKm = R * Math.acos(R / (R + altKm))
+    const scanRadiusDeg = scanRadiusKm / 111.32
+
+    // Country-constrained mode: fill selected countries with hex grid
+    // clipped to the satellite's scan radius
+    if (this._satFootprintCountryMode && this.selectedCountries.size > 0 && this._selectedCountriesBbox) {
+      this._renderCountryConstrainedHexes(baseColor, lat, lng, scanRadiusKm, scanRadiusDeg, satPos)
+      return
+    }
+
+    // Default: radial hex footprint around nadir
     const numRings = 4
     const hexSize = scanRadiusKm / (numRings + 0.5)
     const sqrt3 = Math.sqrt(3)
     const cosLat = Math.cos(lat * Math.PI / 180)
 
-    // Generate hex centers using axial coordinates (q, r)
-    // Flat-top hex: x = size * 3/2 * q, y = size * sqrt3 * (r + q/2)
     const hexCenters = [{ q: 0, r: 0 }]
     const cubeDirs = [
       { q: 1, r: 0 },  { q: 1, r: -1 }, { q: 0, r: -1 },
@@ -1885,7 +2009,6 @@ export default class extends Controller {
       }
     }
 
-    // Render each hex
     hexCenters.forEach(({ q, r }) => {
       const cx = hexSize * 1.5 * q
       const cy = hexSize * sqrt3 * (r + q / 2)
@@ -1905,13 +2028,18 @@ export default class extends Controller {
       }
 
       const falloff = Math.max(0, 1 - dist / scanRadiusKm)
+      const fillAlpha = 0.08 + falloff * 0.25
+      const outlineAlpha = 0.25 + falloff * 0.55
+      const extHeight = falloff * 800
       const entity = dataSource.entities.add({
         polygon: {
           hierarchy: verts,
-          material: baseColor.withAlpha(0.02 + falloff * 0.1),
+          material: baseColor.withAlpha(fillAlpha),
           outline: true,
-          outlineColor: baseColor.withAlpha(0.08 + falloff * 0.2),
+          outlineColor: baseColor.withAlpha(outlineAlpha),
+          outlineWidth: 1.5,
           height: 0,
+          extrudedHeight: extHeight,
         },
       })
       this._satFootprintEntities.push(entity)
@@ -1921,8 +2049,8 @@ export default class extends Controller {
     this._satFootprintEntities.push(dataSource.entities.add({
       polyline: {
         positions: [satPos, Cesium.Cartesian3.fromDegrees(lng, lat, 0)],
-        width: 1.5,
-        material: baseColor.withAlpha(0.4),
+        width: 2,
+        material: baseColor.withAlpha(0.6),
       },
     }))
 
@@ -1935,7 +2063,7 @@ export default class extends Controller {
         polyline: {
           positions: [satPos, Cesium.Cartesian3.fromDegrees(oLng, oLat, 0)],
           width: 1,
-          material: baseColor.withAlpha(0.15),
+          material: baseColor.withAlpha(0.3),
         },
       }))
     }
@@ -1944,12 +2072,114 @@ export default class extends Controller {
     this._satFootprintEntities.push(dataSource.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
       point: {
-        pixelSize: 5,
-        color: baseColor.withAlpha(0.7),
-        outlineColor: baseColor.withAlpha(0.2),
-        outlineWidth: 6,
+        pixelSize: 7,
+        color: baseColor.withAlpha(0.9),
+        outlineColor: baseColor.withAlpha(0.3),
+        outlineWidth: 8,
       },
     }))
+  }
+
+  _renderCountryConstrainedHexes(baseColor, satLat, satLng, scanRadiusKm, scanRadiusDeg, satPos) {
+    const Cesium = window.Cesium
+    const dataSource = this.getSatellitesDataSource()
+    const bb = this._selectedCountriesBbox
+
+    // Hex grid params — use the heatmap grid size for consistency
+    const S = 0.12
+    const sqrt3 = Math.sqrt(3)
+    const rowStep = S * 1.5
+    const colStep = S * sqrt3
+
+    // Scan area: intersection of country bbox and satellite scan circle
+    const minLat = Math.max(bb.minLat, satLat - scanRadiusDeg)
+    const maxLat = Math.min(bb.maxLat, satLat + scanRadiusDeg)
+    const cosCenter = Math.cos(satLat * Math.PI / 180) || 0.01
+    const lngSpread = scanRadiusDeg / cosCenter
+    const minLng = Math.max(bb.minLng, satLng - lngSpread)
+    const maxLng = Math.min(bb.maxLng, satLng + lngSpread)
+
+    if (minLat >= maxLat || minLng >= maxLng) return
+
+    let rendered = 0
+
+    for (let la = minLat; la <= maxLat; la += rowStep) {
+      for (let ln = minLng; ln <= maxLng; ln += colStep) {
+        if (rendered >= 3000) break
+
+        const cell = this._snapToHexGrid(la, ln)
+
+        // Must be inside satellite scan radius
+        const dLat = (cell.lat - satLat) * 111.32
+        const dLng = (cell.lng - satLng) * 111.32 * cosCenter
+        const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+        if (distKm > scanRadiusKm) continue
+
+        // Must be inside selected countries
+        if (!this._pointInSelectedCountries(cell.lat, cell.lng)) continue
+
+        const cosHex = Math.cos(cell.lat * Math.PI / 180) || 0.01
+        const verts = []
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i + (Math.PI / 6) // pointy-top
+          const vLat = cell.lat + S * Math.sin(angle)
+          const vLng = cell.lng + (S * Math.cos(angle)) / cosHex
+          verts.push(Cesium.Cartesian3.fromDegrees(vLng, vLat))
+        }
+
+        const falloff = Math.max(0, 1 - distKm / scanRadiusKm)
+        const fillAlpha = 0.1 + falloff * 0.3
+        const outlineAlpha = 0.3 + falloff * 0.5
+        const extHeight = falloff * 1200
+
+        const entity = dataSource.entities.add({
+          polygon: {
+            hierarchy: verts,
+            material: baseColor.withAlpha(fillAlpha),
+            outline: true,
+            outlineColor: baseColor.withAlpha(outlineAlpha),
+            outlineWidth: 1.5,
+            height: 0,
+            extrudedHeight: extHeight,
+          },
+        })
+        this._satFootprintEntities.push(entity)
+        rendered++
+      }
+    }
+
+    // Nadir line
+    this._satFootprintEntities.push(dataSource.entities.add({
+      polyline: {
+        positions: [satPos, Cesium.Cartesian3.fromDegrees(satLng, satLat, 0)],
+        width: 2,
+        material: baseColor.withAlpha(0.6),
+      },
+    }))
+
+    // Nadir dot
+    this._satFootprintEntities.push(dataSource.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(satLng, satLat, 0),
+      point: {
+        pixelSize: 7,
+        color: baseColor.withAlpha(0.9),
+        outlineColor: baseColor.withAlpha(0.3),
+        outlineWidth: 8,
+      },
+    }))
+  }
+
+  toggleSatFootprintCountryMode() {
+    this._satFootprintCountryMode = !this._satFootprintCountryMode
+    // Force re-render if a satellite is selected
+    if (this._selectedSatPosition) {
+      this.renderSatHexFootprint(this._selectedSatPosition)
+    }
+    // Refresh the detail panel to update button state
+    if (this.selectedSatNoradId) {
+      const satData = this.satelliteData.find(s => s.norad_id === this.selectedSatNoradId)
+      if (satData) this.showSatelliteDetail(satData)
+    }
   }
 
   // ── Ships ────────────────────────────────────────────────
@@ -2092,6 +2322,8 @@ export default class extends Controller {
         this.shipData.delete(mmsi)
       }
     }
+
+    this._updateStats()
   }
 
   getShipsDataSource() {
@@ -2164,6 +2396,326 @@ export default class extends Controller {
     }
 
     return false
+  }
+
+  // ── Airline Lookup & Filter ─────────────────────────────────
+
+  get airlineNames() {
+    return {
+      AAL: "American", AAR: "Asiana", ACA: "Air Canada", AFR: "Air France",
+      AIC: "Air India", ALK: "SriLankan", ANA: "All Nippon", ANZ: "Air NZ",
+      AUA: "Austrian", AZA: "Alitalia/ITA", BAW: "British Airways",
+      BEL: "Brussels", CAL: "China Airlines", CCA: "Air China",
+      CES: "China Eastern", CPA: "Cathay Pacific", CSN: "China Southern",
+      DAL: "Delta", DLH: "Lufthansa", EIN: "Aer Lingus", ELY: "El Al",
+      ETD: "Etihad", ETH: "Ethiopian", EVA: "EVA Air", EWG: "Eurowings",
+      EZY: "easyJet", FDX: "FedEx", FIN: "Finnair", GAF: "German AF",
+      GIA: "Garuda", HAL: "Hawaiian", IBE: "Iberia", ICE: "Icelandair",
+      JAL: "Japan Airlines", JBU: "JetBlue", KAL: "Korean Air",
+      KLM: "KLM", LAN: "LATAM", LOT: "LOT Polish", MAS: "Malaysia",
+      MEA: "Middle East", MSR: "EgyptAir", NAX: "Norwegian", OMA: "Oman Air",
+      PAL: "Philippine", PIA: "PIA", QFA: "Qantas", QTR: "Qatar",
+      RAM: "Royal Air Maroc", RJA: "Royal Jordanian", ROT: "TAROM",
+      RYR: "Ryanair", SAS: "SAS", SAA: "South African", SIA: "Singapore",
+      SKW: "SkyWest", SLK: "Silk Air", SQC: "SQ Cargo", SVA: "Saudia",
+      SWA: "Southwest", SWR: "Swiss", TAP: "TAP Portugal", THA: "Thai",
+      THY: "Turkish", TUI: "TUI", UAE: "Emirates", UAL: "United",
+      UPS: "UPS", VIR: "Virgin Atlantic", VOZ: "Virgin Aus",
+      VJC: "VietJet", WZZ: "Wizz Air", AEE: "Aegean",
+      ENY: "Envoy Air", RPA: "Republic", ASA: "Alaska",
+      NKS: "Spirit", AAY: "Allegiant", FFT: "Frontier",
+      AXM: "AirAsia", SBI: "S7 Airlines", AFL: "Aeroflot",
+      CSZ: "Shenzhen", CQH: "Spring Airlines", HVN: "Vietnam Airlines",
+      AMX: "Aeromexico", AVA: "Avianca", GOL: "Gol", AZU: "Azul",
+      CMP: "Copa", TOM: "TUI Airways", SXS: "SunExpress",
+      PGT: "Pegasus", OAL: "Olympic", TAR: "Tunisair",
+    }
+  }
+
+  _extractAirlineCode(callsign) {
+    if (!callsign || callsign.length < 3) return null
+    const code = callsign.substring(0, 3).toUpperCase()
+    // Must be all letters (ICAO airline codes are 3 alpha chars)
+    if (/^[A-Z]{3}$/.test(code)) return code
+    return null
+  }
+
+  _getAirlineName(code) {
+    return this.airlineNames[code] || code
+  }
+
+  _detectAirlines() {
+    const counts = new Map()
+    for (const [, f] of this.flightData) {
+      const code = this._extractAirlineCode(f.callsign)
+      if (code) {
+        counts.set(code, (counts.get(code) || 0) + 1)
+      }
+    }
+    this._detectedAirlines = counts
+    this._updateAirlineChips()
+  }
+
+  _updateAirlineChips() {
+    // Sort by count descending, show top 20
+    const sorted = [...this._detectedAirlines.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+
+    if (sorted.length === 0) {
+      if (this.hasAirlineFilterTarget) this.airlineFilterTarget.style.display = "none"
+      if (this.hasEntityAirlineBarTarget) this.entityAirlineBarTarget.style.display = "none"
+      return
+    }
+
+    const html = sorted.map(([code, count]) => {
+      const active = this._airlineFilter.has(code) ? " active" : ""
+      const name = this._getAirlineName(code)
+      return `<span class="airline-chip${active}" data-action="click->globe#toggleAirlineFilter" data-code="${code}" title="${name}">
+        ${code}<span class="airline-chip-count">${count}</span>
+      </span>`
+    }).join("")
+
+    // Update sidebar chips
+    if (this.hasAirlineFilterTarget && this.hasAirlineChipsTarget) {
+      this.airlineFilterTarget.style.display = this.flightsVisible ? "" : "none"
+      this.airlineChipsTarget.innerHTML = html
+    }
+
+    // Update entity list chips
+    if (this.hasEntityAirlineBarTarget && this.hasEntityAirlineChipsTarget) {
+      const entityListVisible = this.entityListPanelTarget.style.display !== "none"
+      const activeTab = this.entityListPanelTarget.querySelector(".entity-tab.active")?.dataset.tab
+      this.entityAirlineBarTarget.style.display = (entityListVisible && activeTab === "flights") ? "" : "none"
+      this.entityAirlineChipsTarget.innerHTML = html
+    }
+  }
+
+  toggleAirlineFilter(event) {
+    const code = event.currentTarget.dataset.code
+    if (this._airlineFilter.has(code)) {
+      this._airlineFilter.delete(code)
+    } else {
+      this._airlineFilter.add(code)
+    }
+    this._updateAirlineChips()
+    // Refresh entity list flights tab if visible
+    if (this.entityListPanelTarget.style.display !== "none") {
+      this.renderEntityTab("flights")
+    }
+    this._savePrefs()
+  }
+
+  _flightPassesAirlineFilter(f) {
+    if (this._airlineFilter.size === 0) return true
+    const code = this._extractAirlineCode(f.callsign)
+    return code && this._airlineFilter.has(code)
+  }
+
+  // ── Sidebar & Section Controls ──────────────────────────────
+
+  toggleSidebar() {
+    if (this.hasSidebarTarget) {
+      this.sidebarTarget.classList.toggle("collapsed")
+    }
+    this._savePrefs()
+  }
+
+  toggleSection(event) {
+    const head = event.currentTarget
+    head.classList.toggle("open")
+    this._savePrefs()
+  }
+
+  // ── Stats Bar ───────────────────────────────────────────────
+
+  _updateStats() {
+    if (this.hasStatFlightsTarget) {
+      this.statFlightsTarget.textContent = this.flightData.size.toLocaleString()
+    }
+    if (this.hasStatSatsTarget) {
+      const visibleSats = this.satelliteEntities.size
+      this.statSatsTarget.textContent = visibleSats.toLocaleString()
+    }
+    if (this.hasStatShipsTarget) {
+      this.statShipsTarget.textContent = this.shipData.size.toLocaleString()
+    }
+  }
+
+  _updateClock() {
+    if (this.hasStatClockTarget) {
+      const now = new Date()
+      this.statClockTarget.textContent = now.toUTCString().slice(17, 22)
+    }
+  }
+
+  // ── Preferences Save/Restore ────────────────────────────────
+
+  _savePrefs() {
+    if (!this.signedInValue) return
+    clearTimeout(this._savePrefsDebounce)
+    this._savePrefsDebounce = setTimeout(() => this._doSavePrefs(), 2000)
+  }
+
+  _doSavePrefs() {
+    const Cesium = window.Cesium
+    if (!Cesium || !this.viewer) return
+
+    const carto = this.viewer.camera.positionCartographic
+    const layers = {
+      flights: this.flightsVisible,
+      trails: this.trailsVisible,
+      ships: this.shipsVisible,
+      borders: this.bordersVisible,
+      cities: this.citiesVisible,
+      satOrbits: this.satOrbitsVisible,
+      satHeatmap: this.satHeatmapVisible,
+      satCategories: { ...this.satCategoryVisible },
+    }
+
+    const openSections = []
+    this.element.querySelectorAll(".sb-section-head.open").forEach(el => {
+      const section = el.closest(".sb-section")?.dataset.section
+      if (section) openSections.push(section)
+    })
+
+    const prefs = {
+      camera_lat: Cesium.Math.toDegrees(carto.latitude),
+      camera_lng: Cesium.Math.toDegrees(carto.longitude),
+      camera_height: carto.height,
+      camera_heading: this.viewer.camera.heading,
+      camera_pitch: this.viewer.camera.pitch,
+      sidebar_collapsed: this.hasSidebarTarget && this.sidebarTarget.classList.contains("collapsed"),
+      layers,
+      selected_countries: [...this.selectedCountries],
+      airline_filter: [...this._airlineFilter],
+      open_sections: openSections,
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    fetch("/api/preferences", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(prefs),
+    }).catch(() => {})
+  }
+
+  _restorePrefs() {
+    const prefs = this.savedPrefsValue
+    if (!prefs || Object.keys(prefs).length === 0) return
+
+    this._restoredPrefs = prefs
+  }
+
+  _applyRestoredPrefs() {
+    const prefs = this._restoredPrefs
+    if (!prefs) return
+    this._restoredPrefs = null
+
+    const Cesium = window.Cesium
+
+    // Camera
+    if (prefs.camera_lat != null && prefs.camera_lng != null) {
+      this.viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(
+          prefs.camera_lng, prefs.camera_lat, prefs.camera_height || 20000000
+        ),
+        orientation: {
+          heading: prefs.camera_heading || 0,
+          pitch: prefs.camera_pitch || -Cesium.Math.PI_OVER_TWO,
+          roll: 0,
+        },
+      })
+    }
+
+    // Sidebar
+    if (prefs.sidebar_collapsed && this.hasSidebarTarget) {
+      this.sidebarTarget.classList.add("collapsed")
+    }
+
+    // Open sections
+    if (prefs.open_sections && Array.isArray(prefs.open_sections)) {
+      prefs.open_sections.forEach(name => {
+        const section = this.element.querySelector(`.sb-section[data-section="${name}"] .sb-section-head`)
+        if (section) section.classList.add("open")
+      })
+    }
+
+    // Layers
+    if (prefs.layers) {
+      const l = prefs.layers
+
+      if (l.flights && this.hasFlightsToggleTarget) {
+        this.flightsToggleTarget.checked = true
+        this.toggleFlights()
+      }
+      if (l.trails && this.hasTrailsToggleTarget) {
+        this.trailsToggleTarget.checked = true
+        this.toggleTrails()
+      }
+      if (l.ships && this.hasShipsToggleTarget) {
+        this.shipsToggleTarget.checked = true
+        this.toggleShips()
+      }
+      if (l.borders && this.hasBordersToggleTarget) {
+        this.bordersToggleTarget.checked = true
+        this.toggleBorders()
+      }
+      if (l.cities && this.hasCitiesToggleTarget) {
+        this.citiesToggleTarget.checked = true
+        this.toggleCities()
+      }
+      if (l.satOrbits && this.hasSatOrbitsToggleTarget) {
+        this.satOrbitsToggleTarget.checked = true
+        this.toggleSatOrbits()
+      }
+      if (l.satHeatmap && this.hasSatHeatmapToggleTarget) {
+        this.satHeatmapToggleTarget.checked = true
+        this.toggleSatHeatmap()
+      }
+
+      // Satellite categories
+      if (l.satCategories) {
+        const catTargetMap = {
+          stations: "satStationsToggle",
+          starlink: "satStarlinkToggle",
+          "gps-ops": "satGpsToggle",
+          weather: "satWeatherToggle",
+        }
+        for (const [cat, visible] of Object.entries(l.satCategories)) {
+          if (!visible) continue
+          // Try named target first, then find by data-category
+          const targetName = catTargetMap[cat]
+          let checkbox = null
+          if (targetName && this[`has${targetName.charAt(0).toUpperCase() + targetName.slice(1)}Target`]) {
+            checkbox = this[`${targetName}Target`]
+          }
+          if (!checkbox) {
+            checkbox = this.element.querySelector(`input[data-category="${cat}"]`)
+          }
+          if (checkbox) {
+            checkbox.checked = true
+            this.satCategoryVisible[cat] = true
+            if (!this._loadedSatCategories.has(cat)) {
+              this.fetchSatCategory(cat)
+            }
+          }
+        }
+      }
+    }
+
+    // Selected countries (restore after borders load)
+    if (prefs.selected_countries && prefs.selected_countries.length > 0) {
+      this._pendingCountryRestore = prefs.selected_countries
+    }
+
+    // Airline filter
+    if (prefs.airline_filter && prefs.airline_filter.length > 0) {
+      this._airlineFilter = new Set(prefs.airline_filter)
+    }
   }
 
   getShipTypeName(type) {
@@ -2241,6 +2793,7 @@ export default class extends Controller {
       if (this.shipInterval) { clearInterval(this.shipInterval); this.shipInterval = null }
       if (this._shipCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._shipCameraCb); this._shipCameraCb = null }
     }
+    this._savePrefs()
   }
 
   // ── Country Borders, Selection & Draw Tool ───────────────
@@ -2294,7 +2847,6 @@ export default class extends Controller {
 
   toggleCities() {
     this.citiesVisible = this.hasCitiesToggleTarget && this.citiesToggleTarget.checked
-    console.log("toggleCities called, visible:", this.citiesVisible, "loaded:", this._citiesLoaded)
     if (this.citiesVisible) {
       if (!this._citiesLoaded) {
         this.loadCities()
@@ -2304,6 +2856,7 @@ export default class extends Controller {
     } else {
       this.clearCities()
     }
+    this._savePrefs()
   }
 
   getCitiesDataSource() {
@@ -2316,7 +2869,6 @@ export default class extends Controller {
   }
 
   async loadCities() {
-    console.log("loadCities: starting fetch...")
     try {
       // Fetch city points and urban area polygons in parallel
       const [placesRes, urbanRes] = await Promise.all([
@@ -2349,7 +2901,6 @@ export default class extends Controller {
           area: f.properties.area_sqkm || 0,
         }))
 
-      console.log(`Cities loaded: ${this._citiesData.length} cities, ${this._urbanAreas.length} urban areas`)
 
       this._citiesLoaded = true
       this.renderCities()
@@ -2376,7 +2927,6 @@ export default class extends Controller {
     const hasFilter = this.hasActiveFilter()
 
     let cities = this._citiesData
-    console.log(`renderCities: ${cities.length} total, selectedCountries: ${this.selectedCountries.size}, hasFilter: ${hasFilter}`)
 
     // Filter to selected countries if active
     if (this.selectedCountries.size > 0) {
@@ -2390,7 +2940,6 @@ export default class extends Controller {
     // Limit to top 500 cities to avoid overload
     cities = cities.slice(0, 500)
 
-    console.log(`renderCities: ${cities.length} after filter, urbanAreas: ${this._urbanAreas?.length || 0}`)
     const maxPop = cities.length > 0 ? cities[0].population : 1
 
     cities.forEach((city, idx) => {
@@ -2511,6 +3060,7 @@ export default class extends Controller {
     if (this._bordersDataSource) {
       this._bordersDataSource.show = this.bordersVisible
     }
+    this._savePrefs()
   }
 
   async loadBorders() {
@@ -2574,6 +3124,20 @@ export default class extends Controller {
 
       this.bordersLoaded = true
       this._bordersDataSource.show = this.bordersVisible
+
+      // Restore pending country selections from saved preferences
+      if (this._pendingCountryRestore && this._pendingCountryRestore.length > 0) {
+        this._pendingCountryRestore.forEach(name => {
+          this.selectedCountries.add(name)
+        })
+        this._pendingCountryRestore = null
+        this._updateSelectedCountriesBbox()
+        this.updateBorderColors()
+        if (this.flightsVisible) this.fetchFlights()
+        if (this.shipsVisible) this.fetchShips()
+        if (this.citiesVisible) this.renderCities()
+        this.updateEntityList()
+      }
     } catch (e) {
       console.error("Failed to load borders:", e)
     }
@@ -2594,6 +3158,7 @@ export default class extends Controller {
     if (this.shipsVisible) this.fetchShips()
     this.updateEntityList()
     if (this.citiesVisible) this.renderCities()
+    this._savePrefs()
   }
 
   clearCountrySelection() {

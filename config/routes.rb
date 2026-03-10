@@ -6,6 +6,7 @@ Rails.application.routes.draw do
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index]
     resources :ships, only: [:index]
+    resource :preferences, only: [:show, :update]
   end
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

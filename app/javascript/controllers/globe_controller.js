@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static values = { cesiumToken: String }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount"]
 
   connect() {
     this.flightsVisible = false
@@ -1192,6 +1192,173 @@ export default class extends Controller {
         }
       } catch { /* skip */ }
     }
+  }
+
+  // ── Search ─────────────────────────────────────────────────
+
+  onSearchInput() {
+    clearTimeout(this._searchDebounce)
+    const query = this.searchInputTarget.value.trim()
+
+    if (query.length === 0) {
+      this.searchResultsTarget.style.display = "none"
+      this.searchClearTarget.style.display = "none"
+      return
+    }
+
+    this.searchClearTarget.style.display = "block"
+    this._searchDebounce = setTimeout(() => this._runSearch(query), 150)
+  }
+
+  onSearchKeydown(event) {
+    if (event.key === "Escape") {
+      this.clearSearch()
+    }
+  }
+
+  clearSearch() {
+    this.searchInputTarget.value = ""
+    this.searchResultsTarget.style.display = "none"
+    this.searchClearTarget.style.display = "none"
+  }
+
+  _runSearch(query) {
+    const q = query.toLowerCase()
+    const results = []
+    const MAX = 8
+
+    // Search flights
+    for (const [id, f] of this.flightData) {
+      if (results.length >= MAX) break
+      const cs = (f.callsign || "").toLowerCase()
+      const ic = (f.id || "").toLowerCase()
+      if (cs.includes(q) || ic.includes(q)) {
+        const isMil = this._isMilitaryFlight(f)
+        results.push({
+          type: "flight",
+          icon: isMil ? "fa-jet-fighter" : "fa-plane",
+          color: isMil ? "#ef5350" : "#4fc3f7",
+          name: f.callsign || f.id,
+          detail: f.originCountry || "",
+          lat: f.currentLat,
+          lng: f.currentLng,
+          alt: f.currentAlt || 200000,
+          id,
+        })
+      }
+    }
+
+    // Search ships
+    for (const [mmsi, s] of this.shipData) {
+      if (results.length >= MAX) break
+      const name = (s.name || "").toLowerCase()
+      const mmsiStr = mmsi.toLowerCase()
+      if (name.includes(q) || mmsiStr.includes(q)) {
+        results.push({
+          type: "ship",
+          icon: "fa-ship",
+          color: "#26c6da",
+          name: s.name || mmsi,
+          detail: s.flag || "",
+          lat: s.latitude,
+          lng: s.longitude,
+          alt: 100000,
+        })
+      }
+    }
+
+    // Search satellites
+    for (const s of this.satelliteData) {
+      if (results.length >= MAX) break
+      const name = (s.name || "").toLowerCase()
+      const norad = String(s.norad_id)
+      if (name.includes(q) || norad.includes(q)) {
+        const sat = window.satellite
+        let lat = 0, lng = 0, alt = 500000
+        if (sat) {
+          try {
+            const now = new Date()
+            const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
+            const posVel = sat.propagate(satrec, now)
+            if (posVel.position) {
+              const gmst = sat.gstime(now)
+              const posGd = sat.eciToGeodetic(posVel.position, gmst)
+              lng = sat.degreesLong(posGd.longitude)
+              lat = sat.degreesLat(posGd.latitude)
+              alt = posGd.height * 1000 + 500000
+            }
+          } catch { /* skip */ }
+        }
+        results.push({
+          type: "satellite",
+          icon: "fa-satellite",
+          color: this.satCategoryColors[s.category] || "#ab47bc",
+          name: s.name,
+          detail: s.category,
+          lat, lng, alt,
+        })
+      }
+    }
+
+    // Search cities
+    for (const c of this._citiesData) {
+      if (results.length >= MAX) break
+      if (c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q)) {
+        results.push({
+          type: "city",
+          icon: c.capital ? "fa-landmark" : "fa-city",
+          color: c.capital ? "#ffd54f" : "#e0e0e0",
+          name: c.name,
+          detail: `${c.country} · ${(c.population / 1e6).toFixed(1)}M`,
+          lat: c.lat,
+          lng: c.lng,
+          alt: 200000,
+        })
+      }
+    }
+
+    this._renderSearchResults(results, query)
+  }
+
+  _renderSearchResults(results, query) {
+    if (results.length === 0) {
+      this.searchResultsTarget.innerHTML = '<div class="search-empty">No results</div>'
+      this.searchResultsTarget.style.display = "block"
+      return
+    }
+
+    const html = results.map((r, i) => `
+      <div class="search-result-row" data-action="click->globe#searchResultClick" data-idx="${i}">
+        <span class="search-result-icon" style="color: ${r.color}"><i class="fa-solid ${r.icon}"></i></span>
+        <span class="search-result-name">${r.name}</span>
+        <span class="search-result-detail">${r.detail}</span>
+      </div>
+    `).join("")
+
+    this.searchResultsTarget.innerHTML = html
+    this.searchResultsTarget.style.display = "block"
+    this._searchResults = results
+  }
+
+  searchResultClick(event) {
+    const idx = parseInt(event.currentTarget.dataset.idx)
+    const r = this._searchResults?.[idx]
+    if (!r) return
+
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(r.lng, r.lat, r.alt),
+      duration: 1.5,
+    })
+
+    // Select/highlight the entity
+    if (r.type === "flight" && r.id) {
+      this.toggleFlightSelection(r.id)
+      const f = this.flightData.get(r.id)
+      if (f) this.showDetail(r.id, f)
+    }
+
+    this.clearSearch()
   }
 
   getFlightsDataSource() {

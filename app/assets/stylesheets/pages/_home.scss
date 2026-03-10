@@ -1,3 +1,124 @@
+// ─── Search panel ─── top-left
+#search-panel {
+  position: fixed;
+  top: 60px;
+  left: 24px;
+  z-index: 55;
+  width: 280px;
+
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.25);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 9px 32px 9px 32px;
+    background: rgba(10, 10, 14, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+    }
+
+    &:focus {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+  }
+
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+
+  .search-results {
+    margin-top: 4px;
+    background: rgba(10, 10, 14, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: detail-in 0.15s ease-out;
+  }
+
+  .search-result-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.12s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    &:not(:last-child) {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+  }
+
+  .search-result-icon {
+    font-size: 11px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .search-result-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .search-result-detail {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.25);
+    white-space: nowrap;
+  }
+
+  .search-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.2);
+  }
+}
+
 // Full-screen globe
 #globe-container {
   position: fixed;

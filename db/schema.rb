@@ -10,9 +10,37 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_10_001658) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_10_005646) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "flights", force: :cascade do |t|
+    t.string "callsign"
+    t.float "latitude"
+    t.float "longitude"
+    t.float "altitude"
+    t.float "heading"
+    t.float "speed"
+    t.string "origin_country"
+    t.boolean "on_ground"
+    t.string "icao24"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.float "vertical_rate"
+    t.integer "time_position"
+    t.index ["icao24"], name: "index_flights_on_icao24", unique: true
+  end
+
+  create_table "satellites", force: :cascade do |t|
+    t.string "name"
+    t.string "tle_line1"
+    t.string "tle_line2"
+    t.string "category"
+    t.integer "norad_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["norad_id"], name: "index_satellites_on_norad_id", unique: true
+  end
 
   create_table "users", force: :cascade do |t|
     t.string "email", default: "", null: false

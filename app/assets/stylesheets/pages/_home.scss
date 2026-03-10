@@ -1,1 +1,277 @@
-// Specific CSS for your home-page
+// Full-screen globe
+#globe-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+#cesium-viewer {
+  width: 100%;
+  height: 100%;
+
+  // Hide Cesium's default InfoBox and toolbar
+  .cesium-infoBox {
+    display: none !important;
+  }
+
+  .cesium-viewer-toolbar {
+    display: none !important;
+  }
+}
+
+// ─── Layer panel ─── bottom-left, out of the way
+#layer-panel {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 50;
+  background: rgba(10, 10, 14, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 150px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  .layer-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .layer-panel-icon {
+    font-size: 12px;
+    opacity: 0.5;
+  }
+
+  .layer-panel-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .layer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    color: rgba(255, 255, 255, 0.7);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
+
+    input[type="checkbox"] {
+      display: none;
+    }
+
+    .layer-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--dot-color);
+      flex-shrink: 0;
+      transition: opacity 0.2s;
+    }
+
+    // Dim dot when unchecked
+    input[type="checkbox"]:not(:checked) ~ .layer-dot {
+      opacity: 0.25;
+    }
+
+    input[type="checkbox"]:not(:checked) ~ span:last-of-type,
+    &:has(input:not(:checked)) {
+      color: rgba(255, 255, 255, 0.3);
+    }
+  }
+}
+
+// ─── Detail panel ─── bottom-right, for clicked entities
+#detail-panel {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  background: rgba(10, 10, 14, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.85);
+  padding: 20px 22px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 220px;
+  max-width: 280px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: detail-in 0.2s ease-out;
+
+  .detail-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.15s;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+
+  .detail-callsign {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .detail-country {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
+  .detail-route {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 14px;
+    min-height: 18px;
+
+    .route-airport {
+      color: #4fc3f7;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .route-arrow {
+      margin: 0 6px;
+      color: rgba(255, 255, 255, 0.25);
+    }
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  .detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .detail-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .detail-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-links {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+
+    a {
+      flex: 1;
+      text-align: center;
+      padding: 5px 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: rgba(255, 255, 255, 0.5);
+      text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      transition: all 0.15s;
+
+      &:hover {
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.05);
+      }
+    }
+  }
+
+  .detail-track-btn {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 7px 0;
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 6px;
+    background: rgba(79, 195, 247, 0.1);
+    color: #4fc3f7;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(79, 195, 247, 0.2);
+      border-color: rgba(79, 195, 247, 0.5);
+    }
+
+    &.tracking {
+      background: rgba(79, 195, 247, 0.25);
+      border-color: #4fc3f7;
+      color: #fff;
+    }
+  }
+}
+
+@keyframes detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ─── Flight count badge ─── top-right subtle
+#flight-count {
+  position: fixed;
+  top: 14px;
+  right: 24px;
+  z-index: 50;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}

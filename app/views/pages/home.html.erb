@@ -1,2 +1,46 @@
-<h1>Pages#home</h1>
-<p>Find me in app/views/pages/home.html.erb</p>
+<div id="globe-container"
+     data-controller="globe"
+     data-globe-cesium-token-value="<%= ENV['CESIUM_ION_TOKEN'] %>">
+  <div id="cesium-viewer"></div>
+
+  <div id="layer-panel">
+    <div class="layer-panel-header">
+      <span class="layer-panel-icon"><i class="fa-solid fa-layer-group"></i></span>
+      <span>Layers</span>
+    </div>
+    <div class="layer-panel-items">
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights" checked>
+        <span class="layer-dot" style="--dot-color: #4fc3f7;"></span>
+        Flights
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="trailsToggle" data-action="change->globe#toggleTrails">
+        <span class="layer-dot" style="--dot-color: #4fc3f7; opacity: 0.5;"></span>
+        Trails
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="satellitesToggle" data-action="change->globe#toggleSatellites" checked>
+        <span class="layer-dot" style="--dot-color: #ab47bc;"></span>
+        Satellites
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains">
+        <span class="layer-dot" style="--dot-color: #66bb6a;"></span>
+        Trains
+      </label>
+      <label class="layer-item">
+        <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras">
+        <span class="layer-dot" style="--dot-color: #ffa726;"></span>
+        Cameras
+      </label>
+    </div>
+  </div>
+
+  <div id="detail-panel" data-globe-target="detailPanel" style="display: none;">
+    <button class="detail-close" data-action="click->globe#closeDetail">&times;</button>
+    <div class="detail-content" data-globe-target="detailContent"></div>
+  </div>
+
+  <div id="flight-count" data-globe-target="flightCount"></div>
+</div>

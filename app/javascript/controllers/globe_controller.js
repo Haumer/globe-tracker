@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static values = { cesiumToken: String }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount"]
 
   connect() {
     this.flightsVisible = false
@@ -38,6 +38,11 @@ export default class extends Controller {
     this._borderCountryMap = new Map()
     this._countryEntities = new Map()
     this._countryFeatures = []          // raw GeoJSON features for hit testing
+    this.citiesVisible = false
+    this._citiesData = []
+    this._urbanAreas = []
+    this._citiesLoaded = false
+    this._cityEntities = []
     this.countrySelectMode = false
     this.drawMode = false
     this._drawCenter = null
@@ -2118,6 +2123,196 @@ export default class extends Controller {
     return null
   }
 
+  // ── Cities Layer ─────────────────────────────────────────
+
+  toggleCities() {
+    this.citiesVisible = this.hasCitiesToggleTarget && this.citiesToggleTarget.checked
+    console.log("toggleCities called, visible:", this.citiesVisible, "loaded:", this._citiesLoaded)
+    if (this.citiesVisible) {
+      if (!this._citiesLoaded) {
+        this.loadCities()
+      } else {
+        this.renderCities()
+      }
+    } else {
+      this.clearCities()
+    }
+  }
+
+  getCitiesDataSource() {
+    const Cesium = window.Cesium
+    if (!this._citiesDataSource) {
+      this._citiesDataSource = new Cesium.CustomDataSource("cities")
+      this.viewer.dataSources.add(this._citiesDataSource)
+    }
+    return this._citiesDataSource
+  }
+
+  async loadCities() {
+    console.log("loadCities: starting fetch...")
+    try {
+      // Fetch city points and urban area polygons in parallel
+      const [placesRes, urbanRes] = await Promise.all([
+        fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places_simple.geojson"),
+        fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_urban_areas.geojson"),
+      ])
+
+      const placesData = await placesRes.json()
+      const urbanData = await urbanRes.json()
+
+      this._citiesData = placesData.features
+        .filter(f => f.geometry && f.properties)
+        .map(f => ({
+          name: f.properties.name || f.properties.nameascii || "",
+          country: f.properties.adm0name || f.properties.sov0name || "",
+          population: f.properties.pop_max || f.properties.pop_min || 0,
+          lat: f.geometry.coordinates[1],
+          lng: f.geometry.coordinates[0],
+          capital: f.properties.adm0cap === 1,
+          rank: f.properties.rank_max || 0,
+        }))
+        .filter(c => c.name && c.population > 100000)
+        .sort((a, b) => b.population - a.population)
+
+      this._urbanAreas = urbanData.features
+        .filter(f => f.geometry)
+        .map(f => ({
+          coords: f.geometry.coordinates,
+          type: f.geometry.type,
+          area: f.properties.area_sqkm || 0,
+        }))
+
+      console.log(`Cities loaded: ${this._citiesData.length} cities, ${this._urbanAreas.length} urban areas`)
+
+      this._citiesLoaded = true
+      this.renderCities()
+    } catch (e) {
+      console.error("Failed to load cities:", e, e.message, e.stack)
+    }
+  }
+
+  clearCities() {
+    const ds = this._citiesDataSource
+    if (ds) {
+      this._cityEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._cityEntities = []
+  }
+
+  renderCities() {
+    const Cesium = window.Cesium
+    this.clearCities()
+    if (!this.citiesVisible || this._citiesData.length === 0) return
+
+    const dataSource = this.getCitiesDataSource()
+    dataSource.show = true
+    const hasFilter = this.hasActiveFilter()
+
+    let cities = this._citiesData
+    console.log(`renderCities: ${cities.length} total, selectedCountries: ${this.selectedCountries.size}, hasFilter: ${hasFilter}`)
+
+    // Filter to selected countries if active
+    if (this.selectedCountries.size > 0) {
+      cities = cities.filter(c =>
+        this.selectedCountries.has(c.country)
+      )
+    } else if (hasFilter && this._activeCircle) {
+      cities = cities.filter(c => this.pointPassesFilter(c.lat, c.lng))
+    }
+
+    // Limit to top 500 cities to avoid overload
+    cities = cities.slice(0, 500)
+
+    console.log(`renderCities: ${cities.length} after filter, urbanAreas: ${this._urbanAreas?.length || 0}`)
+    const maxPop = cities.length > 0 ? cities[0].population : 1
+
+    cities.forEach((city, idx) => {
+      try {
+        const popRatio = city.population / maxPop
+        const pixelSize = city.capital ? 7 : Math.max(3, Math.round(popRatio * 6 + 2))
+
+        const color = city.capital
+          ? Cesium.Color.fromCssColorString("#ffd54f")
+          : Cesium.Color.fromCssColorString("#e0e0e0")
+
+        const entity = dataSource.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 100),
+          point: {
+            pixelSize,
+            color: color.withAlpha(0.9),
+            outlineColor: color.withAlpha(0.5),
+            outlineWidth: 1,
+          },
+          label: {
+            text: city.name,
+            font: city.capital ? "bold 12px sans-serif" : "11px sans-serif",
+            fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+            outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -14),
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 1e7, 0.3),
+          },
+        })
+        this._cityEntities.push(entity)
+      } catch (e) {
+        console.warn(`City entity failed: ${city.name}`, e.message)
+      }
+    })
+
+    // Render urban area polygons
+    if (this._urbanAreas && this._urbanAreas.length > 0) {
+      const urbanColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.35)
+      const urbanOutline = Cesium.Color.fromCssColorString("#ffcc80").withAlpha(0.6)
+
+      // If countries selected, build a bbox for quick filtering
+      const filterBbox = this._selectedCountriesBbox
+      const hasCircle = !!this._activeCircle
+
+      this._urbanAreas.forEach((urban, i) => {
+        const rings = urban.type === "Polygon" ? [urban.coords] : urban.type === "MultiPolygon" ? urban.coords : []
+
+        for (const polyCoords of rings) {
+          const outerRing = polyCoords[0]
+          if (!outerRing || outerRing.length < 3) continue
+
+          // Quick centroid for filtering
+          let cLat = 0, cLng = 0
+          for (const coord of outerRing) { cLng += coord[0]; cLat += coord[1] }
+          cLat /= outerRing.length
+          cLng /= outerRing.length
+
+          // Filter: if countries selected, check bbox then point-in-country
+          if (this.selectedCountries.size > 0) {
+            if (filterBbox && (cLat < filterBbox.minLat || cLat > filterBbox.maxLat ||
+                cLng < filterBbox.minLng || cLng > filterBbox.maxLng)) continue
+            if (!this._pointInSelectedCountries(cLat, cLng)) continue
+          } else if (hasCircle) {
+            if (!this.pointPassesFilter(cLat, cLng)) continue
+          }
+
+          const positions = outerRing.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1], 50))
+
+          try {
+            const entity = dataSource.entities.add({
+              polygon: {
+                hierarchy: positions,
+                material: urbanColor,
+                outline: true,
+                outlineColor: urbanOutline,
+                outlineWidth: 1,
+                height: 50,
+              },
+            })
+            this._cityEntities.push(entity)
+          } catch (e) {
+            // skip failed urban polygons
+          }
+        }
+      })
+    }
+  }
+
   toggleCountrySelect() {
     this.countrySelectMode = !this.countrySelectMode
     if (this.countrySelectMode) {
@@ -2231,6 +2426,7 @@ export default class extends Controller {
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     this.updateEntityList()
+    if (this.citiesVisible) this.renderCities()
   }
 
   clearCountrySelection() {
@@ -2409,6 +2605,7 @@ export default class extends Controller {
     // Re-fetch active layers with new filter
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
+    if (this.citiesVisible) this.renderCities()
     this.updateEntityList()
   }
 

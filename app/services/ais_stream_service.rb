@@ -1,4 +1,6 @@
 class AisStreamService
+  extend SnapshotRecorder
+
   WS_URL = "wss://stream.aisstream.io/v0/stream"
 
   @running = false
@@ -166,6 +168,7 @@ class AisStreamService
       end
 
       Ship.upsert_all(normalized, unique_by: :mmsi)
+      record_ship_snapshots(normalized)
       Rails.logger.info("AIS Stream: flushed #{records.size} ships (total in DB: #{Ship.count})")
     rescue => e
       Rails.logger.error("AIS Stream flush error: #{e.message}")

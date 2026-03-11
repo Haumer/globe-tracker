@@ -13,7 +13,7 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %>">
+  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %>">
     <%= render "shared/navbar" %>
     <%= render "shared/flashes" %>
     <%= yield %>

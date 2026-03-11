@@ -1,24 +1,34 @@
 import { Controller } from "@hotwired/stimulus"
+import { screenToLatLng, haversineDistance, pointInPolygon, findCountryAtPoint, createPlaneIcon, getDataSource } from "../globe/utils"
+import { saveCamera, restoreCamera, getViewportBounds, resetView, viewTopDown, resetTilt, zoomIn, zoomOut } from "../globe/camera"
+import { renderDetailHTML, detailField } from "../globe/details"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems"]
 
   connect() {
     this.flightsVisible = false
     this.flightInterval = null
     this.flightData = new Map()
     this.selectedFlights = new Set()
-    this._selectedFlightEntities = new Map()
+    this.selectedShips = new Set()
+    this.selectedSats = new Set()
+    this._selectionBoxEntities = new Map() // key: "flight-id"|"ship-mmsi"|"sat-noradId" → entity
+    this._focusedSelection = null // { type: "flight"|"ship"|"sat", id: string }
+    this._selBoxImgGreen = null
+    this._selBoxImgYellow = null
     this.animationFrame = null
     this.lastAnimTime = null
     this.trailsVisible = false
     this.trailHistory = new Map()
     this.trackedFlightId = null
+    this.showCivilian = true
+    this.showMilitary = true
     this.satelliteData = []
     this._loadedSatCategories = new Set()
     this.satelliteEntities = new Map()
-    this.satCategoryVisible = { stations: false, starlink: false, "gps-ops": false, weather: false, resource: false, science: false, military: false, geo: false, iridium: false, oneweb: false, planet: false, spire: false }
+    this.satCategoryVisible = { stations: false, starlink: false, "gps-ops": false, weather: false, resource: false, science: false, military: false, geo: false, iridium: false, oneweb: false, planet: false, spire: false, gnss: false, tdrss: false, radar: false, sbas: false, cubesat: false, amateur: false, sarsat: false, "last-30-days": false, beidou: false, molniya: false, geodetic: false, dmc: false, argos: false, intelsat: false, ses: false, "x-comm": false, globalstar: false }
     this.satOrbitsVisible = false
     this.satOrbitEntities = new Map()
     this.selectedSatNoradId = null
@@ -56,6 +66,20 @@ export default class extends Controller {
     this._naturalEventEntities = []
     this._eventsInterval = null
     this.camerasVisible = false
+    this.gpsJammingVisible = false
+    this._gpsJammingEntities = []
+    this._gpsJammingInterval = null
+    this.newsVisible = false
+    this._newsData = []
+    this._newsEntities = []
+    this._newsInterval = null
+    this.cablesVisible = false
+    this._cableEntities = []
+    this._landingPointEntities = []
+    this.outagesVisible = false
+    this._outageData = []
+    this._outageEntities = []
+    this._outageInterval = null
     this.airportsVisible = false
     this._airportEntities = []
     this._webcamData = []
@@ -72,6 +96,7 @@ export default class extends Controller {
     this._airlineFilter = new Set() // active airline ICAO codes (empty = show all)
     this._detectedAirlines = new Map() // code → count
     this._pendingCountryRestore = null
+    this._ds = {} // shared datasource cache for getDataSource()
     // Stats clock
     this._clockInterval = setInterval(() => this._updateClock(), 1000)
     this._updateClock()
@@ -131,6 +156,7 @@ export default class extends Controller {
       infoBox: false,
       selectionIndicator: true,
       creditContainer: document.createElement("div"),
+      contextOptions: { webgl: { preserveDrawingBuffer: true } },
     })
 
     this.viewer.scene.globe.enableLighting = true
@@ -138,28 +164,12 @@ export default class extends Controller {
     this.viewer.scene.fog.enabled = true
     this.viewer.scene.globe.showGroundAtmosphere = true
 
+    // Generate selection bracket images
+    this._selBoxImgGreen = this._makeSelectionBracket("#4caf50", 0.9)
+    this._selBoxImgYellow = this._makeSelectionBracket("#fdd835", 0.8)
+
     // Restore camera: prefer DB prefs (signed-in), then sessionStorage, then default
-    const hasDbPrefs = this._restoredPrefs && this._restoredPrefs.camera_lat != null
-    if (!hasDbPrefs) {
-      const saved = sessionStorage.getItem("globe_camera")
-      if (saved) {
-        try {
-          const cam = JSON.parse(saved)
-          this.viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, cam.height),
-            orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
-          })
-        } catch {
-          this.viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000), duration: 0,
-          })
-        }
-      } else {
-        this.viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000), duration: 0,
-        })
-      }
-    }
+    restoreCamera(this.viewer, this._restoredPrefs)
 
     this.viewer.scene.skyBox.show = true
     this.viewer.scene.backgroundColor = Cesium.Color.BLACK
@@ -192,6 +202,7 @@ export default class extends Controller {
           const mmsi = entityId.replace("ship-", "")
           const shipData = this.shipData.get(mmsi)
           if (shipData) {
+            this.toggleShipSelection(mmsi)
             this.showShipDetail(shipData)
             return
           }
@@ -208,6 +219,7 @@ export default class extends Controller {
           const noradId = parseInt(entityId.replace("sat-", ""))
           const satData = this.satelliteData.find(s => s.norad_id === noradId)
           if (satData) {
+            this.toggleSatSelection(noradId)
             this.showSatelliteDetail(satData)
             return
           }
@@ -226,6 +238,31 @@ export default class extends Controller {
           const eoId = entityId.replace("eonet-", "")
           const ev = this._naturalEventData.find(e => e.id === eoId)
           if (ev) { this.showNaturalEventDetail(ev); return }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("news-")) {
+          const idx = parseInt(entityId.replace("news-", ""))
+          const ev = this._newsData?.[idx]
+          if (ev) { this.showNewsDetail(ev); return }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("outage-") && !entityId.startsWith("outage-ring-")) {
+          const code = entityId.replace("outage-", "")
+          this.showOutageDetail(code)
+          return
+        }
+        if (typeof entityId === "string" && entityId.startsWith("cable-")) {
+          const props = picked.id.properties
+          if (props) {
+            const name = props.cableName?.getValue() || "Unknown cable"
+            this.detailContentTarget.innerHTML = `
+              <div class="detail-callsign" style="color:#00bcd4;">
+                <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>Submarine Cable
+              </div>
+              <div class="detail-country">${this._escapeHtml(name)}</div>
+              <a href="https://www.submarinecablemap.com/submarine-cable/${props.cableId?.getValue() || ''}" target="_blank" rel="noopener" class="detail-track-btn">View on TeleGeography →</a>
+            `
+            this.detailPanelTarget.style.display = ""
+            return
+          }
         }
         if (typeof entityId === "string" && entityId.startsWith("cam-")) {
           const camId = entityId.replace("cam-", "")
@@ -287,6 +324,7 @@ export default class extends Controller {
     // Create plane icon
     this.planeIcon = this.createPlaneIcon("#4fc3f7")
     this.planeIconGround = this.createPlaneIcon("#888888")
+    this.planeIconMil = this.createPlaneIcon("#ef5350")
 
     // Layers start disabled — fetching begins when toggled on
 
@@ -295,101 +333,10 @@ export default class extends Controller {
     this.animate()
   }
 
-  createPlaneIcon(color) {
-    const size = 32
-    const canvas = document.createElement("canvas")
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext("2d")
+  createPlaneIcon(color) { return createPlaneIcon(color) }
 
-    ctx.translate(size / 2, size / 2)
-
-    // Draw plane shape pointing up
-    ctx.fillStyle = color
-    ctx.beginPath()
-    // Fuselage
-    ctx.moveTo(0, -14)
-    ctx.lineTo(3, -6)
-    ctx.lineTo(3, 4)
-    ctx.lineTo(0, 14)
-    ctx.lineTo(-3, 4)
-    ctx.lineTo(-3, -6)
-    ctx.closePath()
-    ctx.fill()
-    // Wings
-    ctx.beginPath()
-    ctx.moveTo(0, -2)
-    ctx.lineTo(12, 4)
-    ctx.lineTo(12, 6)
-    ctx.lineTo(3, 2)
-    ctx.lineTo(-3, 2)
-    ctx.lineTo(-12, 6)
-    ctx.lineTo(-12, 4)
-    ctx.closePath()
-    ctx.fill()
-    // Tail
-    ctx.beginPath()
-    ctx.moveTo(0, 10)
-    ctx.lineTo(5, 13)
-    ctx.lineTo(5, 14)
-    ctx.lineTo(0, 12)
-    ctx.lineTo(-5, 14)
-    ctx.lineTo(-5, 13)
-    ctx.closePath()
-    ctx.fill()
-
-    return canvas.toDataURL()
-  }
-
-  saveCamera() {
-    const Cesium = window.Cesium
-    const carto = this.viewer.camera.positionCartographic
-    sessionStorage.setItem("globe_camera", JSON.stringify({
-      lng: Cesium.Math.toDegrees(carto.longitude),
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      height: carto.height,
-      heading: this.viewer.camera.heading,
-      pitch: this.viewer.camera.pitch,
-    }))
-  }
-
-  getViewportBounds() {
-    const Cesium = window.Cesium
-    const scene = this.viewer.scene
-    const canvas = scene.canvas
-
-    const corners = [
-      new Cesium.Cartesian2(0, 0),
-      new Cesium.Cartesian2(canvas.width, 0),
-      new Cesium.Cartesian2(0, canvas.height),
-      new Cesium.Cartesian2(canvas.width, canvas.height),
-      new Cesium.Cartesian2(canvas.width / 2, 0),
-      new Cesium.Cartesian2(canvas.width / 2, canvas.height),
-      new Cesium.Cartesian2(0, canvas.height / 2),
-      new Cesium.Cartesian2(canvas.width, canvas.height / 2),
-    ]
-
-    let lats = [], lngs = []
-
-    corners.forEach(corner => {
-      const ray = scene.camera.getPickRay(corner)
-      const position = scene.globe.pick(ray, scene)
-      if (position) {
-        const carto = Cesium.Cartographic.fromCartesian(position)
-        lats.push(Cesium.Math.toDegrees(carto.latitude))
-        lngs.push(Cesium.Math.toDegrees(carto.longitude))
-      }
-    })
-
-    if (lats.length === 0) return null
-
-    return {
-      lamin: Math.min(...lats),
-      lamax: Math.max(...lats),
-      lomin: Math.min(...lngs),
-      lomax: Math.max(...lngs),
-    }
-  }
+  saveCamera() { saveCamera(this.viewer) }
+  getViewportBounds() { return getViewportBounds(this.viewer) }
 
   // Returns filter bounds from circle/countries, or viewport if no filter active
   getFilterBounds() {
@@ -498,7 +445,7 @@ export default class extends Controller {
   }
 
   async fetchFlights() {
-    if (!this.flightsVisible) return
+    if (!this.flightsVisible || this._timelineActive) return
 
     try {
       let url = "/api/flights"
@@ -579,25 +526,41 @@ export default class extends Controller {
         existing.verticalRate = verticalRate
         existing.onGround = onGround
         existing.originCountry = flight.origin_country
+        existing.source = flight.source
+        existing.registration = flight.registration
+        existing.aircraftType = flight.aircraft_type
 
         // Only correct position if the server has genuinely new data
         const newTimePos = flight.time_position || 0
         if (newTimePos !== existing.lastTimePosition) {
-          existing.currentLat = existing.currentLat * 0.3 + projLat * 0.7
-          existing.currentLng = existing.currentLng * 0.3 + projLng * 0.7
-          existing.currentAlt = existing.currentAlt * 0.3 + projAlt * 0.7
+          // Snap directly if the correction is large (> ~500m), otherwise smooth
+          const dlat = Math.abs(projLat - existing.currentLat)
+          const dlng = Math.abs(projLng - existing.currentLng)
+          if (dlat > 0.005 || dlng > 0.005) {
+            existing.currentLat = projLat
+            existing.currentLng = projLng
+            existing.currentAlt = projAlt
+          } else {
+            existing.currentLat = existing.currentLat * 0.15 + projLat * 0.85
+            existing.currentLng = existing.currentLng * 0.15 + projLng * 0.85
+            existing.currentAlt = existing.currentAlt * 0.15 + projAlt * 0.85
+          }
           existing.lastTimePosition = newTimePos
         }
 
-        existing.entity.billboard.image = onGround ? this.planeIconGround : this.planeIcon
+        const milCheck = { id, callsign }
+        const isMil = this._isMilitaryFlight(milCheck)
+        existing.entity.billboard.image = onGround ? this.planeIconGround : (isMil ? this.planeIconMil : this.planeIcon)
         existing.entity.billboard.rotation = -Cesium.Math.toRadians(heading)
         existing.entity.label.text = callsign
       } else {
+        const milCheck = { id, callsign }
+        const isMil = this._isMilitaryFlight(milCheck)
         const entity = dataSource.entities.add({
           id: id,
           position: Cesium.Cartesian3.fromDegrees(projLng, projLat, projAlt),
           billboard: {
-            image: onGround ? this.planeIconGround : this.planeIcon,
+            image: onGround ? this.planeIconGround : (isMil ? this.planeIconMil : this.planeIcon),
             scale: 0.8,
             rotation: -Cesium.Math.toRadians(heading),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
@@ -607,12 +570,14 @@ export default class extends Controller {
           },
           label: {
             text: callsign,
-            font: "11px sans-serif",
-            fillColor: Cesium.Color.WHITE,
+            font: "15px JetBrains Mono, monospace",
+            fillColor: Cesium.Color.WHITE.withAlpha(0.95),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(18, 0),
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            pixelOffset: new Cesium.Cartesian2(0, -18),
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
             translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
           },
@@ -634,7 +599,12 @@ export default class extends Controller {
           onGround,
           originCountry: flight.origin_country,
           lastTimePosition: flight.time_position || 0,
+          source: flight.source,
+          registration: flight.registration,
+          aircraftType: flight.aircraft_type,
         })
+        // Apply civilian/military filter
+        entity.show = isMil ? this.showMilitary : this.showCivilian
       }
     })
 
@@ -648,6 +618,7 @@ export default class extends Controller {
         if (this.selectedFlights.has(id)) {
           this.selectedFlights.delete(id)
           this._removeFlightHighlight(id)
+          this._renderSelectionTray()
         }
       }
     }
@@ -707,21 +678,27 @@ export default class extends Controller {
     }
   }
 
-  getTrailsDataSource() {
-    const Cesium = window.Cesium
-    if (!this._trailsDataSource) {
-      this._trailsDataSource = new Cesium.CustomDataSource("trails")
-      this.viewer.dataSources.add(this._trailsDataSource)
-    }
-    return this._trailsDataSource
-  }
+  getTrailsDataSource() { return getDataSource(this.viewer, this._ds, "trails") }
 
   toggleTrails() {
     this.trailsVisible = this.hasTrailsToggleTarget && this.trailsToggleTarget.checked
-    if (this._trailsDataSource) {
-      this._trailsDataSource.show = this.trailsVisible
+    if (this._ds["trails"]) {
+      this._ds["trails"].show = this.trailsVisible
     }
     if (this.trailsVisible) this.renderTrails()
+  }
+
+  toggleFlightFilter() {
+    this.showCivilian = this.hasCivilianToggleTarget && this.civilianToggleTarget.checked
+    this.showMilitary = this.hasMilitaryToggleTarget && this.militaryToggleTarget.checked
+    // Show/hide existing flight entities based on filter
+    for (const [id, data] of this.flightData) {
+      const isMil = this._isMilitaryFlight(data)
+      const visible = isMil ? this.showMilitary : this.showCivilian
+      data.entity.show = visible
+    }
+    this.updateEntityList()
+    this._savePrefs()
   }
 
   animate() {
@@ -801,6 +778,8 @@ export default class extends Controller {
   }
 
   showDetail(id, data) {
+    this._focusedSelection = { type: "flight", id }
+    this._renderSelectionTray()
     const callsign = data.callsign || id
     const alt = data.currentAlt
     const speed = data.speed
@@ -842,6 +821,18 @@ export default class extends Controller {
         <div class="detail-field">
           <span class="detail-label">Status</span>
           <span class="detail-value">${data.onGround ? "On Ground" : "Airborne"}</span>
+        </div>
+        ${data.registration ? `<div class="detail-field">
+          <span class="detail-label">Reg</span>
+          <span class="detail-value">${data.registration}</span>
+        </div>` : ""}
+        ${data.aircraftType ? `<div class="detail-field">
+          <span class="detail-label">Type</span>
+          <span class="detail-value">${data.aircraftType}</span>
+        </div>` : ""}
+        <div class="detail-field">
+          <span class="detail-label">Source</span>
+          <span class="detail-value" style="font-size:11px;">${data.source === "adsb" ? "ADS-B Exchange" : "OpenSky"}</span>
         </div>
       </div>
       <div class="detail-links">
@@ -1004,10 +995,10 @@ export default class extends Controller {
       },
       label: {
         text: origin.name,
-        font: "10px JetBrains Mono, monospace",
+        font: "12px JetBrains Mono, monospace",
         fillColor: Cesium.Color.fromCssColorString("#66bb6a"),
         outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-        outlineWidth: 2,
+        outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: Cesium.VerticalOrigin.TOP,
         pixelOffset: new Cesium.Cartesian2(0, 10),
@@ -1030,10 +1021,10 @@ export default class extends Controller {
       },
       label: {
         text: dest.name,
-        font: "10px JetBrains Mono, monospace",
+        font: "12px JetBrains Mono, monospace",
         fillColor: Cesium.Color.fromCssColorString("#ef5350"),
         outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-        outlineWidth: 2,
+        outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: Cesium.VerticalOrigin.TOP,
         pixelOffset: new Cesium.Cartesian2(0, 10),
@@ -1046,7 +1037,7 @@ export default class extends Controller {
 
   _clearFlightRoute() {
     if (!this._flightRouteEntities) return
-    const ds = this._flightsDataSource
+    const ds = this._ds["flights"]
     if (ds) {
       this._flightRouteEntities.forEach(e => ds.entities.remove(e))
     }
@@ -1081,6 +1072,8 @@ export default class extends Controller {
   }
 
   showSatelliteDetail(satData) {
+    this._focusedSelection = { type: "sat", id: satData.norad_id }
+    this._renderSelectionTray()
     const sat = window.satellite
     const now = new Date()
     const satrec = sat.twoline2satrec(satData.tle_line1, satData.tle_line2)
@@ -1099,9 +1092,20 @@ export default class extends Controller {
       speedKms = Math.round(speed * 10) / 10 + " km/s"
     }
 
+    const operatorHtml = satData.operator ? `
+        <div class="detail-field">
+          <span class="detail-label">Operator</span>
+          <span class="detail-value">${satData.operator}</span>
+        </div>` : ""
+    const missionHtml = satData.mission_type ? `
+        <div class="detail-field">
+          <span class="detail-label">Mission</span>
+          <span class="detail-value">${satData.mission_type.replace(/_/g, " ")}</span>
+        </div>` : ""
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign">${satData.name}</div>
-      <div class="detail-country">${satData.category.toUpperCase()}</div>
+      <div class="detail-country">${satData.category.toUpperCase()}${satData.operator ? " — " + satData.operator : ""}</div>
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">NORAD ID</span>
@@ -1119,6 +1123,8 @@ export default class extends Controller {
           <span class="detail-label">Category</span>
           <span class="detail-value">${satData.category}</span>
         </div>
+        ${operatorHtml}
+        ${missionHtml}
       </div>
       ${this.selectedCountries.size > 0 ? `
       <button class="detail-track-btn ${this._satFootprintCountryMode ? 'tracking' : ''}"
@@ -1150,6 +1156,8 @@ export default class extends Controller {
 
   closeDetail() {
     this.detailPanelTarget.style.display = "none"
+    this._focusedSelection = null
+    this._renderSelectionTray()
     this.stopTracking()
     this.clearSatFootprint()
     this._clearFlightRoute()
@@ -1331,7 +1339,7 @@ export default class extends Controller {
     this.entityListPanelTarget.style.display = "none"
   }
 
-  // ── Flight Multi-Select ───────────────────────────────────
+  // ── Selection Tray ───────────────────────────────────────
 
   toggleFlightSelection(id) {
     if (this.selectedFlights.has(id)) {
@@ -1341,47 +1349,272 @@ export default class extends Controller {
       this.selectedFlights.add(id)
       this._addFlightHighlight(id)
     }
-    // Refresh entity list to show selection state
+    this._renderSelectionTray()
     if (this.entityListPanelTarget.style.display !== "none") {
       this.renderEntityTab("flights")
     }
   }
 
-  _addFlightHighlight(id) {
-    const Cesium = window.Cesium
-    const f = this.flightData.get(id)
-    if (!f) return
+  toggleShipSelection(mmsi) {
+    if (this.selectedShips.has(mmsi)) {
+      this.selectedShips.delete(mmsi)
+      this._removeSelectionBox("ship", mmsi)
+    } else {
+      this.selectedShips.add(mmsi)
+      this._addSelectionBox("ship", mmsi)
+    }
+    this._renderSelectionTray()
+  }
 
-    const dataSource = this.getFlightsDataSource()
-    const ring = dataSource.entities.add({
-      id: `sel-${id}`,
-      position: new Cesium.CallbackProperty(() => {
-        const fd = this.flightData.get(id)
-        if (!fd) return Cesium.Cartesian3.fromDegrees(0, 0, 0)
-        return Cesium.Cartesian3.fromDegrees(fd.currentLng, fd.currentLat, fd.currentAlt)
-      }, false),
-      ellipse: {
-        semiMajorAxis: 8000,
-        semiMinorAxis: 8000,
-        height: new Cesium.CallbackProperty(() => {
-          const fd = this.flightData.get(id)
-          return fd ? fd.currentAlt : 0
-        }, false),
-        material: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.15),
-        outline: true,
-        outlineColor: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8),
-        outlineWidth: 2,
-      },
-    })
-    this._selectedFlightEntities.set(id, ring)
+  toggleSatSelection(noradId) {
+    const key = String(noradId)
+    if (this.selectedSats.has(key)) {
+      this.selectedSats.delete(key)
+      this._removeSelectionBox("sat", key)
+    } else {
+      this.selectedSats.add(key)
+      this._addSelectionBox("sat", key)
+    }
+    this._renderSelectionTray()
+  }
+
+  clearAllSelections() {
+    this.clearFlightSelection()
+    for (const mmsi of this.selectedShips) this._removeSelectionBox("ship", mmsi)
+    this.selectedShips.clear()
+    for (const nid of this.selectedSats) this._removeSelectionBox("sat", nid)
+    this.selectedSats.clear()
+    this._focusedSelection = null
+    this._renderSelectionTray()
+  }
+
+  _renderSelectionTray() {
+    const total = this.selectedFlights.size + this.selectedShips.size + this.selectedSats.size
+    if (total === 0) {
+      this.selectionTrayTarget.style.display = "none"
+      return
+    }
+
+    this.selectionTrayTarget.style.display = ""
+    let html = ""
+
+    for (const id of this.selectedFlights) {
+      const f = this.flightData.get(id)
+      const name = f?.callsign || id
+      const isMil = f && this._isMilitaryFlight(f)
+      const focused = this._focusedSelection?.type === "flight" && this._focusedSelection?.id === id
+      html += `<div class="sel-chip${focused ? " sel-focused" : ""}${isMil ? " sel-mil" : ""}" data-action="click->globe#focusSelection" data-sel-type="flight" data-sel-id="${id}">
+        <i class="fa-solid fa-plane"></i>
+        <span class="sel-chip-name">${this._escapeHtml(name)}</span>
+        <button class="sel-chip-remove" data-action="click->globe#removeSelection" data-sel-type="flight" data-sel-id="${id}">&times;</button>
+      </div>`
+    }
+
+    for (const mmsi of this.selectedShips) {
+      const s = this.shipData.get(mmsi)
+      const name = s?.name || mmsi
+      const focused = this._focusedSelection?.type === "ship" && this._focusedSelection?.id === mmsi
+      html += `<div class="sel-chip${focused ? " sel-focused" : ""}" data-action="click->globe#focusSelection" data-sel-type="ship" data-sel-id="${mmsi}">
+        <i class="fa-solid fa-ship"></i>
+        <span class="sel-chip-name">${this._escapeHtml(name)}</span>
+        <button class="sel-chip-remove" data-action="click->globe#removeSelection" data-sel-type="ship" data-sel-id="${mmsi}">&times;</button>
+      </div>`
+    }
+
+    for (const noradId of this.selectedSats) {
+      const s = this.satelliteData.find(sat => String(sat.norad_id) === noradId)
+      const name = s?.name || `SAT ${noradId}`
+      const color = s ? (this.satCategoryColors[s.category] || "#ab47bc") : "#ab47bc"
+      const focused = this._focusedSelection?.type === "sat" && String(this._focusedSelection?.id) === noradId
+      html += `<div class="sel-chip${focused ? " sel-focused" : ""}" data-action="click->globe#focusSelection" data-sel-type="sat" data-sel-id="${noradId}" style="--sel-color: ${color}">
+        <i class="fa-solid fa-satellite"></i>
+        <span class="sel-chip-name">${this._escapeHtml(name)}</span>
+        <button class="sel-chip-remove" data-action="click->globe#removeSelection" data-sel-type="sat" data-sel-id="${noradId}">&times;</button>
+      </div>`
+    }
+
+    this.selectionTrayItemsTarget.innerHTML = html
+    this._updateSelectionBoxColors()
+  }
+
+  focusSelection(event) {
+    // Don't trigger if the remove button was clicked
+    if (event.target.closest(".sel-chip-remove")) return
+    const type = event.currentTarget.dataset.selType
+    const id = event.currentTarget.dataset.selId
+    const Cesium = window.Cesium
+
+    this._focusedSelection = { type, id }
+
+    if (type === "flight") {
+      const f = this.flightData.get(id)
+      if (f) {
+        this.viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(f.currentLng, f.currentLat, 200000),
+          duration: 1.0,
+        })
+        this.showDetail(id, f)
+        return
+      }
+    } else if (type === "ship") {
+      const s = this.shipData.get(id)
+      if (s) {
+        this.viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 100000),
+          duration: 1.0,
+        })
+        this.showShipDetail(s)
+        return
+      }
+    } else if (type === "sat") {
+      const noradId = parseInt(id)
+      const s = this.satelliteData.find(sat => sat.norad_id === noradId)
+      if (s) {
+        const sat = window.satellite
+        try {
+          const now = new Date()
+          const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
+          const posVel = sat.propagate(satrec, now)
+          if (posVel.position) {
+            const gmst = sat.gstime(now)
+            const posGd = sat.eciToGeodetic(posVel.position, gmst)
+            const lng = sat.degreesLong(posGd.longitude)
+            const lat = sat.degreesLat(posGd.latitude)
+            const alt = posGd.height * 1000
+            this.viewer.camera.flyTo({
+              destination: Cesium.Cartesian3.fromDegrees(lng, lat, alt + 500000),
+              duration: 1.0,
+            })
+          }
+        } catch { /* skip */ }
+        this.showSatelliteDetail(s)
+        return
+      }
+    }
+    this._renderSelectionTray()
+  }
+
+  removeSelection(event) {
+    event.stopPropagation()
+    const type = event.currentTarget.dataset.selType
+    const id = event.currentTarget.dataset.selId
+
+    if (type === "flight") {
+      this.selectedFlights.delete(id)
+      this._removeSelectionBox("flight", id)
+    } else if (type === "ship") {
+      this.selectedShips.delete(id)
+      this._removeSelectionBox("ship", id)
+    } else if (type === "sat") {
+      this.selectedSats.delete(id)
+      this._removeSelectionBox("sat", id)
+    }
+
+    // Clear focus if removing the focused item
+    if (this._focusedSelection?.type === type && String(this._focusedSelection?.id) === id) {
+      this._focusedSelection = null
+    }
+    this._renderSelectionTray()
+  }
+
+  _addFlightHighlight(id) {
+    this._addSelectionBox("flight", id)
   }
 
   _removeFlightHighlight(id) {
-    const entity = this._selectedFlightEntities.get(id)
-    if (entity) {
-      const dataSource = this.getFlightsDataSource()
-      dataSource.entities.remove(entity)
-      this._selectedFlightEntities.delete(id)
+    this._removeSelectionBox("flight", id)
+  }
+
+  _makeSelectionBracket(color, alpha) {
+    const size = 48
+    const c = document.createElement("canvas")
+    c.width = size
+    c.height = size
+    const ctx = c.getContext("2d")
+    const L = 12 // bracket arm length
+    const pad = 2
+    ctx.strokeStyle = color
+    ctx.globalAlpha = alpha
+    ctx.lineWidth = 2.5
+    ctx.lineCap = "square"
+    // top-left
+    ctx.beginPath(); ctx.moveTo(pad, pad + L); ctx.lineTo(pad, pad); ctx.lineTo(pad + L, pad); ctx.stroke()
+    // top-right
+    ctx.beginPath(); ctx.moveTo(size - pad - L, pad); ctx.lineTo(size - pad, pad); ctx.lineTo(size - pad, pad + L); ctx.stroke()
+    // bottom-left
+    ctx.beginPath(); ctx.moveTo(pad, size - pad - L); ctx.lineTo(pad, size - pad); ctx.lineTo(pad + L, size - pad); ctx.stroke()
+    // bottom-right
+    ctx.beginPath(); ctx.moveTo(size - pad - L, size - pad); ctx.lineTo(size - pad, size - pad); ctx.lineTo(size - pad, size - pad - L); ctx.stroke()
+    return c.toDataURL()
+  }
+
+  _addSelectionBox(type, id) {
+    const key = `${type}-${id}`
+    if (this._selectionBoxEntities.has(key)) return
+
+    const Cesium = window.Cesium
+    const isFocused = this._focusedSelection?.type === type && String(this._focusedSelection?.id) === String(id)
+    const img = isFocused ? this._selBoxImgGreen : this._selBoxImgYellow
+
+    let positionProp
+    let dataSource
+    if (type === "flight") {
+      dataSource = this.getFlightsDataSource()
+      positionProp = new Cesium.CallbackProperty(() => {
+        const fd = this.flightData.get(id)
+        if (!fd) return Cesium.Cartesian3.fromDegrees(0, 0, 0)
+        return Cesium.Cartesian3.fromDegrees(fd.currentLng, fd.currentLat, fd.currentAlt)
+      }, false)
+    } else if (type === "ship") {
+      dataSource = getDataSource(this.viewer, this._ds, "ships")
+      positionProp = new Cesium.CallbackProperty(() => {
+        const sd = this.shipData.get(id)
+        if (!sd) return Cesium.Cartesian3.fromDegrees(0, 0, 0)
+        return Cesium.Cartesian3.fromDegrees(sd.currentLng, sd.currentLat, 0)
+      }, false)
+    } else if (type === "sat") {
+      dataSource = this.getSatellitesDataSource()
+      const noradId = parseInt(id)
+      positionProp = new Cesium.CallbackProperty(() => {
+        const ent = this.satelliteEntities.get(`sat-${noradId}`)
+        return ent ? ent.position?.getValue(Cesium.JulianDate.now()) : Cesium.Cartesian3.fromDegrees(0, 0, 0)
+      }, false)
+    }
+
+    if (!dataSource) return
+
+    const entity = dataSource.entities.add({
+      id: `selbox-${key}`,
+      position: positionProp,
+      billboard: {
+        image: img,
+        scale: type === "sat" ? 0.7 : 0.85,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: type === "sat"
+          ? new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.5)
+          : new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0.4),
+      },
+    })
+    this._selectionBoxEntities.set(key, { entity, dataSource })
+  }
+
+  _removeSelectionBox(type, id) {
+    const key = `${type}-${id}`
+    const entry = this._selectionBoxEntities.get(key)
+    if (!entry) return
+    try { entry.dataSource.entities.remove(entry.entity) } catch { /* ds may be gone */ }
+    this._selectionBoxEntities.delete(key)
+  }
+
+  _updateSelectionBoxColors() {
+    const Cesium = window.Cesium
+    for (const [key, entry] of this._selectionBoxEntities) {
+      const [type, ...rest] = key.split("-")
+      const id = rest.join("-")
+      const isFocused = this._focusedSelection?.type === type && String(this._focusedSelection?.id) === String(id)
+      entry.entity.billboard.image = isFocused ? this._selBoxImgGreen : this._selBoxImgYellow
     }
   }
 
@@ -1390,6 +1623,7 @@ export default class extends Controller {
       this._removeFlightHighlight(id)
     }
     this.selectedFlights.clear()
+    this._renderSelectionTray()
     if (this.entityListPanelTarget.style.display !== "none") {
       this.renderEntityTab("flights")
     }
@@ -1687,20 +1921,12 @@ export default class extends Controller {
     this.clearSearch()
   }
 
-  getFlightsDataSource() {
-    const Cesium = window.Cesium
-
-    if (!this._flightsDataSource) {
-      this._flightsDataSource = new Cesium.CustomDataSource("flights")
-      this.viewer.dataSources.add(this._flightsDataSource)
-    }
-    return this._flightsDataSource
-  }
+  getFlightsDataSource() { return getDataSource(this.viewer, this._ds, "flights") }
 
   toggleFlights() {
     this.flightsVisible = this.flightsToggleTarget.checked
-    if (this._flightsDataSource) {
-      this._flightsDataSource.show = this.flightsVisible
+    if (this._ds["flights"]) {
+      this._ds["flights"].show = this.flightsVisible
     }
     if (this.flightsVisible) {
       this.fetchFlights()
@@ -1747,6 +1973,13 @@ export default class extends Controller {
       oneweb: "#7e57c2",
       planet: "#8d6e63",
       spire: "#9ccc65",
+      gnss: "#42a5f5",
+      tdrss: "#78909c",
+      radar: "#8d6e63",
+      sbas: "#26a69a",
+      cubesat: "#ffee58",
+      amateur: "#ef5350",
+      sarsat: "#ff8a65",
     }
   }
 
@@ -1801,16 +2034,20 @@ export default class extends Controller {
               outlineWidth: s.category === "stations" ? 3 : 1,
               scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 5e7, 0.6),
             },
-            label: s.category === "stations" ? {
+            label: {
               text: s.name,
-              font: "12px sans-serif",
-              fillColor: Cesium.Color.fromCssColorString(color),
+              font: s.category === "stations" ? "bold 15px JetBrains Mono, monospace" : "14px JetBrains Mono, monospace",
+              fillColor: Cesium.Color.fromCssColorString(color).withAlpha(s.category === "stations" ? 1.0 : 0.9),
               outlineColor: Cesium.Color.BLACK,
-              outlineWidth: 2,
+              outlineWidth: 3,
               style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-              pixelOffset: new Cesium.Cartesian2(12, 0),
-              scaleByDistance: new Cesium.NearFarScalar(1e6, 1, 2e7, 0),
-            } : undefined,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+              pixelOffset: new Cesium.Cartesian2(0, s.category === "stations" ? -14 : -10),
+              scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 1e7, 0),
+              translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 8e6, 0),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
           })
           this.satelliteEntities.set(id, entity)
         }
@@ -1869,7 +2106,7 @@ export default class extends Controller {
     // Only render orbits for stations and a subset of others (too many = slow)
     const orbitSats = this.satelliteData.filter(s =>
       this.satCategoryVisible[s.category] &&
-      (s.category === "stations" || s.category === "gps-ops" || s.category === "weather")
+      (s.category === "stations" || s.category === "gps-ops" || s.category === "weather" || s.category === "military" || s.category === "gnss" || s.category === "sbas" || s.category === "tdrss")
     )
 
     orbitSats.forEach(s => {
@@ -1928,23 +2165,8 @@ export default class extends Controller {
     }
   }
 
-  getSatellitesDataSource() {
-    const Cesium = window.Cesium
-    if (!this._satellitesDataSource) {
-      this._satellitesDataSource = new Cesium.CustomDataSource("satellites")
-      this.viewer.dataSources.add(this._satellitesDataSource)
-    }
-    return this._satellitesDataSource
-  }
-
-  getSatOrbitsDataSource() {
-    const Cesium = window.Cesium
-    if (!this._satOrbitsDataSource) {
-      this._satOrbitsDataSource = new Cesium.CustomDataSource("sat-orbits")
-      this.viewer.dataSources.add(this._satOrbitsDataSource)
-    }
-    return this._satOrbitsDataSource
-  }
+  getSatellitesDataSource() { return getDataSource(this.viewer, this._ds, "satellites") }
+  getSatOrbitsDataSource() { return getDataSource(this.viewer, this._ds, "sat-orbits") }
 
   toggleSatCategory(event) {
     const cat = event.target.dataset.category
@@ -1984,13 +2206,13 @@ export default class extends Controller {
 
   toggleSatOrbits() {
     this.satOrbitsVisible = this.satOrbitsToggleTarget.checked
-    if (this._satOrbitsDataSource) {
-      this._satOrbitsDataSource.show = this.satOrbitsVisible
+    if (this._ds["sat-orbits"]) {
+      this._ds["sat-orbits"].show = this.satOrbitsVisible
     }
     if (this.satOrbitsVisible) {
       // Clear cached orbits so they recompute
       this.satOrbitEntities.clear()
-      if (this._satOrbitsDataSource) this._satOrbitsDataSource.entities.removeAll()
+      if (this._ds["sat-orbits"]) this._ds["sat-orbits"].entities.removeAll()
       this.renderSatOrbits()
     }
   }
@@ -2004,8 +2226,8 @@ export default class extends Controller {
   clearSatFootprint() {
     this.selectedSatNoradId = null
     this._selectedSatPosition = null
-    if (this._satFootprintEntities.length > 0 && this._satellitesDataSource) {
-      this._satFootprintEntities.forEach(e => this._satellitesDataSource.entities.remove(e))
+    if (this._satFootprintEntities.length > 0 && this._ds["satellites"]) {
+      this._satFootprintEntities.forEach(e => this._ds["satellites"].entities.remove(e))
       this._satFootprintEntities = []
     }
   }
@@ -2029,7 +2251,7 @@ export default class extends Controller {
   }
 
   clearHeatmap() {
-    const ds = this._satellitesDataSource
+    const ds = this._ds["satellites"]
     if (ds && this._heatmapEntities.length > 0) {
       this._heatmapEntities.forEach(e => ds.entities.remove(e))
     }
@@ -2127,7 +2349,7 @@ export default class extends Controller {
   }
 
   _clearBuildHeatmap() {
-    const ds = this._satellitesDataSource
+    const ds = this._ds["satellites"]
     if (ds) {
       this._buildHeatmapBaseEntities.forEach(e => ds.entities.remove(e))
     }
@@ -2430,6 +2652,7 @@ export default class extends Controller {
     const R = 6371
     const scanRadiusKm = R * Math.acos(R / (R + altKm))
     const scanRadiusDeg = scanRadiusKm / 111.32
+    const cosLat = Math.cos(lat * Math.PI / 180) || 0.01
 
     // Country-constrained mode: fill selected countries with hex grid
     // clipped to the satellite's scan radius
@@ -2615,14 +2838,7 @@ export default class extends Controller {
 
   // ── Airports ────────────────────────────────────────────
 
-  getAirportsDataSource() {
-    const Cesium = window.Cesium
-    if (!this._airportsDataSource) {
-      this._airportsDataSource = new Cesium.CustomDataSource("airports")
-      this.viewer.dataSources.add(this._airportsDataSource)
-    }
-    return this._airportsDataSource
-  }
+  getAirportsDataSource() { return getDataSource(this.viewer, this._ds, "airports") }
 
   toggleAirports() {
     this.airportsVisible = this.hasAirportsToggleTarget && this.airportsToggleTarget.checked
@@ -2666,10 +2882,10 @@ export default class extends Controller {
         },
         label: {
           text: icao,
-          font: "10px JetBrains Mono, monospace",
-          fillColor: accentColor.withAlpha(0.9),
+          font: "12px JetBrains Mono, monospace",
+          fillColor: accentColor.withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 2,
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           pixelOffset: new Cesium.Cartesian2(0, 10),
@@ -2683,7 +2899,7 @@ export default class extends Controller {
   }
 
   _clearAirportEntities() {
-    const ds = this._airportsDataSource
+    const ds = this._ds["airports"]
     if (ds) this._airportEntities.forEach(e => ds.entities.remove(e))
     this._airportEntities = []
   }
@@ -2720,14 +2936,7 @@ export default class extends Controller {
 
   // ── Events (Earthquakes + NASA EONET) ────────────────────
 
-  getEventsDataSource() {
-    const Cesium = window.Cesium
-    if (!this._eventsDataSource) {
-      this._eventsDataSource = new Cesium.CustomDataSource("events")
-      this.viewer.dataSources.add(this._eventsDataSource)
-    }
-    return this._eventsDataSource
-  }
+  getEventsDataSource() { return getDataSource(this.viewer, this._ds, "events") }
 
   toggleEarthquakes() {
     this.earthquakesVisible = this.hasEarthquakesToggleTarget && this.earthquakesToggleTarget.checked
@@ -2766,23 +2975,11 @@ export default class extends Controller {
   }
 
   async fetchEarthquakes() {
+    if (this._timelineActive) return
     try {
-      const resp = await fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson")
+      const resp = await fetch("/api/earthquakes")
       if (!resp.ok) return
-      const data = await resp.json()
-      this._earthquakeData = data.features.map(f => ({
-        id: f.id,
-        title: f.properties.place || "Unknown",
-        mag: f.properties.mag,
-        magType: f.properties.magType || "",
-        lat: f.geometry.coordinates[1],
-        lng: f.geometry.coordinates[0],
-        depth: f.geometry.coordinates[2],
-        time: f.properties.time,
-        url: f.properties.url,
-        tsunami: f.properties.tsunami,
-        alert: f.properties.alert,
-      }))
+      this._earthquakeData = await resp.json()
       this.renderEarthquakes()
       this._updateStats()
     } catch (e) {
@@ -2840,10 +3037,10 @@ export default class extends Controller {
         },
         label: {
           text: `M${mag.toFixed(1)}`,
-          font: "11px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-          outlineWidth: 2,
+          font: "13px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.95),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -pixelSize - 4),
@@ -2857,7 +3054,7 @@ export default class extends Controller {
   }
 
   _clearEarthquakeEntities() {
-    const ds = this._eventsDataSource
+    const ds = this._ds["events"]
     if (ds) this._earthquakeEntities.forEach(e => ds.entities.remove(e))
     this._earthquakeEntities = []
   }
@@ -2923,28 +3120,11 @@ export default class extends Controller {
   }
 
   async fetchNaturalEvents() {
+    if (this._timelineActive) return
     try {
-      const resp = await fetch("https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=100")
+      const resp = await fetch("/api/natural_events")
       if (!resp.ok) return
-      const data = await resp.json()
-      this._naturalEventData = data.events.map(ev => {
-        const geo = ev.geometry && ev.geometry.length > 0 ? ev.geometry[0] : null
-        const cat = ev.categories && ev.categories.length > 0 ? ev.categories[0] : {}
-        return {
-          id: ev.id,
-          title: ev.title,
-          categoryId: cat.id || "unknown",
-          categoryTitle: cat.title || "Unknown",
-          lat: geo ? geo.coordinates[1] : null,
-          lng: geo ? geo.coordinates[0] : null,
-          date: geo ? geo.date : null,
-          magnitudeValue: geo ? geo.magnitudeValue : null,
-          magnitudeUnit: geo ? geo.magnitudeUnit : null,
-          link: typeof ev.link === "string" ? ev.link : null,
-          sources: ev.sources || [],
-          geometryPoints: ev.geometry || [],
-        }
-      }).filter(ev => ev.lat !== null && ev.lng !== null)
+      this._naturalEventData = await resp.json()
       this.renderNaturalEvents()
       this._updateStats()
     } catch (e) {
@@ -3011,10 +3191,10 @@ export default class extends Controller {
         },
         label: {
           text: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
-          font: "10px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.WHITE.withAlpha(0.85),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-          outlineWidth: 2,
+          font: "12px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -14),
@@ -3028,7 +3208,7 @@ export default class extends Controller {
   }
 
   _clearNaturalEventEntities() {
-    const ds = this._eventsDataSource
+    const ds = this._ds["events"]
     if (ds) this._naturalEventEntities.forEach(e => ds.entities.remove(e))
     this._naturalEventEntities = []
   }
@@ -3087,6 +3267,11 @@ export default class extends Controller {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
     return `${Math.floor(seconds / 86400)}d ago`
+  }
+
+  _escapeHtml(str) {
+    if (!str) return ""
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
   }
 
   // Extract a URL from a Windy player field, which can be:
@@ -3265,10 +3450,10 @@ export default class extends Controller {
         },
         label: {
           text: w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title,
-          font: "10px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.WHITE.withAlpha(0.8),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
-          outlineWidth: 2,
+          font: "12px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -12),
@@ -3282,7 +3467,7 @@ export default class extends Controller {
   }
 
   _clearWebcamEntities() {
-    const ds = this._eventsDataSource
+    const ds = this._ds["events"]
     if (ds) this._webcamEntities.forEach(e => ds.entities.remove(e))
     this._webcamEntities = []
   }
@@ -3330,7 +3515,7 @@ export default class extends Controller {
   // ── Ships ────────────────────────────────────────────────
 
   async fetchShips() {
-    if (!this.shipsVisible) return
+    if (!this.shipsVisible || this._timelineActive) return
 
     try {
       let url = "/api/ships"
@@ -3413,6 +3598,8 @@ export default class extends Controller {
         existing.flag = ship.flag
         existing.shipType = ship.ship_type
         existing.name = name
+        existing.latitude = ship.latitude
+        existing.longitude = ship.longitude
         existing.currentLat = ship.latitude
         existing.currentLng = ship.longitude
 
@@ -3434,10 +3621,10 @@ export default class extends Controller {
           },
           label: {
             text: name,
-            font: "10px sans-serif",
-            fillColor: Cesium.Color.fromCssColorString("#26c6da"),
+            font: "12px JetBrains Mono, monospace",
+            fillColor: Cesium.Color.fromCssColorString("#26c6da").withAlpha(0.95),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             pixelOffset: new Cesium.Cartesian2(14, 0),
             scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0),
@@ -3447,6 +3634,9 @@ export default class extends Controller {
 
         this.shipData.set(mmsi, {
           entity,
+          mmsi,
+          latitude: ship.latitude,
+          longitude: ship.longitude,
           currentLat: ship.latitude,
           currentLng: ship.longitude,
           heading,
@@ -3465,79 +3655,54 @@ export default class extends Controller {
       if (!currentIds.has(mmsi)) {
         dataSource.entities.remove(data.entity)
         this.shipData.delete(mmsi)
+        if (this.selectedShips.has(mmsi)) {
+          this.selectedShips.delete(mmsi)
+          this._removeSelectionBox("ship", mmsi)
+          this._renderSelectionTray()
+        }
       }
     }
 
     this._updateStats()
   }
 
-  getShipsDataSource() {
-    const Cesium = window.Cesium
-    if (!this._shipsDataSource) {
-      this._shipsDataSource = new Cesium.CustomDataSource("ships")
-      this.viewer.dataSources.add(this._shipsDataSource)
-    }
-    return this._shipsDataSource
-  }
+  getShipsDataSource() { return getDataSource(this.viewer, this._ds, "ships") }
 
   _isMilitaryFlight(f) {
+    // Server-side classification (preferred — covers expanded ICAO hex ranges + callsign DB)
+    if (f.military === true) return true
+    if (f.military === false) return false
+
+    // Fallback for playback/cached data without the flag
     const cs = (f.callsign || "").toUpperCase()
-    if (!cs) return false
+    const hex = (f.id || "").toLowerCase()
 
-    // Known military callsign prefixes
-    const milPrefixes = [
-      // US military
-      "RCH",    // USAF C-17/C-5 (Reach)
-      "RRR",    // USAF KC-135 tankers
-      "DUKE",   // US Army
-      "EVAC",   // Aeromedical evacuation
-      "KING",   // USAF HC-130 rescue
-      "FORTE",  // RQ-4 Global Hawk
-      "JAKE",   // USAF
-      "HOMER",  // USAF P-8
-      "IRON",   // USAF
-      "DOOM",   // USAF F-35
-      "VIPER",  // USAF F-16
-      "RAGE",   // USAF
-      "REAPER", // MQ-9 Reaper
-      "TOPCAT", // US Navy
-      "NAVY",   // US Navy
-      "ARMY",   // US Army
-      "CNV",    // US Navy carrier
-      "PAT",    // US Navy P-8/P-3
-      // NATO / international
-      "NATO",   // NATO
-      "MMF",    // French Air Force
-      "GAF",    // German Air Force
-      "BAF",    // Belgian Air Force
-      "RFR",    // French Air Force
-      "IAM",    // Italian Air Force
-      "ASCOT",  // RAF (UK)
-      "RRF",    // French Navy
-      "SPAR",   // USAF VIP (SAM when POTUS)
-      "SAM",    // Special Air Mission
-      "EXEC",   // Executive flight (US govt)
-      "CFC",    // Canadian Forces
-      "SHF",    // Swedish Air Force
-      "PLF",    // Polish Air Force
-      "HAF",    // Hellenic Air Force
-      "HRZ",    // Croatian Air Force
-      "TUAF",   // Turkish Air Force
-      "FAB",    // Brazilian Air Force
-      "RFAF",   // Royal Air Force
-    ]
-
-    for (const p of milPrefixes) {
-      if (cs.startsWith(p)) return true
+    if (cs) {
+      const milPrefixes = [
+        "RCH","RRR","DUKE","EVAC","KING","FORTE","JAKE","HOMER","IRON","DOOM",
+        "VIPER","RAGE","REAPER","TOPCAT","NAVY","ARMY","CNV","PAT","NATO","MMF",
+        "GAF","BAF","RFR","IAM","ASCOT","RRF","SPAR","SAM","EXEC","CFC","SHF",
+        "PLF","HAF","HRZ","TUAF","FAB","RFAF","IAF","ISF","IQF","JOF","KEF",
+        "KAF","KUF","LBF","OMF","PAF","QAF","RSF","YAF",
+      ]
+      for (const p of milPrefixes) {
+        if (cs.startsWith(p)) return true
+      }
+      // Regex patterns for specific military callsigns
+      if (/^UAEAF/i.test(cs)) return true
+      if (/^RSAF\d/i.test(cs)) return true
+      if (/^RJAF/i.test(cs)) return true
+      if (/^EAF\d/i.test(cs)) return true
+      if (/^TAF\d/i.test(cs)) return true
     }
 
-    // ICAO-assigned military hex blocks (common ones)
-    const hex = (f.id || "").toLowerCase()
+    // Only dedicated military hex sub-blocks (NOT country-wide allocations)
     if (hex) {
-      // US military: AE0000-AE ffff
-      if (hex.startsWith("ae")) return true
-      // Some other military ranges
-      if (hex.startsWith("43c")) return true // UK military
+      if (hex >= "ae0000" && hex <= "afffff") return true // US mil block
+      if (hex.startsWith("43c")) return true              // UK mil block
+      if (hex >= "3a8000" && hex <= "3affff") return true  // France mil block
+      if (hex >= "3f4000" && hex <= "3f7fff") return true  // Germany mil block
+      if (hex >= "4b8000" && hex <= "4b8fff") return true  // Turkey mil block
     }
 
     return false
@@ -3672,6 +3837,97 @@ export default class extends Controller {
     this._savePrefs()
   }
 
+  // ── Quick Layer Bar ─────────────────────────────────────────
+  quickToggle(event) {
+    const layer = event.currentTarget.dataset.layer
+    const map = {
+      flights:     { target: "flightsToggle",       method: "toggleFlights" },
+      satellites:  null, // handled by opening the section
+      ships:       { target: "shipsToggle",          method: "toggleShips" },
+      cities:      { target: "citiesToggle",         method: "toggleCities" },
+      airports:    { target: "airportsToggle",       method: "toggleAirports" },
+      borders:     { target: "bordersToggle",        method: "toggleBorders" },
+      terrain:     { target: "terrainToggle",        method: "toggleTerrain" },
+      earthquakes: { target: "earthquakesToggle",    method: "toggleEarthquakes" },
+      events:      { target: "naturalEventsToggle",  method: "toggleNaturalEvents" },
+      cameras:     { target: "camerasToggle",        method: "toggleCameras" },
+      gpsJamming:  { target: "gpsJammingToggle",    method: "toggleGpsJamming" },
+      news:        { target: "newsToggle",          method: "toggleNews" },
+      cables:      { target: "cablesToggle",        method: "toggleCables" },
+      outages:     { target: "outagesToggle",       method: "toggleOutages" },
+    }
+
+    if (layer === "satellites") {
+      // Open the satellite section so user can pick categories
+      const satSection = this.element.querySelector('[data-section="satellites"] .sb-section-head')
+      if (satSection && !satSection.classList.contains("open")) {
+        satSection.classList.add("open")
+      }
+      // Scroll it into view
+      satSection?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      return
+    }
+
+    const cfg = map[layer]
+    if (!cfg) return
+
+    const targetName = cfg.target + "Target"
+    const hasTarget = "has" + cfg.target.charAt(0).toUpperCase() + cfg.target.slice(1) + "Target"
+
+    if (this[hasTarget]) {
+      this[targetName].checked = !this[targetName].checked
+    }
+    this[cfg.method]()
+    this._syncQuickBar()
+  }
+
+  toggleSatChip(event) {
+    const btn = event.currentTarget
+    const category = btn.dataset.category
+    // Fire the existing toggleSatCategory with a synthetic event
+    const syntheticEvent = { target: { dataset: { category }, checked: !this.satCategoryVisible[category] } }
+    syntheticEvent.target.checked = !this.satCategoryVisible[category]
+    this.toggleSatCategory(syntheticEvent)
+    btn.classList.toggle("active", this.satCategoryVisible[category])
+    this._syncQuickBar()
+    this._updateSatBadge()
+  }
+
+  _syncQuickBar() {
+    const sync = (targetName, active) => {
+      const has = "has" + targetName.charAt(0).toUpperCase() + targetName.slice(1) + "Target"
+      if (this[has]) this[targetName + "Target"].classList.toggle("active", active)
+    }
+
+    sync("qlFlights", this.flightsVisible)
+    sync("qlShips", this.shipsVisible)
+    sync("qlCities", this.citiesVisible)
+    sync("qlAirports", this.airportsVisible)
+    sync("qlBorders", this.bordersVisible)
+    sync("qlTerrain", this.terrainEnabled)
+    sync("qlEarthquakes", this.earthquakesVisible)
+    sync("qlEvents", this.naturalEventsVisible)
+    sync("qlCameras", this.camerasVisible)
+    sync("qlGpsJamming", this.gpsJammingVisible)
+    sync("qlNews", this.newsVisible)
+    sync("qlCables", this.cablesVisible)
+    sync("qlOutages", this.outagesVisible)
+
+    const anySat = Object.values(this.satCategoryVisible).some(v => v)
+    sync("qlSatellites", anySat)
+  }
+
+  _updateSatBadge() {
+    if (!this.hasSatBadgeTarget) return
+    const count = Object.values(this.satCategoryVisible).filter(v => v).length
+    if (count > 0) {
+      this.satBadgeTarget.textContent = count
+      this.satBadgeTarget.style.display = ""
+    } else {
+      this.satBadgeTarget.style.display = "none"
+    }
+  }
+
   // ── Stats Bar ───────────────────────────────────────────────
 
   _updateStats() {
@@ -3691,6 +3947,10 @@ export default class extends Controller {
                     (this.camerasVisible ? this._webcamData.length : 0)
       this.statEventsTarget.textContent = count.toLocaleString()
     }
+
+    // Keep quick bar and badges in sync
+    this._syncQuickBar()
+    this._updateSatBadge()
   }
 
   _updateClock() {
@@ -3703,16 +3963,17 @@ export default class extends Controller {
   // ── Preferences Save/Restore ────────────────────────────────
 
   _savePrefs() {
-    if (!this.signedInValue) return
+    if (!this.signedInValue || !this.viewer) return
     clearTimeout(this._savePrefsDebounce)
     this._savePrefsDebounce = setTimeout(() => this._doSavePrefs(), 2000)
   }
 
   _doSavePrefs() {
     const Cesium = window.Cesium
-    if (!Cesium || !this.viewer) return
+    if (!Cesium || !this.viewer || !this.viewer.camera) return
 
-    const carto = this.viewer.camera.positionCartographic
+    let carto
+    try { carto = this.viewer.camera.positionCartographic } catch { return }
     const layers = {
       flights: this.flightsVisible,
       trails: this.trailsVisible,
@@ -3726,8 +3987,15 @@ export default class extends Controller {
       earthquakes: this.earthquakesVisible,
       naturalEvents: this.naturalEventsVisible,
       cameras: this.camerasVisible,
+      gpsJamming: this.gpsJammingVisible,
+      news: this.newsVisible,
+      cables: this.cablesVisible,
+      outages: this.outagesVisible,
       terrain: this.terrainEnabled || false,
-      terrainExaggeration: this.viewer.scene.verticalExaggeration || 1,
+      terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
+      buildings: this.buildingsEnabled || false,
+      showCivilian: this.showCivilian,
+      showMilitary: this.showMilitary,
       satCategories: { ...this.satCategoryVisible },
     }
 
@@ -3855,6 +4123,22 @@ export default class extends Controller {
         this.camerasToggleTarget.checked = true
         this.toggleCameras()
       }
+      if (l.gpsJamming && this.hasGpsJammingToggleTarget) {
+        this.gpsJammingToggleTarget.checked = true
+        this.toggleGpsJamming()
+      }
+      if (l.news && this.hasNewsToggleTarget) {
+        this.newsToggleTarget.checked = true
+        this.toggleNews()
+      }
+      if (l.cables && this.hasCablesToggleTarget) {
+        this.cablesToggleTarget.checked = true
+        this.toggleCables()
+      }
+      if (l.outages && this.hasOutagesToggleTarget) {
+        this.outagesToggleTarget.checked = true
+        this.toggleOutages()
+      }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true
         this.toggleTerrain()
@@ -3863,32 +4147,30 @@ export default class extends Controller {
         this.terrainExaggerationTarget.value = l.terrainExaggeration
         this.setTerrainExaggeration()
       }
+      if (l.buildings && this.hasBuildingsToggleTarget) {
+        this.buildingsToggleTarget.checked = true
+        this.toggleBuildings()
+      }
+      // Civilian/military filter (default both on)
+      if (l.showCivilian === false && this.hasCivilianToggleTarget) {
+        this.civilianToggleTarget.checked = false
+        this.showCivilian = false
+      }
+      if (l.showMilitary === false && this.hasMilitaryToggleTarget) {
+        this.militaryToggleTarget.checked = false
+        this.showMilitary = false
+      }
 
       // Satellite categories
       if (l.satCategories) {
-        const catTargetMap = {
-          stations: "satStationsToggle",
-          starlink: "satStarlinkToggle",
-          "gps-ops": "satGpsToggle",
-          weather: "satWeatherToggle",
-        }
         for (const [cat, visible] of Object.entries(l.satCategories)) {
           if (!visible) continue
-          // Try named target first, then find by data-category
-          const targetName = catTargetMap[cat]
-          let checkbox = null
-          if (targetName && this[`has${targetName.charAt(0).toUpperCase() + targetName.slice(1)}Target`]) {
-            checkbox = this[`${targetName}Target`]
-          }
-          if (!checkbox) {
-            checkbox = this.element.querySelector(`input[data-category="${cat}"]`)
-          }
-          if (checkbox) {
-            checkbox.checked = true
-            this.satCategoryVisible[cat] = true
-            if (!this._loadedSatCategories.has(cat)) {
-              this.fetchSatCategory(cat)
-            }
+          this.satCategoryVisible[cat] = true
+          // Activate the chip button
+          const chip = this.element.querySelector(`.sb-chip[data-category="${cat}"]`)
+          if (chip) chip.classList.add("active")
+          if (!this._loadedSatCategories.has(cat)) {
+            this.fetchSatCategory(cat)
           }
         }
       }
@@ -3903,6 +4185,10 @@ export default class extends Controller {
     if (prefs.airline_filter && prefs.airline_filter.length > 0) {
       this._airlineFilter = new Set(prefs.airline_filter)
     }
+
+    // Sync quick bar and badges after restore
+    this._syncQuickBar()
+    this._updateSatBadge()
   }
 
   getShipTypeName(type) {
@@ -3923,6 +4209,9 @@ export default class extends Controller {
   }
 
   showShipDetail(data) {
+    const mmsi = data.mmsi || data.entity?.id?.replace("ship-", "")
+    this._focusedSelection = { type: "ship", id: mmsi }
+    this._renderSelectionTray()
     const speedKnots = data.speed ? Math.round(data.speed * 10) / 10 + " kn" : "—"
     const courseDisplay = data.course ? Math.round(data.course) + "°" : "—"
     const headingDisplay = data.heading ? Math.round(data.heading) + "°" : "—"
@@ -3966,8 +4255,8 @@ export default class extends Controller {
 
   toggleShips() {
     this.shipsVisible = this.hasShipsToggleTarget && this.shipsToggleTarget.checked
-    if (this._shipsDataSource) {
-      this._shipsDataSource.show = this.shipsVisible
+    if (this._ds["ships"]) {
+      this._ds["ships"].show = this.shipsVisible
     }
     if (this.shipsVisible) {
       this.fetchShips()
@@ -3985,50 +4274,10 @@ export default class extends Controller {
 
   // ── Country Borders, Selection & Draw Tool ───────────────
 
-  screenToLatLng(screenPos) {
-    const Cesium = window.Cesium
-    const ray = this.viewer.camera.getPickRay(screenPos)
-    const cartesian = this.viewer.scene.globe.pick(ray, this.viewer.scene)
-    if (!cartesian) return null
-    const carto = Cesium.Cartographic.fromCartesian(cartesian)
-    return { lat: Cesium.Math.toDegrees(carto.latitude), lng: Cesium.Math.toDegrees(carto.longitude) }
-  }
-
-  haversineDistance(a, b) {
-    const R = 6371000
-    const toRad = d => d * Math.PI / 180
-    const dLat = toRad(b.lat - a.lat)
-    const dLng = toRad(b.lng - a.lng)
-    const sin2 = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2
-    return R * 2 * Math.atan2(Math.sqrt(sin2), Math.sqrt(1 - sin2))
-  }
-
-  // Point-in-polygon (ray casting)
-  pointInPolygon(lat, lng, ring) {
-    let inside = false
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0], yi = ring[i][1]
-      const xj = ring[j][0], yj = ring[j][1]
-      if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
-        inside = !inside
-      }
-    }
-    return inside
-  }
-
-  findCountryAtPoint(lat, lng) {
-    for (const feature of this._countryFeatures) {
-      const geom = feature.geometry
-      const name = feature.properties?.NAME || feature.properties?.name
-      if (!geom || !name) continue
-
-      const polygons = geom.type === "Polygon" ? [geom.coordinates] : geom.type === "MultiPolygon" ? geom.coordinates : []
-      for (const poly of polygons) {
-        if (this.pointInPolygon(lat, lng, poly[0])) return name
-      }
-    }
-    return null
-  }
+  screenToLatLng(screenPos) { return screenToLatLng(this.viewer, screenPos) }
+  haversineDistance(a, b) { return haversineDistance(a, b) }
+  pointInPolygon(lat, lng, ring) { return pointInPolygon(lat, lng, ring) }
+  findCountryAtPoint(lat, lng) { return findCountryAtPoint(this._countryFeatures, lat, lng) }
 
   // ── Cities Layer ─────────────────────────────────────────
 
@@ -4046,14 +4295,7 @@ export default class extends Controller {
     this._savePrefs()
   }
 
-  getCitiesDataSource() {
-    const Cesium = window.Cesium
-    if (!this._citiesDataSource) {
-      this._citiesDataSource = new Cesium.CustomDataSource("cities")
-      this.viewer.dataSources.add(this._citiesDataSource)
-    }
-    return this._citiesDataSource
-  }
+  getCitiesDataSource() { return getDataSource(this.viewer, this._ds, "cities") }
 
   async loadCities() {
     try {
@@ -4097,14 +4339,14 @@ export default class extends Controller {
   }
 
   clearCities() {
-    const ds = this._citiesDataSource
+    const ds = this._ds["cities"]
     if (ds) {
       this._cityEntities.forEach(e => ds.entities.remove(e))
     }
     this._cityEntities = []
   }
 
-  renderCities() {
+  async renderCities() {
     const Cesium = window.Cesium
     this.clearCities()
     if (!this.citiesVisible || this._citiesData.length === 0) return
@@ -4127,6 +4369,20 @@ export default class extends Controller {
     // Limit to top 500 cities to avoid overload
     cities = cities.slice(0, 500)
 
+    // Sample terrain heights if terrain is enabled
+    let terrainHeights = null
+    if (this.terrainEnabled && this.viewer.terrainProvider && !(this.viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider)) {
+      const positions = cities.map(c => Cesium.Cartographic.fromDegrees(c.lng, c.lat))
+      try {
+        terrainHeights = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, positions)
+      } catch (e) {
+        console.warn("Terrain sampling failed for cities:", e)
+      }
+    }
+
+    // Bail if cities were toggled off while awaiting terrain
+    if (!this.citiesVisible) return
+
     const maxPop = cities.length > 0 ? cities[0].population : 1
 
     cities.forEach((city, idx) => {
@@ -4138,13 +4394,16 @@ export default class extends Controller {
           ? Cesium.Color.fromCssColorString("#ffd54f")
           : Cesium.Color.fromCssColorString("#e0e0e0")
 
+        const height = terrainHeights ? terrainHeights[idx].height || 0 : 0
+
         const entity = dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 100),
+          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, height),
           point: {
             pixelSize,
             color: color.withAlpha(0.9),
             outlineColor: color.withAlpha(0.5),
             outlineWidth: 1,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
           label: {
             text: city.name,
@@ -4155,6 +4414,7 @@ export default class extends Controller {
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             pixelOffset: new Cesium.Cartesian2(0, -14),
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 1e7, 0.3),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         })
         this._cityEntities.push(entity)
@@ -4194,7 +4454,7 @@ export default class extends Controller {
             if (!this.pointPassesFilter(cLat, cLng)) continue
           }
 
-          const positions = outerRing.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1], 50))
+          const positions = outerRing.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1]))
 
           try {
             const entity = dataSource.entities.add({
@@ -4204,7 +4464,7 @@ export default class extends Controller {
                 outline: true,
                 outlineColor: urbanOutline,
                 outlineWidth: 1,
-                height: 50,
+                classificationType: Cesium.ClassificationType.BOTH,
               },
             })
             this._cityEntities.push(entity)
@@ -4228,7 +4488,7 @@ export default class extends Controller {
       if (!this.bordersVisible) {
         this.bordersVisible = true
         if (this.hasBordersToggleTarget) this.bordersToggleTarget.checked = true
-        if (this._bordersDataSource) this._bordersDataSource.show = true
+        if (this._ds["borders"]) this._ds["borders"].show = true
       }
       this.viewer.canvas.style.cursor = "pointer"
     } else {
@@ -4272,13 +4532,35 @@ export default class extends Controller {
     this._savePrefs()
   }
 
+  async toggleBuildings() {
+    const Cesium = window.Cesium
+    this.buildingsEnabled = this.hasBuildingsToggleTarget && this.buildingsToggleTarget.checked
+    if (this.buildingsEnabled) {
+      if (!this._buildingsTileset) {
+        try {
+          this._buildingsTileset = await Cesium.createOsmBuildingsAsync()
+          this.viewer.scene.primitives.add(this._buildingsTileset)
+        } catch (e) {
+          console.warn("Failed to load OSM buildings:", e)
+          this.buildingsEnabled = false
+          if (this.hasBuildingsToggleTarget) this.buildingsToggleTarget.checked = false
+          return
+        }
+      }
+      this._buildingsTileset.show = true
+    } else {
+      if (this._buildingsTileset) this._buildingsTileset.show = false
+    }
+    this._savePrefs()
+  }
+
   toggleBorders() {
     this.bordersVisible = this.hasBordersToggleTarget && this.bordersToggleTarget.checked
     if (this.bordersVisible && !this.bordersLoaded) {
       this.loadBorders()
     }
-    if (this._bordersDataSource) {
-      this._bordersDataSource.show = this.bordersVisible
+    if (this._ds["borders"]) {
+      this._ds["borders"].show = this.bordersVisible
     }
     this._savePrefs()
   }
@@ -4343,7 +4625,7 @@ export default class extends Controller {
       })
 
       this.bordersLoaded = true
-      this._bordersDataSource.show = this.bordersVisible
+      this._ds["borders"].show = this.bordersVisible
 
       // Restore pending country selections from saved preferences
       if (this._pendingCountryRestore && this._pendingCountryRestore.length > 0) {
@@ -4353,6 +4635,7 @@ export default class extends Controller {
         this._pendingCountryRestore = null
         this._updateSelectedCountriesBbox()
         this.updateBorderColors()
+        this._updateDeselectBtn()
         if (this.flightsVisible) this.fetchFlights()
         if (this.shipsVisible) this.fetchShips()
         if (this.citiesVisible) this.renderCities()
@@ -4379,6 +4662,7 @@ export default class extends Controller {
     this._activeCircle = null // country click overrides circle filter
     this._updateSelectedCountriesBbox()
     this.updateBorderColors()
+    this._updateDeselectBtn()
 
     // Re-fetch active layers with updated filter
     if (this.flightsVisible) this.fetchFlights()
@@ -4398,12 +4682,19 @@ export default class extends Controller {
     this.viewer.canvas.style.cursor = ""
     this.removeDrawCircle()
     this.updateBorderColors()
+    this._updateDeselectBtn()
     this.closeDetail()
 
     // Re-fetch with no filter (back to viewport)
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     this.updateEntityList()
+  }
+
+  _updateDeselectBtn() {
+    if (this.hasDeselectAllBtnTarget) {
+      this.deselectAllBtnTarget.style.display = this.selectedCountries.size > 0 ? "" : "none"
+    }
   }
 
   updateBorderColors() {
@@ -4460,7 +4751,7 @@ export default class extends Controller {
     if (!this.bordersVisible) {
       this.bordersVisible = true
       if (this.hasBordersToggleTarget) this.bordersToggleTarget.checked = true
-      if (this._bordersDataSource) this._bordersDataSource.show = true
+      if (this._ds["borders"]) this._ds["borders"].show = true
     }
     this.drawMode = true
     this._drawCenter = null
@@ -4517,8 +4808,8 @@ export default class extends Controller {
   }
 
   removeDrawCircle() {
-    if (this._drawCircleEntity && this._bordersDataSource) {
-      this._bordersDataSource.entities.remove(this._drawCircleEntity)
+    if (this._drawCircleEntity && this._ds["borders"]) {
+      this._ds["borders"].entities.remove(this._drawCircleEntity)
       this._drawCircleEntity = null
       this._drawRadius = 0
     }
@@ -4572,91 +4863,1110 @@ export default class extends Controller {
     if (this._buildHeatmapActive) this._initBuildHeatmap()
   }
 
-  getBordersDataSource() {
-    const Cesium = window.Cesium
-    if (!this._bordersDataSource) {
-      this._bordersDataSource = new Cesium.CustomDataSource("borders")
-      this.viewer.dataSources.add(this._bordersDataSource)
-    }
-    return this._bordersDataSource
-  }
+  getBordersDataSource() { return getDataSource(this.viewer, this._ds, "borders") }
 
   // ── Camera Controls ──────────────────────────────────────
 
-  resetView() {
-    const Cesium = window.Cesium
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(10, 30, 20_000_000),
-      orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-      duration: 1.5,
-    })
+  resetView() { resetView(this.viewer) }
+  viewTopDown() { viewTopDown(this.viewer) }
+  resetTilt() { resetTilt(this.viewer) }
+  zoomIn() { zoomIn(this.viewer) }
+  zoomOut() { zoomOut(this.viewer) }
+
+  // ── Recording ──────────────────────────────────────────────
+  toggleRecording() {
+    if (this._mediaRecorder && this._mediaRecorder.state === "recording") {
+      this._stopRecording()
+    } else {
+      this._startRecording()
+    }
   }
 
-  viewTopDown() {
-    const Cesium = window.Cesium
-    const carto = this.viewer.camera.positionCartographic
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        Cesium.Math.toDegrees(carto.longitude),
-        Cesium.Math.toDegrees(carto.latitude),
-        carto.height
-      ),
-      orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
-      duration: 1,
-    })
+  _startRecording() {
+    const canvas = this.viewer.scene.canvas
+    const stream = canvas.captureStream(30)
+
+    // Try to use WebM VP9, fall back to VP8
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : "video/webm;codecs=vp8"
+
+    this._recordedChunks = []
+    this._mediaRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 })
+
+    this._mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) this._recordedChunks.push(e.data)
+    }
+
+    this._mediaRecorder.onstop = () => {
+      const blob = new Blob(this._recordedChunks, { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `globe-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.webm`
+      a.click()
+      URL.revokeObjectURL(url)
+      this._recordedChunks = []
+    }
+
+    this._mediaRecorder.start(1000) // collect data every second
+    this._recordingStart = Date.now()
+
+    // Update UI
+    if (this.hasRecordBtnTarget) this.recordBtnTarget.classList.add("recording")
+    if (this.hasRecordIconTarget) this.recordIconTarget.className = "fa-solid fa-stop"
+
+    // Update recording timer in the stats bar
+    this._recordingTimerInterval = setInterval(() => this._updateRecordingTimer(), 1000)
   }
 
-  resetTilt() {
-    const Cesium = window.Cesium
-    const carto = this.viewer.camera.positionCartographic
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        Cesium.Math.toDegrees(carto.longitude),
-        Cesium.Math.toDegrees(carto.latitude),
-        carto.height
-      ),
-      orientation: {
-        heading: this.viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
-        roll: 0,
-      },
-      duration: 0.8,
-    })
+  _stopRecording() {
+    if (this._mediaRecorder) {
+      this._mediaRecorder.stop()
+      this._mediaRecorder = null
+    }
+    if (this._recordingTimerInterval) {
+      clearInterval(this._recordingTimerInterval)
+      this._recordingTimerInterval = null
+    }
+    if (this.hasRecordBtnTarget) this.recordBtnTarget.classList.remove("recording")
+    if (this.hasRecordIconTarget) this.recordIconTarget.className = "fa-solid fa-circle"
+
+    // Remove timer badge
+    const badge = document.getElementById("record-timer")
+    if (badge) badge.remove()
   }
 
-  zoomIn() {
-    const Cesium = window.Cesium
-    const carto = this.viewer.camera.positionCartographic
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        Cesium.Math.toDegrees(carto.longitude),
-        Cesium.Math.toDegrees(carto.latitude),
-        carto.height * 0.5
-      ),
-      duration: 0.5,
-    })
+  _updateRecordingTimer() {
+    const elapsed = Math.floor((Date.now() - this._recordingStart) / 1000)
+    const min = String(Math.floor(elapsed / 60)).padStart(2, "0")
+    const sec = String(elapsed % 60).padStart(2, "0")
+
+    let badge = document.getElementById("record-timer")
+    if (!badge) {
+      badge = document.createElement("div")
+      badge.id = "record-timer"
+      document.getElementById("controls-bar")?.appendChild(badge)
+    }
+    badge.textContent = `${min}:${sec}`
   }
 
-  zoomOut() {
-    const Cesium = window.Cesium
-    const carto = this.viewer.camera.positionCartographic
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        Cesium.Math.toDegrees(carto.longitude),
-        Cesium.Math.toDegrees(carto.latitude),
-        Math.min(carto.height * 2, 40_000_000)
-      ),
-      duration: 0.5,
-    })
+  takeScreenshot() {
+    const canvas = this.viewer.scene.canvas
+    // Force a render to ensure we capture the current frame
+    this.viewer.scene.render()
+
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `globe-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    }, "image/png")
   }
 
   toggleTrains() {
     // Placeholder
   }
 
+  // ── News Events ────────────────────────────────────────────
+
+  getNewsDataSource() { return getDataSource(this.viewer, this._ds, "news") }
+
+  toggleNews() {
+    this.newsVisible = this.hasNewsToggleTarget && this.newsToggleTarget.checked
+    if (this.newsVisible) {
+      this.fetchNews()
+      this._newsInterval = setInterval(() => this.fetchNews(), 900000) // 15 min
+    } else {
+      if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
+      this._clearNewsEntities()
+      this._newsData = []
+    }
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  async fetchNews() {
+    if (this._timelineActive) return
+    try {
+      const resp = await fetch("/api/news")
+      if (!resp.ok) return
+      const events = await resp.json()
+      this._newsData = events
+      this._renderNews(events)
+    } catch (e) {
+      console.error("Failed to fetch news:", e)
+    }
+  }
+
+  _renderNews(events) {
+    this._clearNewsEntities()
+    const dataSource = this.getNewsDataSource()
+
+    const categoryColors = {
+      conflict: "#f44336",
+      unrest: "#ff9800",
+      disaster: "#ff5722",
+      health: "#e91e63",
+      economy: "#ffc107",
+      diplomacy: "#4caf50",
+      other: "#90a4ae",
+    }
+
+    const categoryIcons = {
+      conflict: "fa-crosshairs",
+      unrest: "fa-bullhorn",
+      disaster: "fa-hurricane",
+      health: "fa-heart-pulse",
+      economy: "fa-chart-line",
+      diplomacy: "fa-handshake",
+      other: "fa-newspaper",
+    }
+
+    events.forEach((ev, i) => {
+      const color = categoryColors[ev.category] || "#90a4ae"
+      const cesiumColor = Cesium.Color.fromCssColorString(color)
+
+      // Size based on tone intensity
+      const intensity = Math.min(Math.abs(ev.tone) / 10, 1)
+      const pixelSize = 6 + intensity * 8
+
+      const entity = dataSource.entities.add({
+        id: `news-${i}`,
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+        point: {
+          pixelSize,
+          color: cesiumColor.withAlpha(0.85),
+          outlineColor: cesiumColor.withAlpha(0.4),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+        label: {
+          text: ev.name ? ev.name.split(",")[0] : "",
+          font: "11px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        },
+        description: `<div style="font-family: sans-serif; max-width: 350px;">
+          <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${ev.category}</div>
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">${ev.name || "Unknown location"}</div>
+          <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Tone: ${ev.tone} &middot; ${ev.level}</div>
+          <div style="font-size: 11px; margin-bottom: 8px;">${(ev.themes || []).map(t => '<span style="display:inline-block;background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:3px;margin:2px;font-size:10px;">' + t.replace(/^.*_/, '') + '</span>').join("")}</div>
+          <a href="${ev.url}" target="_blank" rel="noopener" style="color: ${color}; font-size: 11px;">Read article →</a>
+          ${ev.time ? '<div style="font-size: 10px; color: #666; margin-top: 6px;">' + new Date(ev.time).toUTCString() + '</div>' : ''}
+        </div>`,
+      })
+      this._newsEntities.push(entity)
+    })
+  }
+
+  _clearNewsEntities() {
+    const ds = this.getNewsDataSource()
+    this._newsEntities.forEach(e => ds.entities.remove(e))
+    this._newsEntities = []
+  }
+
+  showNewsDetail(ev) {
+    const categoryColors = {
+      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+    }
+    const categoryIcons = {
+      conflict: "fa-crosshairs", unrest: "fa-bullhorn", disaster: "fa-hurricane",
+      health: "fa-heart-pulse", economy: "fa-chart-line", diplomacy: "fa-handshake", other: "fa-newspaper",
+    }
+    const color = categoryColors[ev.category] || "#90a4ae"
+    const icon = categoryIcons[ev.category] || "fa-newspaper"
+
+    // Find nearby stories (within ~1° ≈ 111km)
+    const nearby = (this._newsData || []).filter(n =>
+      n.url !== ev.url &&
+      Math.abs(n.lat - ev.lat) < 1.0 &&
+      Math.abs(n.lng - ev.lng) < 1.0
+    )
+
+    const themeTags = (ev.themes || []).map(t =>
+      `<span style="display:inline-block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);padding:2px 7px;border-radius:3px;margin:2px;font-size:10px;color:rgba(200,210,225,0.7);">${t.replace(/^.*_/, "")}</span>`
+    ).join("")
+
+    const timeStr = ev.time ? this._timeAgo(new Date(ev.time)) : ""
+
+    const nearbyHtml = nearby.length > 0 ? `
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:rgba(200,210,225,0.5);margin-bottom:8px;">
+          ${nearby.length} nearby stor${nearby.length === 1 ? "y" : "ies"}
+        </div>
+        ${nearby.slice(0, 10).map(n => {
+          const nColor = categoryColors[n.category] || "#90a4ae"
+          const nName = n.name ? n.name.split(",")[0] : "Story"
+          return `<a href="${this._escapeHtml(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.8);text-decoration:none;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04);">
+            <span style="color:${nColor};margin-right:4px;">●</span>
+            ${this._escapeHtml(nName)}
+            <span style="color:rgba(200,210,225,0.4);font-size:10px;margin-left:4px;">${n.category}</span>
+          </a>`
+        }).join("")}
+      </div>
+    ` : ""
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${color};">
+        <i class="fa-solid ${icon}" style="margin-right:6px;"></i>${ev.category.charAt(0).toUpperCase() + ev.category.slice(1)}
+      </div>
+      <div class="detail-country">${this._escapeHtml(ev.name || "Unknown location")}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Sentiment</span>
+          <span class="detail-value">${ev.tone} · ${ev.level}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Location</span>
+          <span class="detail-value">${ev.lat.toFixed(2)}°, ${ev.lng.toFixed(2)}°</span>
+        </div>
+        ${timeStr ? `<div class="detail-field">
+          <span class="detail-label">Published</span>
+          <span class="detail-value">${timeStr}</span>
+        </div>` : ""}
+      </div>
+      <div style="margin:8px 0;">${themeTags}</div>
+      <a href="${this._escapeHtml(ev.url)}" target="_blank" rel="noopener" class="detail-track-btn">Read Article →</a>
+      ${nearbyHtml}
+    `
+    this.detailPanelTarget.style.display = ""
+
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 300000),
+      duration: 1.5,
+    })
+  }
+
+  // ── GPS Jamming ─────────────────────────────────────────
+
+  getGpsJammingDataSource() { return getDataSource(this.viewer, this._ds, "gpsJamming") }
+
+  toggleGpsJamming() {
+    this.gpsJammingVisible = this.hasGpsJammingToggleTarget && this.gpsJammingToggleTarget.checked
+    if (this.gpsJammingVisible) {
+      this.fetchGpsJamming()
+      this._gpsJammingInterval = setInterval(() => this.fetchGpsJamming(), 60000)
+    } else {
+      if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
+      this._clearGpsJammingEntities()
+    }
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  async fetchGpsJamming() {
+    if (this._timelineActive) return
+    try {
+      const resp = await fetch("/api/gps_jamming")
+      if (!resp.ok) return
+      const cells = await resp.json()
+      this._renderGpsJamming(cells)
+    } catch (e) {
+      console.error("Failed to fetch GPS jamming data:", e)
+    }
+  }
+
+  _renderGpsJamming(cells) {
+    this._clearGpsJammingEntities()
+    const dataSource = this.getGpsJammingDataSource()
+
+    const colors = {
+      low: Cesium.Color.fromCssColorString("rgba(76, 175, 80, 0.25)"),
+      medium: Cesium.Color.fromCssColorString("rgba(255, 193, 7, 0.45)"),
+      high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.55)")
+    }
+    const outlines = {
+      low: Cesium.Color.fromCssColorString("rgba(76, 175, 80, 0.5)"),
+      medium: Cesium.Color.fromCssColorString("rgba(255, 193, 7, 0.7)"),
+      high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.8)")
+    }
+
+    const halfCell = 0.5 // half of 1° cell
+
+    cells.forEach(cell => {
+      // Rectangle entity for the cell
+      const rectEntity = dataSource.entities.add({
+        id: `jam-${cell.lat}-${cell.lng}`,
+        rectangle: {
+          coordinates: Cesium.Rectangle.fromDegrees(
+            cell.lng - halfCell, cell.lat - halfCell,
+            cell.lng + halfCell, cell.lat + halfCell
+          ),
+          material: colors[cell.level] || colors.low,
+          outline: true,
+          outlineColor: outlines[cell.level] || outlines.low,
+          outlineWidth: 1,
+          height: 0,
+        },
+        description: `<b>GPS Interference</b><br>Level: ${cell.level.toUpperCase()}<br>Bad accuracy: ${cell.pct}% (${cell.bad}/${cell.total} aircraft)<br>NACp ≤ 6 indicates degraded GPS`,
+      })
+      this._gpsJammingEntities.push(rectEntity)
+
+      // Label for medium/high cells
+      if (cell.level !== "low") {
+        const labelEntity = dataSource.entities.add({
+          id: `jam-lbl-${cell.lat}-${cell.lng}`,
+          position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 100),
+          label: {
+            text: `${cell.pct}%`,
+            font: "11px monospace",
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scale: 0.8,
+          },
+        })
+        this._gpsJammingEntities.push(labelEntity)
+      }
+    })
+  }
+
+  _clearGpsJammingEntities() {
+    const ds = this.getGpsJammingDataSource()
+    this._gpsJammingEntities.forEach(e => ds.entities.remove(e))
+    this._gpsJammingEntities = []
+  }
+
+  // ── Submarine Cables ──────────────────────────────────────
+
+  getCablesDataSource() { return getDataSource(this.viewer, this._ds, "cables") }
+
+  toggleCables() {
+    this.cablesVisible = this.hasCablesToggleTarget && this.cablesToggleTarget.checked
+    if (this.cablesVisible) {
+      this.fetchCables()
+    } else {
+      this._clearCableEntities()
+    }
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  async fetchCables() {
+    try {
+      const resp = await fetch("/api/submarine_cables")
+      if (!resp.ok) return
+      const data = await resp.json()
+      this._renderCables(data.cables, data.landingPoints)
+    } catch (e) {
+      console.error("Failed to fetch submarine cables:", e)
+    }
+  }
+
+  _renderCables(cables, landingPoints) {
+    this._clearCableEntities()
+    const Cesium = window.Cesium
+    const dataSource = this.getCablesDataSource()
+
+    // Render cable polylines
+    cables.forEach(cable => {
+      const color = Cesium.Color.fromCssColorString(cable.color || "#00bcd4").withAlpha(0.6)
+      const coords = cable.coordinates || []
+
+      // Each cable may have multiple segments (array of arrays of [lng, lat])
+      coords.forEach((segment, si) => {
+        if (!Array.isArray(segment) || segment.length < 2) return
+        const positions = segment.map(pt => {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            return Cesium.Cartesian3.fromDegrees(pt[0], pt[1], -50)
+          }
+          return null
+        }).filter(p => p !== null)
+
+        if (positions.length < 2) return
+
+        const entity = dataSource.entities.add({
+          id: `cable-${cable.id}-${si}`,
+          polyline: {
+            positions,
+            width: 1.5,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.15,
+              color,
+            }),
+            clampToGround: false,
+          },
+          properties: {
+            cableName: cable.name,
+            cableId: cable.id,
+          },
+        })
+        this._cableEntities.push(entity)
+      })
+    })
+
+    // Render landing points
+    if (landingPoints) {
+      landingPoints.forEach(lp => {
+        const entity = dataSource.entities.add({
+          id: `landing-${lp.id}`,
+          position: Cesium.Cartesian3.fromDegrees(lp.lng, lp.lat, 0),
+          point: {
+            pixelSize: 4,
+            color: Cesium.Color.fromCssColorString("#00e5ff").withAlpha(0.9),
+            outlineColor: Cesium.Color.fromCssColorString("#00838f").withAlpha(0.5),
+            outlineWidth: 1,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 5e6, 0.3),
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+          label: {
+            text: lp.name || "",
+            font: "10px JetBrains Mono, monospace",
+            fillColor: Cesium.Color.fromCssColorString("#80deea").withAlpha(0.8),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -10),
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0),
+            translucencyByDistance: new Cesium.NearFarScalar(1e4, 1.0, 3e6, 0),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        })
+        this._landingPointEntities.push(entity)
+      })
+    }
+  }
+
+  _clearCableEntities() {
+    const ds = this.getCablesDataSource()
+    this._cableEntities.forEach(e => ds.entities.remove(e))
+    this._cableEntities = []
+    this._landingPointEntities.forEach(e => ds.entities.remove(e))
+    this._landingPointEntities = []
+  }
+
+  // ── Internet Outages ─────────────────────────────────────
+
+  getOutagesDataSource() { return getDataSource(this.viewer, this._ds, "outages") }
+
+  toggleOutages() {
+    this.outagesVisible = this.hasOutagesToggleTarget && this.outagesToggleTarget.checked
+    if (this.outagesVisible) {
+      this.fetchOutages()
+      this._outageInterval = setInterval(() => this.fetchOutages(), 300000) // 5min
+    } else {
+      if (this._outageInterval) clearInterval(this._outageInterval)
+      this._clearOutageEntities()
+    }
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  async fetchOutages() {
+    if (this._timelineActive) return
+    try {
+      const resp = await fetch("/api/internet_outages")
+      if (!resp.ok) return
+      const data = await resp.json()
+      this._outageData = data.summary || []
+      this._renderOutages(data)
+    } catch (e) {
+      console.error("Failed to fetch internet outages:", e)
+    }
+  }
+
+  _renderOutages(data) {
+    this._clearOutageEntities()
+    const Cesium = window.Cesium
+    const dataSource = this.getOutagesDataSource()
+
+    const levelColors = {
+      critical: "#e040fb",
+      severe: "#f44336",
+      moderate: "#ff9800",
+      minor: "#ffc107",
+    }
+
+    // Country centroids for rendering (ISO-2 to approx lat/lng)
+    const countryCentroids = {
+      AF:[33,65],AL:[41,20],DZ:[28,3],AO:[-12.5,18.5],AR:[-34,-64],AM:[40,45],AU:[-25,135],AT:[47.5,13.5],AZ:[40.5,47.5],BD:[24,90],BY:[53,28],BE:[50.8,4],BJ:[9.5,2.25],BO:[-17,-65],BA:[44,18],BW:[-22,24],BR:[-10,-55],BG:[43,25],BF:[13,-1.5],BI:[-3.5,30],KH:[12.5,105],CM:[6,12],CA:[60,-95],CF:[7,21],TD:[15,19],CL:[-30,-71],CN:[35,105],CO:[4,-72],CD:[-2.5,23.5],CG:[-1,15],CR:[10,-84],CI:[8,-5.5],HR:[45.2,15.5],CU:[22,-80],CY:[35,33],CZ:[49.75,15.5],DK:[56,10],DJ:[11.5,43],DO:[19,-70.7],EC:[-2,-77.5],EG:[27,30],SV:[13.8,-88.9],GQ:[2,10],ER:[15,39],EE:[59,26],ET:[8,38],FI:[64,26],FR:[46,2],GA:[-1,11.8],GM:[13.5,-16.5],GE:[42,43.5],DE:[51,9],GH:[8,-1.2],GR:[39,22],GT:[15.5,-90.3],GN:[11,-10],GW:[12,-15],GY:[5,-59],HT:[19,-72.3],HN:[15,-86.5],HU:[47,20],IS:[65,-18],IN:[20,77],ID:[-5,120],IR:[32,53],IQ:[33,44],IE:[53,-8],IL:[31.5,34.8],IT:[42.8,12.8],JM:[18.1,-77.3],JP:[36,138],JO:[31,36],KZ:[48,68],KE:[1,38],KW:[29.5,47.8],KG:[41,75],LA:[18,105],LV:[57,25],LB:[33.8,35.8],LS:[-29.5,28.5],LR:[6.5,-9.5],LY:[25,17],LT:[56,24],LU:[49.8,6.2],MG:[-20,47],MW:[-13.5,34],MY:[2.5,112.5],ML:[17,-4],MR:[20,-12],MX:[23,-102],MD:[47,29],MN:[46,105],ME:[42.5,19.3],MA:[32,-5],MZ:[-18.3,35],MM:[22,98],NA:[-22,17],NP:[28,84],NL:[52.5,5.8],NZ:[-42,174],NI:[13,-85],NE:[16,8],NG:[10,8],KP:[40,127],NO:[62,10],OM:[21,57],PK:[30,70],PA:[9,-80],PG:[-6,147],PY:[-23,-58],PE:[-10,-76],PH:[13,122],PL:[52,20],PT:[39.5,-8],QA:[25.5,51.3],RO:[46,25],RU:[60,100],RW:[-2,30],SA:[25,45],SN:[14,-14],RS:[44,21],SL:[8.5,-11.8],SG:[1.4,103.8],SK:[48.7,19.5],SI:[46.1,14.8],SO:[6,46],ZA:[-29,24],KR:[37,128],SS:[7,30],ES:[40,-4],LK:[7,81],SD:[16,30],SR:[4,-56],SE:[62,15],CH:[47,8],SY:[35,38],TW:[23.5,121],TJ:[39,71],TZ:[-6,35],TH:[15,100],TL:[-8.5,126],TG:[8,1.2],TT:[10.5,-61.3],TN:[34,9],TR:[39,35],TM:[40,60],UG:[1,32],UA:[49,32],AE:[24,54],GB:[54,-2],US:[38,-97],UY:[-33,-56],UZ:[41,64],VE:[8,-66],VN:[16,108],YE:[15,48],ZM:[-15,30],ZW:[-20,30],
+    }
+
+    const summaries = data.summary || []
+    summaries.forEach(s => {
+      const centroid = countryCentroids[s.code]
+      if (!centroid) return
+
+      const color = levelColors[s.level] || "#ffc107"
+      const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const intensity = Math.min(s.score / 100, 1)
+      const pixelSize = 8 + intensity * 16
+
+      // Pulsing ring for outage area
+      const ring = dataSource.entities.add({
+        id: `outage-ring-${s.code}`,
+        position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 0),
+        ellipse: {
+          semiMinorAxis: 50000 + intensity * 300000,
+          semiMajorAxis: 50000 + intensity * 300000,
+          material: cesiumColor.withAlpha(0.06 + intensity * 0.08),
+          outline: true,
+          outlineColor: cesiumColor.withAlpha(0.2),
+          outlineWidth: 1,
+          height: 0,
+        },
+      })
+      this._outageEntities.push(ring)
+
+      // Center marker
+      const entity = dataSource.entities.add({
+        id: `outage-${s.code}`,
+        position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 0),
+        point: {
+          pixelSize,
+          color: cesiumColor.withAlpha(0.85),
+          outlineColor: cesiumColor.withAlpha(0.4),
+          outlineWidth: 3,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+        label: {
+          text: `${s.code} ▼${s.score}`,
+          font: "bold 12px JetBrains Mono, monospace",
+          fillColor: cesiumColor.withAlpha(0.95),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1e7, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._outageEntities.push(entity)
+    })
+  }
+
+  _clearOutageEntities() {
+    const ds = this.getOutagesDataSource()
+    this._outageEntities.forEach(e => ds.entities.remove(e))
+    this._outageEntities = []
+  }
+
+  showOutageDetail(code) {
+    const s = this._outageData.find(o => o.code === code)
+    if (!s) return
+
+    const levelColors = { critical: "#e040fb", severe: "#f44336", moderate: "#ff9800", minor: "#ffc107" }
+    const color = levelColors[s.level] || "#ffc107"
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${color};">
+        <i class="fa-solid fa-wifi" style="margin-right:6px;"></i>Internet Outage
+      </div>
+      <div class="detail-country">${this._escapeHtml(s.name || s.code)}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Severity</span>
+          <span class="detail-value" style="color:${color};">${s.level.toUpperCase()}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Score</span>
+          <span class="detail-value">${s.score}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Country</span>
+          <span class="detail-value">${s.code}</span>
+        </div>
+      </div>
+      <a href="https://ioda.inetintel.cc.gatech.edu/country/${s.code}" target="_blank" rel="noopener" class="detail-track-btn">View on IODA →</a>
+    `
+    this.detailPanelTarget.style.display = ""
+  }
+
+  // ── Unified Timeline ─────────────────────────────────────────
+
+  async timelineOpen() {
+    if (this._timelineActive) { this.timelineClose(); return }
+
+    try {
+      const res = await fetch("/api/playback/range")
+      const range = await res.json()
+      if (!range.oldest) {
+        console.warn("No timeline data available yet")
+        return
+      }
+
+      this._timelineActive = true
+      this._timelinePlaying = false
+      this._timelineSpeed = 5
+      this._timelineFrames = {}
+      this._timelineKeys = []
+      this._timelineFrameIndex = 0
+
+      const oldest = new Date(range.oldest)
+      const newest = new Date(range.newest)
+      this._timelineRangeStart = oldest
+      this._timelineRangeEnd = newest
+      this._timelineCursor = new Date(oldest.getTime())
+
+      // Pause all live refresh intervals
+      this._timelinePauseLive()
+
+      this.timelineBarTarget.style.display = ""
+      this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(oldest)
+      this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(newest)
+      this._updateTimelineCursorDisplay()
+
+      // Load position snapshot frames for the full range
+      await this._timelineLoadFrames()
+
+      // Load event data for current cursor position
+      this._timelineUpdateEvents()
+    } catch (e) {
+      console.error("Timeline open error:", e)
+    }
+  }
+
+  async _timelineLoadFrames() {
+    if (!this._timelineActive) return
+    const from = this._timelineRangeStart.toISOString()
+    const to = this._timelineRangeEnd.toISOString()
+
+    let url = `/api/playback?from=${from}&to=${to}&type=all`
+    const bounds = getViewportBounds(this.viewer)
+    if (bounds) {
+      url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
+    }
+
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+      this._timelineFrames = data.frames || {}
+      this._timelineKeys = Object.keys(this._timelineFrames).sort()
+      this._timelineFrameIndex = 0
+
+      if (this._timelineKeys.length > 0) {
+        this._renderTimelineFrame(0)
+      }
+    } catch (e) {
+      console.error("Timeline frame load error:", e)
+    }
+  }
+
+  _timelinePauseLive() {
+    // Store which intervals were active so we can restore them
+    this._timelinePausedIntervals = {
+      flight: !!this.flightInterval,
+      ship: !!this.shipInterval,
+      gpsJamming: !!this._gpsJammingInterval,
+      news: !!this._newsInterval,
+      events: !!this._eventsInterval,
+      outages: !!this._outageInterval,
+    }
+    if (this.flightInterval) { clearInterval(this.flightInterval); this.flightInterval = null }
+    if (this.shipInterval) { clearInterval(this.shipInterval); this.shipInterval = null }
+    if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
+    if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
+    if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
+    if (this._outageInterval) { clearInterval(this._outageInterval); this._outageInterval = null }
+  }
+
+  _timelineResumeLive() {
+    // Restart live fetch intervals for active layers
+    if (this.flightsVisible) {
+      this.fetchFlights()
+      this.flightInterval = setInterval(() => this.fetchFlights(), 10000)
+    }
+    if (this.shipsVisible) {
+      this.fetchShips()
+      this.shipInterval = setInterval(() => this.fetchShips(), 15000)
+    }
+    if (this.gpsJammingVisible) {
+      this.fetchGpsJamming()
+      this._gpsJammingInterval = setInterval(() => this.fetchGpsJamming(), 60000)
+    }
+    if (this.newsVisible) {
+      this.fetchNews()
+      this._newsInterval = setInterval(() => this.fetchNews(), 900000)
+    }
+    if (this.earthquakesVisible || this.naturalEventsVisible) {
+      if (this.earthquakesVisible) this.fetchEarthquakes()
+      if (this.naturalEventsVisible) this.fetchNaturalEvents()
+      this._eventsInterval = setInterval(() => {
+        if (this.earthquakesVisible) this.fetchEarthquakes()
+        if (this.naturalEventsVisible) this.fetchNaturalEvents()
+      }, 300000)
+    }
+    if (this.outagesVisible) {
+      this.fetchOutages()
+      this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
+    }
+  }
+
+  timelineToggle() {
+    if (!this._timelineActive) return
+    this._timelinePlaying = !this._timelinePlaying
+
+    if (this.hasTimelinePlayBtnTarget) this.timelinePlayBtnTarget.classList.toggle("playing", this._timelinePlaying)
+    if (this.hasTimelinePlayIconTarget) this.timelinePlayIconTarget.className = this._timelinePlaying ? "fa-solid fa-pause" : "fa-solid fa-play"
+
+    if (this._timelinePlaying) {
+      this._timelineLastTick = performance.now()
+      this._timelineTick()
+    } else {
+      if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
+    }
+  }
+
+  _timelineTick() {
+    if (!this._timelinePlaying || !this._timelineActive) return
+
+    const now = performance.now()
+    const dt = (now - this._timelineLastTick) / 1000
+    this._timelineLastTick = now
+
+    // Advance cursor by dt * speed * 10 seconds per real second
+    const advanceMs = dt * this._timelineSpeed * 10000
+    const newCursorMs = Math.min(
+      this._timelineCursor.getTime() + advanceMs,
+      this._timelineRangeEnd.getTime()
+    )
+    this._timelineCursor = new Date(newCursorMs)
+
+    // Update scrubber position
+    this._syncScrubberToCursor()
+    this._updateTimelineCursorDisplay()
+
+    // Find and render the nearest position frame
+    this._renderNearestFrame()
+
+    // Debounced event updates
+    this._timelineEventDebounce()
+
+    // Stop at end
+    if (newCursorMs >= this._timelineRangeEnd.getTime()) {
+      this._timelinePlaying = false
+      if (this.hasTimelinePlayBtnTarget) this.timelinePlayBtnTarget.classList.remove("playing")
+      if (this.hasTimelinePlayIconTarget) this.timelinePlayIconTarget.className = "fa-solid fa-play"
+      return
+    }
+
+    this._timelineRaf = requestAnimationFrame(() => this._timelineTick())
+  }
+
+  timelineStepBack() {
+    if (!this._timelineActive || this._timelineKeys.length === 0) return
+    this._timelineFrameIndex = Math.max(0, this._timelineFrameIndex - 1)
+    const key = this._timelineKeys[this._timelineFrameIndex]
+    if (key) {
+      this._timelineCursor = new Date(key)
+      this._syncScrubberToCursor()
+      this._updateTimelineCursorDisplay()
+      this._renderTimelineFrame(this._timelineFrameIndex)
+      this._timelineEventDebounce()
+    }
+  }
+
+  timelineStepForward() {
+    if (!this._timelineActive || this._timelineKeys.length === 0) return
+    this._timelineFrameIndex = Math.min(this._timelineKeys.length - 1, this._timelineFrameIndex + 1)
+    const key = this._timelineKeys[this._timelineFrameIndex]
+    if (key) {
+      this._timelineCursor = new Date(key)
+      this._syncScrubberToCursor()
+      this._updateTimelineCursorDisplay()
+      this._renderTimelineFrame(this._timelineFrameIndex)
+      this._timelineEventDebounce()
+    }
+  }
+
+  timelineScrub() {
+    if (!this._timelineActive || !this.hasTimelineScrubberTarget) return
+    const val = parseInt(this.timelineScrubberTarget.value)
+    const range = this._timelineRangeEnd.getTime() - this._timelineRangeStart.getTime()
+    const cursorMs = this._timelineRangeStart.getTime() + (val / 10000) * range
+    this._timelineCursor = new Date(cursorMs)
+    this._updateTimelineCursorDisplay()
+    this._renderNearestFrame()
+    this._timelineEventDebounce()
+  }
+
+  timelineSetSpeed() {
+    if (this.hasTimelineSpeedTarget) {
+      this._timelineSpeed = parseInt(this.timelineSpeedTarget.value)
+    }
+  }
+
+  timelineGoLive() {
+    this._timelineCursor = new Date(this._timelineRangeEnd.getTime())
+    this._syncScrubberToCursor()
+    this._updateTimelineCursorDisplay()
+    this._renderNearestFrame()
+    this._timelineUpdateEvents()
+  }
+
+  timelineClose() {
+    this._timelineActive = false
+    this._timelinePlaying = false
+    if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
+    if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
+    this.timelineBarTarget.style.display = "none"
+
+    // Clear timeline entities (positions + events)
+    const ds = this._ds["timeline"]
+    if (ds) ds.entities.removeAll()
+    const evDs = this._ds["timelineEvents"]
+    if (evDs) evDs.entities.removeAll()
+
+    // Resume live data
+    this._timelineResumeLive()
+  }
+
+  _syncScrubberToCursor() {
+    if (!this.hasTimelineScrubberTarget) return
+    const range = this._timelineRangeEnd.getTime() - this._timelineRangeStart.getTime()
+    if (range <= 0) return
+    const pos = ((this._timelineCursor.getTime() - this._timelineRangeStart.getTime()) / range) * 10000
+    this.timelineScrubberTarget.value = Math.round(pos)
+  }
+
+  _updateTimelineCursorDisplay() {
+    if (!this._timelineCursor) return
+    const d = this._timelineCursor
+    if (this.hasTimelineCursorDateTarget) {
+      this.timelineCursorDateTarget.textContent = d.toISOString().slice(0, 10)
+    }
+    if (this.hasTimelineCursorTimeTarget) {
+      this.timelineCursorTimeTarget.textContent = d.toUTCString().slice(17, 25)
+    }
+  }
+
+  _renderNearestFrame() {
+    if (this._timelineKeys.length === 0) return
+    // Binary search for nearest frame key
+    const cursorIso = this._timelineCursor.toISOString()
+    let lo = 0, hi = this._timelineKeys.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (this._timelineKeys[mid] < cursorIso) lo = mid + 1
+      else hi = mid
+    }
+    // Check if previous frame is closer
+    if (lo > 0) {
+      const prev = new Date(this._timelineKeys[lo - 1]).getTime()
+      const curr = new Date(this._timelineKeys[lo]).getTime()
+      const target = this._timelineCursor.getTime()
+      if (Math.abs(target - prev) < Math.abs(target - curr)) lo = lo - 1
+    }
+    if (lo !== this._timelineFrameIndex) {
+      this._timelineFrameIndex = lo
+      this._renderTimelineFrame(lo)
+    }
+  }
+
+  _timelineEventDebounce() {
+    if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
+    this._timelineEventTimer = setTimeout(() => this._timelineUpdateEvents(), 400)
+  }
+
+  async _timelineUpdateEvents() {
+    if (!this._timelineActive) return
+    const cursor = this._timelineCursor
+    const windowMs = 3600000
+    const from = new Date(cursor.getTime() - windowMs).toISOString()
+    const to = new Date(cursor.getTime() + windowMs).toISOString()
+
+    // Build type filter based on visible layers
+    const types = []
+    if (this.earthquakesVisible) types.push("earthquake")
+    if (this.naturalEventsVisible) types.push("natural_event")
+    if (this.newsVisible) types.push("news")
+    if (this.gpsJammingVisible) types.push("gps_jamming")
+    if (this.outagesVisible) types.push("internet_outage")
+
+    if (types.length === 0) return
+
+    let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
+    const bounds = getViewportBounds(this.viewer)
+    if (bounds) {
+      url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
+    }
+
+    try {
+      const res = await fetch(url)
+      const events = await res.json()
+      this._renderUnifiedTimelineEvents(events)
+      this._updateStats()
+    } catch (e) {
+      console.error("Timeline events error:", e)
+    }
+  }
+
+  _renderUnifiedTimelineEvents(events) {
+    const Cesium = window.Cesium
+    const dataSource = getDataSource(this.viewer, this._ds, "timelineEvents")
+
+    // Clear previous event markers
+    dataSource.entities.removeAll()
+
+    // Group by type for the existing render methods
+    const byType = {}
+    events.forEach(e => {
+      if (!byType[e.type]) byType[e.type] = []
+      byType[e.type].push(e)
+    })
+
+    // Dispatch to existing renderers with the right data shape
+    if (byType.earthquake && this.earthquakesVisible) {
+      this._earthquakeData = byType.earthquake.map(e => ({
+        id: e.id, title: e.title, mag: e.mag, magType: e.magType,
+        lat: e.lat, lng: e.lng, depth: e.depth, url: e.url,
+        time: e.time ? new Date(e.time).getTime() : null,
+      }))
+      this.renderEarthquakes()
+    }
+    if (byType.natural_event && this.naturalEventsVisible) {
+      this._naturalEventData = byType.natural_event.map(e => ({
+        id: e.id, title: e.title, categoryId: e.categoryId,
+        categoryTitle: e.categoryTitle, lat: e.lat, lng: e.lng,
+        date: e.time, magnitudeValue: e.magnitudeValue,
+      }))
+      this.renderNaturalEvents()
+    }
+    if (byType.news && this.newsVisible) {
+      const newsData = byType.news.map(e => ({
+        lat: e.lat, lng: e.lng, name: e.name, url: e.url,
+        tone: e.tone, level: e.level, category: e.category,
+        themes: e.themes || [], time: e.time,
+      }))
+      this._newsData = newsData
+      this._renderNews(newsData)
+    }
+    if (byType.gps_jamming && this.gpsJammingVisible) {
+      const jammingData = byType.gps_jamming.map(e => ({
+        lat: e.lat, lng: e.lng, total: e.total, bad: e.bad,
+        pct: e.pct, level: e.level,
+      }))
+      this._renderGpsJamming(jammingData)
+    }
+    if (byType.internet_outage && this.outagesVisible) {
+      const outageEvents = byType.internet_outage.map(e => ({
+        id: e.id, code: e.code, name: e.name,
+        score: e.score, level: e.level,
+      }))
+      this._outageData = outageEvents
+      this._renderOutages({ summary: outageEvents, events: outageEvents })
+    }
+  }
+
+  _renderTimelineFrame(index) {
+    const Cesium = window.Cesium
+    const key = this._timelineKeys[index]
+    if (!key) return
+
+    const entities = this._timelineFrames[key]
+    if (!entities) return
+
+    const dataSource = getDataSource(this.viewer, this._ds, "timeline")
+    const existingIds = new Set()
+
+    entities.forEach(e => {
+      const isFlight = e.type === "flight"
+      const id = `tl-${e.type}-${e.id}`
+      existingIds.add(id)
+
+      let entity = dataSource.entities.getById(id)
+      const position = Cesium.Cartesian3.fromDegrees(e.lng, e.lat, (e.alt || 0) + 100)
+
+      if (entity) {
+        entity.position = position
+        entity.billboard.rotation = -Cesium.Math.toRadians(e.hdg || 0)
+        if (entity.label) entity.label.text = e.callsign || e.id
+      } else {
+        entity = dataSource.entities.add({
+          id,
+          position,
+          billboard: {
+            image: isFlight
+              ? (e.gnd ? this.planeIconGround : this.planeIcon)
+              : this._timelineShipIcon(),
+            scale: isFlight ? 1.0 : 0.8,
+            rotation: -Cesium.Math.toRadians(e.hdg || 0),
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            heightReference: Cesium.HeightReference.NONE,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+          label: {
+            text: e.callsign || e.id,
+            font: "12px JetBrains Mono, monospace",
+            fillColor: Cesium.Color.fromCssColorString(isFlight ? "rgba(200,210,225,0.85)" : "rgba(38,198,218,0.85)"),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -18),
+            scale: 0.8,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          }
+        })
+      }
+    })
+
+    // Remove entities not in this frame
+    const toRemove = []
+    for (let i = 0; i < dataSource.entities.values.length; i++) {
+      const ent = dataSource.entities.values[i]
+      if (!existingIds.has(ent.id)) toRemove.push(ent)
+    }
+    toRemove.forEach(ent => dataSource.entities.remove(ent))
+  }
+
+  _timelineShipIcon() {
+    if (this._cachedTimelineShipIcon) return this._cachedTimelineShipIcon
+    const canvas = document.createElement("canvas")
+    canvas.width = 20
+    canvas.height = 20
+    const ctx = canvas.getContext("2d")
+    ctx.fillStyle = "#26c6da"
+    ctx.beginPath()
+    ctx.moveTo(10, 2)
+    ctx.lineTo(16, 16)
+    ctx.lineTo(10, 13)
+    ctx.lineTo(4, 16)
+    ctx.closePath()
+    ctx.fill()
+    this._cachedTimelineShipIcon = canvas.toDataURL()
+    return this._cachedTimelineShipIcon
+  }
+
+  _fmtTimelineDateTime(dateOrStr) {
+    const d = typeof dateOrStr === "string" ? new Date(dateOrStr) : dateOrStr
+    if (!d || isNaN(d)) return "--"
+    const mo = String(d.getUTCMonth() + 1).padStart(2, "0")
+    const dy = String(d.getUTCDate()).padStart(2, "0")
+    const hh = String(d.getUTCHours()).padStart(2, "0")
+    const mm = String(d.getUTCMinutes()).padStart(2, "0")
+    return `${mo}-${dy} ${hh}:${mm}`
+  }
+
   disconnect() {
+    if (this._mediaRecorder) this._stopRecording()
+    if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
+    if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     if (this.flightInterval) clearInterval(this.flightInterval)
     if (this.shipInterval) clearInterval(this.shipInterval)
+    if (this._gpsJammingInterval) clearInterval(this._gpsJammingInterval)
+    if (this._newsInterval) clearInterval(this._newsInterval)
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame)
     if (this._handler) this._handler.destroy()
     if (this.viewer) this.viewer.destroy()

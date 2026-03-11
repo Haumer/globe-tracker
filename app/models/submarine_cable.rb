@@ -1,0 +1,2 @@
+class SubmarineCable < ApplicationRecord
+end

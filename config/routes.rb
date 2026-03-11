@@ -1,6 +1,7 @@
 Rails.application.routes.draw do
   devise_for :users
   root to: "pages#home"
+  get "sources", to: "pages#sources"
 
   namespace :api do
     resources :flights, only: [:index, :show]
@@ -8,6 +9,18 @@ Rails.application.routes.draw do
     resources :ships, only: [:index]
     resources :webcams, only: [:index]
     resource :preferences, only: [:show, :update]
+    resources :news, only: [:index]
+    resources :earthquakes, only: [:index]
+    resources :natural_events, only: [:index]
+    resources :gps_jamming, only: [:index]
+    resources :submarine_cables, only: [:index]
+    resources :internet_outages, only: [:index]
+    resources :playback, only: [:index] do
+      collection do
+        get :range
+        get :events
+      end
+    end
   end
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

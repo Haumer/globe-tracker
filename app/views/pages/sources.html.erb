@@ -1,0 +1,437 @@
+<div class="src-page">
+  <!-- Scanline overlay -->
+  <div class="src-scanline"></div>
+
+  <!-- Hero -->
+  <header class="src-hero">
+    <div class="src-hero-grid">
+      <div class="src-hero-label">
+        <span class="src-blink"></span>
+        <span>LIVE DATA FEEDS</span>
+      </div>
+      <h1 class="src-hero-title">Open Source<br>Intelligence</h1>
+      <p class="src-hero-sub">
+        GlobeTracker aggregates <strong>13 open data sources</strong> across aviation, maritime,
+        space, earth science, and world news &mdash; all rendered in real-time on a 3D globe.
+        Every feed listed below is publicly accessible or community-driven.
+      </p>
+    </div>
+
+    <div class="src-stats">
+      <div class="src-stat">
+        <span class="src-stat-num">13</span>
+        <span class="src-stat-label">Data Feeds</span>
+      </div>
+      <div class="src-stat-sep"></div>
+      <div class="src-stat">
+        <span class="src-stat-num">7</span>
+        <span class="src-stat-label">Categories</span>
+      </div>
+      <div class="src-stat-sep"></div>
+      <div class="src-stat">
+        <span class="src-stat-num">9</span>
+        <span class="src-stat-label">Free / No Auth</span>
+      </div>
+      <div class="src-stat-sep"></div>
+      <div class="src-stat">
+        <span class="src-stat-num">3</span>
+        <span class="src-stat-label">Real-time Streams</span>
+      </div>
+    </div>
+
+    <div class="src-categories">
+      <span class="src-cat" style="--cat: #4fc3f7;">Aviation</span>
+      <span class="src-cat" style="--cat: #26c6da;">Maritime</span>
+      <span class="src-cat" style="--cat: #ab47bc;">Space</span>
+      <span class="src-cat" style="--cat: #ff7043;">Earth Science</span>
+      <span class="src-cat" style="--cat: #66bb6a;">Imagery & Maps</span>
+      <span class="src-cat" style="--cat: #ff9800;">News & Events</span>
+      <span class="src-cat" style="--cat: #e040fb;">Infrastructure</span>
+    </div>
+  </header>
+
+  <!-- Source Grid -->
+  <section class="src-grid">
+
+    <article class="src-card" style="--accent: #4fc3f7;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-plane"></i></div>
+        <div class="src-card-meta">
+          <h3>ADS-B Exchange</h3>
+          <span class="src-card-url">adsb.lol</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Real-time aircraft positions via ADS-B radio signals. Community-driven,
+        unfiltered flight data including military aircraft. The largest open-source
+        flight tracking network.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">JSON</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Aviation</span>
+        <a href="https://api.adsb.lol" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #4fc3f7;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <div class="src-card-meta">
+          <h3>OpenSky Network</h3>
+          <span class="src-card-url">opensky-network.org</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        Academic flight tracking network operated by research institutions.
+        Provides enriched flight routes, positions, and aircraft metadata
+        with historical data access.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">OAuth</span>
+        <span class="src-tag">JSON</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Aviation</span>
+        <a href="https://opensky-network.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #ab47bc;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-satellite"></i></div>
+        <div class="src-card-meta">
+          <h3>CelesTrak</h3>
+          <span class="src-card-url">celestrak.org</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        NORAD satellite orbital elements in Two-Line Element format.
+        Tracks 10,000+ objects including ISS, Starlink, GPS, military and
+        scientific satellites. SGP4-propagated positions.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">TLE Format</span>
+        <span class="src-tag">SGP4</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">10K+ Objects</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Space</span>
+        <a href="https://celestrak.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #26c6da;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-ship"></i></div>
+        <div class="src-card-meta">
+          <h3>AIS Stream</h3>
+          <span class="src-card-url">aisstream.io</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Real-time maritime vessel tracking via AIS (Automatic Identification System).
+        Global WebSocket stream delivering ship positions, headings, types,
+        destinations, and flags.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag src-tag--ws">WebSocket</span>
+        <span class="src-tag src-tag--auth">API Key</span>
+        <span class="src-tag">Global</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Maritime</span>
+        <a href="https://aisstream.io" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #ff7043;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-house-crack"></i></div>
+        <div class="src-card-meta">
+          <h3>USGS Earthquakes</h3>
+          <span class="src-card-url">earthquake.usgs.gov</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Real-time seismic event feed from the U.S. Geological Survey.
+        Magnitude 2.5+ earthquakes worldwide, updated every minute.
+        Standardized GeoJSON format with depth and magnitude data.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">M2.5+</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Earth Science</span>
+        <a href="https://earthquake.usgs.gov/earthquakes/feed/" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="src-card-meta">
+          <h3>NASA EONET</h3>
+          <span class="src-card-url">eonet.gsfc.nasa.gov</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        Earth Observatory Natural Event Tracker by NASA.
+        Monitors active wildfires, tropical storms, volcanic eruptions,
+        icebergs, and other natural phenomena globally.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">REST API</span>
+        <span class="src-tag">JSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Events</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Earth Science</span>
+        <a href="https://eonet.gsfc.nasa.gov/docs/v3" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #29b6f6;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-video"></i></div>
+        <div class="src-card-meta">
+          <h3>Windy Webcams</h3>
+          <span class="src-card-url">windy.com</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        Global network of live webcams with geolocation and streaming.
+        Bounding box and proximity search with preview images,
+        player embeds, and view statistics.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">API Key</span>
+        <span class="src-tag">Streaming</span>
+        <span class="src-tag">Geo-search</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery</span>
+        <a href="https://api.windy.com/webcams" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #ff9800;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-newspaper"></i></div>
+        <div class="src-card-meta">
+          <h3>GDELT Project</h3>
+          <span class="src-card-url">gdeltproject.org</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Global Database of Events, Language, and Tone. Monitors world news
+        in 100+ languages, geolocates events, and provides sentiment analysis.
+        GKG GeoJSON API with 15-minute updates. Supported by Google Jigsaw.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">100+ Languages</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">News & Events</span>
+        <a href="https://www.gdeltproject.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #78909c;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-globe"></i></div>
+        <div class="src-card-meta">
+          <h3>Cesium Ion</h3>
+          <span class="src-card-url">cesium.com</span>
+        </div>
+        <span class="src-card-status">ENGINE</span>
+      </div>
+      <p class="src-card-desc">
+        3D geospatial visualization platform. Provides the globe renderer,
+        world terrain with water masks, satellite imagery, and
+        OpenStreetMap 3D building tiles.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">3D Tiles</span>
+        <span class="src-tag src-tag--auth">Token</span>
+        <span class="src-tag">Terrain</span>
+        <span class="src-tag">Buildings</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery & Maps</span>
+        <a href="https://cesium.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #a1887f;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-map"></i></div>
+        <div class="src-card-meta">
+          <h3>Natural Earth</h3>
+          <span class="src-card-url">naturalearthdata.com</span>
+        </div>
+        <span class="src-card-status src-card-status--oss">OSS</span>
+      </div>
+      <p class="src-card-desc">
+        Public domain map dataset. Country borders, coastlines,
+        populated places, and urban area polygons. Hosted on GitHub
+        as GeoJSON at multiple resolutions.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Public Domain</span>
+        <span class="src-tag">GitHub</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery & Maps</span>
+        <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #f44336;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+        <div class="src-card-meta">
+          <h3>GPS Interference</h3>
+          <span class="src-card-url">Derived from ADS-B NACp</span>
+        </div>
+        <span class="src-card-status src-card-status--computed">COMPUTED</span>
+      </div>
+      <p class="src-card-desc">
+        Self-computed GPS jamming detection using Navigation Accuracy Category
+        (NACp) values from ADS-B transponders. Same methodology as GPSJam.org.
+        Identifies interference and spoofing zones worldwide.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">NACp Analysis</span>
+        <span class="src-tag">Heatmap</span>
+        <span class="src-tag">Derived</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Aviation / Security</span>
+        <a href="https://gpsjam.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #00bcd4;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-network-wired"></i></div>
+        <div class="src-card-meta">
+          <h3>TeleGeography</h3>
+          <span class="src-card-url">submarinecablemap.com</span>
+        </div>
+        <span class="src-card-status src-card-status--free">FREE</span>
+      </div>
+      <p class="src-card-desc">
+        Global submarine fiber-optic cable map. 690+ cables and 1,900+ landing
+        points connecting continents. The physical backbone of the internet
+        rendered as glowing polylines on the globe.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag">Static</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">MultiLineString</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Infrastructure</span>
+        <a href="https://www.submarinecablemap.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #e040fb;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-wifi"></i></div>
+        <div class="src-card-meta">
+          <h3>IODA</h3>
+          <span class="src-card-url">ioda.inetintel.cc.gatech.edu</span>
+        </div>
+        <span class="src-card-status src-card-status--free">FREE</span>
+      </div>
+      <p class="src-card-desc">
+        Internet Outage Detection and Analysis from Georgia Tech. Monitors
+        country-level connectivity using BGP, active probing, and network
+        telescope data. Detects government shutdowns, cable cuts, and infrastructure failures.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Country-level</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Infrastructure</span>
+        <a href="https://ioda.inetintel.cc.gatech.edu" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- Footer note -->
+  <footer class="src-footer">
+    <div class="src-footer-line"></div>
+    <p>
+      All data is sourced from publicly accessible APIs and open-source projects.
+      GlobeTracker does not store or redistribute raw third-party data beyond what is
+      necessary for real-time visualization. Please respect each provider's terms of service.
+    </p>
+    <div class="src-footer-back">
+      <%= link_to root_path, class: "src-back-link" do %>
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Back to Globe</span>
+      <% end %>
+    </div>
+  </footer>
+</div>

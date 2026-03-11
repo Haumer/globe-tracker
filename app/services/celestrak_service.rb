@@ -14,7 +14,24 @@ class CelestrakService
     "iridium" => "iridium",
     "oneweb" => "oneweb",
     "planet" => "planet",
-    "spire" => "spire"
+    "spire" => "spire",
+    "gnss" => "gnss",
+    "tdrss" => "tdrss",
+    "radar" => "radar",
+    "sbas" => "sbas",
+    "cubesat" => "cubesat",
+    "amateur" => "amateur",
+    "sarsat" => "sarsat",
+    "last-30-days" => "last-30-days",  # Recently launched — often military or classified
+    "geodetic" => "geodetic",         # Geodetic survey satellites
+    "dmc" => "dmc",                   # Disaster Monitoring Constellation
+    "argos" => "argos",               # ARGOS data collection
+    "intelsat" => "intelsat",         # Intelsat (some carry military transponders)
+    "ses" => "ses",                   # SES (military/govt contracts)
+    "x-comm" => "x-comm",            # Experimental comms
+    "molniya" => "molniya",          # Molniya orbit (Russian military comms)
+    "beidou" => "beidou",            # BeiDou navigation (Chinese military/civilian)
+    "globalstar" => "globalstar",    # Globalstar (military backup comms)
   }.freeze
 
   class << self
@@ -96,13 +113,22 @@ class CelestrakService
 
       now = Time.current
       records = satellites.map do |sat|
-        sat.merge(created_at: now, updated_at: now)
+        enriched = sat.merge(created_at: now, updated_at: now)
+
+        # Classify satellites by name (military sats exist in multiple categories)
+        classification = SatelliteClassifier.classify(sat[:name])
+        if classification[:operator]
+          enriched[:operator] = classification[:operator]
+          enriched[:mission_type] = classification[:mission_type]
+        end
+
+        enriched
       end
 
       Satellite.upsert_all(
         records,
         unique_by: :norad_id,
-        update_only: %i[name tle_line1 tle_line2 category]
+        update_only: %i[name tle_line1 tle_line2 category operator mission_type]
       )
     end
   end

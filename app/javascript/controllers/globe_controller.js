@@ -7097,6 +7097,14 @@ export default class extends Controller {
       "Restricted Area": "#d50000",
       "Hazard": "#ffab00",
       "TFR": "#ef5350",
+      "Nuclear Facility": "#ffea00",
+      "Government": "#ff1744",
+      "Military": "#d50000",
+      "Conflict Zone": "#ff3d00",
+      "Environmental": "#00e676",
+      "Danger": "#ff6d00",
+      "Prohibited": "#d50000",
+      "Warning": "#ffab00",
     }
 
     this._notamData.forEach((n) => {

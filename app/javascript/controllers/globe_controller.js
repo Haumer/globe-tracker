@@ -5,7 +5,7 @@ import { renderDetailHTML, detailField } from "../globe/details"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "notamsToggle", "qlNotams"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "newsArcControls", "newsArcFrom", "newsArcTo", "newsArcMax", "newsArcsToggle", "newsBlobsToggle", "newsFeedPanel", "newsFeedCount", "newsFeedContent", "threatsPanel", "threatsCount", "threatsContent", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "trafficArcsToggle", "trafficBlobsToggle", "trafficArcControls", "notamsToggle", "qlNotams"]
 
   connect() {
     this.flightsVisible = false
@@ -70,8 +70,11 @@ export default class extends Controller {
     this._gpsJammingEntities = []
     this._gpsJammingInterval = null
     this.newsVisible = false
+    this.newsArcsVisible = true
+    this.newsBlobsVisible = true
     this._newsData = []
     this._newsEntities = []
+    this._newsArcEntities = []
     this._newsInterval = null
     this.cablesVisible = false
     this._cableEntities = []
@@ -87,6 +90,8 @@ export default class extends Controller {
     this._conflictData = []
     this._conflictEntities = []
     this.trafficVisible = false
+    this.trafficArcsVisible = true
+    this.trafficBlobsVisible = true
     this._trafficData = null
     this._trafficEntities = []
     this.notamsVisible = false
@@ -111,6 +116,8 @@ export default class extends Controller {
     this._detectedAirlines = new Map() // code → count
     this._pendingCountryRestore = null
     this._ds = {} // shared datasource cache for getDataSource()
+    this._backgroundRefreshRetryTimers = {}
+    this._backgroundRefreshRetryCounts = {}
     // Stats clock
     this._clockInterval = setInterval(() => this._updateClock(), 1000)
     this._updateClock()
@@ -172,7 +179,8 @@ export default class extends Controller {
       infoBox: false,
       selectionIndicator: true,
       creditContainer: document.createElement("div"),
-      contextOptions: { webgl: { preserveDrawingBuffer: true } },
+      requestRenderMode: true,
+      maximumRenderTimeChange: Infinity,
     })
 
     this.viewer.scene.globe.enableLighting = true
@@ -378,6 +386,8 @@ export default class extends Controller {
     this.animate()
   }
 
+  _requestRender() { if (this.viewer) this.viewer.scene.requestRender() }
+
   createPlaneIcon(color) { return createPlaneIcon(color) }
 
   saveCamera() { saveCamera(this.viewer) }
@@ -504,6 +514,31 @@ export default class extends Controller {
     clearTimeout(this._toastTimer)
   }
 
+  _handleBackgroundRefresh(resp, key, hasData, retryFn) {
+    const queued = resp.headers.get("X-Background-Refresh") === "queued"
+    if (!queued || hasData) {
+      if (this._backgroundRefreshRetryTimers[key]) {
+        clearTimeout(this._backgroundRefreshRetryTimers[key])
+        delete this._backgroundRefreshRetryTimers[key]
+      }
+      delete this._backgroundRefreshRetryCounts[key]
+      return
+    }
+
+    const attempts = this._backgroundRefreshRetryCounts[key] || 0
+    if (attempts >= 3) return
+
+    if (this._backgroundRefreshRetryTimers[key]) {
+      clearTimeout(this._backgroundRefreshRetryTimers[key])
+    }
+
+    this._backgroundRefreshRetryCounts[key] = attempts + 1
+    this._backgroundRefreshRetryTimers[key] = setTimeout(() => {
+      delete this._backgroundRefreshRetryTimers[key]
+      retryFn()
+    }, 1500)
+  }
+
   async fetchFlights() {
     if (!this.flightsVisible || this._timelineActive) return
 
@@ -552,16 +587,18 @@ export default class extends Controller {
 
       const existing = this.flightData.get(id)
 
-      // Record trail history
-      let trail = this.trailHistory.get(id)
-      if (!trail) {
-        trail = []
-        this.trailHistory.set(id, trail)
-      }
-      const lastPoint = trail[trail.length - 1]
-      if (!lastPoint || lastPoint.lat !== flight.latitude || lastPoint.lng !== flight.longitude) {
-        trail.push({ lat: flight.latitude, lng: flight.longitude, alt })
-        if (trail.length > 200) trail.shift() // cap trail length
+      // Record trail history (only when trails are visible)
+      if (this.trailsVisible) {
+        let trail = this.trailHistory.get(id)
+        if (!trail) {
+          trail = []
+          this.trailHistory.set(id, trail)
+        }
+        const lastPoint = trail[trail.length - 1]
+        if (!lastPoint || lastPoint.lat !== flight.latitude || lastPoint.lng !== flight.longitude) {
+          trail.push({ lat: flight.latitude, lng: flight.longitude, alt })
+          if (trail.length > 200) trail.shift()
+        }
       }
 
       // Pre-project the reported position forward by data age
@@ -696,6 +733,8 @@ export default class extends Controller {
     if (this.hasActiveFilter() && this.entityListPanelTarget.style.display !== "none") {
       this.updateEntityList()
     }
+
+    this.viewer.scene.requestRender()
   }
 
   renderTrails() {
@@ -710,18 +749,17 @@ export default class extends Controller {
       if (trail.length < 2) continue
       activeIds.add(id)
 
+      const positions = trail.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt))
       const existing = this._trailEntities.get(id)
 
-      if (!existing) {
-        // Use CallbackProperty so Cesium doesn't re-create the primitive on update
+      if (existing) {
+        // Update positions directly instead of per-frame CallbackProperty
+        existing.polyline.positions = positions
+      } else {
         const entity = trailSource.entities.add({
           id: `trail-${id}`,
           polyline: {
-            positions: new Cesium.CallbackProperty(() => {
-              const t = this.trailHistory.get(id)
-              if (!t || t.length < 2) return []
-              return t.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt))
-            }, false),
+            positions,
             width: 1.5,
             material: Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4),
             clampToGround: false,
@@ -747,7 +785,20 @@ export default class extends Controller {
     if (this._ds["trails"]) {
       this._ds["trails"].show = this.trailsVisible
     }
-    if (this.trailsVisible) this.renderTrails()
+    if (this.trailsVisible) {
+      this.renderTrails()
+    } else {
+      // Free trail entities and history when disabled
+      if (this._trailEntities) {
+        const trailSource = this.getTrailsDataSource()
+        for (const [, entity] of this._trailEntities) {
+          trailSource.entities.remove(entity)
+        }
+        this._trailEntities.clear()
+      }
+      this.trailHistory.clear()
+    }
+    this._requestRender()
   }
 
   toggleFlightFilter() {
@@ -766,14 +817,22 @@ export default class extends Controller {
   animate() {
     const Cesium = window.Cesium
     const now = performance.now()
+
+    // Throttle to ~30fps (33ms) — no need to update positions faster than that
+    if (this.lastAnimTime && (now - this.lastAnimTime) < 33) {
+      this.animationFrame = requestAnimationFrame(() => this.animate())
+      return
+    }
+
     const dt = (now - this.lastAnimTime) / 1000
     this.lastAnimTime = now
+    let needsRender = false
 
-    if (dt > 0 && dt < 1) {
+    // Dead reckoning for flights
+    if (dt > 0 && dt < 1 && this.flightData.size > 0) {
       for (const [, data] of this.flightData) {
         if (data.onGround || !data.speed) continue
 
-        // Dead reckoning: project forward with speed, heading, and vertical rate
         const headingRad = Cesium.Math.toRadians(data.heading)
         const distanceM = data.speed * dt
 
@@ -787,28 +846,64 @@ export default class extends Controller {
         data.entity.position = Cesium.Cartesian3.fromDegrees(
           data.currentLng, data.currentLat, data.currentAlt
         )
+        needsRender = true
       }
     }
 
-    // Update trails during animation (every ~500ms)
-    if (this.trailsVisible) {
-      if (!this._lastTrailUpdate || now - this._lastTrailUpdate > 500) {
+    // Update trails during animation (every ~2s — trail data only refreshes every 10s)
+    if (this.trailsVisible && this.flightData.size > 0) {
+      if (!this._lastTrailUpdate || now - this._lastTrailUpdate > 2000) {
         this._lastTrailUpdate = now
-        for (const [id, data] of this.flightData) {
+        for (const [, data] of this.flightData) {
           if (data.onGround || !data.speed) continue
-          let trail = this.trailHistory.get(id)
+          let trail = this.trailHistory.get(data.id)
           if (!trail) {
             trail = []
-            this.trailHistory.set(id, trail)
+            this.trailHistory.set(data.id, trail)
           }
           const last = trail[trail.length - 1]
-          if (!last || Math.abs(last.lat - data.currentLat) > 0.0001 || Math.abs(last.lng - data.currentLng) > 0.0001) {
+          if (!last || Math.abs(last.lat - data.currentLat) > 0.001 || Math.abs(last.lng - data.currentLng) > 0.001) {
             trail.push({ lat: data.currentLat, lng: data.currentLng, alt: data.currentAlt })
             if (trail.length > 200) trail.shift()
           }
         }
         this.renderTrails()
+        needsRender = true
       }
+    }
+
+    // Animate news arc blobs inline (instead of separate rAF loop)
+    if (this.newsVisible && this.newsBlobsVisible && this._newsArcEntities?.length > 0) {
+      const t = Date.now() / 1000
+      const scratch = this._animScratch || (this._animScratch = new Cesium.Cartesian3())
+      for (const e of this._newsArcEntities) {
+        if (!e._blobArc) continue
+        const pos = e._blobArc
+        const n = pos.length
+        const f = (t * e._blobSpeed + e._blobPhase) % 1.0
+        const fi = f * (n - 1)
+        const lo = Math.floor(fi)
+        const hi = Math.min(lo + 1, n - 1)
+        e.position = Cesium.Cartesian3.lerp(pos[lo], pos[hi], fi - lo, scratch)
+      }
+      needsRender = true
+    }
+
+    // Animate traffic arc blobs inline (instead of separate rAF loop)
+    if (this.trafficVisible && this.trafficBlobsVisible && this._trafficEntities?.length > 0) {
+      const t = Date.now() / 1000
+      const scratch = this._animScratch || (this._animScratch = new Cesium.Cartesian3())
+      for (const e of this._trafficEntities) {
+        if (!e._blobArc) continue
+        const pos = e._blobArc
+        const n = pos.length
+        const f = (t * e._blobSpeed + e._blobPhase) % 1.0
+        const fi = f * (n - 1)
+        const lo = Math.floor(fi)
+        const hi = Math.min(lo + 1, n - 1)
+        e.position = Cesium.Cartesian3.lerp(pos[lo], pos[hi], fi - lo, scratch)
+      }
+      needsRender = true
     }
 
     // Follow tracked flight
@@ -823,6 +918,7 @@ export default class extends Controller {
             Math.max(offset, 50000)
           ),
         })
+        needsRender = true
       } else {
         this.trackedFlightId = null
       }
@@ -833,8 +929,11 @@ export default class extends Controller {
       if (!this._lastSatUpdate || now - this._lastSatUpdate > 2000) {
         this._lastSatUpdate = now
         this.updateSatellitePositions()
+        needsRender = true
       }
     }
+
+    if (needsRender) this.viewer.scene.requestRender()
 
     this.animationFrame = requestAnimationFrame(() => this.animate())
   }
@@ -2014,6 +2113,9 @@ export default class extends Controller {
       const response = await fetch(`/api/satellites?category=${cat}`)
       if (!response.ok) return
       const sats = await response.json()
+      this._handleBackgroundRefresh(response, `satellites-${cat}`, sats.length > 0, () => {
+        if (this.satCategoryVisible[cat]) this.fetchSatCategory(cat)
+      })
 
       // Remove old data for this category, add fresh
       this.satelliteData = this.satelliteData.filter(s => s.category !== cat)
@@ -3035,6 +3137,9 @@ export default class extends Controller {
       const resp = await fetch("/api/earthquakes")
       if (!resp.ok) return
       this._earthquakeData = await resp.json()
+      this._handleBackgroundRefresh(resp, "earthquakes", this._earthquakeData.length > 0, () => {
+        if (this.earthquakesVisible && !this._timelineActive) this.fetchEarthquakes()
+      })
       this.renderEarthquakes()
       this._updateStats()
       this._toastHide()
@@ -3183,6 +3288,9 @@ export default class extends Controller {
       const resp = await fetch("/api/natural_events")
       if (!resp.ok) return
       this._naturalEventData = await resp.json()
+      this._handleBackgroundRefresh(resp, "natural-events", this._naturalEventData.length > 0, () => {
+        if (this.naturalEventsVisible && !this._timelineActive) this.fetchNaturalEvents()
+      })
       this.renderNaturalEvents()
       this._updateStats()
       this._toastHide()
@@ -5144,18 +5252,75 @@ export default class extends Controller {
 
   getNewsDataSource() { return getDataSource(this.viewer, this._ds, "news") }
 
+  static NEWS_REGIONS = {
+    "north-america": { latMin: 10, latMax: 85, lngMin: -170, lngMax: -50 },
+    "south-america": { latMin: -60, latMax: 15, lngMin: -90, lngMax: -30 },
+    "europe":        { latMin: 35, latMax: 72, lngMin: -25, lngMax: 40 },
+    "middle-east":   { latMin: 12, latMax: 45, lngMin: 25, lngMax: 65 },
+    "africa":        { latMin: -35, latMax: 37, lngMin: -20, lngMax: 55 },
+    "central-asia":  { latMin: 25, latMax: 55, lngMin: 40, lngMax: 90 },
+    "east-asia":     { latMin: 18, latMax: 55, lngMin: 90, lngMax: 150 },
+    "southeast-asia":{ latMin: -15, latMax: 25, lngMin: 90, lngMax: 155 },
+    "oceania":       { latMin: -50, latMax: 0, lngMin: 110, lngMax: 180 },
+  }
+
+  _pointInRegion(lat, lng, regionKey) {
+    if (regionKey === "all") return true
+    const r = this.constructor.NEWS_REGIONS[regionKey]
+    if (!r) return true
+    return lat >= r.latMin && lat <= r.latMax && lng >= r.lngMin && lng <= r.lngMax
+  }
+
   toggleNews() {
     this.newsVisible = this.hasNewsToggleTarget && this.newsToggleTarget.checked
     if (this.newsVisible) {
       this.fetchNews()
       this._newsInterval = setInterval(() => this.fetchNews(), 900000) // 15 min
+      if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = ""
+      if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = ""
     } else {
       if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
       this._clearNewsEntities()
       this._newsData = []
+      if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = "none"
+      if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
     }
     this._syncQuickBar()
     this._savePrefs()
+  }
+
+  toggleNewsArcs() {
+    this.newsArcsVisible = this.hasNewsArcsToggleTarget && this.newsArcsToggleTarget.checked
+    if (!this.newsArcsVisible) {
+      this.newsBlobsVisible = false
+      if (this.hasNewsBlobsToggleTarget) this.newsBlobsToggleTarget.checked = false
+      this._clearNewsArcEntities()
+    } else if (this._newsData?.length) {
+      this._renderNewsArcs(this._newsData)
+    }
+  }
+
+  toggleNewsBlobs() {
+    this.newsBlobsVisible = this.hasNewsBlobsToggleTarget && this.newsBlobsToggleTarget.checked
+    if (this.newsBlobsVisible && !this.newsArcsVisible) {
+      this.newsBlobsVisible = false
+      if (this.hasNewsBlobsToggleTarget) this.newsBlobsToggleTarget.checked = false
+      return
+    }
+    if (!this.newsBlobsVisible) {
+      this._stopNewsArcBlobAnim()
+      this._removeNewsBlobEntities()
+    } else if (this._newsData?.length) {
+      this._clearNewsArcEntities()
+      this._renderNewsArcs(this._newsData)
+    }
+  }
+
+  applyNewsArcFilter() {
+    if (!this._newsData?.length) return
+    // Clear only arc entities, keep news point entities
+    this._clearNewsArcEntities()
+    this._renderNewsArcs(this._newsData)
   }
 
   async fetchNews() {
@@ -5165,6 +5330,9 @@ export default class extends Controller {
       const resp = await fetch("/api/news")
       if (!resp.ok) return
       const events = await resp.json()
+      this._handleBackgroundRefresh(resp, "news", events.length > 0, () => {
+        if (this.newsVisible && !this._timelineActive) this.fetchNews()
+      })
       this._newsData = events
       this._renderNews(events)
       this._toastHide()
@@ -5197,36 +5365,61 @@ export default class extends Controller {
       other: "fa-newspaper",
     }
 
+    // Build coverage count per location (how many articles target each area)
+    const coverageMap = new Map()
+    events.forEach(ev => {
+      const key = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+      coverageMap.set(key, (coverageMap.get(key) || 0) + 1)
+    })
+
+    // Find top 3 most-covered locations
+    const top3Counts = [...coverageMap.values()].sort((a, b) => b - a).slice(0, 3)
+    const top3Set = new Set(top3Counts)
+
     events.forEach((ev, i) => {
       const color = categoryColors[ev.category] || "#90a4ae"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
 
-      // Size based on tone intensity
+      // Size based on tone intensity + coverage (how many articles about this location)
+      const locKey = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+      const coverage = coverageMap.get(locKey) || 1
       const intensity = Math.min(Math.abs(ev.tone) / 10, 1)
-      const pixelSize = 6 + intensity * 8
+      const coverageBoost = Math.min(Math.log2(coverage + 1) / 3, 1) // log scale, caps at ~8 articles
+      let pixelSize = 6 + intensity * 6 + coverageBoost * 8
+
+      // Top 3 most-covered destinations get extra large dots
+      if (top3Counts.length >= 3 && coverage >= top3Counts[2]) {
+        const rank = coverage >= top3Counts[0] ? 0 : coverage >= top3Counts[1] ? 1 : 2
+        pixelSize = [48, 36, 28][rank]
+      }
 
       const entity = dataSource.entities.add({
         id: `news-${i}`,
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
         point: {
           pixelSize,
-          color: cesiumColor.withAlpha(0.85),
-          outlineColor: cesiumColor.withAlpha(0.4),
-          outlineWidth: 2,
+          color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
+          outlineColor: cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
+          outlineWidth: 2 + Math.floor(coverageBoost * 4),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
         label: {
           text: ev.name ? ev.name.split(",")[0] : "",
-          font: "11px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          font: `${pixelSize >= 28 ? 14 : pixelSize >= 20 ? 12 : 11}px JetBrains Mono, monospace`,
+          fillColor: Cesium.Color.fromCssColorString(color).withAlpha(pixelSize >= 28 ? 1.0 : 0.9),
           outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 3,
+          outlineWidth: pixelSize >= 28 ? 4 : 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -14),
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
-          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
+          pixelOffset: new Cesium.Cartesian2(0, -(pixelSize / 2 + 6)),
+          scaleByDistance: pixelSize >= 28
+            ? new Cesium.NearFarScalar(1e5, 1.2, 1.5e7, 0.5)
+            : new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
+          translucencyByDistance: pixelSize >= 28
+            ? new Cesium.NearFarScalar(1e5, 1.0, 1.5e7, 0.6)
+            : new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          disableDepthTestDistance: pixelSize >= 28 ? Number.POSITIVE_INFINITY : 0,
         },
         description: `<div style="font-family: sans-serif; max-width: 350px;">
           <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${ev.category}</div>
@@ -5351,8 +5544,14 @@ export default class extends Controller {
   }
 
   _renderNewsArcs(events) {
+    if (!this.newsArcsVisible) return
     const Cesium = window.Cesium
     const dataSource = this.getNewsDataSource()
+
+    // Read filter values
+    const fromRegion = this.hasNewsArcFromTarget ? this.newsArcFromTarget.value : "all"
+    const toRegion = this.hasNewsArcToTarget ? this.newsArcToTarget.value : "all"
+    const maxArcs = this.hasNewsArcMaxTarget ? parseInt(this.newsArcMaxTarget.value) : 120
 
     // Group by source→event pair, tracking individual articles
     const arcMap = new Map()
@@ -5366,6 +5565,10 @@ export default class extends Controller {
       const dLat = Math.abs(src.lat - ev.lat)
       const dLng = Math.abs(src.lng - ev.lng)
       if (dLat < 2 && dLng < 2) return
+
+      // Apply region filters
+      if (!this._pointInRegion(src.lat, src.lng, fromRegion)) return
+      if (!this._pointInRegion(ev.lat, ev.lng, toRegion)) return
 
       let host
       try { host = new URL(ev.url).hostname.replace(/^www\./, "") } catch { return }
@@ -5385,8 +5588,8 @@ export default class extends Controller {
       }
     })
 
-    // Render arcs (max 30 to avoid clutter)
-    const arcs = [...arcMap.values()].sort((a, b) => b.count - a.count).slice(0, 30)
+    // Render arcs up to user-selected max
+    const arcs = [...arcMap.values()].sort((a, b) => b.count - a.count).slice(0, maxArcs)
     this._newsArcData = arcs
 
     arcs.forEach((arc, idx) => {
@@ -5423,26 +5626,34 @@ export default class extends Controller {
           material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.15, color: arcColor }),
         },
       })
-      this._newsEntities.push(entity)
+      this._newsArcEntities.push(entity)
 
-      // Directional arrows at 1/3 and 2/3 along the arc
-      const arrowColor = Cesium.Color.fromCssColorString("#ffab40")
-      for (const frac of [0.33, 0.66]) {
-        const ai = Math.floor(frac * (positions.length - 1))
-        const arrowPos = positions[ai]
-        const arrow = dataSource.entities.add({
-          id: `news-arc-arr-${idx}-${frac}`,
-          position: arrowPos,
-          point: {
-            pixelSize: 5,
-            color: arrowColor.withAlpha(alpha * 1.2),
-            outlineColor: arrowColor.withAlpha(0.2),
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.3),
-          },
-        })
-        this._newsEntities.push(arrow)
+      // Animated directional blob traveling source → event
+      if (this.newsBlobsVisible) {
+        const blobColor = Cesium.Color.fromCssColorString("#ffab40")
+        const blobCount = Math.min(3, Math.max(1, Math.ceil(arc.count / 3)))
+        const speed = 0.1 + (arc.count - 1) * 0.1
+        const blobSize = Math.max(5, Math.min(10, 4 + arc.count * 0.5))
+        // Per-arc random offset so arcs don't pulse in sync
+        const arcPhaseOffset = ((idx * 7.31) % 1.0)  // deterministic pseudo-random per arc
+        for (let b = 0; b < blobCount; b++) {
+          const blob = dataSource.entities.add({
+            id: `news-arc-blob-${idx}-${b}`,
+            position: positions[0],
+            point: {
+              pixelSize: blobSize,
+              color: blobColor.withAlpha(0.9),
+              outlineColor: blobColor.withAlpha(0.3),
+              outlineWidth: 2,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
+            },
+          })
+          this._newsArcEntities.push(blob)
+          blob._blobArc = positions
+          blob._blobPhase = arcPhaseOffset + (b / blobCount)
+          blob._blobSpeed = speed
+        }
       }
 
       // Label at midpoint with arrow showing direction
@@ -5464,8 +5675,77 @@ export default class extends Controller {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
-      this._newsEntities.push(lbl)
+      this._newsArcEntities.push(lbl)
     })
+
+    // Update news feed panel
+    this._updateNewsFeed(arcs)
+  }
+
+  // Blob animation is now handled by the consolidated animate() loop
+
+  _updateNewsFeed(arcs) {
+    if (!this.hasNewsFeedContentTarget) return
+    const count = arcs.length
+    if (this.hasNewsFeedCountTarget) {
+      this.newsFeedCountTarget.textContent = `${count} route${count !== 1 ? "s" : ""}`
+    }
+
+    const categoryColors = {
+      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+    }
+
+    const html = arcs.map((arc, idx) => {
+      // Determine dominant category from articles
+      const cats = {}
+      arc.articles.forEach(a => { cats[a.category] = (cats[a.category] || 0) + 1 })
+      const topCat = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]?.[0] || "other"
+      const color = categoryColors[topCat] || "#90a4ae"
+      const avgTone = arc.articles.length
+        ? (arc.articles.reduce((s, a) => s + (a.tone || 0), 0) / arc.articles.length).toFixed(1)
+        : "0"
+
+      const articleList = arc.articles.slice(0, 5).map(a =>
+        `<a href="${a.url}" target="_blank" rel="noopener" class="nf-article">${a.domain}</a>`
+      ).join("")
+
+      return `<div class="nf-row" data-action="click->globe#focusNewsArc" data-arc-idx="${idx}">
+        <div class="nf-route">
+          <span class="nf-origin">${arc.srcCity}</span>
+          <span class="nf-arrow">→</span>
+          <span class="nf-dest">${arc.evtName}</span>
+          <span class="nf-badge" style="background:${color}20;color:${color}">${topCat}</span>
+        </div>
+        <div class="nf-meta">
+          <span class="nf-count">${arc.count} article${arc.count !== 1 ? "s" : ""}</span>
+          <span class="nf-tone" style="color:${parseFloat(avgTone) < -2 ? "#ef5350" : parseFloat(avgTone) > 2 ? "#66bb6a" : "#90a4ae"}">tone ${avgTone}</span>
+        </div>
+        <div class="nf-sources">${articleList}</div>
+      </div>`
+    }).join("")
+
+    this.newsFeedContentTarget.innerHTML = html
+  }
+
+  closeNewsFeed() {
+    if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
+  }
+
+  focusNewsArc(event) {
+    const idx = parseInt(event.currentTarget.dataset.arcIdx)
+    const arc = this._newsArcData?.[idx]
+    if (!arc) return
+    // Fly to midpoint between source and event
+    const midLat = (arc.srcLat + arc.evtLat) / 2
+    const midLng = (arc.srcLng + arc.evtLng) / 2
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(midLng, midLat, 5000000),
+      duration: 1.0,
+    })
+    // Also show arc detail
+    this.showNewsArcDetail(idx)
   }
 
   showNewsArcDetail(arcIdx) {
@@ -5518,6 +5798,34 @@ export default class extends Controller {
     const ds = this.getNewsDataSource()
     this._newsEntities.forEach(e => ds.entities.remove(e))
     this._newsEntities = []
+    this._clearNewsArcEntities()
+  }
+
+  _clearNewsArcEntities() {
+    this._stopNewsArcBlobAnim()
+    const ds = this.getNewsDataSource()
+    ;(this._newsArcEntities || []).forEach(e => ds.entities.remove(e))
+    this._newsArcEntities = []
+  }
+
+  _stopNewsArcBlobAnim() {
+    if (this._newsArcBlobRaf) {
+      cancelAnimationFrame(this._newsArcBlobRaf)
+      this._newsArcBlobRaf = null
+    }
+  }
+
+  _removeNewsBlobEntities() {
+    const ds = this.getNewsDataSource()
+    const kept = []
+    for (const e of (this._newsArcEntities || [])) {
+      if (e._blobArc) {
+        ds.entities.remove(e)
+      } else {
+        kept.push(e)
+      }
+    }
+    this._newsArcEntities = kept
   }
 
   showNewsDetail(ev) {
@@ -5710,6 +6018,10 @@ export default class extends Controller {
       const resp = await fetch("/api/submarine_cables")
       if (!resp.ok) return
       const data = await resp.json()
+      const hasData = (data.cables?.length || 0) > 0 || (data.landingPoints?.length || 0) > 0
+      this._handleBackgroundRefresh(resp, "submarine-cables", hasData, () => {
+        if (this.cablesVisible) this.fetchCables()
+      })
       this._renderCables(data.cables, data.landingPoints)
       this._toastHide()
     } catch (e) {
@@ -5871,6 +6183,10 @@ export default class extends Controller {
       const resp = await fetch("/api/internet_outages")
       if (!resp.ok) return
       const data = await resp.json()
+      const hasData = (data.summary?.length || 0) > 0 || (data.events?.length || 0) > 0
+      this._handleBackgroundRefresh(resp, "internet-outages", hasData, () => {
+        if (this.outagesVisible && !this._timelineActive) this.fetchOutages()
+      })
       this._outageData = data.summary || []
       this._renderOutages(data)
       this._toastHide()
@@ -5994,7 +6310,7 @@ export default class extends Controller {
   togglePowerPlants() {
     this.powerPlantsVisible = this.hasPowerPlantsToggleTarget && this.powerPlantsToggleTarget.checked
     if (this.powerPlantsVisible) {
-      this._ensurePowerPlantData().then(() => this.renderPowerPlants())
+      this._ensurePowerPlantData().then(() => { this.renderPowerPlants(); this._updateThreatsPanel() })
       if (!this._ppCameraCb) {
         this._ppCameraCb = () => { if (this.powerPlantsVisible) this.renderPowerPlants() }
         this.viewer.camera.moveEnd.addEventListener(this._ppCameraCb)
@@ -6002,6 +6318,7 @@ export default class extends Controller {
     } else {
       this._clearPowerPlantEntities()
       if (this._ppCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._ppCameraCb); this._ppCameraCb = null }
+      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
     }
     this._syncQuickBar()
     this._savePrefs()
@@ -6107,7 +6424,7 @@ export default class extends Controller {
         this._powerPlantEntities.push(atkRing)
       }
     })
-    dataSource.entities.resumeEvents()
+    dataSource.entities.resumeEvents(); this._requestRender()
     this._powerPlantData = visible // for click lookups
   }
 
@@ -6116,9 +6433,97 @@ export default class extends Controller {
     if (ds) {
       ds.entities.suspendEvents()
       this._powerPlantEntities.forEach(e => ds.entities.remove(e))
-      ds.entities.resumeEvents()
+      ds.entities.resumeEvents(); this._requestRender()
     }
     this._powerPlantEntities = []
+  }
+
+  _updateThreatsPanel() {
+    if (!this.hasThreatsContentTarget) return
+    const attacked = this._attackedCountries
+    if (!attacked?.size || !this._powerPlantAll?.length) {
+      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+      return
+    }
+
+    // Find all power plants in attacked countries
+    const threatened = this._powerPlantAll
+      .filter(p => attacked.has(p.country))
+      .sort((a, b) => (b.capacity || 0) - (a.capacity || 0))
+      .slice(0, 200)
+
+    if (!threatened.length) {
+      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+      return
+    }
+
+    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = ""
+    if (this.hasThreatsCountTarget) {
+      this.threatsCountTarget.textContent = `${threatened.length} target${threatened.length !== 1 ? "s" : ""}`
+    }
+
+    const pairs = this._trafficData?.attack_pairs || []
+    const fuelColors = {
+      Coal: "#616161", Gas: "#ff9800", Oil: "#795548", Nuclear: "#fdd835",
+      Hydro: "#42a5f5", Solar: "#ffca28", Wind: "#80cbc4", Biomass: "#8bc34a",
+      Geothermal: "#e64a19", Other: "#78909c",
+    }
+
+    // Group by country
+    const byCountry = {}
+    threatened.forEach(p => {
+      if (!byCountry[p.country]) byCountry[p.country] = []
+      byCountry[p.country].push(p)
+    })
+
+    const html = Object.entries(byCountry).map(([country, plants]) => {
+      const countryAttacks = pairs.filter(p => p.target === country)
+      const totalPct = countryAttacks.reduce((s, p) => s + (p.pct || 0), 0).toFixed(1)
+      const origins = countryAttacks.map(p => p.origin_name || p.origin).join(", ")
+
+      const plantRows = plants.slice(0, 15).map(p => {
+        const color = fuelColors[p.fuel] || "#78909c"
+        return `<div class="th-plant" data-action="click->globe#focusThreat" data-lat="${p.lat}" data-lng="${p.lng}" data-pp-id="${p.id}">
+          <span class="th-fuel" style="color:${color}"><i class="fa-solid fa-bolt"></i></span>
+          <span class="th-name">${this._escapeHtml(p.name)}</span>
+          <span class="th-cap">${p.capacity ? p.capacity.toLocaleString() + " MW" : ""}</span>
+          <span class="th-type" style="background:${color}20;color:${color}">${p.fuel}</span>
+        </div>`
+      }).join("")
+
+      const moreCount = plants.length > 15 ? `<div class="th-more">+ ${plants.length - 15} more</div>` : ""
+
+      return `<div class="th-country">
+        <div class="th-country-header">
+          <span class="th-country-name">${this._escapeHtml(country)}</span>
+          <span class="th-attack-pct">${totalPct}% DDoS</span>
+        </div>
+        <div class="th-origins">from ${this._escapeHtml(origins)}</div>
+        <div class="th-plants">${plantRows}${moreCount}</div>
+      </div>`
+    }).join("")
+
+    this.threatsContentTarget.innerHTML = html
+  }
+
+  closeThreats() {
+    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+  }
+
+  focusThreat(event) {
+    const lat = parseFloat(event.currentTarget.dataset.lat)
+    const lng = parseFloat(event.currentTarget.dataset.lng)
+    if (isNaN(lat) || isNaN(lng)) return
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, 500000),
+      duration: 1.0,
+    })
+    // Show detail if we have the plant data
+    const ppId = event.currentTarget.dataset.ppId
+    const pp = this._powerPlantData?.find(p => String(p.id) === ppId) ||
+               this._powerPlantAll?.find(p => String(p.id) === ppId)
+    if (pp) this.showPowerPlantDetail(pp)
   }
 
   showPowerPlantDetail(pp) {
@@ -6179,6 +6584,9 @@ export default class extends Controller {
       const resp = await fetch("/api/conflict_events")
       if (!resp.ok) return
       this._conflictData = await resp.json()
+      this._handleBackgroundRefresh(resp, "conflict-events", this._conflictData.length > 0, () => {
+        if (this.conflictsVisible && !this._timelineActive) this.fetchConflicts()
+      })
       this.renderConflicts()
       this._updateStats()
       this._toastHide()
@@ -6734,7 +7142,7 @@ export default class extends Controller {
       })
       this._notamEntities.push(label)
     })
-    dataSource.entities.resumeEvents()
+    dataSource.entities.resumeEvents(); this._requestRender()
 
     this._checkFlightNotamProximity()
   }
@@ -6744,7 +7152,7 @@ export default class extends Controller {
     if (ds) {
       ds.entities.suspendEvents()
       this._notamEntities.forEach(e => ds.entities.remove(e))
-      ds.entities.resumeEvents()
+      ds.entities.resumeEvents(); this._requestRender()
     }
     this._notamEntities = []
     this._clearFlightNotamWarnings()
@@ -6829,15 +7237,45 @@ export default class extends Controller {
 
   toggleTraffic() {
     this.trafficVisible = this.hasTrafficToggleTarget && this.trafficToggleTarget.checked
-    console.log("[Traffic] toggleTraffic called, visible:", this.trafficVisible, "hasTarget:", this.hasTrafficToggleTarget, "checked:", this.hasTrafficToggleTarget && this.trafficToggleTarget.checked)
     if (this.trafficVisible) {
       this.fetchTraffic()
+      if (this.hasTrafficArcControlsTarget) this.trafficArcControlsTarget.style.display = ""
     } else {
       this._clearTrafficEntities()
       this._trafficData = null
+      if (this.hasTrafficArcControlsTarget) this.trafficArcControlsTarget.style.display = "none"
     }
     this._syncQuickBar()
     this._savePrefs()
+  }
+
+  toggleTrafficArcs() {
+    this.trafficArcsVisible = this.hasTrafficArcsToggleTarget && this.trafficArcsToggleTarget.checked
+    if (!this.trafficArcsVisible) {
+      this.trafficBlobsVisible = false
+      if (this.hasTrafficBlobsToggleTarget) this.trafficBlobsToggleTarget.checked = false
+      this._clearTrafficEntities()
+      if (this._trafficData) this.renderTraffic()
+    } else if (this._trafficData) {
+      this._clearTrafficEntities()
+      this.renderTraffic()
+    }
+  }
+
+  toggleTrafficBlobs() {
+    this.trafficBlobsVisible = this.hasTrafficBlobsToggleTarget && this.trafficBlobsToggleTarget.checked
+    if (this.trafficBlobsVisible && !this.trafficArcsVisible) {
+      this.trafficBlobsVisible = false
+      if (this.hasTrafficBlobsToggleTarget) this.trafficBlobsToggleTarget.checked = false
+      return
+    }
+    if (!this.trafficBlobsVisible) {
+      this._stopTrafficBlobAnim()
+      this._removeTrafficBlobEntities()
+    } else if (this._trafficData) {
+      this._clearTrafficEntities()
+      this.renderTraffic()
+    }
   }
 
   async fetchTraffic() {
@@ -6852,6 +7290,10 @@ export default class extends Controller {
         return
       }
       this._trafficData = await resp.json()
+      const hasData = (this._trafficData.traffic?.length || 0) > 0 || (this._trafficData.attack_pairs?.length || 0) > 0
+      this._handleBackgroundRefresh(resp, "internet-traffic", hasData, () => {
+        if (this.trafficVisible && !this._timelineActive) this.fetchTraffic()
+      })
       console.log("[Traffic] Got data:", this._trafficData.traffic?.length, "countries,", this._trafficData.attack_pairs?.length, "attack pairs")
       this.renderTraffic()
       this._toastHide()
@@ -6947,6 +7389,12 @@ export default class extends Controller {
     // Re-render infra layers if visible to show attack highlighting
     if (this.powerPlantsVisible) this.renderPowerPlants()
     if (this.cablesVisible) this._refreshCableAttackHighlights()
+    this._updateThreatsPanel()
+
+    if (!this.trafficArcsVisible) {
+      dataSource.entities.resumeEvents(); this._requestRender()
+      return
+    }
 
     pairs.forEach((p, idx) => {
       const originC = CC[p.origin]
@@ -6996,30 +7444,32 @@ export default class extends Controller {
       this._trafficEntities.push(arc)
 
       // Animated attack blobs — 1 to 4 based on severity, staggered along path
-      const blobCount = Math.min(4, Math.max(1, Math.ceil(pct / 5)))
-      const speed = 0.3 + Math.min(pct * 0.01, 0.4) // 0.3–0.7 full-path per second
-      const blobSize = Math.max(7, Math.min(16, 5 + pct * 0.3))
-      const blobColor = Cesium.Color.fromCssColorString("#ff1744")
-      const glowColor = Cesium.Color.fromCssColorString("#ff5252")
+      if (this.trafficBlobsVisible) {
+        const blobCount = Math.min(4, Math.max(1, Math.ceil(pct / 5)))
+        const speed = 0.3 + Math.min(pct * 0.01, 0.4) // 0.3–0.7 full-path per second
+        const blobSize = Math.max(7, Math.min(16, 5 + pct * 0.3))
+        const blobColor = Cesium.Color.fromCssColorString("#ff1744")
+        const glowColor = Cesium.Color.fromCssColorString("#ff5252")
 
-      for (let b = 0; b < blobCount; b++) {
-        const blob = dataSource.entities.add({
-          id: `traf-blob-${idx}-${b}`,
-          position: arcPositions[0],
-          point: {
-            pixelSize: blobSize,
-            color: blobColor.withAlpha(0.9),
-            outlineColor: glowColor.withAlpha(0.4),
-            outlineWidth: 3,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
-          },
-        })
-        this._trafficEntities.push(blob)
-        // Store animation metadata on the entity for the RAF loop
-        blob._blobArc = arcPositions
-        blob._blobPhase = b / blobCount
-        blob._blobSpeed = speed
+        for (let b = 0; b < blobCount; b++) {
+          const blob = dataSource.entities.add({
+            id: `traf-blob-${idx}-${b}`,
+            position: arcPositions[0],
+            point: {
+              pixelSize: blobSize,
+              color: blobColor.withAlpha(0.9),
+              outlineColor: glowColor.withAlpha(0.4),
+              outlineWidth: 3,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
+            },
+          })
+          this._trafficEntities.push(blob)
+          // Store animation metadata on the entity for the RAF loop
+          blob._blobArc = arcPositions
+          blob._blobPhase = b / blobCount
+          blob._blobSpeed = speed
+        }
       }
 
       // Label at midpoint of arc
@@ -7044,50 +7494,48 @@ export default class extends Controller {
       })
       this._trafficEntities.push(label)
     })
-    dataSource.entities.resumeEvents()
+    dataSource.entities.resumeEvents(); this._requestRender()
 
-    // Start blob animation loop
-    this._startTrafficBlobAnim()
+    // Blob animation is handled by the consolidated animate() loop
   }
 
-  _startTrafficBlobAnim() {
-    if (this._trafficBlobRaf) return
-    const Cesium = window.Cesium
-    const scratch = new Cesium.Cartesian3()
-    const animate = () => {
-      if (!this.trafficVisible) { this._trafficBlobRaf = null; return }
-      const now = Date.now() / 1000
-      for (const e of this._trafficEntities) {
-        if (!e._blobArc) continue
-        const pos = e._blobArc
-        const n = pos.length
-        const t = (now * e._blobSpeed + e._blobPhase) % 1.0
-        const fi = t * (n - 1)
-        const lo = Math.floor(fi)
-        const hi = Math.min(lo + 1, n - 1)
-        const frac = fi - lo
-        e.position = Cesium.Cartesian3.lerp(pos[lo], pos[hi], frac, scratch)
-      }
-      this.viewer.scene.requestRender()
-      this._trafficBlobRaf = requestAnimationFrame(animate)
-    }
-    this._trafficBlobRaf = requestAnimationFrame(animate)
-  }
+  // Blob animation is now handled by the consolidated animate() loop
 
   _clearTrafficEntities() {
-    if (this._trafficBlobRaf) {
-      cancelAnimationFrame(this._trafficBlobRaf)
-      this._trafficBlobRaf = null
-    }
+    this._stopTrafficBlobAnim()
     const ds = this._ds["traffic"]
     if (ds) {
       ds.entities.suspendEvents()
       this._trafficEntities.forEach(e => ds.entities.remove(e))
-      ds.entities.resumeEvents()
+      ds.entities.resumeEvents(); this._requestRender()
     }
     this._trafficEntities = []
     this._attackedCountries = null
     this._clearCableAttackHighlights()
+    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+  }
+
+  _stopTrafficBlobAnim() {
+    if (this._trafficBlobRaf) {
+      cancelAnimationFrame(this._trafficBlobRaf)
+      this._trafficBlobRaf = null
+    }
+  }
+
+  _removeTrafficBlobEntities() {
+    const ds = this._ds["traffic"]
+    if (!ds) return
+    const kept = []
+    ds.entities.suspendEvents()
+    for (const e of this._trafficEntities) {
+      if (e._blobArc) {
+        ds.entities.remove(e)
+      } else {
+        kept.push(e)
+      }
+    }
+    ds.entities.resumeEvents(); this._requestRender()
+    this._trafficEntities = kept
   }
 
   showTrafficDetail(code) {
@@ -7600,6 +8048,7 @@ export default class extends Controller {
   }
 
   disconnect() {
+    Object.values(this._backgroundRefreshRetryTimers || {}).forEach(timer => clearTimeout(timer))
     if (this._mediaRecorder) this._stopRecording()
     if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)

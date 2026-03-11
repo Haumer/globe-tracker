@@ -160,6 +160,22 @@ module Api
       end
     end
 
+    # GET /api/playback/satellites?at=ISO8601&category=starlink
+    def satellites
+      at = parse_time(params[:at]) || Time.current
+
+      scope = SatelliteTleSnapshot.tles_at(at)
+      scope = scope.where(category: params[:category]) if params[:category].present?
+
+      render json: {
+        at: at.utc.iso8601,
+        count: scope.length,
+        satellites: scope.map { |s|
+          { norad_id: s.norad_id, name: s.name, tle_line1: s.tle_line1, tle_line2: s.tle_line2, category: s.category }
+        },
+      }
+    end
+
     def parse_time(str)
       return nil if str.blank?
       Time.parse(str)

@@ -1,11 +1,10 @@
 module Api
   class ConflictEventsController < ApplicationController
-    include TimelineRecorder
     skip_before_action :authenticate_user!
 
     def index
       unless params[:from].present? && params[:to].present?
-        ConflictEventService.fetch_recent if ConflictEvent.count == 0
+        enqueue_background_refresh(RefreshConflictEventsJob, key: "conflict-events", debounce: 15.minutes) if ConflictEventService.stale?
       end
 
       scope = if params[:from].present? && params[:to].present?

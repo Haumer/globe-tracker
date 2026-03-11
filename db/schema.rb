@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_11_110000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_11_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -111,6 +111,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_110000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["entity_type", "entity_code", "started_at"], name: "idx_outages_entity_time"
+    t.index ["external_id"], name: "index_internet_outages_on_external_id", unique: true
     t.index ["fetched_at"], name: "index_internet_outages_on_fetched_at"
     t.index ["started_at"], name: "index_internet_outages_on_started_at"
   end
@@ -181,6 +182,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_110000) do
     t.boolean "on_ground"
     t.string "extra"
     t.datetime "recorded_at", null: false
+    t.index ["entity_type", "entity_id", "recorded_at"], name: "idx_position_snapshots_entity_lookup", order: { recorded_at: :desc }
     t.index ["entity_type", "entity_id", "recorded_at"], name: "idx_snapshots_entity_time"
     t.index ["entity_type", "recorded_at"], name: "index_position_snapshots_on_entity_type_and_recorded_at"
     t.index ["recorded_at"], name: "index_position_snapshots_on_recorded_at"
@@ -205,6 +207,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_110000) do
     t.index ["gppd_idnr"], name: "index_power_plants_on_gppd_idnr", unique: true
     t.index ["latitude", "longitude"], name: "index_power_plants_on_latitude_and_longitude"
     t.index ["primary_fuel"], name: "index_power_plants_on_primary_fuel"
+  end
+
+  create_table "satellite_tle_snapshots", force: :cascade do |t|
+    t.integer "norad_id", null: false
+    t.string "name"
+    t.string "tle_line1", null: false
+    t.string "tle_line2", null: false
+    t.string "category"
+    t.datetime "recorded_at", null: false
+    t.index ["norad_id", "recorded_at"], name: "idx_tle_snapshots_lookup", order: { recorded_at: :desc }
+    t.index ["recorded_at"], name: "idx_tle_snapshots_recorded_at"
   end
 
   create_table "satellites", force: :cascade do |t|

@@ -101,6 +101,62 @@
           <button class="ql-btn" data-globe-target="qlNews" data-action="click->globe#quickToggle" data-layer="news" data-tip="World news (GDELT)" data-tip-pos="right" style="--ql-color: #ff9800;">
             <i class="fa-solid fa-newspaper"></i><span class="ql-label">NEWS</span>
           </button>
+          <!-- News arc controls popover -->
+          <div class="arc-controls" data-globe-target="newsArcControls" style="display:none;">
+            <div class="arc-controls-title">NEWS ARCS</div>
+            <div class="arc-controls-row">
+              <label class="arc-mini-toggle">
+                <input type="checkbox" checked data-globe-target="newsArcsToggle" data-action="change->globe#toggleNewsArcs">
+                <span class="arc-mini-track"></span>
+                <span>Arcs</span>
+              </label>
+              <label class="arc-mini-toggle">
+                <input type="checkbox" checked data-globe-target="newsBlobsToggle" data-action="change->globe#toggleNewsBlobs">
+                <span class="arc-mini-track"></span>
+                <span>Blobs</span>
+              </label>
+            </div>
+            <div class="arc-controls-row">
+              <label>From</label>
+              <select data-globe-target="newsArcFrom" data-action="change->globe#applyNewsArcFilter">
+                <option value="all">All regions</option>
+                <option value="north-america">North America</option>
+                <option value="south-america">South America</option>
+                <option value="europe">Europe</option>
+                <option value="middle-east">Middle East</option>
+                <option value="africa">Africa</option>
+                <option value="central-asia">Central Asia</option>
+                <option value="east-asia">East Asia</option>
+                <option value="southeast-asia">SE Asia</option>
+                <option value="oceania">Oceania</option>
+              </select>
+            </div>
+            <div class="arc-controls-row">
+              <label>To</label>
+              <select data-globe-target="newsArcTo" data-action="change->globe#applyNewsArcFilter">
+                <option value="all">All regions</option>
+                <option value="north-america">North America</option>
+                <option value="south-america">South America</option>
+                <option value="europe">Europe</option>
+                <option value="middle-east">Middle East</option>
+                <option value="africa">Africa</option>
+                <option value="central-asia">Central Asia</option>
+                <option value="east-asia">East Asia</option>
+                <option value="southeast-asia">SE Asia</option>
+                <option value="oceania">Oceania</option>
+              </select>
+            </div>
+            <div class="arc-controls-row">
+              <label>Max arcs</label>
+              <select data-globe-target="newsArcMax" data-action="change->globe#applyNewsArcFilter">
+                <option value="30">30</option>
+                <option value="60">60</option>
+                <option value="120" selected>120</option>
+                <option value="240">240</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+          </div>
           <button class="ql-btn" data-globe-target="qlConflicts" data-action="click->globe#quickToggle" data-layer="conflicts" data-tip="Armed conflicts (UCDP)" data-tip-pos="right" style="--ql-color: #f44336;">
             <i class="fa-solid fa-crosshairs"></i><span class="ql-label">WAR</span>
           </button>
@@ -126,6 +182,22 @@
           <button class="ql-btn" data-globe-target="qlTraffic" data-action="click->globe#quickToggle" data-layer="traffic" data-tip="Internet traffic & DDoS (Cloudflare)" data-tip-pos="right" style="--ql-color: #69f0ae;">
             <i class="fa-solid fa-globe"></i><span class="ql-label">RADAR</span>
           </button>
+          <!-- Traffic arc controls popover -->
+          <div class="arc-controls" data-globe-target="trafficArcControls" style="display:none;">
+            <div class="arc-controls-title" style="color: #69f0ae;">ATTACK ARCS</div>
+            <div class="arc-controls-row">
+              <label class="arc-mini-toggle">
+                <input type="checkbox" checked data-globe-target="trafficArcsToggle" data-action="change->globe#toggleTrafficArcs">
+                <span class="arc-mini-track"></span>
+                <span>Arcs</span>
+              </label>
+              <label class="arc-mini-toggle">
+                <input type="checkbox" checked data-globe-target="trafficBlobsToggle" data-action="change->globe#toggleTrafficBlobs">
+                <span class="arc-mini-track"></span>
+                <span>Blobs</span>
+              </label>
+            </div>
+          </div>
           <button class="ql-btn" data-globe-target="qlOutages" data-action="click->globe#quickToggle" data-layer="outages" data-tip="Internet outages (IODA)" data-tip-pos="right" style="--ql-color: #e040fb;">
             <i class="fa-solid fa-wifi"></i><span class="ql-label">NET</span>
           </button>
@@ -280,6 +352,26 @@
       <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
     </div>
     <div class="entity-list-content" data-globe-target="entityListContent"></div>
+  </div>
+
+  <%# ── Threats Panel ── right side ────────────────────────────── %>
+  <div id="threats-panel" data-globe-target="threatsPanel" style="display:none;">
+    <button class="detail-close" data-action="click->globe#closeThreats">&times;</button>
+    <div class="threats-header">
+      <span class="threats-title"><i class="fa-solid fa-shield-halved"></i> CYBER THREATS</span>
+      <span class="threats-count" data-globe-target="threatsCount">0 targets</span>
+    </div>
+    <div class="threats-content" data-globe-target="threatsContent"></div>
+  </div>
+
+  <%# ── News Feed Panel ── right side ──────────────────────────── %>
+  <div id="news-feed-panel" data-globe-target="newsFeedPanel" style="display:none;">
+    <button class="detail-close" data-action="click->globe#closeNewsFeed">&times;</button>
+    <div class="news-feed-header">
+      <span class="news-feed-title">NEWS COVERAGE</span>
+      <span class="news-feed-count" data-globe-target="newsFeedCount">0 routes</span>
+    </div>
+    <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
   </div>
 
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>

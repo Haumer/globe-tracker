@@ -36,35 +36,36 @@ class CelestrakService
 
   class << self
     def fetch_satellites(category: nil)
-      refresh_data_if_needed(category)
-
       scope = Satellite.all
       scope = scope.where(category: category) if category.present?
       scope
     end
 
-    private
-
-    def refresh_data_if_needed(category)
-      @fetch_times ||= {}
-      cache_key = cache_key_for(category)
-      last = @fetch_times[cache_key]
-      return if last && (Time.now.to_f - last) < CACHE_TTL
+    def refresh_if_stale(category: nil, force: false)
+      return 0 if !force && !stale?(category: category)
 
       if category.present? && CATEGORY_GROUPS.key?(category)
         fetch_and_upsert(group: CATEGORY_GROUPS[category], category: category)
+        1
       else
         # Fetch specific categories (not the massive "active" group)
         CATEGORY_GROUPS.each do |cat, group|
           fetch_and_upsert(group: group, category: cat)
         end
+        CATEGORY_GROUPS.size
       end
-
-      @fetch_times[cache_key] = Time.now.to_f
     end
 
-    def cache_key_for(category)
-      "celestrak_fetched_#{category || 'all'}"
+    def stale?(category: nil)
+      latest_updated_at(category: category).blank? || latest_updated_at(category: category) < CACHE_TTL.seconds.ago
+    end
+
+    private
+
+    def latest_updated_at(category:)
+      scope = Satellite.all
+      scope = scope.where(category: category) if category.present?
+      scope.maximum(:updated_at)
     end
 
     def fetch_and_upsert(group:, category:)
@@ -130,6 +131,39 @@ class CelestrakService
         unique_by: :norad_id,
         update_only: %i[name tle_line1 tle_line2 category operator mission_type]
       )
+
+      record_tle_snapshots(satellites, now)
+    end
+
+    def record_tle_snapshots(satellites, now)
+      norad_ids = satellites.map { |s| s[:norad_id] }
+
+      # Fetch the most recent TLE snapshot per satellite to dedup
+      last_tles = SatelliteTleSnapshot
+        .where(norad_id: norad_ids)
+        .where("recorded_at > ?", 1.hour.ago)
+        .select("DISTINCT ON (norad_id) norad_id, tle_line1, tle_line2")
+        .order(:norad_id, recorded_at: :desc)
+        .index_by(&:norad_id)
+
+      snapshots = satellites.filter_map do |sat|
+        last = last_tles[sat[:norad_id]]
+        # Skip if TLE lines haven't changed since last snapshot
+        next if last && last.tle_line1 == sat[:tle_line1] && last.tle_line2 == sat[:tle_line2]
+
+        {
+          norad_id: sat[:norad_id],
+          name: sat[:name],
+          tle_line1: sat[:tle_line1],
+          tle_line2: sat[:tle_line2],
+          category: sat[:category],
+          recorded_at: now,
+        }
+      end
+
+      SatelliteTleSnapshot.insert_all(snapshots) if snapshots.any?
+    rescue => e
+      Rails.logger.error("TLE snapshot recording error: #{e.message}")
     end
   end
 end

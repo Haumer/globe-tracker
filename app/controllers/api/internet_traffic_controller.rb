@@ -3,9 +3,8 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      result = CloudflareRadarService.fetch_snapshot
+      enqueue_background_refresh(RefreshInternetTrafficJob, key: "internet-traffic", debounce: 5.minutes) if CloudflareRadarService.stale?
 
-      # Always return latest DB snapshot (even if fetch failed or was cached)
       snapshots = InternetTrafficSnapshot.latest_batch
 
       traffic = snapshots.map do |s|
@@ -18,8 +17,7 @@ module Api
         }
       end
 
-      # Attack pairs from live result, or cached from last fetch
-      pairs = result&.dig(:attack_pairs) || CloudflareRadarService.cached_attack_pairs
+      pairs = CloudflareRadarService.cached_attack_pairs
 
       render json: {
         traffic: traffic,

@@ -23,6 +23,7 @@ Rails.application.routes.draw do
       collection do
         get :range
         get :events
+        get :satellites
       end
     end
   end

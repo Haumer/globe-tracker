@@ -2,6 +2,26 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
+module Rails
+  module LineFiltering
+    # Rails 7.1 expects the older Minitest run signature; Minitest 6 passes 3 args.
+    def run(*args)
+      return super(*args) if args.length == 3 && !args.last.is_a?(Hash)
+
+      options = args.last.is_a?(Hash) ? args.last : {}
+      options = options.merge(filter: Rails::TestUnit::Runner.compose_filter(self, options[:filter]))
+
+      if args.last.is_a?(Hash)
+        args[-1] = options
+      else
+        args << options
+      end
+
+      super(*args)
+    end
+  end
+end
+
 module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers

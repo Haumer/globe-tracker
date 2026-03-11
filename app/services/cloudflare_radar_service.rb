@@ -6,6 +6,20 @@ class CloudflareRadarService
   CACHE_TTL = 3600 # 1 hour
 
   class << self
+    def refresh_if_stale(force: false)
+      return nil if !force && !stale?
+
+      fetch_snapshot
+    end
+
+    def stale?
+      latest_recorded_at.blank? || latest_recorded_at < CACHE_TTL.seconds.ago
+    end
+
+    def latest_recorded_at
+      InternetTrafficSnapshot.maximum(:recorded_at)
+    end
+
     def fetch_snapshot
       token = api_token
       unless token

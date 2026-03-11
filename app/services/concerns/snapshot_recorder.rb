@@ -1,11 +1,21 @@
 module SnapshotRecorder
+  # Minimum thresholds to record a new snapshot
+  LAT_LNG_THRESHOLD = 0.001  # ~111 meters
+  ALT_THRESHOLD     = 50     # meters
+  HEADING_THRESHOLD = 2      # degrees
+  SPEED_THRESHOLD   = 5      # m/s
+
   # Call after upserting flights to record position snapshots
   def record_flight_snapshots(records)
     return if records.blank?
 
     now = Time.current
+    entity_ids = records.filter_map { |r| r[:icao24] if r[:latitude] && r[:longitude] }
+    last_snapshots = fetch_last_snapshots("flight", entity_ids)
+
     snapshots = records.filter_map do |r|
       next if r[:latitude].nil? || r[:longitude].nil?
+      next if snapshot_unchanged?(last_snapshots[r[:icao24]], r)
 
       {
         entity_type: "flight",
@@ -33,8 +43,12 @@ module SnapshotRecorder
     return if records.blank?
 
     now = Time.current
+    entity_ids = records.filter_map { |r| r[:mmsi] if r[:latitude] && r[:longitude] }
+    last_snapshots = fetch_last_snapshots("ship", entity_ids)
+
     snapshots = records.filter_map do |r|
       next if r[:latitude].nil? || r[:longitude].nil?
+      next if snapshot_unchanged?(last_snapshots[r[:mmsi]], r)
 
       {
         entity_type: "ship",
@@ -55,5 +69,45 @@ module SnapshotRecorder
     PositionSnapshot.insert_all(snapshots) if snapshots.any?
   rescue => e
     Rails.logger.error("Ship snapshot recording error: #{e.message}")
+  end
+
+  private
+
+  # Batch-fetch the most recent snapshot per entity to compare against
+  def fetch_last_snapshots(entity_type, entity_ids)
+    return {} if entity_ids.blank?
+
+    rows = PositionSnapshot
+      .where(entity_type: entity_type, entity_id: entity_ids)
+      .where("recorded_at > ?", 10.minutes.ago)
+      .select("DISTINCT ON (entity_id) entity_id, latitude, longitude, altitude, heading, speed")
+      .order(:entity_id, recorded_at: :desc)
+
+    rows.each_with_object({}) do |row, hash|
+      hash[row.entity_id] = row
+    end
+  end
+
+  def snapshot_unchanged?(last, record)
+    return false unless last # no previous record — always insert
+
+    pos_same = (last.latitude - record[:latitude]).abs < LAT_LNG_THRESHOLD &&
+               (last.longitude - record[:longitude]).abs < LAT_LNG_THRESHOLD &&
+               (!record[:altitude] || !last.altitude || (last.altitude - record[:altitude]).abs < ALT_THRESHOLD)
+
+    # Position hasn't moved — skip regardless of heading/speed jitter
+    return true if pos_same
+
+    # Position moved but heading+speed unchanged — straight-line, interpolatable
+    hdg_same = !record[:heading] || !last.heading || heading_delta(last.heading, record[:heading]) < HEADING_THRESHOLD
+    spd_same = !record[:speed] || !last.speed || (last.speed - record[:speed]).abs < SPEED_THRESHOLD
+
+    hdg_same && spd_same
+  end
+
+  # Handle heading wraparound (e.g. 359° → 1° = 2° delta, not 358°)
+  def heading_delta(a, b)
+    d = (a - b).abs
+    d > 180 ? 360 - d : d
   end
 end

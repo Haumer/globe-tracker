@@ -19,6 +19,7 @@ Rails.application.routes.draw do
     resources :conflict_events, only: [:index]
     resources :internet_traffic, only: [:index]
     resources :notams, only: [:index]
+    resources :airports, only: [:index]
     resources :playback, only: [:index] do
       collection do
         get :range

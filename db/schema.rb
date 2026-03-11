@@ -10,9 +10,31 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_11_140000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_11_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "airports", force: :cascade do |t|
+    t.string "icao_code", null: false
+    t.string "iata_code"
+    t.string "name", null: false
+    t.string "airport_type", null: false
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.integer "elevation_ft"
+    t.string "country_code"
+    t.string "municipality"
+    t.boolean "is_military", default: false, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["airport_type"], name: "index_airports_on_airport_type"
+    t.index ["country_code"], name: "index_airports_on_country_code"
+    t.index ["iata_code"], name: "index_airports_on_iata_code"
+    t.index ["icao_code"], name: "index_airports_on_icao_code", unique: true
+    t.index ["is_military"], name: "index_airports_on_is_military"
+    t.index ["latitude", "longitude"], name: "index_airports_on_latitude_and_longitude"
+  end
 
   create_table "conflict_events", force: :cascade do |t|
     t.integer "external_id", null: false

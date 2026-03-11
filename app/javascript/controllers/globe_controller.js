@@ -455,8 +455,9 @@ export default class extends Controller {
     return true // no filter active
   }
 
-  // Test point against only the selected countries' polygons
+  // Test point against selected countries' polygons OR their convex hull (international waters)
   _pointInSelectedCountries(lat, lng) {
+    // Check exact country polygons first
     for (const feature of this._countryFeatures) {
       const name = feature.properties?.NAME || feature.properties?.name
       if (!name || !this.selectedCountries.has(name)) continue
@@ -467,16 +468,22 @@ export default class extends Controller {
         if (this.pointInPolygon(lat, lng, poly[0])) return true
       }
     }
+    // Fall back to convex hull (captures international waters between selected countries)
+    if (this._selectedCountriesHull && this._selectedCountriesHull.length >= 3) {
+      return this.pointInPolygon(lat, lng, this._selectedCountriesHull)
+    }
     return false
   }
 
-  // Recompute bounding box whenever selection changes
+  // Recompute bounding box and convex hull whenever selection changes
   _updateSelectedCountriesBbox() {
     if (this.selectedCountries.size === 0) {
       this._selectedCountriesBbox = null
+      this._selectedCountriesHull = null
       return
     }
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180
+    const allPoints = []
     for (const feature of this._countryFeatures) {
       const name = feature.properties?.NAME || feature.properties?.name
       if (!name || !this.selectedCountries.has(name)) continue
@@ -489,10 +496,42 @@ export default class extends Controller {
           if (coord[0] > maxLng) maxLng = coord[0]
           if (coord[1] < minLat) minLat = coord[1]
           if (coord[1] > maxLat) maxLat = coord[1]
+          allPoints.push(coord)
         }
       }
     }
     this._selectedCountriesBbox = { minLat, maxLat, minLng, maxLng }
+    this._selectedCountriesHull = this._computeConvexHull(allPoints)
+  }
+
+  // Andrew's monotone chain convex hull algorithm — O(n log n)
+  _computeConvexHull(points) {
+    if (points.length < 3) return points.slice()
+    // Downsample for performance: take every Nth point if there are too many
+    let pts = points
+    if (pts.length > 5000) {
+      const step = Math.ceil(pts.length / 5000)
+      pts = pts.filter((_, i) => i % step === 0)
+    }
+    pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    // Remove duplicates
+    pts = pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
+    if (pts.length < 3) return pts
+
+    const cross = (O, A, B) => (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0])
+    const lower = []
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
+      lower.push(p)
+    }
+    const upper = []
+    for (let i = pts.length - 1; i >= 0; i--) {
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[i]) <= 0) upper.pop()
+      upper.push(pts[i])
+    }
+    lower.pop()
+    upper.pop()
+    return lower.concat(upper)
   }
 
   hasActiveFilter() {
@@ -737,6 +776,29 @@ export default class extends Controller {
     this.viewer.scene.requestRender()
   }
 
+  // Smooth an array of Cartesian3 positions using Catmull-Rom spline interpolation.
+  // Returns the original array unchanged if fewer than 3 points are provided.
+  _interpolateTrailSpline(positions, segmentsPerPoint = 4) {
+    const Cesium = window.Cesium
+    if (positions.length < 3) return positions
+
+    // Build evenly-spaced time values for each input position
+    const times = positions.map((_, i) => i / (positions.length - 1))
+
+    const spline = new Cesium.CatmullRomSpline({
+      times,
+      points: positions,
+    })
+
+    const smoothed = []
+    const totalSegments = (positions.length - 1) * segmentsPerPoint
+    for (let i = 0; i <= totalSegments; i++) {
+      const t = i / totalSegments
+      smoothed.push(spline.evaluate(t))
+    }
+    return smoothed
+  }
+
   renderTrails() {
     const Cesium = window.Cesium
     const trailSource = this.getTrailsDataSource()
@@ -749,7 +811,8 @@ export default class extends Controller {
       if (trail.length < 2) continue
       activeIds.add(id)
 
-      const positions = trail.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt))
+      const raw = trail.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt))
+      const positions = this._interpolateTrailSpline(raw)
       const existing = this._trailEntities.get(id)
 
       if (existing) {
@@ -760,7 +823,7 @@ export default class extends Controller {
           id: `trail-${id}`,
           polyline: {
             positions,
-            width: 1.5,
+            width: 2.5,
             material: Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4),
             clampToGround: false,
           },
@@ -1037,30 +1100,35 @@ export default class extends Controller {
     }
   }
 
-  get airportDatabase() {
-    return {
-      // North America
-      KATL:{lat:33.64,lng:-84.43,name:"Atlanta"},KLAX:{lat:33.94,lng:-118.41,name:"Los Angeles"},KORD:{lat:41.97,lng:-87.91,name:"Chicago O'Hare"},KDFW:{lat:32.90,lng:-97.04,name:"Dallas/Fort Worth"},KDEN:{lat:39.86,lng:-104.67,name:"Denver"},KJFK:{lat:40.64,lng:-73.78,name:"New York JFK"},KSFO:{lat:37.62,lng:-122.38,name:"San Francisco"},KLAS:{lat:36.08,lng:-115.15,name:"Las Vegas"},KSEA:{lat:47.45,lng:-122.31,name:"Seattle"},KMCO:{lat:28.43,lng:-81.31,name:"Orlando"},KEWR:{lat:40.69,lng:-74.17,name:"Newark"},KMIA:{lat:25.80,lng:-80.29,name:"Miami"},KPHX:{lat:33.44,lng:-112.01,name:"Phoenix"},KIAH:{lat:29.98,lng:-95.34,name:"Houston IAH"},KBOS:{lat:42.36,lng:-71.01,name:"Boston"},KMSP:{lat:44.88,lng:-93.22,name:"Minneapolis"},KFLL:{lat:26.07,lng:-80.15,name:"Fort Lauderdale"},KDTW:{lat:42.21,lng:-83.35,name:"Detroit"},KPHL:{lat:39.87,lng:-75.24,name:"Philadelphia"},KLGA:{lat:40.77,lng:-73.87,name:"New York LaGuardia"},KBWI:{lat:39.18,lng:-76.67,name:"Baltimore"},KSLC:{lat:40.79,lng:-111.98,name:"Salt Lake City"},KDCA:{lat:38.85,lng:-77.04,name:"Washington Reagan"},KIAD:{lat:38.94,lng:-77.46,name:"Washington Dulles"},KTPA:{lat:27.98,lng:-82.53,name:"Tampa"},KSAN:{lat:32.73,lng:-117.19,name:"San Diego"},KPDX:{lat:45.59,lng:-122.60,name:"Portland"},KSTL:{lat:38.75,lng:-90.37,name:"St. Louis"},KHNL:{lat:21.32,lng:-157.92,name:"Honolulu"},PANC:{lat:61.17,lng:-150.00,name:"Anchorage"},CYYZ:{lat:43.68,lng:-79.63,name:"Toronto Pearson"},CYUL:{lat:45.47,lng:-73.74,name:"Montreal"},CYVR:{lat:49.19,lng:-123.18,name:"Vancouver"},CYOW:{lat:45.32,lng:-75.67,name:"Ottawa"},CYCG:{lat:51.11,lng:-114.02,name:"Calgary"},MMMX:{lat:19.44,lng:-99.07,name:"Mexico City"},MMUN:{lat:21.04,lng:-86.87,name:"Cancun"},
-      // Europe
-      EGLL:{lat:51.47,lng:-0.46,name:"London Heathrow"},LFPG:{lat:49.01,lng:2.55,name:"Paris CDG"},EHAM:{lat:52.31,lng:4.77,name:"Amsterdam"},EDDF:{lat:50.03,lng:8.57,name:"Frankfurt"},LEMD:{lat:40.47,lng:-3.56,name:"Madrid"},LEBL:{lat:41.30,lng:2.08,name:"Barcelona"},LIRF:{lat:41.80,lng:12.25,name:"Rome Fiumicino"},EDDM:{lat:48.35,lng:11.79,name:"Munich"},EGKK:{lat:51.15,lng:-0.18,name:"London Gatwick"},LSZH:{lat:47.46,lng:8.55,name:"Zurich"},LOWW:{lat:48.11,lng:16.57,name:"Vienna"},EKCH:{lat:55.62,lng:12.66,name:"Copenhagen"},ENGM:{lat:60.19,lng:11.10,name:"Oslo"},ESSA:{lat:59.65,lng:17.94,name:"Stockholm Arlanda"},EFHK:{lat:60.32,lng:24.96,name:"Helsinki"},EIDW:{lat:53.42,lng:-6.27,name:"Dublin"},EBBR:{lat:50.90,lng:4.48,name:"Brussels"},LPPT:{lat:38.77,lng:-9.13,name:"Lisbon"},LGAV:{lat:37.94,lng:23.94,name:"Athens"},LTFM:{lat:41.26,lng:28.74,name:"Istanbul"},UUEE:{lat:55.97,lng:37.41,name:"Moscow SVO"},EPWA:{lat:52.17,lng:20.97,name:"Warsaw"},LKPR:{lat:50.10,lng:14.26,name:"Prague"},LHBP:{lat:47.44,lng:19.26,name:"Budapest"},LROP:{lat:44.57,lng:26.08,name:"Bucharest"},EDDL:{lat:51.29,lng:6.77,name:"Dusseldorf"},EDDB:{lat:52.36,lng:13.51,name:"Berlin"},EGPH:{lat:55.95,lng:-3.37,name:"Edinburgh"},EGCC:{lat:53.35,lng:-2.28,name:"Manchester"},LFPO:{lat:48.72,lng:2.36,name:"Paris Orly"},
-      // Middle East
-      OMDB:{lat:25.25,lng:55.36,name:"Dubai"},OEJN:{lat:21.68,lng:39.16,name:"Jeddah"},OERK:{lat:24.96,lng:46.70,name:"Riyadh"},OTHH:{lat:25.27,lng:51.61,name:"Doha"},OMAA:{lat:24.44,lng:54.65,name:"Abu Dhabi"},OBBI:{lat:26.27,lng:50.63,name:"Bahrain"},LLBG:{lat:32.01,lng:34.89,name:"Tel Aviv"},OIIE:{lat:35.41,lng:51.15,name:"Tehran"},OKBK:{lat:29.23,lng:47.97,name:"Kuwait"},OOMS:{lat:23.59,lng:58.28,name:"Muscat"},
-      // Asia
-      RJTT:{lat:35.55,lng:139.78,name:"Tokyo Haneda"},RJAA:{lat:35.76,lng:140.39,name:"Tokyo Narita"},VHHH:{lat:22.31,lng:113.91,name:"Hong Kong"},WSSS:{lat:1.36,lng:103.99,name:"Singapore"},RKSI:{lat:37.46,lng:126.44,name:"Seoul Incheon"},ZBAA:{lat:40.08,lng:116.58,name:"Beijing"},ZSPD:{lat:31.14,lng:121.81,name:"Shanghai Pudong"},VTBS:{lat:13.69,lng:100.75,name:"Bangkok"},RPLL:{lat:14.51,lng:121.02,name:"Manila"},WMKK:{lat:2.75,lng:101.71,name:"Kuala Lumpur"},VABB:{lat:19.09,lng:72.87,name:"Mumbai"},VIDP:{lat:28.57,lng:77.10,name:"Delhi"},VECC:{lat:22.65,lng:88.45,name:"Kolkata"},VOBL:{lat:13.20,lng:77.71,name:"Bangalore"},VOMM:{lat:12.99,lng:80.17,name:"Chennai"},ZGGG:{lat:23.39,lng:113.30,name:"Guangzhou"},ZUUU:{lat:30.58,lng:103.95,name:"Chengdu"},RCTP:{lat:25.08,lng:121.23,name:"Taipei"},WIII:{lat:-6.13,lng:106.66,name:"Jakarta"},VNKT:{lat:27.70,lng:85.36,name:"Kathmandu"},
-      // Oceania
-      YSSY:{lat:-33.95,lng:151.18,name:"Sydney"},YMML:{lat:-37.67,lng:144.84,name:"Melbourne"},YBBN:{lat:-27.38,lng:153.12,name:"Brisbane"},NZAA:{lat:-37.01,lng:174.79,name:"Auckland"},NZWN:{lat:-41.33,lng:174.81,name:"Wellington"},
-      // Africa
-      FAOR:{lat:-26.14,lng:28.25,name:"Johannesburg"},HECA:{lat:30.12,lng:31.41,name:"Cairo"},GMMN:{lat:33.37,lng:-7.59,name:"Casablanca"},DNMM:{lat:6.58,lng:3.32,name:"Lagos"},HKJK:{lat:-1.32,lng:36.93,name:"Nairobi"},HAAB:{lat:8.98,lng:38.80,name:"Addis Ababa"},FALE:{lat:-29.61,lng:31.12,name:"Durban"},FACT:{lat:-33.96,lng:18.60,name:"Cape Town"},DTTA:{lat:36.85,lng:10.23,name:"Tunis"},
-      // South America
-      SBGR:{lat:-23.43,lng:-46.47,name:"Sao Paulo GRU"},SCEL:{lat:-33.39,lng:-70.79,name:"Santiago"},SKBO:{lat:4.70,lng:-74.15,name:"Bogota"},SEQM:{lat:-0.13,lng:-78.49,name:"Quito"},SPJC:{lat:-12.02,lng:-77.11,name:"Lima"},SAEZ:{lat:-34.82,lng:-58.54,name:"Buenos Aires EZE"},SBBR:{lat:-15.87,lng:-47.92,name:"Brasilia"},SBGL:{lat:-22.81,lng:-43.25,name:"Rio de Janeiro GIG"},SVMI:{lat:10.60,lng:-66.99,name:"Caracas"},
+  // Airport data fetched from API — keyed by ICAO code
+  _airportDb = {}
+
+  _getAirport(icao) {
+    return this._airportDb[icao] || null
+  }
+
+  async _fetchAirportData() {
+    if (this._airportDataLoaded) return
+    try {
+      const resp = await fetch("/api/airports")
+      if (!resp.ok) return
+      const airports = await resp.json()
+      this._airportDb = {}
+      airports.forEach(a => {
+        this._airportDb[a.icao] = {
+          lat: a.lat, lng: a.lng, name: a.name,
+          iata: a.iata, type: a.type, elevation: a.elevation,
+          country: a.country, municipality: a.municipality, military: a.military,
+        }
+      })
+      this._airportDataLoaded = true
+    } catch (e) {
+      console.warn("Failed to fetch airports:", e)
     }
   }
 
-  _getAirport(icao) {
-    return this.airportDatabase[icao] || null
-  }
-
   async fetchRoute(callsign) {
+    await this._fetchAirportData()
     // Store which callsign we're fetching for — if it changes, discard stale results
     this._fetchingRouteFor = callsign
 
@@ -1989,7 +2057,7 @@ export default class extends Controller {
 
     // Search airports
     if (this.airportsVisible) {
-      for (const [icao, ap] of Object.entries(this.airportDatabase)) {
+      for (const [icao, ap] of Object.entries(this._airportDb)) {
         if (results.length >= MAX) break
         if (icao.toLowerCase().includes(q) || ap.name.toLowerCase().includes(q)) {
           results.push({
@@ -2998,9 +3066,10 @@ export default class extends Controller {
 
   getAirportsDataSource() { return getDataSource(this.viewer, this._ds, "airports") }
 
-  toggleAirports() {
+  async toggleAirports() {
     this.airportsVisible = this.hasAirportsToggleTarget && this.airportsToggleTarget.checked
     if (this.airportsVisible) {
+      await this._fetchAirportData()
       this.renderAirports()
     } else {
       this._clearAirportEntities()
@@ -3017,30 +3086,33 @@ export default class extends Controller {
     dataSource.show = true
     const hasFilter = this.hasActiveFilter()
 
-    let entries = Object.entries(this.airportDatabase)
+    let entries = Object.entries(this._airportDb)
 
-    // Filter to selected countries if active (match by checking if airport is inside selected country polygons)
     if (hasFilter) {
       entries = entries.filter(([, ap]) => this.pointPassesFilter(ap.lat, ap.lng))
     }
 
-    const accentColor = Cesium.Color.fromCssColorString("#ffd54f")
+    const civilColor = Cesium.Color.fromCssColorString("#ffd54f")
+    const milColor = Cesium.Color.fromCssColorString("#ef5350")
 
     for (const [icao, ap] of entries) {
+      const isMil = ap.military
+      const color = isMil ? milColor : civilColor
+
       const entity = dataSource.entities.add({
         id: `airport-${icao}`,
         position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 100),
         point: {
-          pixelSize: 6,
-          color: accentColor.withAlpha(0.9),
-          outlineColor: accentColor.withAlpha(0.35),
+          pixelSize: isMil ? 5 : 6,
+          color: color.withAlpha(0.9),
+          outlineColor: color.withAlpha(0.35),
           outlineWidth: 4,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 1e7, 0.4),
         },
         label: {
           text: icao,
           font: "12px JetBrains Mono, monospace",
-          fillColor: accentColor.withAlpha(0.95),
+          fillColor: color.withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -3064,20 +3136,25 @@ export default class extends Controller {
     const ap = this._getAirport(icao)
     if (!ap) return
 
-    // Count flights using this airport
-    let departures = 0, arrivals = 0
-    // Check cached route data if available
+    const color = ap.military ? "#ef5350" : "#ffd54f"
+    const typeLabel = ap.military ? "Military" : (ap.type || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-plane-departure" style="color: #ffd54f;"></i> ${ap.name}</div>
-      <div class="detail-country">${icao}</div>
+      <div class="detail-callsign"><i class="fa-solid fa-plane-departure" style="color: ${color};"></i> ${ap.name}</div>
+      <div class="detail-country">${ap.municipality ? ap.municipality + ", " : ""}${ap.country || ""}</div>
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">ICAO</span>
           <span class="detail-value">${icao}</span>
         </div>
+        ${ap.iata ? `<div class="detail-field"><span class="detail-label">IATA</span><span class="detail-value">${ap.iata}</span></div>` : ""}
+        <div class="detail-field">
+          <span class="detail-label">Type</span>
+          <span class="detail-value">${typeLabel}</span>
+        </div>
+        ${ap.elevation ? `<div class="detail-field"><span class="detail-label">Elevation</span><span class="detail-value">${ap.elevation.toLocaleString()} ft</span></div>` : ""}
         <div class="detail-field">
           <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${ap.lat.toFixed(2)}°, ${ap.lng.toFixed(2)}°</span>
+          <span class="detail-value">${ap.lat.toFixed(4)}°, ${ap.lng.toFixed(4)}°</span>
         </div>
       </div>
     `
@@ -4916,7 +4993,7 @@ export default class extends Controller {
         if (this.flightsVisible) this.fetchFlights()
         if (this.shipsVisible) this.fetchShips()
         if (this.citiesVisible) this.renderCities()
-        if (this.airportsVisible) this.renderAirports()
+        if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
         this.updateEntityList()
         // Init build heatmap if it was pending
         if (this._pendingBuildHeatmap) {
@@ -4946,7 +5023,7 @@ export default class extends Controller {
     if (this.shipsVisible) this.fetchShips()
     this.updateEntityList()
     if (this.citiesVisible) this.renderCities()
-    if (this.airportsVisible) this.renderAirports()
+    if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
     if (this._buildHeatmapActive) this._initBuildHeatmap()
     this._savePrefs()
   }
@@ -5135,7 +5212,7 @@ export default class extends Controller {
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     if (this.citiesVisible) this.renderCities()
-    if (this.airportsVisible) this.renderAirports()
+    if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
     this.updateEntityList()
     if (this._buildHeatmapActive) this._initBuildHeatmap()
   }

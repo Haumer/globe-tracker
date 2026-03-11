@@ -16,52 +16,29 @@
   --gt-red: #ef5350;
   --gt-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --gt-sans: 'DM Sans', -apple-system, sans-serif;
-  --gt-sidebar-w: 240px;
+  --gt-sidebar-w: 270px;
   --gt-glass-bg: rgba(10, 13, 20, 0.88);
   --gt-blur: blur(20px);
 }
 
-// ─── Tooltips ───────────────────────────────────────────────────
-[data-tip] {
-  position: relative;
+// ─── Tooltips ── JS-positioned, fixed, escapes all containers ───
+// The [data-tip] attribute triggers JS tooltip (see globe_controller)
+// No ::after pseudo-elements — they can't escape overflow:hidden.
 
-  &::after {
-    content: attr(data-tip);
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 6px);
-    transform: translateX(-50%);
-    padding: 3px 8px;
-    border-radius: 4px;
-    background: var(--gt-void);
-    border: 1px solid var(--gt-border);
-    color: var(--gt-text);
-    font: 500 9px var(--gt-mono);
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s;
-    z-index: 200;
-  }
-
-  &:hover::after {
-    opacity: 1;
-  }
-}
-
-// Tooltip below (for top-positioned elements like stats bar)
-[data-tip-pos="below"]::after {
-  bottom: auto;
-  top: calc(100% + 6px);
-}
-
-// Tooltip right (for left-positioned elements like sidebar items)
-[data-tip-pos="right"]::after {
-  left: calc(100% + 6px);
-  bottom: auto;
-  top: 50%;
-  transform: translateY(-50%);
+#gt-tooltip {
+  position: fixed;
+  z-index: 9999;
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: var(--gt-void);
+  border: 1px solid var(--gt-border);
+  color: var(--gt-text);
+  font: 500 9px var(--gt-mono);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
 
 // ─── Full-screen globe ──────────────────────────────────────────
@@ -248,26 +225,40 @@
     animation: detail-in 0.12s ease-out;
   }
 
-  // Quick layer bar
+  // Quick layer bar — categorized
   .ql-bar {
-    padding: 8px 10px 4px;
+    padding: 6px 10px 2px;
     border-bottom: 1px solid var(--gt-border);
     flex-shrink: 0;
   }
 
+  .ql-category {
+    margin-bottom: 4px;
+
+    &:last-child { margin-bottom: 2px; }
+  }
+
+  .ql-cat-label {
+    display: block;
+    font: 600 7px var(--gt-mono);
+    letter-spacing: 2px;
+    color: var(--gt-text-dim);
+    opacity: 0.4;
+    padding: 2px 2px 2px;
+  }
+
   .ql-row {
     display: flex;
-    gap: 2px;
-    margin-bottom: 3px;
+    gap: 3px;
   }
 
   .ql-btn {
     flex: 1;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 5px 0 3px;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 4px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid transparent;
     border-radius: 5px;
@@ -275,11 +266,11 @@
     cursor: pointer;
     transition: all 0.15s;
 
-    i { font-size: 10px; }
+    i { font-size: 11px; }
 
     .ql-label {
-      font: 600 7px var(--gt-mono);
-      letter-spacing: 0.8px;
+      font: 600 8px var(--gt-mono);
+      letter-spacing: 0.5px;
       opacity: 0.6;
     }
 

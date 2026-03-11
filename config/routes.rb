@@ -15,6 +15,9 @@ Rails.application.routes.draw do
     resources :gps_jamming, only: [:index]
     resources :submarine_cables, only: [:index]
     resources :internet_outages, only: [:index]
+    resources :power_plants, only: [:index]
+    resources :conflict_events, only: [:index]
+    resources :internet_traffic, only: [:index]
     resources :playback, only: [:index] do
       collection do
         get :range

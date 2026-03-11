@@ -10,9 +10,35 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_11_090001) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_11_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "conflict_events", force: :cascade do |t|
+    t.integer "external_id", null: false
+    t.string "conflict_name"
+    t.string "side_a"
+    t.string "side_b"
+    t.string "country"
+    t.string "region"
+    t.string "where_description"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.date "date_start"
+    t.date "date_end"
+    t.integer "best_estimate", default: 0
+    t.integer "deaths_a", default: 0
+    t.integer "deaths_b", default: 0
+    t.integer "deaths_civilians", default: 0
+    t.integer "type_of_violence"
+    t.string "source_headline"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["date_start"], name: "index_conflict_events_on_date_start"
+    t.index ["external_id"], name: "index_conflict_events_on_external_id", unique: true
+    t.index ["latitude", "longitude"], name: "index_conflict_events_on_latitude_and_longitude"
+    t.index ["type_of_violence"], name: "index_conflict_events_on_type_of_violence"
+  end
 
   create_table "earthquakes", force: :cascade do |t|
     t.string "external_id"
@@ -89,6 +115,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_090001) do
     t.index ["started_at"], name: "index_internet_outages_on_started_at"
   end
 
+  create_table "internet_traffic_snapshots", force: :cascade do |t|
+    t.string "country_code", null: false
+    t.string "country_name"
+    t.float "traffic_pct"
+    t.float "attack_origin_pct"
+    t.float "attack_target_pct"
+    t.datetime "recorded_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code", "recorded_at"], name: "idx_on_country_code_recorded_at_4ce32fcec1"
+    t.index ["recorded_at"], name: "index_internet_traffic_snapshots_on_recorded_at"
+  end
+
   create_table "natural_events", force: :cascade do |t|
     t.string "external_id"
     t.string "title"
@@ -145,6 +184,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_090001) do
     t.index ["entity_type", "entity_id", "recorded_at"], name: "idx_snapshots_entity_time"
     t.index ["entity_type", "recorded_at"], name: "index_position_snapshots_on_entity_type_and_recorded_at"
     t.index ["recorded_at"], name: "index_position_snapshots_on_recorded_at"
+  end
+
+  create_table "power_plants", force: :cascade do |t|
+    t.string "gppd_idnr", null: false
+    t.string "name", null: false
+    t.string "country_code"
+    t.string "country_name"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.float "capacity_mw"
+    t.string "primary_fuel"
+    t.string "other_fuel"
+    t.string "owner"
+    t.integer "commissioning_year"
+    t.string "source"
+    t.string "url"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["gppd_idnr"], name: "index_power_plants_on_gppd_idnr", unique: true
+    t.index ["latitude", "longitude"], name: "index_power_plants_on_latitude_and_longitude"
+    t.index ["primary_fuel"], name: "index_power_plants_on_primary_fuel"
   end
 
   create_table "satellites", force: :cascade do |t|

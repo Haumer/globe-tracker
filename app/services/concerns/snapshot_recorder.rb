@@ -80,7 +80,7 @@ module SnapshotRecorder
     rows = PositionSnapshot
       .where(entity_type: entity_type, entity_id: entity_ids)
       .where("recorded_at > ?", 10.minutes.ago)
-      .select("DISTINCT ON (entity_id) entity_id, latitude, longitude, altitude, heading, speed")
+      .select("DISTINCT ON (entity_id) entity_id, latitude, longitude, altitude, heading, speed, recorded_at")
       .order(:entity_id, recorded_at: :desc)
 
     rows.each_with_object({}) do |row, hash|
@@ -88,8 +88,13 @@ module SnapshotRecorder
     end
   end
 
+  MAX_SNAPSHOT_AGE = 60 # Always record if last snapshot is older than 60s
+
   def snapshot_unchanged?(last, record)
     return false unless last # no previous record — always insert
+
+    # Always record periodically so playback has consistent data
+    return false if last.respond_to?(:recorded_at) && last.recorded_at && last.recorded_at < MAX_SNAPSHOT_AGE.seconds.ago
 
     pos_same = (last.latitude - record[:latitude]).abs < LAT_LNG_THRESHOLD &&
                (last.longitude - record[:longitude]).abs < LAT_LNG_THRESHOLD &&

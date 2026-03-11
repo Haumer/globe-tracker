@@ -48,15 +48,39 @@ class GlobalPollerService
       end
     end
 
+    # Regional centers for ADSB polling (250nm radius each covers ~460km)
+    ADSB_REGIONS = [
+      { name: "europe",    lat: 50, lon: 10 },
+      { name: "na-east",   lat: 38, lon: -80 },
+      { name: "na-west",   lat: 37, lon: -120 },
+      { name: "mideast",   lat: 28, lon: 47 },
+      { name: "east-asia", lat: 35, lon: 135 },
+      { name: "se-asia",   lat: 5,  lon: 105 },
+      { name: "oceania",   lat: -30, lon: 150 },
+      { name: "south-am",  lat: -20, lon: -50 },
+      { name: "africa",    lat: 5,  lon: 25 },
+      { name: "india",     lat: 22, lon: 78 },
+    ].freeze
+
     def poll_all
       # Flights - OpenSky (global, no bounds)
       poll_source("opensky", "flight") do
         OpenskyService.fetch_flights(bounds: {})
       end
 
-      # Flights - ADSB (global)
-      poll_source("adsb", "flight") do
-        AdsbService.fetch_flights(bounds: {})
+      # Flights - ADSB (regional polls for global coverage)
+      region = ADSB_REGIONS[@poll_count.to_i % ADSB_REGIONS.size]
+      poll_source("adsb-#{region[:name]}", "flight") do
+        bounds = {
+          lamin: region[:lat] - 20, lamax: region[:lat] + 20,
+          lomin: region[:lon] - 25, lomax: region[:lon] + 25,
+        }
+        AdsbService.fetch_flights(bounds: bounds)
+      end
+
+      # Military flights from ADSB (global endpoint)
+      poll_source("adsb-mil", "flight") do
+        AdsbService.fetch_military
       end
 
       # Ships - AIS (WebSocket stream, just ensure it's running)

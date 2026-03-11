@@ -5,7 +5,7 @@ import { renderDetailHTML, detailField } from "../globe/details"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "notamsToggle", "qlNotams"]
 
   connect() {
     this.flightsVisible = false
@@ -89,6 +89,11 @@ export default class extends Controller {
     this.trafficVisible = false
     this._trafficData = null
     this._trafficEntities = []
+    this.notamsVisible = false
+    this._notamData = []
+    this._notamEntities = []
+    this._satVisEntities = []
+    this._satVisEventPos = null
     this.airportsVisible = false
     this._airportEntities = []
     this._webcamData = []
@@ -250,6 +255,10 @@ export default class extends Controller {
           const ev = this._naturalEventData.find(e => e.id === eoId)
           if (ev) { this.showNaturalEventDetail(ev); return }
         }
+        if (typeof entityId === "string" && entityId.startsWith("news-arc-")) {
+          const arcIdx = parseInt(entityId.replace(/^news-arc-(?:lbl-|arr-)?/, ""))
+          if (!isNaN(arcIdx)) { this.showNewsArcDetail(arcIdx); return }
+        }
         if (typeof entityId === "string" && entityId.startsWith("news-")) {
           const idx = parseInt(entityId.replace("news-", ""))
           const ev = this._newsData?.[idx]
@@ -294,6 +303,16 @@ export default class extends Controller {
           const code = entityId.replace("traf-", "")
           this.showTrafficDetail(code)
           return
+        }
+        if (typeof entityId === "string" && entityId.startsWith("notam-") && !entityId.startsWith("notam-warn-") && !entityId.startsWith("notam-lbl-")) {
+          const nId = entityId.replace("notam-", "")
+          const n = this._notamData?.find(x => String(x.id) === nId)
+          if (n) { this.showNotamDetail(n); return }
+        }
+        if (typeof entityId === "string" && entityId.startsWith("notam-lbl-")) {
+          const nId = entityId.replace("notam-lbl-", "")
+          const n = this._notamData?.find(x => String(x.id) === nId)
+          if (n) { this.showNotamDetail(n); return }
         }
       }
 
@@ -470,9 +489,25 @@ export default class extends Controller {
     return !!this._activeCircle || this.selectedCountries.size > 0
   }
 
+  // ── Toast ──────────────────────────────────────────────────
+  _toast(msg) {
+    const el = document.getElementById("gt-toast")
+    if (!el) return
+    el.textContent = msg
+    el.classList.add("visible")
+    clearTimeout(this._toastTimer)
+    this._toastTimer = setTimeout(() => el.classList.remove("visible"), 2000)
+  }
+  _toastHide() {
+    const el = document.getElementById("gt-toast")
+    if (el) el.classList.remove("visible")
+    clearTimeout(this._toastTimer)
+  }
+
   async fetchFlights() {
     if (!this.flightsVisible || this._timelineActive) return
 
+    this._toast("Loading flights...")
     try {
       let url = "/api/flights"
       const bounds = this.getFilterBounds()
@@ -492,6 +527,7 @@ export default class extends Controller {
       }
 
       this.renderFlights(flights)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch flights:", e)
     }
@@ -1157,6 +1193,9 @@ export default class extends Controller {
               data-action="click->globe#toggleSatFootprintCountryMode">
         ${this._satFootprintCountryMode ? 'Show Radial Footprint' : 'Map to Selected Countries'}
       </button>` : ''}
+      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showGroundEvents" data-norad="${satData.norad_id}">
+        <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>Show Ground Events in Footprint
+      </button>
     `
     this.detailPanelTarget.style.display = ""
 
@@ -1187,6 +1226,7 @@ export default class extends Controller {
     this.stopTracking()
     this.clearSatFootprint()
     this._clearFlightRoute()
+    this._clearSatVisEntities()
   }
 
   // ── Entity List Panel ─────────────────────────────────────
@@ -1969,6 +2009,7 @@ export default class extends Controller {
   }
 
   async fetchSatCategory(cat) {
+    this._toast("Loading satellites...")
     try {
       const response = await fetch(`/api/satellites?category=${cat}`)
       if (!response.ok) return
@@ -1980,6 +2021,7 @@ export default class extends Controller {
       this._loadedSatCategories.add(cat)
 
       this.updateSatellitePositions()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch satellites:", e)
     }
@@ -2687,43 +2729,45 @@ export default class extends Controller {
       return
     }
 
-    // Default: radial hex footprint using 0.12° snapped grid (matches heatmap)
+    // Small 2-3-2 hex diamond directly below satellite (nadir)
+    // Place hexes at exact relative positions (no grid snapping)
     const S = 0.12
-    const rowStep = S * 1.5
-    const colStep = S * Math.sqrt(3)
+    const rowH = S * 1.5               // vertical distance between row centers
+    const colW = S * Math.sqrt(3)      // horizontal distance between column centers
     const cosCenter = Math.cos(lat * Math.PI / 180) || 0.01
-    let rendered = 0
 
-    for (let la = lat - scanRadiusDeg; la <= lat + scanRadiusDeg; la += rowStep) {
-      for (let ln = lng - scanRadiusDeg / cosCenter; ln <= lng + scanRadiusDeg / cosCenter; ln += colStep) {
-        if (rendered >= 500) break
-        const cell = this._snapToHexGrid(la, ln)
-        const dLat = (cell.lat - lat) * 111.32
-        const dLng = (cell.lng - lng) * 111.32 * cosCenter
-        const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
-        if (distKm > scanRadiusKm) continue
+    // 7 hex offsets: 2-3-2 honeycomb diamond (row, col)
+    // Odd rows (±1) are shifted right by half a column
+    const hexOffsets = [
+      [-1, -0.5], [-1, 0.5],           // top 2
+      [ 0, -1],   [ 0, 0], [ 0, 1],    // middle 3
+      [ 1, -0.5], [ 1, 0.5],           // bottom 2
+    ]
 
-        const verts = this._buildHexVerts(cell.lat, cell.lng, S)
-        const falloff = Math.max(0, 1 - distKm / scanRadiusKm)
-        const fillAlpha = 0.08 + falloff * 0.25
-        const outlineAlpha = 0.25 + falloff * 0.55
-        const extHeight = falloff * 800
+    hexOffsets.forEach(([dr, dc]) => {
+      const hexLat = lat + dr * rowH
+      const hexLng = lng + dc * colW / cosCenter
 
-        const entity = dataSource.entities.add({
-          polygon: {
-            hierarchy: verts,
-            material: baseColor.withAlpha(fillAlpha),
-            outline: true,
-            outlineColor: baseColor.withAlpha(outlineAlpha),
-            outlineWidth: 1.5,
-            height: 0,
-            extrudedHeight: extHeight,
-          },
-        })
-        this._satFootprintEntities.push(entity)
-        rendered++
-      }
-    }
+      const dLat = dr * rowH * 111.32
+      const dLng = dc * colW * 111.32
+      const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+      const falloff = Math.max(0, 1 - distKm / (scanRadiusKm * 0.05))
+      const fillAlpha = 0.12 + falloff * 0.25
+      const outlineAlpha = 0.35 + falloff * 0.5
+
+      const verts = this._buildHexVerts(hexLat, hexLng, S)
+      const entity = dataSource.entities.add({
+        polygon: {
+          hierarchy: verts,
+          material: baseColor.withAlpha(fillAlpha),
+          outline: true,
+          outlineColor: baseColor.withAlpha(outlineAlpha),
+          outlineWidth: 1.5,
+          height: 0,
+        },
+      })
+      this._satFootprintEntities.push(entity)
+    })
 
     // Nadir line
     this._satFootprintEntities.push(dataSource.entities.add({
@@ -2733,20 +2777,6 @@ export default class extends Controller {
         material: baseColor.withAlpha(0.6),
       },
     }))
-
-    // Cone lines to 6 outer points
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i
-      const oLat = lat + (scanRadiusKm * Math.sin(angle)) / 111.32
-      const oLng = lng + (scanRadiusKm * Math.cos(angle)) / (111.32 * cosLat)
-      this._satFootprintEntities.push(dataSource.entities.add({
-        polyline: {
-          positions: [satPos, Cesium.Cartesian3.fromDegrees(oLng, oLat, 0)],
-          width: 1,
-          material: baseColor.withAlpha(0.3),
-        },
-      }))
-    }
 
     // Nadir dot
     this._satFootprintEntities.push(dataSource.entities.add({
@@ -2903,7 +2933,6 @@ export default class extends Controller {
           color: accentColor.withAlpha(0.9),
           outlineColor: accentColor.withAlpha(0.35),
           outlineWidth: 4,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 1e7, 0.4),
         },
         label: {
@@ -2915,7 +2944,6 @@ export default class extends Controller {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           pixelOffset: new Cesium.Cartesian2(0, 10),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
         },
@@ -3002,12 +3030,14 @@ export default class extends Controller {
 
   async fetchEarthquakes() {
     if (this._timelineActive) return
+    this._toast("Loading earthquakes...")
     try {
       const resp = await fetch("/api/earthquakes")
       if (!resp.ok) return
       this._earthquakeData = await resp.json()
       this.renderEarthquakes()
       this._updateStats()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch earthquakes:", e)
     }
@@ -3059,7 +3089,6 @@ export default class extends Controller {
           color: color.withAlpha(0.85),
           outlineColor: color.withAlpha(0.4),
           outlineWidth: pulseScale,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: `M${mag.toFixed(1)}`,
@@ -3070,7 +3099,6 @@ export default class extends Controller {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -pixelSize - 4),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0.4),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
         },
@@ -3114,6 +3142,9 @@ export default class extends Controller {
         </div>
       </div>
       ${typeof eq.url === "string" && eq.url.startsWith("http") ? `<a href="${eq.url}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
+      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${eq.lat}" data-lng="${eq.lng}">
+        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
+      </button>
     `
     this.detailPanelTarget.style.display = ""
 
@@ -3147,12 +3178,14 @@ export default class extends Controller {
 
   async fetchNaturalEvents() {
     if (this._timelineActive) return
+    this._toast("Loading natural events...")
     try {
       const resp = await fetch("/api/natural_events")
       if (!resp.ok) return
       this._naturalEventData = await resp.json()
       this.renderNaturalEvents()
       this._updateStats()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch EONET events:", e)
     }
@@ -3213,7 +3246,6 @@ export default class extends Controller {
           color: color.withAlpha(0.9),
           outlineColor: color.withAlpha(0.35),
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
@@ -3224,7 +3256,6 @@ export default class extends Controller {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -14),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 8e6, 0),
         },
@@ -3277,6 +3308,9 @@ export default class extends Controller {
       </div>
       ${sourceLinks ? `<div class="event-sources">Sources: ${sourceLinks}</div>` : ""}
       ${typeof ev.link === "string" && ev.link.startsWith("http") ? `<a href="${ev.link}" target="_blank" rel="noopener" class="detail-track-btn">View on NASA EONET</a>` : ""}
+      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${ev.lat}" data-lng="${ev.lng}">
+        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
+      </button>
     `
     this.detailPanelTarget.style.display = ""
 
@@ -3424,6 +3458,7 @@ export default class extends Controller {
       url = `/api/webcams?lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}&radius=${radiusKm}&limit=50`
     }
 
+    this._toast("Loading webcams...")
     try {
       const resp = await fetch(url)
       if (!resp.ok) {
@@ -3450,6 +3485,7 @@ export default class extends Controller {
       this._webcamLastFetchCenter = center
       this.renderWebcams()
       this._updateStats()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch webcams:", e)
     }
@@ -3471,7 +3507,6 @@ export default class extends Controller {
           color: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.9),
           outlineColor: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.35),
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e4, 1.2, 5e6, 0.5),
         },
         label: {
@@ -3483,7 +3518,6 @@ export default class extends Controller {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -12),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e6, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0),
         },
@@ -3543,6 +3577,7 @@ export default class extends Controller {
   async fetchShips() {
     if (!this.shipsVisible || this._timelineActive) return
 
+    this._toast("Loading ships...")
     try {
       let url = "/api/ships"
       const bounds = this.getFilterBounds()
@@ -3561,6 +3596,7 @@ export default class extends Controller {
       }
 
       this.renderShips(ships)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch ships:", e)
     }
@@ -3886,6 +3922,7 @@ export default class extends Controller {
       powerPlants: { target: "powerPlantsToggle",  method: "togglePowerPlants" },
       conflicts:   { target: "conflictsToggle",    method: "toggleConflicts" },
       traffic:     { target: "trafficToggle",      method: "toggleTraffic" },
+      notams:      { target: "notamsToggle",        method: "toggleNotams" },
     }
 
     if (layer === "satellites") {
@@ -3946,6 +3983,7 @@ export default class extends Controller {
     sync("qlPowerPlants", this.powerPlantsVisible)
     sync("qlConflicts", this.conflictsVisible)
     sync("qlTraffic", this.trafficVisible)
+    sync("qlNotams", this.notamsVisible)
 
     const anySat = Object.values(this.satCategoryVisible).some(v => v)
     sync("qlSatellites", anySat)
@@ -4101,6 +4139,7 @@ export default class extends Controller {
       powerPlants: this.powerPlantsVisible,
       conflicts: this.conflictsVisible,
       traffic: this.trafficVisible,
+      notams: this.notamsVisible,
       terrain: this.terrainEnabled || false,
       terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
       buildings: this.buildingsEnabled || false,
@@ -4260,6 +4299,10 @@ export default class extends Controller {
       if (l.traffic && this.hasTrafficToggleTarget) {
         this.trafficToggleTarget.checked = true
         this.toggleTraffic()
+      }
+      if (l.notams && this.hasNotamsToggleTarget) {
+        this.notamsToggleTarget.checked = true
+        this.toggleNotams()
       }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true
@@ -4692,6 +4735,7 @@ export default class extends Controller {
   async loadBorders() {
     const Cesium = window.Cesium
 
+    this._toast("Loading borders...")
     try {
       const response = await fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson")
       if (!response.ok) return
@@ -4750,6 +4794,7 @@ export default class extends Controller {
 
       this.bordersLoaded = true
       this._ds["borders"].show = this.bordersVisible
+      this._toastHide()
 
       // Restore pending country selections from saved preferences
       if (this._pendingCountryRestore && this._pendingCountryRestore.length > 0) {
@@ -5115,12 +5160,14 @@ export default class extends Controller {
 
   async fetchNews() {
     if (this._timelineActive) return
+    this._toast("Loading news...")
     try {
       const resp = await fetch("/api/news")
       if (!resp.ok) return
       const events = await resp.json()
       this._newsData = events
       this._renderNews(events)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch news:", e)
     }
@@ -5166,7 +5213,6 @@ export default class extends Controller {
           color: cesiumColor.withAlpha(0.85),
           outlineColor: cesiumColor.withAlpha(0.4),
           outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
@@ -5180,7 +5226,6 @@ export default class extends Controller {
           pixelOffset: new Cesium.Cartesian2(0, -14),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         },
         description: `<div style="font-family: sans-serif; max-width: 350px;">
@@ -5194,6 +5239,279 @@ export default class extends Controller {
       })
       this._newsEntities.push(entity)
     })
+
+    // News attention arcs: source publication → event location
+    this._renderNewsArcs(events)
+  }
+
+  _getSourceLocation(url) {
+    if (!url) return null
+    let host
+    try { host = new URL(url).hostname.replace(/^www\./, "") } catch { return null }
+
+    // Major publications → city coordinates [lat, lng, name]
+    const knownSources = {
+      "nytimes.com": [40.76, -73.99, "New York"],
+      "washingtonpost.com": [38.90, -77.04, "Washington DC"],
+      "cnn.com": [33.75, -84.39, "Atlanta"],
+      "foxnews.com": [40.76, -73.99, "New York"],
+      "bbc.com": [51.52, -0.13, "London"],
+      "bbc.co.uk": [51.52, -0.13, "London"],
+      "dailymail.co.uk": [51.52, -0.13, "London"],
+      "theguardian.com": [51.52, -0.13, "London"],
+      "reuters.com": [51.52, -0.13, "London"],
+      "aljazeera.com": [25.29, 51.53, "Doha"],
+      "rt.com": [55.75, 37.62, "Moscow"],
+      "russian.rt.com": [55.75, 37.62, "Moscow"],
+      "lenta.ru": [55.75, 37.62, "Moscow"],
+      "aif.ru": [55.75, 37.62, "Moscow"],
+      "spiegel.de": [53.55, 9.99, "Hamburg"],
+      "stern.de": [53.55, 9.99, "Hamburg"],
+      "merkur.de": [48.14, 11.58, "Munich"],
+      "lemonde.fr": [48.86, 2.35, "Paris"],
+      "radiofrance.fr": [48.86, 2.35, "Paris"],
+      "zonebourse.com": [48.86, 2.35, "Paris"],
+      "ansa.it": [41.90, 12.50, "Rome"],
+      "zazoom.it": [41.90, 12.50, "Rome"],
+      "europapress.es": [40.42, -3.70, "Madrid"],
+      "aa.com.tr": [39.93, 32.86, "Ankara"],
+      "haberler.com": [41.01, 28.98, "Istanbul"],
+      "malatyaguncel.com": [38.35, 38.31, "Malatya"],
+      "birgun.net": [41.01, 28.98, "Istanbul"],
+      "dunya.com": [41.01, 28.98, "Istanbul"],
+      "inewsgr.com": [37.98, 23.73, "Athens"],
+      "163.com": [30.27, 120.15, "Hangzhou"],
+      "sina.com.cn": [31.23, 121.47, "Shanghai"],
+      "baidu.com": [39.91, 116.40, "Beijing"],
+      "baijiahao.baidu.com": [39.91, 116.40, "Beijing"],
+      "china.com": [39.91, 116.40, "Beijing"],
+      "81.cn": [39.91, 116.40, "Beijing"],
+      "ltn.com.tw": [25.03, 121.57, "Taipei"],
+      "yam.com": [25.03, 121.57, "Taipei"],
+      "baomoi.com": [21.03, 105.85, "Hanoi"],
+      "shorouknews.com": [30.04, 31.24, "Cairo"],
+      "almasryalyoum.com": [30.04, 31.24, "Cairo"],
+      "moneycontrol.com": [19.08, 72.88, "Mumbai"],
+      "naslovi.net": [44.79, 20.47, "Belgrade"],
+      "politika.rs": [44.79, 20.47, "Belgrade"],
+      "24tv.ua": [50.45, 30.52, "Kyiv"],
+      "mignews.com": [32.07, 34.77, "Tel Aviv"],
+      "idnes.cz": [50.08, 14.44, "Prague"],
+      "heraldcorp.com": [37.57, 126.98, "Seoul"],
+      "etoday.co.kr": [37.57, 126.98, "Seoul"],
+      "allafrica.com": [38.90, -77.04, "Washington DC"],
+      "time.mk": [41.99, 21.43, "Skopje"],
+      "lurer.com": [40.18, 44.51, "Yerevan"],
+    }
+
+    // Check known sources first
+    for (const [domain, loc] of Object.entries(knownSources)) {
+      if (host === domain || host.endsWith("." + domain)) {
+        return { lat: loc[0], lng: loc[1], city: loc[2] }
+      }
+    }
+
+    // Fallback: TLD → country centroid
+    const tldCountry = {
+      "de": [51.0, 9.0, "Germany"], "fr": [46.0, 2.0, "France"], "it": [42.8, 12.8, "Italy"],
+      "es": [40.0, -4.0, "Spain"], "nl": [52.5, 5.8, "Netherlands"], "be": [50.8, 4.0, "Belgium"],
+      "at": [47.5, 13.5, "Austria"], "ch": [47.0, 8.0, "Switzerland"], "se": [62.0, 15.0, "Sweden"],
+      "no": [62.0, 10.0, "Norway"], "dk": [56.0, 10.0, "Denmark"], "fi": [64.0, 26.0, "Finland"],
+      "pl": [52.0, 20.0, "Poland"], "cz": [49.8, 15.5, "Czechia"], "sk": [48.7, 19.5, "Slovakia"],
+      "hu": [47.0, 20.0, "Hungary"], "ro": [46.0, 25.0, "Romania"], "bg": [43.0, 25.0, "Bulgaria"],
+      "hr": [45.2, 15.5, "Croatia"], "rs": [44.0, 21.0, "Serbia"], "ua": [49.0, 32.0, "Ukraine"],
+      "ru": [55.75, 37.62, "Russia"], "tr": [39.0, 35.0, "Turkey"], "gr": [39.0, 22.0, "Greece"],
+      "pt": [39.5, -8.0, "Portugal"], "ie": [53.0, -8.0, "Ireland"], "gb": [51.52, -0.13, "UK"],
+      "uk": [51.52, -0.13, "UK"], "in": [20.0, 77.0, "India"], "cn": [39.91, 116.40, "China"],
+      "jp": [36.0, 138.0, "Japan"], "kr": [37.57, 126.98, "S. Korea"], "tw": [25.03, 121.57, "Taiwan"],
+      "au": [-25.0, 135.0, "Australia"], "nz": [-42.0, 174.0, "NZ"], "br": [-10.0, -55.0, "Brazil"],
+      "ar": [-34.0, -64.0, "Argentina"], "mx": [23.0, -102.0, "Mexico"], "za": [-29.0, 24.0, "S. Africa"],
+      "il": [32.07, 34.77, "Israel"], "eg": [30.04, 31.24, "Egypt"], "sa": [25.0, 45.0, "Saudi Arabia"],
+      "ae": [24.0, 54.0, "UAE"], "pk": [30.0, 70.0, "Pakistan"], "ir": [32.0, 53.0, "Iran"],
+      "mk": [41.99, 21.43, "N. Macedonia"], "am": [40.18, 44.51, "Armenia"],
+      "ge": [42.0, 43.5, "Georgia"], "az": [40.5, 47.5, "Azerbaijan"],
+      "vn": [21.03, 105.85, "Vietnam"], "th": [15.0, 100.0, "Thailand"],
+      "my": [2.5, 112.5, "Malaysia"], "sg": [1.4, 103.8, "Singapore"],
+      "ph": [13.0, 122.0, "Philippines"], "id": [-5.0, 120.0, "Indonesia"],
+      "ca": [60.0, -95.0, "Canada"], "co": [4.0, -72.0, "Colombia"],
+    }
+
+    // Extract TLD (handle co.uk, com.au etc)
+    const parts = host.split(".")
+    let tld = parts[parts.length - 1]
+    if (parts.length >= 3 && ["co", "com", "org", "net"].includes(parts[parts.length - 2])) {
+      tld = parts[parts.length - 1] // country part of co.uk etc
+    }
+
+    const loc = tldCountry[tld]
+    if (loc) return { lat: loc[0], lng: loc[1], city: loc[2] }
+
+    // .com with no known mapping — skip
+    return null
+  }
+
+  _renderNewsArcs(events) {
+    const Cesium = window.Cesium
+    const dataSource = this.getNewsDataSource()
+
+    // Group by source→event pair, tracking individual articles
+    const arcMap = new Map()
+    this._newsArcData = [] // for click lookups
+
+    events.forEach(ev => {
+      const src = this._getSourceLocation(ev.url)
+      if (!src) return
+
+      // Skip if source and event are very close (same city/country reporting on itself)
+      const dLat = Math.abs(src.lat - ev.lat)
+      const dLng = Math.abs(src.lng - ev.lng)
+      if (dLat < 2 && dLng < 2) return
+
+      let host
+      try { host = new URL(ev.url).hostname.replace(/^www\./, "") } catch { return }
+
+      const key = `${src.lat.toFixed(0)},${src.lng.toFixed(0)}→${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+      if (!arcMap.has(key)) {
+        arcMap.set(key, {
+          srcLat: src.lat, srcLng: src.lng, srcCity: src.city,
+          evtLat: ev.lat, evtLng: ev.lng, evtName: ev.name?.split(",")[0] || "",
+          count: 0, articles: [],
+        })
+      }
+      const entry = arcMap.get(key)
+      entry.count++
+      if (entry.articles.length < 15) {
+        entry.articles.push({ domain: host, url: ev.url, name: ev.name, category: ev.category, tone: ev.tone })
+      }
+    })
+
+    // Render arcs (max 30 to avoid clutter)
+    const arcs = [...arcMap.values()].sort((a, b) => b.count - a.count).slice(0, 30)
+    this._newsArcData = arcs
+
+    arcs.forEach((arc, idx) => {
+      const alpha = Math.min(0.2 + arc.count * 0.08, 0.6)
+      const width = Math.min(1 + arc.count * 0.3, 3)
+      const arcColor = Cesium.Color.fromCssColorString("#ffab40").withAlpha(alpha)
+
+      // SLERP arc with lift
+      const oLat = arc.srcLat * Math.PI / 180, oLng = arc.srcLng * Math.PI / 180
+      const tLat = arc.evtLat * Math.PI / 180, tLng = arc.evtLng * Math.PI / 180
+      const SEGS = 30
+      const positions = []
+      for (let i = 0; i <= SEGS; i++) {
+        const f = i / SEGS
+        const d = Math.acos(Math.min(1, Math.sin(oLat)*Math.sin(tLat) + Math.cos(oLat)*Math.cos(tLat)*Math.cos(tLng-oLng)))
+        if (d < 0.001) break
+        const A = Math.sin((1-f)*d)/Math.sin(d)
+        const B = Math.sin(f*d)/Math.sin(d)
+        const x = A*Math.cos(oLat)*Math.cos(oLng) + B*Math.cos(tLat)*Math.cos(tLng)
+        const y = A*Math.cos(oLat)*Math.sin(oLng) + B*Math.cos(tLat)*Math.sin(tLng)
+        const z = A*Math.sin(oLat) + B*Math.sin(tLat)
+        const lat = Math.atan2(z, Math.sqrt(x*x+y*y)) * 180/Math.PI
+        const lng = Math.atan2(y, x) * 180/Math.PI
+        const lift = Math.sin(f * Math.PI) * (100000 + d * 800000)
+        positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, lift))
+      }
+      if (positions.length < 2) return
+
+      const entity = dataSource.entities.add({
+        id: `news-arc-${idx}`,
+        polyline: {
+          positions,
+          width,
+          material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.15, color: arcColor }),
+        },
+      })
+      this._newsEntities.push(entity)
+
+      // Directional arrows at 1/3 and 2/3 along the arc
+      const arrowColor = Cesium.Color.fromCssColorString("#ffab40")
+      for (const frac of [0.33, 0.66]) {
+        const ai = Math.floor(frac * (positions.length - 1))
+        const arrowPos = positions[ai]
+        const arrow = dataSource.entities.add({
+          id: `news-arc-arr-${idx}-${frac}`,
+          position: arrowPos,
+          point: {
+            pixelSize: 5,
+            color: arrowColor.withAlpha(alpha * 1.2),
+            outlineColor: arrowColor.withAlpha(0.2),
+            outlineWidth: 2,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.3),
+          },
+        })
+        this._newsEntities.push(arrow)
+      }
+
+      // Label at midpoint with arrow showing direction
+      const midPos = positions[Math.floor(SEGS / 2)]
+      const lbl = dataSource.entities.add({
+        id: `news-arc-lbl-${idx}`,
+        position: midPos,
+        label: {
+          text: `${arc.srcCity} → ${arc.evtName} (${arc.count})`,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.fromCssColorString("#ffab40").withAlpha(0.85),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -4),
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 1e7, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.2e7, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._newsEntities.push(lbl)
+    })
+  }
+
+  showNewsArcDetail(arcIdx) {
+    const arc = this._newsArcData?.[arcIdx]
+    if (!arc) return
+
+    const categoryColors = {
+      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+    }
+
+    const articleList = arc.articles.map(a => {
+      const color = categoryColors[a.category] || "#90a4ae"
+      const toneColor = a.tone < -2 ? "#f44336" : a.tone > 2 ? "#4caf50" : "#90a4ae"
+      return `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div style="font:500 10px var(--gt-mono);color:${color};">
+          <a href="${this._escapeHtml(a.url)}" target="_blank" rel="noopener" style="color:${color};text-decoration:none;">${this._escapeHtml(a.domain)}</a>
+        </div>
+        <div style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);line-height:1.3;">${this._escapeHtml(a.name || "")}</div>
+        <div style="font:400 9px var(--gt-mono);color:${toneColor};">${a.category} · tone ${a.tone}</div>
+      </div>`
+    }).join("")
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:#ffab40;">
+        <i class="fa-solid fa-newspaper" style="margin-right:6px;"></i>Media Attention
+      </div>
+      <div class="detail-country">${this._escapeHtml(arc.srcCity)} → ${this._escapeHtml(arc.evtName)}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Articles</span>
+          <span class="detail-value" style="color:#ffab40;">${arc.count}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Source</span>
+          <span class="detail-value">${this._escapeHtml(arc.srcCity)}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">About</span>
+          <span class="detail-value">${this._escapeHtml(arc.evtName)}</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;font:600 9px var(--gt-mono);color:#ffab40;letter-spacing:1px;text-transform:uppercase;">Publishers</div>
+      ${articleList}
+    `
+    this.detailPanelTarget.style.display = ""
   }
 
   _clearNewsEntities() {
@@ -5294,11 +5612,13 @@ export default class extends Controller {
 
   async fetchGpsJamming() {
     if (this._timelineActive) return
+    this._toast("Loading GPS jamming...")
     try {
       const resp = await fetch("/api/gps_jamming")
       if (!resp.ok) return
       const cells = await resp.json()
       this._renderGpsJamming(cells)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch GPS jamming data:", e)
     }
@@ -5385,11 +5705,13 @@ export default class extends Controller {
   }
 
   async fetchCables() {
+    this._toast("Loading submarine cables...")
     try {
       const resp = await fetch("/api/submarine_cables")
       if (!resp.ok) return
       const data = await resp.json()
       this._renderCables(data.cables, data.landingPoints)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch submarine cables:", e)
     }
@@ -5448,7 +5770,6 @@ export default class extends Controller {
             color: Cesium.Color.fromCssColorString("#00e5ff").withAlpha(0.9),
             outlineColor: Cesium.Color.fromCssColorString("#00838f").withAlpha(0.5),
             outlineWidth: 1,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
             scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 5e6, 0.3),
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
@@ -5462,11 +5783,15 @@ export default class extends Controller {
             pixelOffset: new Cesium.Cartesian2(0, -10),
             scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0),
             translucencyByDistance: new Cesium.NearFarScalar(1e4, 1.0, 3e6, 0),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         })
         this._landingPointEntities.push(entity)
       })
+    }
+
+    // Cross-layer: highlight landing points in attacked countries
+    if (this.trafficVisible && this._attackedCountries?.size) {
+      this._refreshCableAttackHighlights()
     }
   }
 
@@ -5476,6 +5801,50 @@ export default class extends Controller {
     this._cableEntities = []
     this._landingPointEntities.forEach(e => ds.entities.remove(e))
     this._landingPointEntities = []
+  }
+
+  _refreshCableAttackHighlights() {
+    this._clearCableAttackHighlights()
+    if (!this.trafficVisible || !this._attackedCountries?.size || !this._landingPointEntities.length) return
+    if (!this._countryFeatures.length) return // need borders data for country lookup
+
+    const Cesium = window.Cesium
+    const dataSource = this.getCablesDataSource()
+    this._cableAttackEntities = []
+
+    this._landingPointEntities.forEach(e => {
+      const pos = e.position?.getValue(Cesium.JulianDate.now())
+      if (!pos) return
+      const carto = Cesium.Cartographic.fromCartesian(pos)
+      const lat = Cesium.Math.toDegrees(carto.latitude)
+      const lng = Cesium.Math.toDegrees(carto.longitude)
+      const country = findCountryAtPoint(this._countryFeatures, lat, lng)
+      const code = country?.properties?.ISO_A2 || country?.properties?.iso_a2
+      if (!code || !this._attackedCountries.has(code)) return
+
+      const ring = dataSource.entities.add({
+        id: `cable-atk-${e.id}`,
+        position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+        point: {
+          pixelSize: 8,
+          color: Cesium.Color.RED.withAlpha(0.8),
+          outlineColor: Cesium.Color.RED.withAlpha(0.3),
+          outlineWidth: 4,
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 1.4, 5e6, 0.4),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+      })
+      this._cableAttackEntities.push(ring)
+    })
+  }
+
+  _clearCableAttackHighlights() {
+    if (!this._cableAttackEntities) return
+    const ds = this._ds["cables"]
+    if (ds) {
+      this._cableAttackEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._cableAttackEntities = []
   }
 
   // ── Internet Outages ─────────────────────────────────────
@@ -5497,12 +5866,14 @@ export default class extends Controller {
 
   async fetchOutages() {
     if (this._timelineActive) return
+    this._toast("Loading outages...")
     try {
       const resp = await fetch("/api/internet_outages")
       if (!resp.ok) return
       const data = await resp.json()
       this._outageData = data.summary || []
       this._renderOutages(data)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet outages:", e)
     }
@@ -5560,7 +5931,6 @@ export default class extends Controller {
           color: cesiumColor.withAlpha(0.85),
           outlineColor: cesiumColor.withAlpha(0.4),
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
@@ -5574,7 +5944,6 @@ export default class extends Controller {
           pixelOffset: new Cesium.Cartesian2(0, -18),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1e7, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._outageEntities.push(entity)
@@ -5640,6 +6009,7 @@ export default class extends Controller {
 
   async _ensurePowerPlantData() {
     if (this._powerPlantAll) return // already loaded
+    this._toast("Loading power plants...")
     try {
       const resp = await fetch("/api/power_plants")
       if (!resp.ok) return
@@ -5650,6 +6020,7 @@ export default class extends Controller {
         capacity: r[4], name: r[5], country: r[6],
       }))
       console.log(`[PowerPlants] Loaded ${this._powerPlantAll.length} plants`)
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch power plants:", e)
     }
@@ -5699,7 +6070,6 @@ export default class extends Controller {
           color: cesiumColor.withAlpha(0.85),
           outlineColor: cesiumColor.withAlpha(0.3),
           outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
@@ -5715,10 +6085,27 @@ export default class extends Controller {
           pixelOffset: new Cesium.Cartesian2(0, -10),
           scaleByDistance: new Cesium.NearFarScalar(5e3, 1, 2e5, 0),
           translucencyByDistance: new Cesium.NearFarScalar(5e3, 1.0, 2e5, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._powerPlantEntities.push(entity)
+
+      // Cross-layer: attack warning ring if this country is under cyber attack
+      if (this.trafficVisible && this._attackedCountries?.has(p.country)) {
+        const atkRing = dataSource.entities.add({
+          id: `pp-atk-${p.id}`,
+          position: Cesium.Cartesian3.fromDegrees(p.lng, p.lat, 0),
+          ellipse: {
+            semiMinorAxis: 20000 + (p.capacity || 1) * 5,
+            semiMajorAxis: 20000 + (p.capacity || 1) * 5,
+            material: Cesium.Color.RED.withAlpha(0.06),
+            outline: true,
+            outlineColor: Cesium.Color.RED.withAlpha(0.35),
+            outlineWidth: 1,
+            height: 0,
+          },
+        })
+        this._powerPlantEntities.push(atkRing)
+      }
     })
     dataSource.entities.resumeEvents()
     this._powerPlantData = visible // for click lookups
@@ -5757,6 +6144,14 @@ export default class extends Controller {
           <span class="detail-value">${pp.capacity ? pp.capacity.toLocaleString() + " MW" : "—"}</span>
         </div>
       </div>
+      ${this.trafficVisible && this._attackedCountries?.has(pp.country) ? `
+        <div style="margin-top:10px;padding:6px 8px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);border-radius:4px;">
+          <div style="font:600 9px var(--gt-mono);color:#f44336;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">⚠ CYBER ATTACK TARGET</div>
+          ${(this._trafficData?.attack_pairs || []).filter(p => p.target === pp.country).map(p =>
+            `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">${this._escapeHtml(p.origin_name)} → ${p.pct?.toFixed(1)}%</div>`
+          ).join("")}
+        </div>
+      ` : ""}
     `
     this.detailPanelTarget.style.display = ""
   }
@@ -5779,12 +6174,14 @@ export default class extends Controller {
 
   async fetchConflicts() {
     if (this._timelineActive) return
+    this._toast("Loading conflicts...")
     try {
       const resp = await fetch("/api/conflict_events")
       if (!resp.ok) return
       this._conflictData = await resp.json()
       this.renderConflicts()
       this._updateStats()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch conflict events:", e)
     }
@@ -5835,7 +6232,6 @@ export default class extends Controller {
           color: cesiumColor.withAlpha(0.85),
           outlineColor: cesiumColor.withAlpha(0.4),
           outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
@@ -5851,7 +6247,6 @@ export default class extends Controller {
           pixelOffset: new Cesium.Cartesian2(0, -12),
           scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e6, 0),
           translucencyByDistance: new Cesium.NearFarScalar(1e4, 1.0, 3e6, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._conflictEntities.push(entity)
@@ -5901,10 +6296,533 @@ export default class extends Controller {
         </div>
       </div>
       ${c.headline ? `<div style="margin-top:8px;font:400 10px var(--gt-mono);color:var(--gt-text-dim);line-height:1.4;">${this._escapeHtml(c.headline)}</div>` : ""}
+      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${c.lat}" data-lng="${c.lng}">
+        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
+      </button>
     `
     this.detailPanelTarget.style.display = ""
   }
 
+  // ── Satellite-to-Ground Visibility ─────────────────────────
+
+  showSatVisibility(event) {
+    // Toggle: if already showing, hide
+    if (this._satVisEntities?.length) {
+      this._clearSatVisEntities()
+      event.currentTarget.classList.remove("tracking")
+      return
+    }
+
+    const lat = parseFloat(event.currentTarget.dataset.lat)
+    const lng = parseFloat(event.currentTarget.dataset.lng)
+    if (isNaN(lat) || isNaN(lng)) return
+
+    event.currentTarget.classList.add("tracking")
+    this._clearSatVisEntities()
+    this._satVisEventPos = { lat, lng }
+
+    const sat = window.satellite
+    if (!sat || !this.satelliteData.length) {
+      // Append message to detail panel
+      const msg = document.createElement("div")
+      msg.style.cssText = "margin-top:8px;font:400 10px var(--gt-mono);color:#ce93d8;"
+      msg.textContent = "Enable satellite categories first to see overhead passes."
+      event.currentTarget.parentNode.appendChild(msg)
+      return
+    }
+
+    const Cesium = window.Cesium
+    const now = new Date()
+    const gmst = sat.gstime(now)
+    const observerGd = {
+      latitude: lat * Math.PI / 180,
+      longitude: lng * Math.PI / 180,
+      height: 0,
+    }
+
+    const visible = []
+
+    this.satelliteData.forEach(s => {
+      try {
+        const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
+        const posVel = sat.propagate(satrec, now)
+        if (!posVel.position) return
+
+        const posGd = sat.eciToGeodetic(posVel.position, gmst)
+        const satLng = sat.degreesLong(posGd.longitude)
+        const satLat = sat.degreesLat(posGd.latitude)
+        const satAlt = posGd.height // km
+
+        if (isNaN(satLng) || isNaN(satLat) || isNaN(satAlt)) return
+
+        // Compute look angles (elevation)
+        const posEcf = sat.eciToEcf(posVel.position, gmst)
+        const lookAngles = sat.ecfToLookAngles(observerGd, posEcf)
+        const elevationDeg = lookAngles.elevation * 180 / Math.PI
+
+        if (elevationDeg > 5) {
+          visible.push({
+            name: s.name,
+            norad_id: s.norad_id,
+            category: s.category,
+            lat: satLat,
+            lng: satLng,
+            alt: satAlt,
+            elevation: elevationDeg,
+            azimuth: lookAngles.azimuth * 180 / Math.PI,
+          })
+        }
+      } catch (e) {
+        // Skip satellites with bad TLE
+      }
+    })
+
+    // Sort by elevation (highest first) and limit to top 15
+    visible.sort((a, b) => b.elevation - a.elevation)
+    const top = visible.slice(0, 15)
+
+    // Render visibility lines
+    const dataSource = this.getSatellitesDataSource()
+
+    top.forEach((s, i) => {
+      const color = Cesium.Color.fromCssColorString(this.satCategoryColors[s.category] || "#ce93d8").withAlpha(0.5)
+
+      // Line from satellite to ground event
+      const line = dataSource.entities.add({
+        id: `satvis-line-${i}`,
+        polyline: {
+          positions: [
+            Cesium.Cartesian3.fromDegrees(s.lng, s.lat, s.alt * 1000),
+            Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+          ],
+          width: 1.5,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: color,
+            dashLength: 16,
+          }),
+        },
+      })
+      this._satVisEntities.push(line)
+
+      // Small label at satellite position
+      const lbl = dataSource.entities.add({
+        id: `satvis-lbl-${i}`,
+        position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, s.alt * 1000),
+        label: {
+          text: `${s.name} (${s.elevation.toFixed(0)}°)`,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: color.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(8, 0),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e7, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 5e7, 0.1),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._satVisEntities.push(lbl)
+    })
+
+    // Ground marker at event location
+    const groundMarker = dataSource.entities.add({
+      id: "satvis-ground",
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+      ellipse: {
+        semiMinorAxis: 50000,
+        semiMajorAxis: 50000,
+        material: Cesium.Color.fromCssColorString("#ce93d8").withAlpha(0.1),
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString("#ce93d8").withAlpha(0.4),
+        outlineWidth: 1,
+        height: 0,
+      },
+    })
+    this._satVisEntities.push(groundMarker)
+
+    // Append satellite list to the detail panel
+    const listHtml = top.length > 0
+      ? top.map(s => {
+          const catColor = this.satCategoryColors[s.category] || "#ce93d8"
+          return `<div style="display:flex;justify-content:space-between;font:400 10px var(--gt-mono);color:var(--gt-text-dim);padding:1px 0;">
+            <span style="color:${catColor};">${this._escapeHtml(s.name)}</span>
+            <span>${s.elevation.toFixed(0)}° el · ${Math.round(s.alt)} km</span>
+          </div>`
+        }).join("")
+      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No satellites currently overhead. Enable more satellite categories.</div>`
+
+    const container = document.createElement("div")
+    container.id = "satvis-results"
+    container.innerHTML = `
+      <div style="margin-top:10px;padding:6px 8px;background:rgba(171,71,188,0.08);border:1px solid rgba(171,71,188,0.25);border-radius:4px;">
+        <div style="font:600 9px var(--gt-mono);color:#ce93d8;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">
+          <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>${top.length} SATELLITES OVERHEAD
+        </div>
+        ${listHtml}
+      </div>
+    `
+
+    // Remove previous results if any
+    document.getElementById("satvis-results")?.remove()
+    this.detailContentTarget.appendChild(container)
+  }
+
+  _clearSatVisEntities() {
+    if (!this._satVisEntities?.length) return
+    const ds = this._ds["satellites"]
+    if (ds) {
+      this._satVisEntities.forEach(e => ds.entities.remove(e))
+    }
+    this._satVisEntities = []
+    this._satVisEventPos = null
+    document.getElementById("satvis-results")?.remove()
+    document.getElementById("ground-events-results")?.remove()
+  }
+
+  showGroundEvents(event) {
+    // Toggle: if already showing, hide
+    if (this._satVisEntities?.length) {
+      this._clearSatVisEntities()
+      event.currentTarget.classList.remove("tracking")
+      return
+    }
+
+    const noradId = parseInt(event.currentTarget.dataset.norad)
+    const satData = this.satelliteData.find(s => s.norad_id === noradId)
+    if (!satData) return
+
+    event.currentTarget.classList.add("tracking")
+
+    const sat = window.satellite
+    if (!sat) return
+    const Cesium = window.Cesium
+    const now = new Date()
+    const gmst = sat.gstime(now)
+
+    // Get satellite position
+    const satrec = sat.twoline2satrec(satData.tle_line1, satData.tle_line2)
+    const posVel = sat.propagate(satrec, now)
+    if (!posVel.position) return
+    const posGd = sat.eciToGeodetic(posVel.position, gmst)
+    const satLat = sat.degreesLat(posGd.latitude)
+    const satLng = sat.degreesLong(posGd.longitude)
+    const satAltKm = posGd.height
+
+    // Footprint radius: horizon distance from satellite altitude
+    // Simple approximation: sqrt(2 * R * h) where R = 6371km
+    const footprintKm = Math.sqrt(2 * 6371 * satAltKm)
+    const footprintM = footprintKm * 1000
+
+    // Collect ground events within footprint
+    const events = []
+    const catIcons = { earthquake: "house-crack", natural: "bolt", conflict: "crosshairs", news: "newspaper" }
+    const catColors = { earthquake: "#ff7043", natural: "#66bb6a", conflict: "#f44336", news: "#ff9800" }
+
+    // Earthquakes
+    if (this._earthquakeData?.length) {
+      this._earthquakeData.forEach(eq => {
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: eq.lat, lng: eq.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "earthquake", label: `M${eq.mag.toFixed(1)} ${eq.title}`, lat: eq.lat, lng: eq.lng, dist })
+        }
+      })
+    }
+
+    // Natural events
+    if (this._naturalEventData?.length) {
+      this._naturalEventData.forEach(ev => {
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: ev.lat, lng: ev.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "natural", label: ev.title, lat: ev.lat, lng: ev.lng, dist })
+        }
+      })
+    }
+
+    // Conflicts
+    if (this._conflictData?.length) {
+      this._conflictData.forEach(c => {
+        if (!c.lat || !c.lng) return
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: c.lat, lng: c.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "conflict", label: `${c.conflict || "Conflict"} — ${c.country || ""}`, lat: c.lat, lng: c.lng, dist })
+        }
+      })
+    }
+
+    // News
+    if (this._newsData?.length) {
+      this._newsData.forEach(n => {
+        if (!n.lat || !n.lng) return
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: n.lat, lng: n.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "news", label: n.title || "News", lat: n.lat, lng: n.lng, dist })
+        }
+      })
+    }
+
+    events.sort((a, b) => a.dist - b.dist)
+    const top = events.slice(0, 20)
+
+    // Draw lines from satellite to each ground event
+    this._clearSatVisEntities()
+    const dataSource = this.getSatellitesDataSource()
+    const satColor = Cesium.Color.fromCssColorString(this.satCategoryColors[satData.category] || "#ce93d8")
+
+    // Footprint circle on ground
+    const fpCircle = dataSource.entities.add({
+      id: "satvis-footprint",
+      position: Cesium.Cartesian3.fromDegrees(satLng, satLat, 0),
+      ellipse: {
+        semiMinorAxis: footprintM,
+        semiMajorAxis: footprintM,
+        material: satColor.withAlpha(0.04),
+        outline: true,
+        outlineColor: satColor.withAlpha(0.2),
+        outlineWidth: 1,
+        height: 0,
+      },
+    })
+    this._satVisEntities.push(fpCircle)
+
+    top.forEach((ev, i) => {
+      const evColor = Cesium.Color.fromCssColorString(catColors[ev.type] || "#ce93d8").withAlpha(0.5)
+      const line = dataSource.entities.add({
+        id: `satvis-gnd-${i}`,
+        polyline: {
+          positions: [
+            Cesium.Cartesian3.fromDegrees(satLng, satLat, satAltKm * 1000),
+            Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+          ],
+          width: 1.5,
+          material: new Cesium.PolylineDashMaterialProperty({ color: evColor, dashLength: 16 }),
+        },
+      })
+      this._satVisEntities.push(line)
+    })
+
+    // Build results HTML
+    const listHtml = top.length > 0
+      ? top.map(ev => {
+          const color = catColors[ev.type] || "#ce93d8"
+          const icon = catIcons[ev.type] || "circle"
+          const distKm = Math.round(ev.dist / 1000)
+          return `<div style="display:flex;gap:6px;align-items:start;font:400 10px var(--gt-mono);color:var(--gt-text-dim);padding:2px 0;">
+            <i class="fa-solid fa-${icon}" style="color:${color};margin-top:2px;font-size:9px;flex-shrink:0;"></i>
+            <span style="flex:1;line-height:1.3;">${this._escapeHtml(ev.label)}</span>
+            <span style="flex-shrink:0;color:${color};">${distKm} km</span>
+          </div>`
+        }).join("")
+      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No active events in footprint. Enable event layers (EQ, EVT, WAR, NEWS).</div>`
+
+    const container = document.createElement("div")
+    container.id = "ground-events-results"
+    container.innerHTML = `
+      <div style="margin-top:10px;padding:6px 8px;background:rgba(171,71,188,0.08);border:1px solid rgba(171,71,188,0.25);border-radius:4px;">
+        <div style="font:600 9px var(--gt-mono);color:#ce93d8;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">
+          <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>${top.length} EVENTS IN FOOTPRINT
+          <span style="font-weight:400;text-transform:none;margin-left:4px;">(${Math.round(footprintKm)} km radius)</span>
+        </div>
+        ${listHtml}
+      </div>
+    `
+    document.getElementById("ground-events-results")?.remove()
+    this.detailContentTarget.appendChild(container)
+  }
+
+  // ── NOTAMs / No-Fly Zones ─────────────────────────────────
+
+  getNotamsDataSource() { return getDataSource(this.viewer, this._ds, "notams") }
+
+  toggleNotams() {
+    this.notamsVisible = this.hasNotamsToggleTarget && this.notamsToggleTarget.checked
+    if (this.notamsVisible) {
+      this.fetchNotams()
+      if (!this._notamCameraCb) {
+        this._notamCameraCb = () => { if (this.notamsVisible) this.fetchNotams() }
+        this.viewer.camera.moveEnd.addEventListener(this._notamCameraCb)
+      }
+    } else {
+      this._clearNotamEntities()
+      if (this._notamCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._notamCameraCb); this._notamCameraCb = null }
+    }
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  async fetchNotams() {
+    this._toast("Loading NOTAMs...")
+    try {
+      const bounds = getViewportBounds(this.viewer)
+      let url = "/api/notams"
+      if (bounds) {
+        url += `?lamin=${bounds.south.toFixed(2)}&lamax=${bounds.north.toFixed(2)}&lomin=${bounds.west.toFixed(2)}&lomax=${bounds.east.toFixed(2)}`
+      }
+      const resp = await fetch(url)
+      if (!resp.ok) return
+      this._notamData = await resp.json()
+      this.renderNotams()
+      this._toastHide()
+    } catch (e) {
+      console.error("Failed to fetch NOTAMs:", e)
+    }
+  }
+
+  renderNotams() {
+    this._clearNotamEntities()
+    if (!this._notamData || this._notamData.length === 0) return
+
+    const Cesium = window.Cesium
+    const dataSource = this.getNotamsDataSource()
+    dataSource.entities.suspendEvents()
+
+    const reasonColors = {
+      "VIP Movement": "#ff1744",
+      "White House": "#ff1744",
+      "US Capitol": "#ff1744",
+      "Washington DC SFRA": "#ff5252",
+      "Washington DC FRZ": "#ff1744",
+      "Camp David": "#ff1744",
+      "Wildfire": "#ff6d00",
+      "Space Operations": "#7c4dff",
+      "Sporting Event": "#00c853",
+      "Security": "#ff9100",
+      "Restricted Area": "#d50000",
+      "Hazard": "#ffab00",
+      "TFR": "#ef5350",
+    }
+
+    this._notamData.forEach((n) => {
+      const color = reasonColors[n.reason] || "#ef5350"
+      const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const radius = n.radius_m || 5556
+
+      const altLow = (n.alt_low_ft || 0) * 0.3048
+      const altHigh = Math.min((n.alt_high_ft || 18000) * 0.3048, 60000)
+
+      const ellipse = dataSource.entities.add({
+        id: `notam-${n.id}`,
+        position: Cesium.Cartesian3.fromDegrees(n.lng, n.lat, 0),
+        ellipse: {
+          semiMinorAxis: radius,
+          semiMajorAxis: radius,
+          height: altLow,
+          extrudedHeight: altHigh,
+          material: cesiumColor.withAlpha(0.08),
+          outline: true,
+          outlineColor: cesiumColor.withAlpha(0.4),
+          outlineWidth: 1,
+        },
+      })
+      this._notamEntities.push(ellipse)
+
+      const label = dataSource.entities.add({
+        id: `notam-lbl-${n.id}`,
+        position: Cesium.Cartesian3.fromDegrees(n.lng, n.lat, altHigh + 500),
+        label: {
+          text: `⛔ ${n.reason}`,
+          font: "bold 11px JetBrains Mono, monospace",
+          fillColor: cesiumColor.withAlpha(0.95),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 5e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1.0, 5e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._notamEntities.push(label)
+    })
+    dataSource.entities.resumeEvents()
+
+    this._checkFlightNotamProximity()
+  }
+
+  _clearNotamEntities() {
+    const ds = this._ds["notams"]
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._notamEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
+    this._notamEntities = []
+    this._clearFlightNotamWarnings()
+  }
+
+  _checkFlightNotamProximity() {
+    if (!this.notamsVisible || !this._notamData?.length) return
+    this._clearFlightNotamWarnings()
+
+    const Cesium = window.Cesium
+    const dataSource = this.getNotamsDataSource()
+    this._notamFlightWarnings = []
+
+    this.flightData.forEach((f, icao24) => {
+      if (!f.latitude || !f.longitude) return
+
+      for (const n of this._notamData) {
+        const dist = haversineDistance(
+          { lat: f.latitude, lng: f.longitude },
+          { lat: n.lat, lng: n.lng }
+        )
+        const proximityThreshold = (n.radius_m || 5556) * 1.5
+
+        if (dist <= proximityThreshold) {
+          const warningEntity = dataSource.entities.add({
+            id: `notam-warn-${icao24}`,
+            position: Cesium.Cartesian3.fromDegrees(f.longitude, f.latitude, (f.baro_altitude || 0)),
+            ellipse: {
+              semiMinorAxis: 8000,
+              semiMajorAxis: 8000,
+              material: Cesium.Color.RED.withAlpha(0.15),
+              outline: true,
+              outlineColor: Cesium.Color.RED.withAlpha(0.6),
+              outlineWidth: 2,
+              height: (f.baro_altitude || 0) - 500,
+              extrudedHeight: (f.baro_altitude || 0) + 500,
+            },
+          })
+          this._notamFlightWarnings.push(warningEntity)
+          break
+        }
+      }
+    })
+  }
+
+  _clearFlightNotamWarnings() {
+    if (!this._notamFlightWarnings) return
+    const ds = this._ds["notams"]
+    if (ds) {
+      this._notamFlightWarnings.forEach(e => ds.entities.remove(e))
+    }
+    this._notamFlightWarnings = []
+  }
+
+  showNotamDetail(n) {
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:#ef5350;">
+        <i class="fa-solid fa-ban" style="margin-right:6px;"></i>${this._escapeHtml(n.reason)}
+      </div>
+      <div class="detail-country">${this._escapeHtml(n.id)}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Radius</span>
+          <span class="detail-value">${n.radius_nm} NM (${(n.radius_m / 1000).toFixed(1)} km)</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Altitude</span>
+          <span class="detail-value">${n.alt_low_ft?.toLocaleString() || 'SFC'} – ${n.alt_high_ft?.toLocaleString()} ft</span>
+        </div>
+        ${n.effective_start ? `<div class="detail-field">
+          <span class="detail-label">Effective</span>
+          <span class="detail-value" style="font-size:9px;">${n.effective_start}</span>
+        </div>` : ""}
+      </div>
+      <div style="margin-top:8px;font:400 10px var(--gt-mono);color:var(--gt-text-dim);line-height:1.4;">${this._escapeHtml(n.text)}</div>
+    `
+    this.detailPanelTarget.style.display = ""
+  }
   // ── Internet Traffic (Cloudflare Radar) ─────────────────────
 
   getTrafficDataSource() { return getDataSource(this.viewer, this._ds, "traffic") }
@@ -5924,6 +6842,7 @@ export default class extends Controller {
 
   async fetchTraffic() {
     if (this._timelineActive) return
+    this._toast("Loading internet traffic...")
     try {
       console.log("[Traffic] Fetching /api/internet_traffic ...")
       const resp = await fetch("/api/internet_traffic")
@@ -5935,6 +6854,7 @@ export default class extends Controller {
       this._trafficData = await resp.json()
       console.log("[Traffic] Got data:", this._trafficData.traffic?.length, "countries,", this._trafficData.attack_pairs?.length, "attack pairs")
       this.renderTraffic()
+      this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet traffic:", e)
     }
@@ -5977,7 +6897,6 @@ export default class extends Controller {
           color,
           outlineColor: color.withAlpha(0.3),
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
@@ -5993,7 +6912,6 @@ export default class extends Controller {
           pixelOffset: new Cesium.Cartesian2(0, -14),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1e7, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._trafficEntities.push(entity)
@@ -6021,6 +6939,15 @@ export default class extends Controller {
 
     // DDoS attack arcs (origin → target) with labels and directional arrows
     const pairs = this._trafficData.attack_pairs || []
+
+    // Build set of attacked country codes for cross-layer correlation
+    this._attackedCountries = new Set()
+    pairs.forEach(p => { if (p.pct > 0.5) this._attackedCountries.add(p.target) })
+
+    // Re-render infra layers if visible to show attack highlighting
+    if (this.powerPlantsVisible) this.renderPowerPlants()
+    if (this.cablesVisible) this._refreshCableAttackHighlights()
+
     pairs.forEach((p, idx) => {
       const originC = CC[p.origin]
       const targetC = CC[p.target]
@@ -6053,35 +6980,47 @@ export default class extends Controller {
       }
       if (arcPositions.length < 2) return
 
-      // Arc line
-      const arcColor = Cesium.Color.fromCssColorString("#f44336").withAlpha(arcAlpha)
+      // Arc line — dimmer base trail
+      const arcColor = Cesium.Color.fromCssColorString("#f44336").withAlpha(arcAlpha * 0.5)
       const arc = dataSource.entities.add({
         id: `traf-arc-${idx}`,
         polyline: {
           positions: arcPositions,
           width: arcWidth,
           material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.2,
+            glowPower: 0.15,
             color: arcColor,
           }),
         },
       })
       this._trafficEntities.push(arc)
 
-      // Arrow at target end (small red triangle pointing down at target)
-      const arrowPos = arcPositions[Math.floor(SEGS * 0.85)] // slightly before target
-      const arrow = dataSource.entities.add({
-        id: `traf-arrow-${idx}`,
-        position: arrowPos,
-        point: {
-          pixelSize: 5 + arcWidth,
-          color: Cesium.Color.fromCssColorString("#f44336").withAlpha(arcAlpha + 0.2),
-          outlineColor: Cesium.Color.fromCssColorString("#ff1744").withAlpha(0.6),
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
-      this._trafficEntities.push(arrow)
+      // Animated attack blobs — 1 to 4 based on severity, staggered along path
+      const blobCount = Math.min(4, Math.max(1, Math.ceil(pct / 5)))
+      const speed = 0.3 + Math.min(pct * 0.01, 0.4) // 0.3–0.7 full-path per second
+      const blobSize = Math.max(7, Math.min(16, 5 + pct * 0.3))
+      const blobColor = Cesium.Color.fromCssColorString("#ff1744")
+      const glowColor = Cesium.Color.fromCssColorString("#ff5252")
+
+      for (let b = 0; b < blobCount; b++) {
+        const blob = dataSource.entities.add({
+          id: `traf-blob-${idx}-${b}`,
+          position: arcPositions[0],
+          point: {
+            pixelSize: blobSize,
+            color: blobColor.withAlpha(0.9),
+            outlineColor: glowColor.withAlpha(0.4),
+            outlineWidth: 3,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
+          },
+        })
+        this._trafficEntities.push(blob)
+        // Store animation metadata on the entity for the RAF loop
+        blob._blobArc = arcPositions
+        blob._blobPhase = b / blobCount
+        blob._blobSpeed = speed
+      }
 
       // Label at midpoint of arc
       const midPos = arcPositions[Math.floor(SEGS / 2)]
@@ -6106,9 +7045,40 @@ export default class extends Controller {
       this._trafficEntities.push(label)
     })
     dataSource.entities.resumeEvents()
+
+    // Start blob animation loop
+    this._startTrafficBlobAnim()
+  }
+
+  _startTrafficBlobAnim() {
+    if (this._trafficBlobRaf) return
+    const Cesium = window.Cesium
+    const scratch = new Cesium.Cartesian3()
+    const animate = () => {
+      if (!this.trafficVisible) { this._trafficBlobRaf = null; return }
+      const now = Date.now() / 1000
+      for (const e of this._trafficEntities) {
+        if (!e._blobArc) continue
+        const pos = e._blobArc
+        const n = pos.length
+        const t = (now * e._blobSpeed + e._blobPhase) % 1.0
+        const fi = t * (n - 1)
+        const lo = Math.floor(fi)
+        const hi = Math.min(lo + 1, n - 1)
+        const frac = fi - lo
+        e.position = Cesium.Cartesian3.lerp(pos[lo], pos[hi], frac, scratch)
+      }
+      this.viewer.scene.requestRender()
+      this._trafficBlobRaf = requestAnimationFrame(animate)
+    }
+    this._trafficBlobRaf = requestAnimationFrame(animate)
   }
 
   _clearTrafficEntities() {
+    if (this._trafficBlobRaf) {
+      cancelAnimationFrame(this._trafficBlobRaf)
+      this._trafficBlobRaf = null
+    }
     const ds = this._ds["traffic"]
     if (ds) {
       ds.entities.suspendEvents()
@@ -6116,6 +7086,8 @@ export default class extends Controller {
       ds.entities.resumeEvents()
     }
     this._trafficEntities = []
+    this._attackedCountries = null
+    this._clearCableAttackHighlights()
   }
 
   showTrafficDetail(code) {

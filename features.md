@@ -32,7 +32,68 @@
 
 ---
 
-## Planned
+## In Progress
+
+### NOTAMs / No-Fly Zones
+- FAA NOTAM API for TFR polygons on the globe
+- Highlight flights routing around restricted airspace
+- Show flight density drops in conflict/restricted regions
+
+### Cyber Attacks → Target Infrastructure
+- Attack target countries → highlight their power plants, cables, data centers
+- Attack origin overlaid with internet traffic share
+- Visual link between attack arcs and affected infrastructure
+
+### Satellite to Ground Events
+- Show which imaging/comms satellites have line-of-sight to a selected event
+- Satellite coverage footprint over active events (earthquakes, conflicts)
+- Starlink/OneWeb coverage gaps overlaid with internet outages
+
+---
+
+## Planned — Cross-Layer Correlations
+
+### GPS Jamming → Flights & Ships
+- Flights/ships entering jamming zones highlighted (red outline, warning)
+- "Affected count" on jamming markers
+- ADS-B NACP accuracy degradation near jamming zones
+
+### Submarine Cables → Internet Outages
+- Outage occurs → highlight nearby cables as potential cause
+- Cable cut events correlated with ship positions near cable routes
+
+### Earthquakes → Infrastructure
+- Shake radius overlay on power plants, cable landing points, airports
+- "At risk" infrastructure count per quake
+- Post-quake outage correlation
+
+### Country Borders → News
+- Auto-fetch and display news events when a country is selected
+
+---
+
+## Planned — New Data Sources
+
+### NASA FIRMS (Active Fires)
+- Real-time fire/hotspot locations
+- Correlate with natural events + air quality
+
+### OpenAQ (Air Quality)
+- Air quality stations worldwide
+- Overlay with fires, power plants
+
+### NOAA Weather
+- Severe weather alerts, hurricanes, GeoJSON overlays
+
+### UNHCR (Refugee Flows)
+- Migration routes and camps, correlate with conflict events
+
+### IODA (Internet Outage Detection)
+- Better outage detection than Cloudflare for regional outages (Georgia Tech API)
+
+---
+
+## Planned — Original
 
 ### GDELT Geotagged News
 - Source: `api.gdeltproject.org`

@@ -67,6 +67,9 @@
           <button class="ql-btn" data-globe-target="qlShips" data-action="click->globe#quickToggle" data-layer="ships" data-tip="AIS marine vessels" data-tip-pos="right" style="--ql-color: #26c6da;">
             <i class="fa-solid fa-ship"></i><span class="ql-label">AIS</span>
           </button>
+          <button class="ql-btn" data-globe-target="qlNotams" data-action="click->globe#quickToggle" data-layer="notams" data-tip="No-fly zones & TFRs (FAA)" data-tip-pos="right" style="--ql-color: #ef5350;">
+            <i class="fa-solid fa-ban"></i><span class="ql-label">TFR</span>
+          </button>
         </div>
       </div>
       <div class="ql-category">
@@ -219,6 +222,7 @@
           <input type="checkbox" style="display:none;" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
           <input type="checkbox" style="display:none;" data-globe-target="conflictsToggle" data-action="change->globe#toggleConflicts">
           <input type="checkbox" style="display:none;" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
+          <input type="checkbox" style="display:none;" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
           <div class="sb-slider-row">
             <span class="sb-slider-label">Terrain Exag.</span>
             <input type="range" min="1" max="10" step="0.5" value="1"
@@ -383,3 +387,4 @@
   </div>
 </div>
 <div id="gt-tooltip"></div>
+<div id="gt-toast"></div>

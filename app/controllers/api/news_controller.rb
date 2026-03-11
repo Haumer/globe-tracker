@@ -72,15 +72,24 @@ module Api
             }
           end
 
+          # Scrub any remaining invalid UTF-8 from individual fields
+          records.each do |r|
+            r.each { |k, v| r[k] = v.scrub("") if v.is_a?(String) }
+          end
+
           if records.any?
-            NewsEvent.upsert_all(records, unique_by: :url)
-            record_timeline_events(
-              event_type: "news",
-              model_class: NewsEvent,
-              unique_key: :url,
-              unique_values: records.map { |r| r[:url] },
-              time_column: :published_at
-            )
+            begin
+              NewsEvent.upsert_all(records, unique_by: :url)
+              record_timeline_events(
+                event_type: "news",
+                model_class: NewsEvent,
+                unique_key: :url,
+                unique_values: records.map { |r| r[:url] },
+                time_column: :published_at
+              )
+            rescue => e
+              Rails.logger.error("NewsController upsert error: #{e.message}")
+            end
           end
         end
       end

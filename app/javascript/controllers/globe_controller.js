@@ -776,27 +776,60 @@ export default class extends Controller {
     this.viewer.scene.requestRender()
   }
 
-  // Smooth an array of Cartesian3 positions using Catmull-Rom spline interpolation.
-  // Returns the original array unchanged if fewer than 3 points are provided.
+  // Simplify trail by removing redundant straight-line points (Ramer-Douglas-Peucker),
+  // then smooth the remaining key points with a Catmull-Rom spline.
   _interpolateTrailSpline(positions, segmentsPerPoint = 4) {
     const Cesium = window.Cesium
     if (positions.length < 3) return positions
 
-    // Build evenly-spaced time values for each input position
-    const times = positions.map((_, i) => i / (positions.length - 1))
+    // Step 1: Simplify — strip out points that lie on a straight course
+    const simplified = this._rdpSimplify(positions, 500) // 500m tolerance
+    if (simplified.length < 3) return simplified
 
-    const spline = new Cesium.CatmullRomSpline({
-      times,
-      points: positions,
-    })
+    // Step 2: Spline through the key waypoints for a flowing curve
+    const times = simplified.map((_, i) => i / (simplified.length - 1))
+    const spline = new Cesium.CatmullRomSpline({ times, points: simplified })
 
     const smoothed = []
-    const totalSegments = (positions.length - 1) * segmentsPerPoint
+    const totalSegments = (simplified.length - 1) * segmentsPerPoint
     for (let i = 0; i <= totalSegments; i++) {
-      const t = i / totalSegments
-      smoothed.push(spline.evaluate(t))
+      smoothed.push(spline.evaluate(i / totalSegments))
     }
     return smoothed
+  }
+
+  // Ramer-Douglas-Peucker: keep start/end + points that deviate from the straight line
+  // by more than `epsilon` meters. Removes noise on straight segments, keeps real turns.
+  _rdpSimplify(points, epsilon) {
+    if (points.length <= 2) return points
+
+    const Cesium = window.Cesium
+    // Find the point farthest from the line between first and last
+    const first = points[0], last = points[points.length - 1]
+    let maxDist = 0, maxIdx = 0
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const d = this._pointToLineDist(points[i], first, last, Cesium)
+      if (d > maxDist) { maxDist = d; maxIdx = i }
+    }
+
+    if (maxDist > epsilon) {
+      const left = this._rdpSimplify(points.slice(0, maxIdx + 1), epsilon)
+      const right = this._rdpSimplify(points.slice(maxIdx), epsilon)
+      return left.slice(0, -1).concat(right)
+    }
+    return [first, last]
+  }
+
+  // Perpendicular distance from point P to line segment A→B, in meters
+  _pointToLineDist(p, a, b, Cesium) {
+    const ap = Cesium.Cartesian3.subtract(p, a, new Cesium.Cartesian3())
+    const ab = Cesium.Cartesian3.subtract(b, a, new Cesium.Cartesian3())
+    const abLen = Cesium.Cartesian3.magnitude(ab)
+    if (abLen < 1e-10) return Cesium.Cartesian3.distance(p, a)
+
+    const cross = Cesium.Cartesian3.cross(ap, ab, new Cesium.Cartesian3())
+    return Cesium.Cartesian3.magnitude(cross) / abLen
   }
 
   renderTrails() {

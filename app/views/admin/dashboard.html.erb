@@ -1,0 +1,165 @@
+<%= tag.meta("http-equiv": "refresh", content: "10") %>
+
+<div style="background: #0a0e17; min-height: 100vh; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #c8d2e1;">
+
+  <div style="max-width: 1200px; margin: 0 auto;">
+
+    <h1 style="color: #4fc3f7; margin-bottom: 8px; font-size: 28px;">Globe Tracker Admin</h1>
+    <p style="color: #6b7a8d; margin-bottom: 24px; font-size: 14px;">Last refreshed: <%= Time.current.strftime("%H:%M:%S UTC") %></p>
+
+    <%# ── Poller Status ── %>
+    <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="margin: 0 0 8px; font-size: 18px; color: #e0e6ed;">Global Poller</h2>
+          <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+            <span>
+              Status:
+              <% if @poller_status[:running] %>
+                <span style="color: #66bb6a; font-weight: 600;">Running</span>
+              <% else %>
+                <span style="color: #ef5350; font-weight: 600;">Stopped</span>
+              <% end %>
+            </span>
+            <% if @poller_status[:started_at] %>
+              <span>Started: <strong><%= @poller_status[:started_at]&.strftime("%H:%M:%S") %></strong></span>
+            <% end %>
+            <% if @poller_status[:last_poll_at] %>
+              <span>Last poll: <strong><%= @poller_status[:last_poll_at]&.strftime("%H:%M:%S") %></strong></span>
+            <% end %>
+            <span>Polls: <strong><%= @poller_status[:poll_count] %></strong></span>
+          </div>
+        </div>
+        <%= form_tag admin_toggle_poller_path, method: :post, style: "margin: 0;" do %>
+          <button type="submit" style="background: <%= @poller_status[:running] ? '#ef5350' : '#66bb6a' %>; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+            <%= @poller_status[:running] ? "Stop Poller" : "Start Poller" %>
+          </button>
+        <% end %>
+      </div>
+    </div>
+
+    <%# ── Snapshot Counts ── %>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+      <div style="background: #141a28; border-radius: 8px; padding: 16px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #4fc3f7;"><%= number_with_delimiter(@snapshot_counts[:total]) %></div>
+        <div style="color: #6b7a8d; font-size: 13px; margin-top: 4px;">Total Snapshots</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 16px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #4fc3f7;"><%= number_with_delimiter(@snapshot_counts[:last_hour]) %></div>
+        <div style="color: #6b7a8d; font-size: 13px; margin-top: 4px;">Last Hour</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 16px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #4fc3f7;"><%= number_with_delimiter(@snapshot_counts[:flights_hour]) %></div>
+        <div style="color: #6b7a8d; font-size: 13px; margin-top: 4px;">Flight Snapshots (1h)</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 16px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #4fc3f7;"><%= number_with_delimiter(@snapshot_counts[:ships_hour]) %></div>
+        <div style="color: #6b7a8d; font-size: 13px; margin-top: 4px;">Ship Snapshots (1h)</div>
+      </div>
+    </div>
+
+    <%# ── Stats Summary ── %>
+    <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
+      <h2 style="margin: 0 0 12px; font-size: 18px; color: #e0e6ed;">Polling Summary (Last Hour)</h2>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #1e2a3a;">
+              <th style="text-align: left; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Source</th>
+              <th style="text-align: left; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Type</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Polls</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Fetched</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Stored</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Avg Duration</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Errors</th>
+              <th style="text-align: right; padding: 8px 12px; color: #6b7a8d; font-weight: 600;">Last Poll</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @stats_summary.each do |stat| %>
+              <tr style="border-bottom: 1px solid #1e2a3a;">
+                <td style="padding: 8px 12px; font-weight: 600;"><%= stat.source %></td>
+                <td style="padding: 8px 12px;"><%= stat.poll_type %></td>
+                <td style="padding: 8px 12px; text-align: right;"><%= stat.poll_count %></td>
+                <td style="padding: 8px 12px; text-align: right;"><%= number_with_delimiter(stat.total_fetched.to_i) %></td>
+                <td style="padding: 8px 12px; text-align: right;"><%= number_with_delimiter(stat.total_stored.to_i) %></td>
+                <td style="padding: 8px 12px; text-align: right;"><%= stat.avg_duration.to_i %> ms</td>
+                <td style="padding: 8px 12px; text-align: right; color: <%= stat.error_count.to_i > 0 ? '#ef5350' : '#66bb6a' %>;"><%= stat.error_count %></td>
+                <td style="padding: 8px 12px; text-align: right;"><%= stat.last_poll_at&.strftime("%H:%M:%S") %></td>
+              </tr>
+            <% end %>
+            <% if @stats_summary.empty? %>
+              <tr><td colspan="8" style="padding: 16px; text-align: center; color: #6b7a8d;">No polling data yet</td></tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <%# ── Data Freshness ── %>
+    <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
+      <h2 style="margin: 0 0 12px; font-size: 18px; color: #e0e6ed;">Data Freshness</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <% @freshness.each do |layer, timestamp| %>
+          <div style="background: #0d1320; border-radius: 6px; padding: 12px;">
+            <div style="color: #6b7a8d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;"><%= layer %></div>
+            <% if timestamp %>
+              <% age_minutes = ((Time.current - timestamp) / 60).round %>
+              <div style="font-size: 16px; font-weight: 600; color: <%= age_minutes > 30 ? '#ef5350' : age_minutes > 10 ? '#ffa726' : '#66bb6a' %>;">
+                <%= time_ago_in_words(timestamp) %> ago
+              </div>
+              <div style="color: #4a5568; font-size: 11px;"><%= timestamp.strftime("%H:%M:%S") %></div>
+            <% else %>
+              <div style="font-size: 16px; color: #4a5568;">No data</div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <%# ── Recent Poll Log ── %>
+    <div style="background: #141a28; border-radius: 8px; padding: 20px; border: 1px solid #1e2a3a;">
+      <h2 style="margin: 0 0 12px; font-size: 18px; color: #e0e6ed;">Recent Poll Log</h2>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #1e2a3a;">
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Time</th>
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Source</th>
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Type</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Fetched</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Stored</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Duration</th>
+              <th style="text-align: center; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Status</th>
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @recent_stats.limit(50).each do |stat| %>
+              <tr style="border-bottom: 1px solid #1e2a3a;">
+                <td style="padding: 6px 10px; color: #8892a4;"><%= stat.created_at.strftime("%H:%M:%S") %></td>
+                <td style="padding: 6px 10px; font-weight: 600;"><%= stat.source %></td>
+                <td style="padding: 6px 10px;"><%= stat.poll_type %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= number_with_delimiter(stat.records_fetched) %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= number_with_delimiter(stat.records_stored) %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= stat.duration_ms %> ms</td>
+                <td style="padding: 6px 10px; text-align: center;">
+                  <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: <%= stat.status == 'success' ? '#1b3a2a' : '#3a1b1b' %>; color: <%= stat.status == 'success' ? '#66bb6a' : '#ef5350' %>;">
+                    <%= stat.status %>
+                  </span>
+                </td>
+                <td style="padding: 6px 10px; color: #ef5350; font-size: 12px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= stat.error_message %>">
+                  <%= stat.error_message %>
+                </td>
+              </tr>
+            <% end %>
+            <% if @recent_stats.empty? %>
+              <tr><td colspan="8" style="padding: 16px; text-align: center; color: #6b7a8d;">No recent polls</td></tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>

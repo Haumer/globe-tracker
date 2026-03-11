@@ -924,8 +924,8 @@ export default class extends Controller {
     this.lastAnimTime = now
     let needsRender = false
 
-    // Dead reckoning for flights
-    if (dt > 0 && dt < 1 && this.flightData.size > 0) {
+    // Dead reckoning for flights (skip during timeline playback)
+    if (dt > 0 && dt < 1 && this.flightData.size > 0 && !this._timelineActive) {
       for (const [, data] of this.flightData) {
         if (data.onGround || !data.speed) continue
 
@@ -947,7 +947,7 @@ export default class extends Controller {
     }
 
     // Update trails during animation (every ~2s — trail data only refreshes every 10s)
-    if (this.trailsVisible && this.flightData.size > 0) {
+    if (this.trailsVisible && this.flightData.size > 0 && !this._timelineActive) {
       if (!this._lastTrailUpdate || now - this._lastTrailUpdate > 2000) {
         this._lastTrailUpdate = now
         for (const [, data] of this.flightData) {
@@ -7722,9 +7722,11 @@ export default class extends Controller {
 
       const oldest = new Date(range.oldest)
       const newest = new Date(range.newest)
-      this._timelineRangeStart = oldest
+      // Default to last 1 hour for a manageable playback window
+      const oneHourAgo = new Date(newest.getTime() - 60 * 60 * 1000)
+      this._timelineRangeStart = oneHourAgo > oldest ? oneHourAgo : oldest
       this._timelineRangeEnd = newest
-      this._timelineCursor = new Date(oldest.getTime())
+      this._timelineCursor = new Date(this._timelineRangeStart.getTime())
 
       // Pause all live refresh intervals
       this._timelinePauseLive()
@@ -7749,8 +7751,13 @@ export default class extends Controller {
     const from = this._timelineRangeStart.toISOString()
     const to = this._timelineRangeEnd.toISOString()
 
-    let url = `/api/playback?from=${from}&to=${to}&type=all`
-    const bounds = getViewportBounds(this.viewer)
+    // Only fetch entity types that were active before entering playback
+    let playbackType = "all"
+    if (this.flightsVisible && !this.shipsVisible) playbackType = "flight"
+    else if (this.shipsVisible && !this.flightsVisible) playbackType = "ship"
+    let url = `/api/playback?from=${from}&to=${to}&type=${playbackType}`
+    // Use country/circle filter bounds if active, otherwise viewport
+    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
     if (bounds) {
       url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
     }
@@ -7786,9 +7793,37 @@ export default class extends Controller {
     if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
     if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
     if (this._outageInterval) { clearInterval(this._outageInterval); this._outageInterval = null }
+
+    // Hide only live-data sources that conflict with playback entities
+    // Keep static overlays (borders, airports, cities, notams, etc.) visible
+    const liveDataSources = new Set(["flights", "ships", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+    this._timelineHiddenSources = []
+    for (const [name, ds] of Object.entries(this._ds)) {
+      if (!liveDataSources.has(name)) continue
+      if (ds && ds.show) {
+        ds.show = false
+        this._timelineHiddenSources.push(name)
+      }
+    }
   }
 
   _timelineResumeLive() {
+    // Restore only data sources whose layer is still toggled on
+    if (this._timelineHiddenSources) {
+      const activeDs = new Set()
+      if (this.flightsVisible) activeDs.add("flights")
+      if (this.shipsVisible) activeDs.add("ships")
+      if (this.airportsVisible) activeDs.add("airports")
+      if (this.earthquakesVisible || this.naturalEventsVisible) activeDs.add("events")
+      if (this.gpsJammingVisible) activeDs.add("gpsJamming")
+      if (this.newsVisible) activeDs.add("news")
+      if (this.outagesVisible) activeDs.add("outages")
+      if (this.trailsVisible) activeDs.add("trails")
+      for (const name of this._timelineHiddenSources) {
+        if (this._ds[name]) this._ds[name].show = activeDs.has(name)
+      }
+      this._timelineHiddenSources = null
+    }
     // Restart live fetch intervals for active layers
     if (this.flightsVisible) {
       this.fetchFlights()
@@ -7935,6 +7970,16 @@ export default class extends Controller {
     const evDs = this._ds["timelineEvents"]
     if (evDs) evDs.entities.removeAll()
 
+    // Clear only live-data entities before resuming — they'll be re-fetched fresh
+    const liveDataSources = new Set(["flights", "ships", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+    for (const [name, source] of Object.entries(this._ds)) {
+      if (!liveDataSources.has(name)) continue
+      if (source) source.entities.removeAll()
+    }
+    // Clear flight/ship tracking maps so renderFlights/renderShips rebuild cleanly
+    if (this.flightData) this.flightData.clear()
+    if (this.shipData) this.shipData.clear()
+
     // Resume live data
     this._timelineResumeLive()
   }
@@ -7975,10 +8020,8 @@ export default class extends Controller {
       const target = this._timelineCursor.getTime()
       if (Math.abs(target - prev) < Math.abs(target - curr)) lo = lo - 1
     }
-    if (lo !== this._timelineFrameIndex) {
-      this._timelineFrameIndex = lo
-      this._renderTimelineFrame(lo)
-    }
+    this._timelineFrameIndex = lo
+    this._renderTimelineFrame(lo)
   }
 
   _timelineEventDebounce() {
@@ -8004,7 +8047,7 @@ export default class extends Controller {
     if (types.length === 0) return
 
     let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
-    const bounds = getViewportBounds(this.viewer)
+    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
     if (bounds) {
       url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
     }
@@ -8076,6 +8119,7 @@ export default class extends Controller {
     }
   }
 
+  // Render a playback frame, interpolating positions between current and next frame
   _renderTimelineFrame(index) {
     const Cesium = window.Cesium
     const key = this._timelineKeys[index]
@@ -8084,20 +8128,48 @@ export default class extends Controller {
     const entities = this._timelineFrames[key]
     if (!entities) return
 
+    // Build lookup for next frame (for interpolation)
+    const nextKey = this._timelineKeys[index + 1]
+    const nextEntities = nextKey ? this._timelineFrames[nextKey] : null
+    const nextMap = new Map()
+    if (nextEntities) {
+      nextEntities.forEach(e => nextMap.set(`${e.type}-${e.id}`, e))
+    }
+
+    // Compute interpolation factor (0-1) between current and next frame
+    let t = 0
+    if (nextKey && this._timelineCursor) {
+      const curMs = new Date(key).getTime()
+      const nextMs = new Date(nextKey).getTime()
+      const cursorMs = this._timelineCursor.getTime()
+      if (nextMs > curMs) t = Math.max(0, Math.min(1, (cursorMs - curMs) / (nextMs - curMs)))
+    }
+
     const dataSource = getDataSource(this.viewer, this._ds, "timeline")
     const existingIds = new Set()
+    const hasFilter = this.hasActiveFilter()
 
     entities.forEach(e => {
+      // Interpolate with next frame if available
+      const next = nextMap.get(`${e.type}-${e.id}`)
+      const lat = next ? e.lat + (next.lat - e.lat) * t : e.lat
+      const lng = next ? e.lng + (next.lng - e.lng) * t : e.lng
+      const alt = next ? (e.alt || 0) + ((next.alt || 0) - (e.alt || 0)) * t : (e.alt || 0)
+      const hdg = next ? this._lerpAngle(e.hdg || 0, next.hdg || 0, t) : (e.hdg || 0)
+
+      // Apply precise country/circle filter
+      if (hasFilter && !this.pointPassesFilter(lat, lng)) return
+
       const isFlight = e.type === "flight"
       const id = `tl-${e.type}-${e.id}`
       existingIds.add(id)
 
       let entity = dataSource.entities.getById(id)
-      const position = Cesium.Cartesian3.fromDegrees(e.lng, e.lat, (e.alt || 0) + 100)
+      const position = Cesium.Cartesian3.fromDegrees(lng, lat, alt + 100)
 
       if (entity) {
         entity.position = position
-        entity.billboard.rotation = -Cesium.Math.toRadians(e.hdg || 0)
+        entity.billboard.rotation = -Cesium.Math.toRadians(hdg)
         if (entity.label) entity.label.text = e.callsign || e.id
       } else {
         entity = dataSource.entities.add({
@@ -8108,7 +8180,7 @@ export default class extends Controller {
               ? (e.gnd ? this.planeIconGround : this.planeIcon)
               : this._timelineShipIcon(),
             scale: isFlight ? 1.0 : 0.8,
-            rotation: -Cesium.Math.toRadians(e.hdg || 0),
+            rotation: -Cesium.Math.toRadians(hdg),
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             heightReference: Cesium.HeightReference.NONE,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -8135,6 +8207,16 @@ export default class extends Controller {
       if (!existingIds.has(ent.id)) toRemove.push(ent)
     }
     toRemove.forEach(ent => dataSource.entities.remove(ent))
+
+    this._requestRender()
+  }
+
+  // Interpolate between two angles (degrees), handling 359°→1° wraparound
+  _lerpAngle(a, b, t) {
+    let diff = b - a
+    if (diff > 180) diff -= 360
+    if (diff < -180) diff += 360
+    return (a + diff * t + 360) % 360
   }
 
   _timelineShipIcon() {

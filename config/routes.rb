@@ -3,6 +3,9 @@ Rails.application.routes.draw do
   root to: "pages#home"
   get "sources", to: "pages#sources"
 
+  get "admin", to: "admin#dashboard", as: :admin
+  post "admin/toggle_poller", to: "admin#toggle_poller", as: :admin_toggle_poller
+
   namespace :api do
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index]

@@ -186,6 +186,7 @@ module Api
     def snapshot_json(s)
       {
         id: s.entity_id,
+        type: s.entity_type,
         callsign: s.callsign,
         lat: s.latitude,
         lng: s.longitude,

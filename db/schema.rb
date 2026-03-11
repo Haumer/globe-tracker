@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_11_150000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_11_160001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -191,6 +191,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_150000) do
     t.index ["url"], name: "index_news_events_on_url", unique: true
   end
 
+  create_table "polling_stats", force: :cascade do |t|
+    t.string "source", null: false
+    t.string "poll_type", null: false
+    t.integer "records_fetched", default: 0
+    t.integer "records_stored", default: 0
+    t.integer "duration_ms", default: 0
+    t.string "status", null: false
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.index ["created_at"], name: "index_polling_stats_on_created_at"
+    t.index ["source"], name: "index_polling_stats_on_source"
+  end
+
   create_table "position_snapshots", force: :cascade do |t|
     t.string "entity_type", null: false
     t.string "entity_id", null: false
@@ -306,6 +319,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_150000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.jsonb "preferences", default: {}
+    t.boolean "admin", default: false, null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end

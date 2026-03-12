@@ -5,7 +5,7 @@ import { renderDetailHTML, detailField } from "../globe/details"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "newsArcControls", "newsArcFrom", "newsArcTo", "newsArcMax", "newsArcsToggle", "newsBlobsToggle", "newsFeedPanel", "newsFeedCount", "newsFeedContent", "threatsPanel", "threatsCount", "threatsContent", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "trafficArcsToggle", "trafficBlobsToggle", "trafficArcControls", "notamsToggle", "qlNotams"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "newsArcControls", "newsArcFrom", "newsArcTo", "newsArcMax", "newsArcsToggle", "newsBlobsToggle", "newsFeedPanel", "newsFeedCount", "newsFeedContent", "newsArticlesPane", "newsFlowsPane", "newsArticleCatFilter", "newsArticleSearch", "newsArticleList", "threatsPanel", "threatsCount", "threatsContent", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "trafficArcsToggle", "trafficBlobsToggle", "trafficArcControls", "notamsToggle", "qlNotams"]
 
   connect() {
     this.flightsVisible = false
@@ -28,7 +28,7 @@ export default class extends Controller {
     this.satelliteData = []
     this._loadedSatCategories = new Set()
     this.satelliteEntities = new Map()
-    this.satCategoryVisible = { stations: false, starlink: false, "gps-ops": false, weather: false, resource: false, science: false, military: false, geo: false, iridium: false, oneweb: false, planet: false, spire: false, gnss: false, tdrss: false, radar: false, sbas: false, cubesat: false, amateur: false, sarsat: false, "last-30-days": false, beidou: false, molniya: false, geodetic: false, dmc: false, argos: false, intelsat: false, ses: false, "x-comm": false, globalstar: false }
+    this.satCategoryVisible = { stations: false, starlink: false, "gps-ops": false, glonass: false, galileo: false, weather: false, resource: false, science: false, military: false, analyst: false, geo: false, iridium: false, oneweb: false, planet: false, spire: false, gnss: false, tdrss: false, radar: false, sbas: false, cubesat: false, amateur: false, sarsat: false, "last-30-days": false, beidou: false, molniya: false, geodetic: false, dmc: false, argos: false, intelsat: false, ses: false, "x-comm": false, globalstar: false }
     this.satOrbitsVisible = false
     this.satOrbitEntities = new Map()
     this.selectedSatNoradId = null
@@ -76,6 +76,7 @@ export default class extends Controller {
     this._newsEntities = []
     this._newsArcEntities = []
     this._newsInterval = null
+    this._newsActiveTab = "articles"
     this.cablesVisible = false
     this._cableEntities = []
     this._landingPointEntities = []
@@ -694,9 +695,10 @@ export default class extends Controller {
       } else {
         const milCheck = { id, callsign }
         const isMil = this._isMilitaryFlight(milCheck)
+        const pos = Cesium.Cartesian3.fromDegrees(projLng, projLat, projAlt)
         const entity = dataSource.entities.add({
           id: id,
-          position: Cesium.Cartesian3.fromDegrees(projLng, projLat, projAlt),
+          position: pos,
           billboard: {
             image: onGround ? this.planeIconGround : (isMil ? this.planeIconMil : this.planeIcon),
             scale: 0.8,
@@ -1365,9 +1367,28 @@ export default class extends Controller {
           <span class="detail-value">${satData.mission_type.replace(/_/g, " ")}</span>
         </div>` : ""
 
+    // UCS enrichment fields
+    const ucsFields = [
+      ["Country", satData.country_owner],
+      ["Users", satData.users],
+      ["Purpose", satData.purpose],
+      ["Detail", satData.detailed_purpose],
+      ["Orbit", satData.orbit_class],
+      ["Launched", satData.launch_date],
+      ["Launch Site", satData.launch_site],
+      ["Vehicle", satData.launch_vehicle],
+      ["Contractor", satData.contractor],
+      ["Lifetime", satData.expected_lifetime ? satData.expected_lifetime + " yrs" : null],
+    ].filter(([, v]) => v).map(([label, value]) => `
+        <div class="detail-field">
+          <span class="detail-label">${label}</span>
+          <span class="detail-value">${this._escapeHtml(value)}</span>
+        </div>`).join("")
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign">${satData.name}</div>
-      <div class="detail-country">${satData.category.toUpperCase()}${satData.operator ? " — " + satData.operator : ""}</div>
+      <div class="detail-country">${satData.category.toUpperCase()}${satData.country_owner ? " — " + satData.country_owner : (satData.operator ? " — " + satData.operator : "")}</div>
+      ${satData.purpose ? '<div style="font:500 10px var(--gt-mono);color:var(--gt-text-dim);margin:-4px 0 8px;">' + this._escapeHtml(satData.detailed_purpose || satData.purpose) + '</div>' : ''}
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">NORAD ID</span>
@@ -1381,12 +1402,9 @@ export default class extends Controller {
           <span class="detail-label">Speed</span>
           <span class="detail-value">${speedKms}</span>
         </div>
-        <div class="detail-field">
-          <span class="detail-label">Category</span>
-          <span class="detail-value">${satData.category}</span>
-        </div>
         ${operatorHtml}
         ${missionHtml}
+        ${ucsFields}
       </div>
       ${this.selectedCountries.size > 0 ? `
       <button class="detail-track-btn ${this._satFootprintCountryMode ? 'tracking' : ''}"
@@ -2235,6 +2253,8 @@ export default class extends Controller {
       stations: "#ff5252",
       starlink: "#ab47bc",
       "gps-ops": "#66bb6a",
+      glonass: "#5c6bc0",
+      galileo: "#0288d1",
       weather: "#ffa726",
       resource: "#29b6f6",
       science: "#ec407a",
@@ -2251,6 +2271,17 @@ export default class extends Controller {
       cubesat: "#ffee58",
       amateur: "#ef5350",
       sarsat: "#ff8a65",
+      analyst: "#b71c1c",
+      beidou: "#ff6e40",
+      molniya: "#d50000",
+      globalstar: "#00897b",
+      intelsat: "#546e7a",
+      ses: "#455a64",
+      "x-comm": "#7c4dff",
+      geodetic: "#a1887f",
+      dmc: "#f06292",
+      argos: "#4db6ac",
+      "last-30-days": "#ff1744",
     }
   }
 
@@ -2377,7 +2408,7 @@ export default class extends Controller {
     // Only render orbits for stations and a subset of others (too many = slow)
     const orbitSats = this.satelliteData.filter(s =>
       this.satCategoryVisible[s.category] &&
-      (s.category === "stations" || s.category === "gps-ops" || s.category === "weather" || s.category === "military" || s.category === "gnss" || s.category === "sbas" || s.category === "tdrss")
+      (s.category === "stations" || s.category === "gps-ops" || s.category === "glonass" || s.category === "galileo" || s.category === "weather" || s.category === "military" || s.category === "analyst" || s.category === "gnss" || s.category === "sbas" || s.category === "tdrss")
     )
 
     orbitSats.forEach(s => {
@@ -5546,6 +5577,12 @@ export default class extends Controller {
 
     // News attention arcs: source publication → event location
     this._renderNewsArcs(events)
+
+    // Update article list if articles tab is active
+    if (this._newsActiveTab === "articles") {
+      this._renderNewsArticleList()
+      this._setNewsDotOpacity(0.25)
+    }
   }
 
   _getSourceLocation(url) {
@@ -5849,6 +5886,162 @@ export default class extends Controller {
 
   closeNewsFeed() {
     if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
+    this._setNewsDotOpacity(1.0)
+  }
+
+  switchNewsTab(event) {
+    const tab = event.currentTarget.dataset.tab
+    this._newsActiveTab = tab
+
+    // Toggle active tab button
+    const tabs = event.currentTarget.parentElement.children
+    for (const t of tabs) t.classList.toggle("nf-tab--active", t.dataset.tab === tab)
+
+    // Show/hide panes
+    if (this.hasNewsArticlesPaneTarget) this.newsArticlesPaneTarget.style.display = tab === "articles" ? "" : "none"
+    if (this.hasNewsFlowsPaneTarget) this.newsFlowsPaneTarget.style.display = tab === "flows" ? "" : "none"
+
+    if (tab === "articles") {
+      this._renderNewsArticleList()
+      this._setNewsDotOpacity(0.25)
+    } else {
+      this._setNewsDotOpacity(1.0)
+      // Update count for flows
+      const count = this._newsArcData?.length || 0
+      if (this.hasNewsFeedCountTarget) this.newsFeedCountTarget.textContent = `${count} flow${count !== 1 ? "s" : ""}`
+    }
+  }
+
+  filterNewsArticles() {
+    this._renderNewsArticleList()
+  }
+
+  _renderNewsArticleList() {
+    if (!this.hasNewsArticleListTarget) return
+    const events = this._newsData || []
+
+    const catFilter = this.hasNewsArticleCatFilterTarget ? this.newsArticleCatFilterTarget.value : "all"
+    const search = this.hasNewsArticleSearchTarget ? this.newsArticleSearchTarget.value.toLowerCase().trim() : ""
+
+    const categoryColors = {
+      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+    }
+
+    // Filter and sort (newest first)
+    const filtered = events
+      .map((ev, i) => ({ ...ev, _idx: i }))
+      .filter(ev => {
+        if (catFilter !== "all" && ev.category !== catFilter) return false
+        if (search && !(ev.title || "").toLowerCase().includes(search) &&
+            !(ev.name || "").toLowerCase().includes(search) &&
+            !(ev.source || "").toLowerCase().includes(search)) return false
+        return true
+      })
+      .sort((a, b) => {
+        if (a.time && b.time) return b.time.localeCompare(a.time)
+        if (a.time) return -1
+        if (b.time) return 1
+        return 0
+      })
+
+    // Update count
+    if (this.hasNewsFeedCountTarget) {
+      this.newsFeedCountTarget.textContent = `${filtered.length} article${filtered.length !== 1 ? "s" : ""}`
+    }
+
+    if (filtered.length === 0) {
+      this.newsArticleListTarget.innerHTML = '<div style="padding:24px 14px;text-align:center;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">No articles match filters</div>'
+      return
+    }
+
+    const html = filtered.map(ev => {
+      const color = categoryColors[ev.category] || "#90a4ae"
+      let domain = ev.source || ""
+      if (!domain && ev.url) {
+        try { domain = new URL(ev.url).hostname.replace(/^www\./, "") } catch {}
+      }
+
+      const timeAgo = ev.time ? this._timeAgo(new Date(ev.time)) : ""
+      const tone = ev.tone || 0
+      let toneBg, toneColor, toneLabel
+      if (tone <= -2) { toneBg = "rgba(244,67,54,0.12)"; toneColor = "#ef5350"; toneLabel = "negative" }
+      else if (tone >= 2) { toneBg = "rgba(76,175,80,0.12)"; toneColor = "#66bb6a"; toneLabel = "positive" }
+      else { toneBg = "rgba(144,164,174,0.1)"; toneColor = "#90a4ae"; toneLabel = "neutral" }
+
+      const title = this._escapeHtml(ev.title || ev.name || "Untitled")
+
+      return `<div class="nf-card" data-action="click->globe#focusNewsArticle" data-news-idx="${ev._idx}">
+        <div class="nf-card-bar" style="background:${color};"></div>
+        <div class="nf-card-body">
+          <div class="nf-card-headline">${title}</div>
+          <div class="nf-card-meta">
+            <span class="nf-card-source">${this._escapeHtml(domain)}</span>
+            ${timeAgo ? `<span class="nf-card-dot">&middot;</span><span class="nf-card-time">${timeAgo}</span>` : ""}
+          </div>
+          <div class="nf-card-footer">
+            <span class="nf-card-tone" style="background:${toneBg};color:${toneColor}">${toneLabel}</span>
+            <a href="${this._escapeHtml(ev.url || "#")}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation()" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            <button class="nf-card-locate" data-action="click->globe#locateNewsArticle" data-news-idx="${ev._idx}" title="Locate on map"><i class="fa-solid fa-location-crosshairs"></i></button>
+          </div>
+        </div>
+      </div>`
+    }).join("")
+
+    this.newsArticleListTarget.innerHTML = html
+  }
+
+  focusNewsArticle(event) {
+    const idx = parseInt(event.currentTarget.dataset.newsIdx)
+    const ev = this._newsData?.[idx]
+    if (!ev) return
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 2000000),
+      duration: 1.0,
+    })
+    // Highlight the dot briefly
+    const entity = this._newsEntities?.[idx]
+    if (entity?.point) {
+      const origSize = entity.point.pixelSize?.getValue() || 10
+      entity.point.pixelSize = origSize * 2.5
+      entity.point.outlineWidth = 6
+      setTimeout(() => {
+        if (entity.point) {
+          entity.point.pixelSize = origSize
+          entity.point.outlineWidth = 3
+        }
+      }, 2000)
+    }
+  }
+
+  locateNewsArticle(event) {
+    event.stopPropagation()
+    const idx = parseInt(event.currentTarget.dataset.newsIdx)
+    const ev = this._newsData?.[idx]
+    if (!ev) return
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 2000000),
+      duration: 1.0,
+    })
+  }
+
+  _setNewsDotOpacity(alpha) {
+    const Cesium = window.Cesium
+    for (const entity of this._newsEntities) {
+      if (entity.point) {
+        const c = entity.point.color?.getValue()
+        if (c) entity.point.color = new Cesium.Color(c.red, c.green, c.blue, alpha)
+        const oc = entity.point.outlineColor?.getValue()
+        if (oc) entity.point.outlineColor = new Cesium.Color(oc.red, oc.green, oc.blue, alpha * 0.5)
+      }
+      if (entity.label) {
+        const fc = entity.label.fillColor?.getValue()
+        if (fc) entity.label.fillColor = new Cesium.Color(fc.red, fc.green, fc.blue, alpha)
+      }
+    }
+    this.viewer.scene.requestRender()
   }
 
   focusNewsArc(event) {

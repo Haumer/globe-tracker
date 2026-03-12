@@ -11,7 +11,9 @@ module Api
       satellites = Satellite.all
       satellites = satellites.where(category: category) if category.present?
 
-      render json: satellites.select(:name, :tle_line1, :tle_line2, :category, :norad_id, :operator, :mission_type)
+      render json: satellites.select(:name, :tle_line1, :tle_line2, :category, :norad_id, :operator, :mission_type,
+                                      :country_owner, :users, :purpose, :detailed_purpose, :orbit_class,
+                                      :launch_date, :launch_site, :launch_vehicle, :contractor, :expected_lifetime)
     end
   end
 end

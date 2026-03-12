@@ -243,16 +243,19 @@
             <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations" style="--chip-color: #ff5252;">ISS</button>
             <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink constellation" style="--chip-color: #ab47bc;">Starlink</button>
             <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation satellites" style="--chip-color: #66bb6a;">GPS</button>
+            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass" data-tip="Russian GLONASS navigation" style="--chip-color: #5c6bc0;">GLONASS</button>
+            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo" data-tip="European Galileo navigation" style="--chip-color: #0288d1;">Galileo</button>
             <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather" data-tip="Meteorological satellites" style="--chip-color: #ffa726;">Weather</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource" data-tip="Earth observation & imaging" style="--chip-color: #29b6f6;">Earth Res</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science" data-tip="Scientific research satellites" style="--chip-color: #ec407a;">Science</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military" data-tip="Military & reconnaissance" style="--chip-color: #ef5350;">Military</button>
+            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst" data-tip="Classified / spy satellites (NRO, etc.)" style="--chip-color: #b71c1c;">Classified</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo" data-tip="Geostationary orbit (36,000 km)" style="--chip-color: #78909c;">GEO</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium" data-tip="Iridium communications" style="--chip-color: #26c6da;">Iridium</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb" data-tip="OneWeb broadband constellation" style="--chip-color: #7e57c2;">OneWeb</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet" data-tip="Planet Labs Earth imaging" style="--chip-color: #8d6e63;">Planet</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire" data-tip="Spire Global weather & AIS" style="--chip-color: #9ccc65;">Spire</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss" data-tip="GNSS navigation (GLONASS, Galileo, BeiDou)" style="--chip-color: #42a5f5;">GNSS</button>
+            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss" data-tip="Other GNSS (QZSS, IRNSS, etc.)" style="--chip-color: #42a5f5;">GNSS</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss" data-tip="Tracking & Data Relay satellites" style="--chip-color: #78909c;">TDRS</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar" data-tip="Radar calibration satellites" style="--chip-color: #8d6e63;">Radar</button>
             <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas" data-tip="Satellite-Based Augmentation System" style="--chip-color: #26a69a;">SBAS</button>
@@ -368,10 +371,32 @@
   <div id="news-feed-panel" data-globe-target="newsFeedPanel" style="display:none;">
     <button class="detail-close" data-action="click->globe#closeNewsFeed">&times;</button>
     <div class="news-feed-header">
-      <span class="news-feed-title">NEWS COVERAGE</span>
-      <span class="news-feed-count" data-globe-target="newsFeedCount">0 routes</span>
+      <span class="news-feed-title">NEWS</span>
+      <span class="news-feed-count" data-globe-target="newsFeedCount">0 articles</span>
     </div>
-    <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
+    <div class="nf-tabs">
+      <button class="nf-tab nf-tab--active" data-action="click->globe#switchNewsTab" data-tab="articles">ARTICLES</button>
+      <button class="nf-tab" data-action="click->globe#switchNewsTab" data-tab="flows">FLOWS</button>
+    </div>
+    <div class="nf-tab-pane nf-tab-articles" data-globe-target="newsArticlesPane">
+      <div class="nf-filter-row">
+        <select class="nf-cat-filter" data-globe-target="newsArticleCatFilter" data-action="change->globe#filterNewsArticles">
+          <option value="all">All</option>
+          <option value="conflict">Conflict</option>
+          <option value="unrest">Unrest</option>
+          <option value="disaster">Disaster</option>
+          <option value="health">Health</option>
+          <option value="economy">Economy</option>
+          <option value="diplomacy">Diplomacy</option>
+          <option value="other">Other</option>
+        </select>
+        <input type="text" class="nf-search" placeholder="Search headlines..." data-globe-target="newsArticleSearch" data-action="input->globe#filterNewsArticles">
+      </div>
+      <div class="nf-article-list" data-globe-target="newsArticleList"></div>
+    </div>
+    <div class="nf-tab-pane nf-tab-flows" data-globe-target="newsFlowsPane" style="display:none;">
+      <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
+    </div>
   </div>
 
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>

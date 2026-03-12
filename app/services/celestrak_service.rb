@@ -6,6 +6,8 @@ class CelestrakService
     "stations" => "stations",
     "starlink" => "starlink",
     "gps-ops" => "gps-ops",
+    "glonass" => "glo-ops",              # Russian GLONASS navigation
+    "galileo" => "galileo",              # European Galileo navigation
     "weather" => "weather",
     "resource" => "resource",
     "science" => "science",
@@ -22,16 +24,17 @@ class CelestrakService
     "cubesat" => "cubesat",
     "amateur" => "amateur",
     "sarsat" => "sarsat",
-    "last-30-days" => "last-30-days",  # Recently launched — often military or classified
-    "geodetic" => "geodetic",         # Geodetic survey satellites
-    "dmc" => "dmc",                   # Disaster Monitoring Constellation
-    "argos" => "argos",               # ARGOS data collection
-    "intelsat" => "intelsat",         # Intelsat (some carry military transponders)
-    "ses" => "ses",                   # SES (military/govt contracts)
-    "x-comm" => "x-comm",            # Experimental comms
-    "molniya" => "molniya",          # Molniya orbit (Russian military comms)
-    "beidou" => "beidou",            # BeiDou navigation (Chinese military/civilian)
-    "globalstar" => "globalstar",    # Globalstar (military backup comms)
+    "last-30-days" => "last-30-days",    # Recently launched — often military or classified
+    "analyst" => "analyst",              # Classified/unacknowledged (NRO, etc.)
+    "geodetic" => "geodetic",
+    "dmc" => "dmc",
+    "argos" => "argos",
+    "intelsat" => "intelsat",
+    "ses" => "ses",
+    "x-comm" => "x-comm",
+    "molniya" => "molniya",
+    "beidou" => "beidou",
+    "globalstar" => "globalstar",
   }.freeze
 
   class << self
@@ -70,7 +73,11 @@ class CelestrakService
 
     def fetch_and_upsert(group:, category:)
       uri = URI("#{BASE_URL}?GROUP=#{group}&FORMAT=tle")
-      response = Net::HTTP.get_response(uri)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = true
+      http.open_timeout = 15
+      http.read_timeout = 30
+      response = http.request(Net::HTTP::Get.new(uri))
 
       return unless response.is_a?(Net::HTTPSuccess)
 
@@ -92,8 +99,12 @@ class CelestrakService
         if line1.start_with?("1 ") && line2.start_with?("2 ")
           norad_id = line1[2..6].strip.to_i
 
+          display_name = name.strip
+          # Classified satellites from analyst group are named "UNKNOWN" — use NORAD ID
+          display_name = "CLASSIFIED #{norad_id}" if display_name == "UNKNOWN" && category == "analyst"
+
           satellites << {
-            name: name.strip,
+            name: display_name,
             tle_line1: line1,
             tle_line2: line2,
             category: category,
@@ -114,16 +125,13 @@ class CelestrakService
 
       now = Time.current
       records = satellites.map do |sat|
-        enriched = sat.merge(created_at: now, updated_at: now)
-
-        # Classify satellites by name (military sats exist in multiple categories)
         classification = SatelliteClassifier.classify(sat[:name])
-        if classification[:operator]
-          enriched[:operator] = classification[:operator]
-          enriched[:mission_type] = classification[:mission_type]
-        end
-
-        enriched
+        sat.merge(
+          operator: classification[:operator],
+          mission_type: classification[:mission_type],
+          created_at: now,
+          updated_at: now,
+        )
       end
 
       Satellite.upsert_all(

@@ -133,6 +133,7 @@ export function applyUiMethods(GlobeController) {
   GlobeController.prototype._updateStats = function() {
     if (this.hasStatFlightsTarget) {
       this.statFlightsTarget.textContent = this.flightData.size.toLocaleString()
+      if (this.flightsVisible && this.flightData.size > 0) this._markFresh("flights")
     }
     if (this.hasStatSatsTarget) {
       const visibleSats = this.satelliteEntities.size
@@ -140,6 +141,7 @@ export function applyUiMethods(GlobeController) {
     }
     if (this.hasStatShipsTarget) {
       this.statShipsTarget.textContent = this.shipData.size.toLocaleString()
+      if (this.shipsVisible && this.shipData.size > 0) this._markFresh("ships")
     }
     if (this.hasStatEventsTarget) {
       const count = (this.earthquakesVisible ? this._earthquakeData.length : 0) +
@@ -148,6 +150,10 @@ export function applyUiMethods(GlobeController) {
                     (this.powerPlantsVisible ? this._powerPlantData.length : 0) +
                     (this.conflictsVisible ? this._conflictData.length : 0)
       this.statEventsTarget.textContent = count.toLocaleString()
+      if (this.earthquakesVisible && this._earthquakeData.length > 0) this._markFresh("earthquakes")
+      if (this.naturalEventsVisible && this._naturalEventData.length > 0) this._markFresh("naturalEvents")
+      if (this.camerasVisible && this._webcamData.length > 0) this._markFresh("cameras")
+      if (this.conflictsVisible && this._conflictData.length > 0) this._markFresh("conflicts")
     }
 
     // Keep quick bar and badges in sync

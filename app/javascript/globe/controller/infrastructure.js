@@ -24,6 +24,7 @@ export function applyInfrastructureMethods(GlobeController) {
       if (!resp.ok) return
       const cells = await resp.json()
       this._renderGpsJamming(cells)
+      this._markFresh("gpsJamming")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch GPS jamming data:", e)
@@ -311,6 +312,7 @@ export function applyInfrastructureMethods(GlobeController) {
       })
       this._outageData = data.summary || []
       this._renderOutages(data)
+      this._markFresh("outages")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet outages:", e)
@@ -1104,6 +1106,7 @@ export function applyInfrastructureMethods(GlobeController) {
       })
       console.log("[Traffic] Got data:", this._trafficData.traffic?.length, "countries,", this._trafficData.attack_pairs?.length, "attack pairs")
       this.renderTraffic()
+      this._markFresh("traffic")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet traffic:", e)

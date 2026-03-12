@@ -41,6 +41,22 @@
   <%# ── Sidebar ── left side, redesigned ────────────────────────── %>
   <div id="sidebar" data-globe-target="sidebar">
     <div class="sb-sheet-handle" data-action="click->globe#toggleSidebar"></div>
+
+    <%# Workspace selector (logged-in users only) %>
+    <% if user_signed_in? %>
+    <div class="ws-bar" data-globe-target="workspaceBar">
+      <select class="ws-select" data-globe-target="workspaceSelect" data-action="change->globe#loadWorkspace">
+        <option value="">— Workspaces —</option>
+      </select>
+      <button class="ws-btn" data-action="click->globe#saveWorkspace" data-tip="Save current view" data-tip-pos="below">
+        <i class="fa-solid fa-floppy-disk"></i>
+      </button>
+      <button class="ws-btn" data-action="click->globe#deleteWorkspace" data-tip="Delete workspace" data-tip-pos="below" data-globe-target="workspaceDeleteBtn" style="display:none;">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+    <% end %>
+
     <%# Search %>
     <div class="sb-search">
       <i class="fa-solid fa-magnifying-glass sb-search-icon"></i>
@@ -512,10 +528,41 @@
     </div>
     <div class="cb-sep"></div>
     <div class="cb-group">
+      <button class="cb-btn" data-action="click->globe#shareView" data-tip="Copy shareable link">
+        <i class="fa-solid fa-share-nodes"></i>
+      </button>
+    </div>
+    <div class="cb-sep"></div>
+    <div class="cb-group">
       <button class="cb-btn cb-timeline" data-action="click->globe#timelineOpen" data-tip="Time travel — scroll through history">
         <i class="fa-solid fa-clock-rotate-left"></i>
       </button>
     </div>
+  </div>
+
+  <%# ── Onboarding overlay for first-time users ─────────────────── %>
+  <div id="onboarding-overlay" style="display:none;">
+    <div class="onboarding-card" data-scenario="aviation">
+      <div class="onboarding-icon" style="--ql-color:#4fc3f7;"><i class="fa-solid fa-plane"></i></div>
+      <div class="onboarding-title">Live Aviation</div>
+      <div class="onboarding-desc">Track flights worldwide with ADS-B and OpenSky data</div>
+    </div>
+    <div class="onboarding-card" data-scenario="events">
+      <div class="onboarding-icon" style="--ql-color:#ff7043;"><i class="fa-solid fa-bolt"></i></div>
+      <div class="onboarding-title">Global Events</div>
+      <div class="onboarding-desc">Earthquakes, conflicts, natural events and news</div>
+    </div>
+    <div class="onboarding-card" data-scenario="space">
+      <div class="onboarding-icon" style="--ql-color:#ab47bc;"><i class="fa-solid fa-satellite"></i></div>
+      <div class="onboarding-title">Space Watch</div>
+      <div class="onboarding-desc">Track satellites including ISS, GPS, and classified objects</div>
+    </div>
+    <div class="onboarding-card" data-scenario="infrastructure">
+      <div class="onboarding-icon" style="--ql-color:#ffc107;"><i class="fa-solid fa-network-wired"></i></div>
+      <div class="onboarding-title">Infrastructure</div>
+      <div class="onboarding-desc">Submarine cables, power plants, GPS jamming and outages</div>
+    </div>
+    <button class="onboarding-dismiss" id="onboarding-dismiss">Explore freely</button>
   </div>
 
   <div id="controls-hint">

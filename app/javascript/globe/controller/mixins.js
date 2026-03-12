@@ -9,6 +9,7 @@ import { applyUiMethods } from "./ui"
 import { applyNewsMethods } from "./news"
 import { applyInfrastructureMethods } from "./infrastructure"
 import { applyTimelineMethods } from "./timeline"
+import { applyWorkspaceMethods } from "./workspaces"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
@@ -22,4 +23,5 @@ export function applyGlobeControllerMixins(GlobeController) {
   applyNewsMethods(GlobeController)
   applyInfrastructureMethods(GlobeController)
   applyTimelineMethods(GlobeController)
+  applyWorkspaceMethods(GlobeController)
 }

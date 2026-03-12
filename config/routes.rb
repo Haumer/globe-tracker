@@ -14,6 +14,7 @@ Rails.application.routes.draw do
     resources :ships, only: [:index]
     resources :webcams, only: [:index]
     resource :preferences, only: [:show, :update]
+    resources :workspaces, only: [:index, :create, :update, :destroy]
     resources :news, only: [:index]
     resources :earthquakes, only: [:index]
     resources :natural_events, only: [:index]

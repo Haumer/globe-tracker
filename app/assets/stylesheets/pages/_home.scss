@@ -385,6 +385,7 @@
   }
 
   .ql-btn {
+    position: relative;
     flex: 1;
     display: flex;
     align-items: center;
@@ -1811,6 +1812,24 @@
     color: rgba(255, 255, 255, 0.75);
   }
 
+  .detail-emergency-banner {
+    background: rgba(255, 152, 0, 0.2);
+    border: 1px solid #ff9800;
+    color: #ff9800;
+    font: 700 11px var(--gt-mono);
+    letter-spacing: 2px;
+    text-align: center;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    animation: emergency-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes emergency-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
   .detail-callsign {
     font: 700 15px var(--gt-mono);
     letter-spacing: 1px;
@@ -2474,6 +2493,165 @@
       height: 4px;
       border-radius: 2px;
       background: rgba(255, 255, 255, 0.2);
+    }
+  }
+}
+
+// ─── Workspace Bar ──────────────────────────────────────────────
+.ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--gt-border);
+
+  .ws-select {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--gt-border);
+    border-radius: 4px;
+    color: var(--gt-text);
+    font: 10px var(--gt-mono);
+    padding: 4px 6px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    min-width: 0;
+
+    &:focus { border-color: var(--gt-accent); }
+
+    option {
+      background: #0a0d14;
+      color: var(--gt-text);
+    }
+  }
+
+  .ws-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--gt-border);
+    border-radius: 4px;
+    color: var(--gt-text-dim);
+    cursor: pointer;
+    transition: all 0.12s;
+    font-size: 11px;
+    flex-shrink: 0;
+
+    &:hover {
+      color: var(--gt-accent);
+      border-color: var(--gt-border-hover);
+    }
+  }
+}
+
+// ─── Freshness Dots ─────────────────────────────────────────────
+.freshness-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+
+  &[data-freshness="fresh"] { background: #66bb6a; box-shadow: 0 0 4px #66bb6a; }
+  &[data-freshness="warm"]  { background: #ffa726; box-shadow: 0 0 4px #ffa726; }
+  &[data-freshness="stale"] { background: #ef5350; box-shadow: 0 0 4px #ef5350; }
+}
+
+// ─── Onboarding Overlay ─────────────────────────────────────────
+#onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+
+  .onboarding-card {
+    width: 200px;
+    padding: 24px 16px;
+    background: var(--gt-panel);
+    border: 1px solid var(--gt-border);
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+
+    &:hover {
+      border-color: var(--gt-accent);
+      transform: translateY(-2px);
+    }
+  }
+
+  .onboarding-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: rgba(79, 195, 247, 0.1);
+    color: var(--ql-color, var(--gt-accent));
+    font-size: 20px;
+  }
+
+  .onboarding-title {
+    font-family: var(--gt-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gt-text-bright);
+    margin-bottom: 6px;
+  }
+
+  .onboarding-desc {
+    font-family: var(--gt-mono);
+    font-size: 10px;
+    color: var(--gt-text-dim);
+    line-height: 1.4;
+  }
+
+  .onboarding-dismiss {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: 1px solid var(--gt-border);
+    border-radius: 6px;
+    color: var(--gt-text-dim);
+    font-family: var(--gt-mono);
+    font-size: 11px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover {
+      color: var(--gt-text);
+      border-color: var(--gt-border-hover);
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  #onboarding-overlay {
+    flex-direction: column;
+    gap: 12px;
+
+    .onboarding-card {
+      width: 80%;
+      max-width: 260px;
+      padding: 16px 12px;
     }
   }
 }

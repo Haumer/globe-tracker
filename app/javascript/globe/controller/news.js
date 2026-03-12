@@ -75,6 +75,7 @@ export function applyNewsMethods(GlobeController) {
       })
       this._newsData = events
       this._renderNews(events)
+      this._markFresh("news")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch news:", e)

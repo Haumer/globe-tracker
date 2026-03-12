@@ -119,6 +119,9 @@ export const GLOBE_TARGETS = [
   "trafficArcControls",
   "notamsToggle",
   "qlNotams",
+  "workspaceBar",
+  "workspaceSelect",
+  "workspaceDeleteBtn",
 ]
 
 export const NEWS_REGIONS = {

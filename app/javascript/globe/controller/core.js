@@ -1,5 +1,6 @@
 import { getViewportBounds, restoreCamera, saveCamera } from "../camera"
 import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "../utils"
+import { decodeHash, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
 
 export function applyCoreMethods(GlobeController) {
   GlobeController.prototype.connect = function() {
@@ -204,8 +205,24 @@ export function applyCoreMethods(GlobeController) {
     this.viewer.scene.skyBox.show = true
     this.viewer.scene.backgroundColor = Cesium.Color.BLACK
 
-    // Apply DB-saved preferences (camera, layers, sections, countries)
-    this._applyRestoredPrefs()
+    // Apply deep link from URL hash (takes priority over saved prefs)
+    const deepLinkState = decodeHash(window.location.hash)
+    if (deepLinkState) {
+      applyDeepLink(this, deepLinkState)
+    } else {
+      // Apply DB-saved preferences (camera, layers, sections, countries)
+      this._applyRestoredPrefs()
+    }
+
+    // Track data freshness per layer
+    this._layerFreshness = {}
+
+    // Show onboarding for first-time users (no deep link, no saved prefs, no prior session)
+    const hadSavedPrefs = this.savedPrefsValue && Object.keys(this.savedPrefsValue).length > 0
+    const hadSession = !!sessionStorage.getItem("globe_camera")
+    if (!deepLinkState && !hadSavedPrefs && !hadSession) {
+      this._maybeShowOnboarding()
+    }
 
     // Save camera position on move (sessionStorage + DB)
     this.viewer.camera.moveEnd.addEventListener(() => {
@@ -387,12 +404,16 @@ export function applyCoreMethods(GlobeController) {
     this.planeIcon = this.createPlaneIcon("#4fc3f7")
     this.planeIconGround = this.createPlaneIcon("#888888")
     this.planeIconMil = this.createPlaneIcon("#ef5350")
+    this.planeIconEmergency = this.createPlaneIcon("#ff9800")
 
     // Pre-build satellite icons per category color
     this._satIcons = {}
     this._satPrevPositions = new Map() // norad_id -> { lat, lng, alt, time }
 
     // Layers start disabled — fetching begins when toggled on
+
+    // Load workspace list for signed-in users
+    this._loadWorkspaceList()
 
     // Start animation loop
     this.lastAnimTime = performance.now()
@@ -404,6 +425,51 @@ export function applyCoreMethods(GlobeController) {
   GlobeController.prototype.createPlaneIcon = function(color) { return createPlaneIcon(color) }
 
   GlobeController.prototype.saveCamera = function() { saveCamera(this.viewer) }
+
+  GlobeController.prototype.shareView = function() { copyShareLink(this) }
+
+  GlobeController.prototype._markFresh = function(layerKey) {
+    if (!this._layerFreshness) this._layerFreshness = {}
+    this._layerFreshness[layerKey] = Date.now()
+    this._updateFreshnessDots()
+  }
+
+  GlobeController.prototype._updateFreshnessDots = function() {
+    if (!this._layerFreshness) return
+    const now = Date.now()
+    const dotMap = {
+      flights: "qlFlights", ships: "qlShips", earthquakes: "qlEarthquakes",
+      naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
+      cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
+      traffic: "qlTraffic",
+    }
+    for (const [layer, targetName] of Object.entries(dotMap)) {
+      const hasTarget = "has" + targetName.charAt(0).toUpperCase() + targetName.slice(1) + "Target"
+      if (!this[hasTarget]) continue
+      const btn = this[targetName + "Target"]
+      let dot = btn.querySelector(".freshness-dot")
+      // Only show dot when layer is active
+      const visKey = layer === "naturalEvents" ? "naturalEventsVisible" : layer + "Visible"
+      if (!this[visKey]) {
+        if (dot) dot.remove()
+        continue
+      }
+      if (!dot) {
+        dot = document.createElement("span")
+        dot.className = "freshness-dot"
+        btn.appendChild(dot)
+      }
+      const lastUpdate = this._layerFreshness[layer]
+      if (!lastUpdate) {
+        dot.dataset.freshness = "stale"
+      } else {
+        const age = now - lastUpdate
+        if (age < 30000) dot.dataset.freshness = "fresh"
+        else if (age < 120000) dot.dataset.freshness = "warm"
+        else dot.dataset.freshness = "stale"
+      }
+    }
+  }
 
   GlobeController.prototype.getViewportBounds = function() { return getViewportBounds(this.viewer) }
 
@@ -734,6 +800,12 @@ export function applyCoreMethods(GlobeController) {
       }
     }
 
+    // Update freshness dots every 10s
+    if (!this._lastFreshnessCheck || now - this._lastFreshnessCheck > 10000) {
+      this._lastFreshnessCheck = now
+      this._updateFreshnessDots()
+    }
+
     if (needsRender) this.viewer.scene.requestRender()
 
     this.animationFrame = requestAnimationFrame(() => this.animate())
@@ -764,6 +836,73 @@ export function applyCoreMethods(GlobeController) {
   GlobeController.prototype.pointInPolygon = function(lat, lng, ring) { return pointInPolygon(lat, lng, ring) }
 
   GlobeController.prototype.findCountryAtPoint = function(lat, lng) { return findCountryAtPoint(this._countryFeatures, lat, lng) }
+
+  // ── Onboarding ──────────────────────────────────────────
+
+  GlobeController.prototype._maybeShowOnboarding = function() {
+    if (localStorage.getItem("gt_onboarded")) return
+    const overlay = document.getElementById("onboarding-overlay")
+    if (!overlay) return
+
+    overlay.style.display = ""
+
+    const dismiss = () => {
+      overlay.style.display = "none"
+      localStorage.setItem("gt_onboarded", "1")
+    }
+
+    document.getElementById("onboarding-dismiss")?.addEventListener("click", dismiss)
+
+    overlay.querySelectorAll(".onboarding-card").forEach(card => {
+      card.addEventListener("click", () => {
+        this._applyScenario(card.dataset.scenario)
+        dismiss()
+      })
+    })
+  }
+
+  GlobeController.prototype._applyScenario = function(scenario) {
+    const Cesium = window.Cesium
+    const scenarios = {
+      aviation: {
+        layers: ["flights", "airports", "borders"],
+        camera: { lat: 48, lng: 10, height: 5000000 },
+      },
+      events: {
+        layers: ["earthquakes", "naturalEvents", "news", "conflicts", "borders"],
+        camera: { lat: 20, lng: 30, height: 15000000 },
+      },
+      space: {
+        satCategories: ["stations", "gps-ops", "military", "analyst"],
+        camera: { lat: 30, lng: 0, height: 20000000 },
+      },
+      infrastructure: {
+        layers: ["cables", "powerPlants", "gpsJamming", "outages", "borders"],
+        camera: { lat: 35, lng: 30, height: 12000000 },
+      },
+    }
+
+    const s = scenarios[scenario]
+    if (!s) return
+
+    // Fly to camera position
+    if (s.camera) {
+      this.viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(s.camera.lng, s.camera.lat, s.camera.height),
+        duration: 1.5,
+      })
+    }
+
+    // Activate layers
+    if (s.layers) {
+      applyDeepLink(this, { layers: s.layers })
+    }
+
+    // Activate satellite categories
+    if (s.satCategories) {
+      applyDeepLink(this, { satCategories: s.satCategories })
+    }
+  }
 
   // ── Cities Layer ─────────────────────────────────────────
 

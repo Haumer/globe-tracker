@@ -471,7 +471,7 @@ export function applyInfrastructureMethods(GlobeController) {
 
     const Cesium = window.Cesium
     const dataSource = this.getPowerPlantsDataSource()
-    const bounds = getViewportBounds(this.viewer)
+    const bounds = this.getViewportBounds()
 
     const fuelColors = {
       Coal: "#616161", Gas: "#ff9800", Oil: "#795548", Nuclear: "#fdd835",
@@ -484,8 +484,8 @@ export function applyInfrastructureMethods(GlobeController) {
     let visible = this._powerPlantAll
     if (bounds) {
       visible = visible.filter(p =>
-        p.lat >= bounds.south && p.lat <= bounds.north &&
-        p.lng >= bounds.west && p.lng <= bounds.east
+        p.lat >= bounds.lamin && p.lat <= bounds.lamax &&
+        p.lng >= bounds.lomin && p.lng <= bounds.lomax
       )
     }
     if (this.hasActiveFilter()) {
@@ -856,10 +856,10 @@ export function applyInfrastructureMethods(GlobeController) {
   GlobeController.prototype.fetchNotams = async function() {
     this._toast("Loading NOTAMs...")
     try {
-      const bounds = getViewportBounds(this.viewer)
+      const bounds = this.getViewportBounds()
       let url = "/api/notams"
       if (bounds) {
-        url += `?lamin=${bounds.south.toFixed(2)}&lamax=${bounds.north.toFixed(2)}&lomin=${bounds.west.toFixed(2)}&lomax=${bounds.east.toFixed(2)}`
+        url += `?lamin=${bounds.lamin.toFixed(2)}&lamax=${bounds.lamax.toFixed(2)}&lomin=${bounds.lomin.toFixed(2)}&lomax=${bounds.lomax.toFixed(2)}`
       }
       const resp = await fetch(url)
       if (!resp.ok) return

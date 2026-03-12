@@ -60,8 +60,8 @@ module Api
         else w["live"] ? 1 : 2
         end
       end
-      # Hard cap to prevent Cesium entity overflow crash
-      max = (params[:limit]&.to_i || 50).clamp(1, 50)
+      # Hard cap stays bounded, but clustering lets the client handle more cameras safely.
+      max = (params[:limit]&.to_i || 80).clamp(1, 160)
       all_webcams = all_webcams.first(max)
       render json: { webcams: all_webcams }
     end
@@ -82,7 +82,7 @@ module Api
     # ── Windy ──────────────────────────────────────────────────
 
     def fetch_windy(api_key, has_bbox, north, south, east, west, lat, lng)
-      limit = 30
+      limit = (params[:limit]&.to_i || 50).clamp(1, 100)
 
       # Prefer radius-based nearby query (capped at 100 km) to avoid overwhelming the globe
       if lat && lng
@@ -203,9 +203,10 @@ module Api
           "_dist" => dist,
         }
       end
-      # Return only the 20 nearest to bbox center
+      # Return only the nearest cameras within the caller's requested cap.
+      limit = (params[:limit]&.to_i || 20).clamp(1, 60)
       results.sort_by! { |c| c["_dist"] }
-      results.first(20).each { |c| c.delete("_dist") }
+      results.first(limit).each { |c| c.delete("_dist") }
     rescue => e
       Rails.logger.warn("NYC DOT fetch error: #{e.message}")
       []
@@ -214,49 +215,41 @@ module Api
     # ── YouTube Live ─────────────────────────────────────────
 
     def fetch_youtube_live(api_key, lat, lng, radius_km)
-      uri = URI("https://www.googleapis.com/youtube/v3/search")
-      uri.query = URI.encode_www_form(
+      search = youtube_json(
+        "https://www.googleapis.com/youtube/v3/search",
         part: "snippet",
         type: "video",
         eventType: "live",
         location: "#{lat},#{lng}",
         locationRadius: "#{radius_km}km",
         q: "webcam OR camera OR live OR street OR traffic OR weather",
-        maxResults: 10,
+        maxResults: (params[:limit]&.to_i || 20).clamp(1, 25),
         key: api_key,
       )
+      items = search["items"] || []
+      Rails.logger.info("YouTube Live: got #{items.size} results (totalResults: #{search.dig('pageInfo', 'totalResults')})")
 
-      Rails.logger.info("YouTube Live: fetching #{uri}")
-      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
-        http.request(Net::HTTP::Get.new(uri))
-      end
+      locations = fetch_youtube_locations(api_key, items)
+      Rails.logger.info("YouTube Live: found coordinates for #{locations.size} results")
 
-      unless resp.is_a?(Net::HTTPSuccess)
-        Rails.logger.warn("YouTube Live: HTTP #{resp.code} — #{resp.body[0..200]}")
-        return []
-      end
-
-      data = JSON.parse(resp.body)
-      items = data["items"] || []
-      Rails.logger.info("YouTube Live: got #{items.size} results (totalResults: #{data.dig('pageInfo', 'totalResults')})")
-      items.each_with_index.filter_map do |item, idx|
+      items.filter_map do |item|
         video_id = item.dig("id", "videoId")
-        next unless video_id
+        location = locations[video_id]
+        next unless video_id && location
 
         snippet = item["snippet"] || {}
-        # YouTube doesn't return per-video coords — fan out in a small circle so they don't stack
-        angle = idx * (2 * Math::PI / [items.size, 1].max)
-        spread = 0.005 # ~500m offset
-        v_lat = lat + Math.sin(angle) * spread
-        v_lng = lng + Math.cos(angle) * spread
         {
           "webcamId" => "yt-#{video_id}",
           "title" => snippet["title"] || "YouTube Live",
           "source" => "youtube",
           "live" => true,
           "location" => {
-            "latitude" => v_lat,
-            "longitude" => v_lng,
+            "latitude" => location[:latitude],
+            "longitude" => location[:longitude],
+            "city" => nil,
+            "region" => nil,
+            "country" => nil,
+            "description" => location[:description],
           },
           "images" => {
             "current" => {
@@ -279,6 +272,50 @@ module Api
     rescue => e
       Rails.logger.warn("YouTube Live fetch error: #{e.message}")
       []
+    end
+
+    def fetch_youtube_locations(api_key, items)
+      video_ids = items.filter_map { |item| item.dig("id", "videoId") }.uniq
+      return {} if video_ids.empty?
+
+      details = youtube_json(
+        "https://www.googleapis.com/youtube/v3/videos",
+        part: "recordingDetails",
+        id: video_ids.join(","),
+        key: api_key,
+      )
+
+      (details["items"] || []).each_with_object({}) do |item, locations|
+        raw = item.dig("recordingDetails", "location")
+        next unless raw
+
+        latitude = raw["latitude"]&.to_f
+        longitude = raw["longitude"]&.to_f
+        next unless latitude&.finite? && longitude&.finite?
+
+        locations[item["id"]] = {
+          latitude: latitude,
+          longitude: longitude,
+          description: item.dig("recordingDetails", "locationDescription"),
+        }
+      end
+    end
+
+    def youtube_json(url, **params)
+      uri = URI(url)
+      uri.query = URI.encode_www_form(params)
+      Rails.logger.info("YouTube Live: fetching #{uri}")
+
+      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
+        http.request(Net::HTTP::Get.new(uri))
+      end
+
+      unless resp.is_a?(Net::HTTPSuccess)
+        Rails.logger.warn("YouTube Live: HTTP #{resp.code} — #{resp.body[0..200]}")
+        return {}
+      end
+
+      JSON.parse(resp.body)
     end
   end
 end

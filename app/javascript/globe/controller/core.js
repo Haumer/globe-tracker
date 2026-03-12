@@ -100,6 +100,9 @@ export function applyCoreMethods(GlobeController) {
     this._airportEntities = []
     this._webcamData = []
     this._webcamEntities = []
+    this._webcamEntityMap = new Map()
+    this._webcamClusteringReady = false
+    this._webcamFetchToken = 0
     this._webcamLastFetchCenter = null
     this.countrySelectMode = false
     this.drawMode = false
@@ -211,6 +214,16 @@ export function applyCoreMethods(GlobeController) {
       if (this.drawMode) return
 
       const picked = this.viewer.scene.pick(click.position)
+      const clusterId = picked?.id?.kind === "webcam-cluster"
+        ? picked.id
+        : picked?.primitive?.id?.kind === "webcam-cluster"
+          ? picked.primitive.id
+          : null
+      if (clusterId?.clusteredEntities?.length) {
+        this.zoomToWebcamCluster(clusterId.clusteredEntities)
+        return
+      }
+
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
         const flightData = this.flightData.get(entityId)
@@ -291,7 +304,9 @@ export function applyCoreMethods(GlobeController) {
         }
         if (typeof entityId === "string" && entityId.startsWith("cam-")) {
           const camId = entityId.replace("cam-", "")
-          const cam = this._webcamData.find(c => String(c.id) === camId)
+          const pickedWebcamId = picked.id.properties?.webcamId?.getValue?.()
+          const cam = this._webcamEntityMap.get(entityId) ||
+            this._webcamData.find(c => String(c.id) === camId || String(c.id) === String(pickedWebcamId))
           if (cam) { this.showWebcamDetail(cam); return }
         }
         if (typeof entityId === "string" && entityId.startsWith("pp-")) {

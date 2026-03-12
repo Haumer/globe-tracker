@@ -389,6 +389,7 @@ export function applyGeographyMethods(GlobeController) {
         this._updateDeselectBtn()
         if (this.flightsVisible) this.fetchFlights()
         if (this.shipsVisible) this.fetchShips()
+        if (this.camerasVisible) this.fetchWebcams()
         if (this.citiesVisible) this.renderCities()
         if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
         this.updateEntityList()
@@ -418,6 +419,7 @@ export function applyGeographyMethods(GlobeController) {
     // Re-fetch active layers with updated filter
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
+    if (this.camerasVisible) this.fetchWebcams()
     this.updateEntityList()
     if (this.citiesVisible) this.renderCities()
     if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
@@ -439,6 +441,7 @@ export function applyGeographyMethods(GlobeController) {
     // Re-fetch with no filter (back to viewport)
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
+    if (this.camerasVisible) this.fetchWebcams()
     this.updateEntityList()
   }
 
@@ -608,6 +611,7 @@ export function applyGeographyMethods(GlobeController) {
     // Re-fetch active layers with new filter
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
+    if (this.camerasVisible) this.fetchWebcams()
     if (this.citiesVisible) this.renderCities()
     if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
     this.updateEntityList()

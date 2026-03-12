@@ -1487,6 +1487,7 @@ export default class extends Controller {
     this.clearSatFootprint()
     this._clearFlightRoute()
     this._clearSatVisEntities()
+    if (this._webcamRefreshInterval) { clearInterval(this._webcamRefreshInterval); this._webcamRefreshInterval = null }
   }
 
   // ── Entity List Panel ─────────────────────────────────────
@@ -1871,6 +1872,45 @@ export default class extends Controller {
     ctx.beginPath(); ctx.moveTo(pad, size - pad - L); ctx.lineTo(pad, size - pad); ctx.lineTo(pad + L, size - pad); ctx.stroke()
     // bottom-right
     ctx.beginPath(); ctx.moveTo(size - pad - L, size - pad); ctx.lineTo(size - pad, size - pad); ctx.lineTo(size - pad, size - pad - L); ctx.stroke()
+    return c.toDataURL()
+  }
+
+  _makeWebcamIcon(color = "#29b6f6") {
+    const size = 28
+    const c = document.createElement("canvas")
+    c.width = size
+    c.height = size
+    const ctx = c.getContext("2d")
+    const cx = size / 2, cy = size / 2
+
+    // Drop shadow
+    ctx.shadowColor = "rgba(0,0,0,0.5)"
+    ctx.shadowBlur = 3
+    ctx.shadowOffsetY = 1
+
+    // Camera body
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.roundRect(cx - 8, cy - 5, 16, 11, 2)
+    ctx.fill()
+
+    // Lens circle
+    ctx.shadowBlur = 0
+    ctx.fillStyle = "rgba(0,0,0,0.3)"
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = "#fff"
+    ctx.globalAlpha = 0.8
+    ctx.beginPath()
+    ctx.arc(cx, cy, 1.8, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalAlpha = 1
+
+    // Flash / top bump
+    ctx.fillStyle = color
+    ctx.fillRect(cx - 3, cy - 7, 6, 3)
+
     return c.toDataURL()
   }
 
@@ -3783,69 +3823,118 @@ export default class extends Controller {
     ]
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180
     let hits = 0
-    for (const corner of corners) {
-      const ray = this.viewer.camera.getPickRay(corner)
-      const pos = ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
-      if (pos) {
-        const carto = Cesium.Cartographic.fromCartesian(pos)
-        const lat = Cesium.Math.toDegrees(carto.latitude)
-        const lng = Cesium.Math.toDegrees(carto.longitude)
-        minLat = Math.min(minLat, lat)
-        maxLat = Math.max(maxLat, lat)
-        minLng = Math.min(minLng, lng)
-        maxLng = Math.max(maxLng, lng)
-        hits++
+
+    // Try globe pick first (works when globe is visible)
+    if (this.viewer.scene.globe.show) {
+      for (const corner of corners) {
+        const ray = this.viewer.camera.getPickRay(corner)
+        const pos = ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
+        if (pos) {
+          const carto = Cesium.Cartographic.fromCartesian(pos)
+          const lat = Cesium.Math.toDegrees(carto.latitude)
+          const lng = Cesium.Math.toDegrees(carto.longitude)
+          minLat = Math.min(minLat, lat)
+          maxLat = Math.max(maxLat, lat)
+          minLng = Math.min(minLng, lng)
+          maxLng = Math.max(maxLng, lng)
+          hits++
+        }
       }
     }
-    if (hits < 2) return null // Too zoomed out or looking at space
+
+    // Fallback: estimate bbox from camera position + height (works with Google tiles)
+    if (hits < 2) {
+      const carto = this.viewer.camera.positionCartographic
+      const lat = Cesium.Math.toDegrees(carto.latitude)
+      const lng = Cesium.Math.toDegrees(carto.longitude)
+      const heightKm = carto.height / 1000
+      const spanDeg = Math.min(Math.max(heightKm / 111, 0.1), 30)
+      return {
+        north: lat + spanDeg,
+        south: lat - spanDeg,
+        east: lng + spanDeg / Math.max(Math.cos(lat * Math.PI / 180), 0.01),
+        west: lng - spanDeg / Math.max(Math.cos(lat * Math.PI / 180), 0.01),
+      }
+    }
+
     return { north: maxLat, south: minLat, east: maxLng, west: minLng }
   }
 
   async fetchWebcams() {
-    const bbox = this._getViewportBbox()
     const center = this._getViewCenter()
-    if (!center && !bbox) return
+    if (!center) return
 
-    let url
-    if (bbox) {
-      url = `/api/webcams?north=${bbox.north.toFixed(4)}&south=${bbox.south.toFixed(4)}&east=${bbox.east.toFixed(4)}&west=${bbox.west.toFixed(4)}&limit=50`
-    } else {
-      // Fallback: nearby search
-      const radiusKm = Math.min(Math.max(Math.round(center.height / 5000), 10), 250)
-      url = `/api/webcams?lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}&radius=${radiusKm}&limit=50`
-    }
+    // Always use radius-based query centered on camera (max 100 km) to avoid flooding Cesium with entities
+    const radiusKm = Math.min(Math.max(Math.round(center.height / 5000), 10), 100)
+    const baseUrl = `/api/webcams?lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}&radius=${radiusKm}`
 
-    this._toast("Loading webcams...")
+    // Clear stale webcams from previous location
+    this._webcamData = []
+
+    this._toast("Loading live cameras...")
+
+    // Phase 1: fetch real-time sources first (YouTube + NYC DOT) — fast, true live
     try {
-      const resp = await fetch(url)
-      if (!resp.ok) {
-        if (resp.status === 503) console.warn("Windy API key not configured")
-        return
+      const rtResp = await fetch(`${baseUrl}&sources=youtube,nycdot`)
+      if (rtResp.ok) {
+        const rtData = await rtResp.json()
+        const rtCams = rtData.webcams || []
+        if (rtCams.length > 0) {
+          this._mergeWebcams(rtCams)
+          this.renderWebcams()
+          this._updateStats()
+        }
       }
-      const data = await resp.json()
-      this._webcamData = (data.webcams || []).map(w => ({
-        id: w.webcamId || w.id,
-        title: w.title,
-        lat: w.location?.latitude,
-        lng: w.location?.longitude,
-        city: w.location?.city,
-        region: w.location?.region,
-        country: w.location?.country,
-        thumbnail: w.images?.current?.preview || w.images?.daylight?.preview,
-        thumbnailIcon: w.images?.current?.icon || w.images?.daylight?.icon,
-        playerUrl: this._extractWindyUrl(w.player?.day, "embed") || this._extractWindyUrl(w.player?.live, "embed"),
-        playerLink: this._extractWindyUrl(w.player?.day) || this._extractWindyUrl(w.player?.live) || (typeof w.url === "string" ? w.url : null),
-        lastUpdated: w.lastUpdatedOn,
-        viewCount: w.viewCount,
-      })).filter(w => w.lat != null && w.lng != null)
+    } catch (e) { console.warn("Real-time webcam fetch failed:", e) }
 
-      this._webcamLastFetchCenter = center
-      this.renderWebcams()
-      this._updateStats()
-      this._toastHide()
-    } catch (e) {
-      console.error("Failed to fetch webcams:", e)
+    // Phase 2: fetch Windy (periodic/timelapse)
+    this._toast("Loading more cameras...")
+    try {
+      const wResp = await fetch(`${baseUrl}&sources=windy`)
+      if (wResp.ok) {
+        const wData = await wResp.json()
+        const wCams = wData.webcams || []
+        if (wCams.length > 0) {
+          this._mergeWebcams(wCams)
+          this.renderWebcams()
+          this._updateStats()
+        }
+      }
+    } catch (e) { console.warn("Windy webcam fetch failed:", e) }
+
+    this._webcamLastFetchCenter = center
+    this._toastHide()
+  }
+
+  _normalizeWebcam(w) {
+    return {
+      id: w.webcamId || w.id,
+      title: w.title,
+      source: w.source || "windy",
+      live: w.live || false,
+      lat: w.location?.latitude,
+      lng: w.location?.longitude,
+      city: w.location?.city,
+      region: w.location?.region,
+      country: w.location?.country,
+      thumbnail: w.images?.current?.preview || w.images?.daylight?.preview,
+      thumbnailIcon: w.images?.current?.icon || w.images?.daylight?.icon,
+      playerUrl: this._extractWindyUrl(w.player?.day, "embed") || this._extractWindyUrl(w.player?.live, "embed"),
+      playerLink: this._extractWindyUrl(w.player?.day) || this._extractWindyUrl(w.player?.live) || (typeof w.url === "string" ? w.url : null),
+      videoId: w.videoId || null,
+      channelTitle: w.channelTitle || null,
+      lastUpdated: w.lastUpdatedOn,
+      viewCount: w.viewCount,
     }
+  }
+
+  _mergeWebcams(raw) {
+    const newCams = raw.map(w => this._normalizeWebcam(w)).filter(w =>
+      w.lat != null && w.lng != null && Number.isFinite(w.lat) && Number.isFinite(w.lng)
+    )
+    const existingIds = new Set(this._webcamData.map(w => w.id))
+    const added = newCams.filter(w => !existingIds.has(w.id))
+    this._webcamData = [...this._webcamData, ...added]
   }
 
   renderWebcams() {
@@ -3856,27 +3945,36 @@ export default class extends Controller {
     this._webcamData.forEach(w => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(w.lat, w.lng)) return
 
+      const realtime = w.source === "youtube" || w.source === "nycdot"
+      const icon = realtime
+        ? (this._webcamIconRT || (this._webcamIconRT = this._makeWebcamIcon("#ff4444")))
+        : w.live
+          ? (this._webcamIconLive || (this._webcamIconLive = this._makeWebcamIcon("#4caf50")))
+          : (this._webcamIcon || (this._webcamIcon = this._makeWebcamIcon("#29b6f6")))
+      const labelPrefix = w.source === "nycdot" ? "🚦 " : w.source === "youtube" ? "▶ " : ""
       const entity = dataSource.entities.add({
         id: `cam-${w.id}`,
-        position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, 0),
-        point: {
-          pixelSize: 7,
-          color: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.9),
-          outlineColor: Cesium.Color.fromCssColorString("#29b6f6").withAlpha(0.35),
-          outlineWidth: 3,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.2, 5e6, 0.5),
+        position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, 300),
+        billboard: {
+          image: icon,
+          scale: 0.7,
+          scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5e6, 0.4),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          heightReference: Cesium.HeightReference.NONE,
         },
         label: {
-          text: w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title,
+          text: labelPrefix + (w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title),
           font: "12px JetBrains Mono, monospace",
           fillColor: Cesium.Color.WHITE.withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -12),
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e6, 0.3),
-          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0),
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          scaleByDistance: new Cesium.NearFarScalar(500, 1, 3e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(500, 1, 5e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          heightReference: Cesium.HeightReference.NONE,
         },
       })
       this._webcamEntities.push(entity)
@@ -3890,37 +3988,74 @@ export default class extends Controller {
   }
 
   showWebcamDetail(cam) {
+    // Stop any existing auto-refresh
+    if (this._webcamRefreshInterval) { clearInterval(this._webcamRefreshInterval); this._webcamRefreshInterval = null }
+
     const updated = cam.lastUpdated ? this._timeAgo(new Date(cam.lastUpdated)) : "—"
     const location = [cam.city, cam.region, cam.country].filter(Boolean).join(", ")
-    const thumbHtml = cam.thumbnail
-      ? `<div class="webcam-thumb"><img src="${cam.thumbnail}" alt="${cam.title}" loading="lazy"></div>`
-      : ""
+    const sourceLabel = { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube Live" }[cam.source] || cam.source
+    const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
+    const liveBadge = isRealtime
+      ? '<span style="background:#ff4444;color:#fff;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">LIVE</span>'
+      : cam.live
+        ? '<span style="background:#4caf50;color:#fff;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">PERIODIC</span>'
+        : '<span style="background:#666;color:#ccc;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">TIMELAPSE</span>'
+
+    // For DOT cameras, add cache-busting timestamp for auto-refresh
+    const thumbUrl = cam.thumbnail ? `${cam.thumbnail}${cam.source === "nycdot" ? "?t=" + Date.now() : ""}` : null
+
+    let thumbHtml
+    if (cam.source === "youtube" && cam.videoId) {
+      thumbHtml = `<div class="webcam-thumb"><iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`
+    } else if (thumbUrl) {
+      thumbHtml = `<div class="webcam-thumb"><img id="webcam-detail-img" src="${thumbUrl}" alt="${this._escapeHtml(cam.title)}" loading="lazy" style="width:100%;border-radius:4px;"></div>`
+    } else {
+      thumbHtml = ""
+    }
+
+    const watchUrl = cam.source === "youtube" && cam.videoId
+      ? `https://www.youtube.com/watch?v=${cam.videoId}`
+      : cam.source === "nycdot"
+        ? `https://webcams.nyctmc.org/map`
+        : (typeof cam.playerLink === "string" && cam.playerLink.startsWith("http") ? cam.playerLink : `https://www.windy.com/webcams/${cam.id}`)
 
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-video" style="color: #29b6f6;"></i> Webcam</div>
-      <div class="detail-country">${cam.title}</div>
+      <div class="detail-callsign"><i class="fa-solid fa-video" style="color: ${cam.live ? '#4caf50' : '#29b6f6'};"></i> ${sourceLabel}${liveBadge}</div>
+      <div class="detail-country">${this._escapeHtml(cam.title)}</div>
       ${thumbHtml}
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">Location</span>
-          <span class="detail-value">${location || "—"}</span>
+          <span class="detail-value">${this._escapeHtml(location) || "—"}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Updated</span>
           <span class="detail-value">${updated}</span>
         </div>
-        <div class="detail-field">
+        ${cam.channelTitle ? `<div class="detail-field">
+          <span class="detail-label">Channel</span>
+          <span class="detail-value">${this._escapeHtml(cam.channelTitle)}</span>
+        </div>` : ""}
+        ${cam.viewCount ? `<div class="detail-field">
           <span class="detail-label">Views</span>
-          <span class="detail-value">${(cam.viewCount || 0).toLocaleString()}</span>
-        </div>
+          <span class="detail-value">${cam.viewCount.toLocaleString()}</span>
+        </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">Coordinates</span>
           <span class="detail-value">${cam.lat.toFixed(3)}°, ${cam.lng.toFixed(3)}°</span>
         </div>
       </div>
-      <a href="${typeof cam.playerLink === "string" && cam.playerLink.startsWith("http") ? cam.playerLink : `https://www.windy.com/webcams/${cam.id}`}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-play"></i> Watch Live</a>
+      <a href="${watchUrl}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-play"></i> Watch Live</a>
     `
     this.detailPanelTarget.style.display = ""
+
+    // Auto-refresh DOT camera images every 5 seconds
+    if (cam.source === "nycdot" && cam.thumbnail) {
+      this._webcamRefreshInterval = setInterval(() => {
+        const img = document.getElementById("webcam-detail-img")
+        if (img) img.src = `${cam.thumbnail}?t=${Date.now()}`
+      }, 5000)
+    }
 
     const Cesium = window.Cesium
     this.viewer.camera.flyTo({

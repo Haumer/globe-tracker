@@ -83,6 +83,14 @@ class MultiNewsService
     "tel aviv" => "il", "dublin" => "ie", "zurich" => "ch",
     "singapore" => "sg", "seoul" => "kr", "taipei" => "tw",
     "bengaluru" => "in", "hyderabad" => "in",
+    # Australia & NZ cities
+    "sydney" => "au", "melbourne" => "au", "brisbane" => "au", "perth" => "au",
+    "adelaide" => "au", "canberra" => "au", "hobart" => "au", "darwin" => "au",
+    "gold coast" => "au", "newcastle" => "au", "wollongong" => "au",
+    "queensland" => "au", "victoria" => "au", "tasmania" => "au",
+    "new south wales" => "au", "western australia" => "au",
+    "auckland" => "nz", "wellington" => "nz", "christchurch" => "nz",
+    "dunedin" => "nz", "hamilton" => "nz", "tauranga" => "nz",
     # Companies as proxy
     "google" => "us", "apple" => "us", "microsoft" => "us", "amazon" => "us",
     "meta" => "us", "openai" => "us", "anthropic" => "us", "nvidia" => "us",
@@ -109,6 +117,7 @@ class MultiNewsService
     all_records = []
 
     all_records.concat(fetch_worldnews)
+    all_records.concat(fetch_worldnews_region("au,nz"))
     all_records.concat(fetch_currents)
     all_records.concat(fetch_thenewsapi)
     all_records.concat(fetch_gnews)
@@ -164,7 +173,7 @@ class MultiNewsService
     return [] unless data && data["news"]
 
     data["news"].filter_map do |article|
-      lat, lng = resolve_location(article["source_country"], article["title"])
+      lat, lng = resolve_location(article["source_country"], article["title"], article["url"])
       next unless lat && lng
 
       build_record(
@@ -180,6 +189,46 @@ class MultiNewsService
     end
   rescue => e
     Rails.logger.error("MultiNewsService[worldnews]: #{e.message}")
+    []
+  end
+
+  # ── WorldNewsAPI (region-specific) ────────────────────────────
+  # Targeted fetch for underrepresented regions. Costs ~2 pts per call.
+  def fetch_worldnews_region(countries)
+    key = ENV["WORLDNEWS_API_KEY"]
+    return [] if key.blank?
+
+    uri = URI("https://api.worldnewsapi.com/search-news")
+    uri.query = URI.encode_www_form(
+      "api-key" => key,
+      "language" => "en",
+      "source-countries" => countries,
+      "sort" => "publish-time",
+      "sort-direction" => "DESC",
+      "number" => 50,
+      "earliest-publish-date" => 24.hours.ago.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+    data = fetch_json(uri)
+    return [] unless data && data["news"]
+
+    data["news"].filter_map do |article|
+      lat, lng = resolve_location(article["source_country"], article["title"], article["url"])
+      next unless lat && lng
+
+      build_record(
+        url: article["url"],
+        title: article["title"],
+        name: article["source_country"] || article["author"],
+        lat: lat, lng: lng,
+        tone: sentiment_to_tone(article["sentiment"]),
+        published_at: parse_time(article["publish_date"]),
+        themes: extract_keywords(article["title"], article["text"]),
+        source: "worldnews",
+      )
+    end
+  rescue => e
+    Rails.logger.error("MultiNewsService[worldnews-#{countries}]: #{e.message}")
     []
   end
 
@@ -202,7 +251,7 @@ class MultiNewsService
     data["news"].filter_map do |article|
       countries = article["country"]
       country_name = countries.is_a?(Array) ? countries.first : countries
-      lat, lng = resolve_location(country_name, article["title"])
+      lat, lng = resolve_location(country_name, article["title"], article["url"])
       next unless lat && lng
 
       build_record(
@@ -239,7 +288,7 @@ class MultiNewsService
     return [] unless data && data["data"]
 
     data["data"].filter_map do |article|
-      lat, lng = resolve_location(article["locale"], article["title"])
+      lat, lng = resolve_location(article["locale"], article["title"], article["url"])
       next unless lat && lng
 
       build_record(
@@ -276,7 +325,7 @@ class MultiNewsService
     return [] unless data && data["articles"]
 
     data["articles"].filter_map do |article|
-      lat, lng = resolve_location(nil, article["title"])
+      lat, lng = resolve_location(nil, article["title"], article["url"])
       next unless lat && lng
 
       build_record(
@@ -313,7 +362,7 @@ class MultiNewsService
     return [] unless data && data["data"]
 
     data["data"].filter_map do |article|
-      lat, lng = resolve_location(article["country"], article["title"])
+      lat, lng = resolve_location(article["country"], article["title"], article["url"])
       next unless lat && lng
 
       build_record(
@@ -348,7 +397,7 @@ class MultiNewsService
     data["hits"].filter_map do |hit|
       next if hit["url"].blank?
 
-      lat, lng = resolve_location(nil, hit["title"])
+      lat, lng = resolve_location(nil, hit["title"], hit["url"])
       next unless lat && lng
 
       build_record(
@@ -369,15 +418,16 @@ class MultiNewsService
 
   # ── Geocoding ─────────────────────────────────────────────────
 
-  # Try country code → country name → title extraction, with jitter
-  def resolve_location(country_hint, title)
+  # Try country code → country name → title extraction → publisher domain, with jitter
+  def resolve_location(country_hint, title, url = nil)
     lat, lng = geocode_country(country_hint) ||
                geocode_country_name(country_hint) ||
-               geocode_from_title(title)
+               geocode_from_title(title) ||
+               geocode_from_domain(url)
     return nil unless lat && lng
 
-    # Add jitter so same-country articles don't stack
-    [lat + rand(-0.5..0.5), lng + rand(-0.5..0.5)]
+    # Small jitter so same-country articles don't stack exactly
+    [lat + rand(-0.15..0.15), lng + rand(-0.15..0.15)]
   end
 
   def geocode_country(code)
@@ -404,6 +454,61 @@ class MultiNewsService
         return COUNTRY_COORDS[code] if code
       end
     end
+    nil
+  end
+
+  # ccTLD → country code (covers common two-part TLDs like .co.nz, .com.au)
+  DOMAIN_TLD_MAP = {
+    "au" => "au", "nz" => "nz", "uk" => "gb", "ie" => "ie",
+    "fr" => "fr", "de" => "de", "it" => "it", "es" => "es",
+    "pt" => "pt", "nl" => "nl", "be" => "be", "ch" => "ch",
+    "at" => "at", "se" => "se", "no" => "no", "dk" => "dk",
+    "fi" => "fi", "pl" => "pl", "cz" => "cz", "hu" => "hu",
+    "ro" => "ro", "bg" => "bg", "gr" => "gr", "hr" => "hr",
+    "rs" => "rs", "ua" => "ua", "ru" => "ru", "tr" => "tr",
+    "il" => "il", "ae" => "ae", "sa" => "sa", "qa" => "qa",
+    "ir" => "ir", "iq" => "iq", "eg" => "eg", "za" => "za",
+    "ng" => "ng", "ke" => "ke", "ug" => "ug", "gh" => "gh",
+    "ma" => "ma", "tn" => "tn", "cn" => "cn", "jp" => "jp",
+    "kr" => "kr", "in" => "in", "pk" => "pk", "bd" => "bd",
+    "th" => "th", "vn" => "vn", "ph" => "ph", "id" => "id",
+    "my" => "my", "sg" => "sg", "tw" => "tw", "hk" => "hk",
+    "ca" => "ca", "mx" => "mx", "br" => "br", "ar" => "ar",
+    "cl" => "cl", "co" => "co", "pe" => "pe",
+    "md" => "ro", # news.yam.md is actually Moldova but rare
+  }.freeze
+
+  # Well-known domains with no ccTLD that map to a specific country
+  DOMAIN_PUBLISHER_MAP = {
+    "foxnews.com" => "us", "nypost.com" => "us", "tmz.com" => "us",
+    "yahoo.com" => "us", "foxbusiness.com" => "us", "wtop.com" => "us",
+    "prnewswire.com" => "us", "phys.org" => "us", "fool.com" => "us",
+    "seekingalpha.com" => "us", "marketbeat.com" => "us",
+    "tickerreport.com" => "us", "sportskeeda.com" => "in",
+    "jpost.com" => "il", "straitstimes.com" => "sg",
+    "independent.co.uk" => "gb", "mirror.co.uk" => "gb",
+  }.freeze
+
+  def geocode_from_domain(url)
+    return nil if url.blank?
+    host = URI.parse(url).host&.downcase&.sub(/^www\./, "")
+    return nil if host.blank?
+
+    # Check known publisher domains first
+    code = DOMAIN_PUBLISHER_MAP[host]
+    return COUNTRY_COORDS[code] if code
+
+    # Extract ccTLD: handle .com.au, .co.nz, .net.au, etc.
+    parts = host.split(".")
+    tld = parts.last
+    # Skip generic TLDs
+    return nil if %w[com org net io edu gov].include?(tld)
+
+    code = DOMAIN_TLD_MAP[tld]
+    return COUNTRY_COORDS[code] if code
+
+    nil
+  rescue URI::InvalidURIError
     nil
   end
 

@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { screenToLatLng, haversineDistance, pointInPolygon, findCountryAtPoint, createPlaneIcon, getDataSource } from "../globe/utils"
+import { screenToLatLng, haversineDistance, pointInPolygon, findCountryAtPoint, createPlaneIcon, createSatelliteIcon, getDataSource } from "../globe/utils"
 import { saveCamera, restoreCamera, getViewportBounds, resetView, viewTopDown, resetTilt, zoomIn, zoomOut } from "../globe/camera"
 import { renderDetailHTML, detailField } from "../globe/details"
 
@@ -379,6 +379,10 @@ export default class extends Controller {
     this.planeIcon = this.createPlaneIcon("#4fc3f7")
     this.planeIconGround = this.createPlaneIcon("#888888")
     this.planeIconMil = this.createPlaneIcon("#ef5350")
+
+    // Pre-build satellite icons per category color
+    this._satIcons = {}
+    this._satPrevPositions = new Map() // norad_id -> { lat, lng, alt, time }
 
     // Layers start disabled — fetching begins when toggled on
 
@@ -1029,6 +1033,22 @@ export default class extends Controller {
         this.updateSatellitePositions()
         needsRender = true
       }
+
+      // Smooth lerp satellite positions between updates
+      if (this._satPrevPositions.size > 0 && this.satelliteEntities.size > 0) {
+        // Smoothly update footprint/ground line for selected satellite
+        if (this._selectedSatGeoLerp && this.selectedSatNoradId) {
+          const gl = this._selectedSatGeoLerp
+          const t = Math.min((now - gl.startTime) / gl.duration, 1.0)
+          const lat = gl.fromLat + (gl.toLat - gl.fromLat) * t
+          const lng = gl.fromLng + (gl.toLng - gl.fromLng) * t
+          const alt = gl.fromAlt + (gl.toAlt - gl.fromAlt) * t
+          const altKm = gl.fromAltKm + (gl.toAltKm - gl.fromAltKm) * t
+          this._selectedSatPosition = { lat, lng, alt, altKm, color: gl.color }
+          this.renderSatHexFootprint(this._selectedSatPosition)
+        }
+        needsRender = true
+      }
     }
 
     if (needsRender) this.viewer.scene.requestRender()
@@ -1367,17 +1387,17 @@ export default class extends Controller {
           <span class="detail-value">${satData.mission_type.replace(/_/g, " ")}</span>
         </div>` : ""
 
-    // UCS enrichment fields
-    const ucsFields = [
+    // Enrichment fields — UCS for regular sats, orbital analysis for classified
+    const isClassified = satData.category === "analyst"
+    const enrichmentFields = [
       ["Country", satData.country_owner],
       ["Users", satData.users],
       ["Purpose", satData.purpose],
-      ["Detail", satData.detailed_purpose],
       ["Orbit", satData.orbit_class],
       ["Launched", satData.launch_date],
       ["Launch Site", satData.launch_site],
       ["Vehicle", satData.launch_vehicle],
-      ["Contractor", satData.contractor],
+      isClassified ? ["Co-orbital Group", satData.contractor] : ["Contractor", satData.contractor],
       ["Lifetime", satData.expected_lifetime ? satData.expected_lifetime + " yrs" : null],
     ].filter(([, v]) => v).map(([label, value]) => `
         <div class="detail-field">
@@ -1385,10 +1405,32 @@ export default class extends Controller {
           <span class="detail-value">${this._escapeHtml(value)}</span>
         </div>`).join("")
 
+    // Classified badge + orbital analysis callout
+    const classifiedBanner = isClassified ? `
+      <div class="classified-banner">
+        <span class="classified-badge">CLASSIFIED</span>
+        <span class="classified-label">Unacknowledged payload — orbital analysis</span>
+      </div>` : ""
+
+    const analysisCallout = isClassified && satData.detailed_purpose ? `
+      <div class="orbital-analysis-callout">
+        <div class="oac-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+        <div class="oac-text">${this._escapeHtml(satData.detailed_purpose)}</div>
+      </div>` : ""
+
+    const subtitlePurpose = !isClassified && satData.purpose
+      ? '<div style="font:500 10px var(--gt-mono);color:var(--gt-text-dim);margin:-4px 0 8px;">' + this._escapeHtml(satData.detailed_purpose || satData.purpose) + '</div>'
+      : ""
+
+    const categoryLabel = isClassified ? "ANALYST" : satData.category.toUpperCase()
+    const operatorSuffix = satData.country_owner ? " — " + satData.country_owner : (satData.operator ? " — " + satData.operator : "")
+
     this.detailContentTarget.innerHTML = `
+      ${classifiedBanner}
       <div class="detail-callsign">${satData.name}</div>
-      <div class="detail-country">${satData.category.toUpperCase()}${satData.country_owner ? " — " + satData.country_owner : (satData.operator ? " — " + satData.operator : "")}</div>
-      ${satData.purpose ? '<div style="font:500 10px var(--gt-mono);color:var(--gt-text-dim);margin:-4px 0 8px;">' + this._escapeHtml(satData.detailed_purpose || satData.purpose) + '</div>' : ''}
+      <div class="detail-country">${categoryLabel}${operatorSuffix}</div>
+      ${subtitlePurpose}
+      ${analysisCallout}
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">NORAD ID</span>
@@ -1404,7 +1446,7 @@ export default class extends Controller {
         </div>
         ${operatorHtml}
         ${missionHtml}
-        ${ucsFields}
+        ${enrichmentFields}
       </div>
       ${this.selectedCountries.size > 0 ? `
       <button class="detail-track-btn ${this._satFootprintCountryMode ? 'tracking' : ''}"
@@ -2285,6 +2327,15 @@ export default class extends Controller {
     }
   }
 
+  _getSatIcon(color) {
+    if (!this._satIcons[color]) {
+      this._satIcons[color] = createSatelliteIcon(color)
+    }
+    return this._satIcons[color]
+  }
+
+  // Compute target positions for satellites (called every ~2s)
+  // Stores current + next position for smooth lerping in animate()
   updateSatellitePositions() {
     const Cesium = window.Cesium
     const sat = window.satellite
@@ -2292,7 +2343,9 @@ export default class extends Controller {
 
     const dataSource = this.getSatellitesDataSource()
     const now = new Date()
+    const future = new Date(now.getTime() + 2000) // 2s ahead for lerp target
     const gmst = sat.gstime(now)
+    const gmstF = sat.gstime(future)
     const currentIds = new Set()
 
     this.satelliteData.forEach(s => {
@@ -2310,6 +2363,17 @@ export default class extends Controller {
 
         if (isNaN(lng) || isNaN(lat) || isNaN(alt)) return
 
+        // Propagate future position for smooth lerping
+        const posVelF = sat.propagate(satrec, future)
+        let fLng = lng, fLat = lat, fAlt = alt
+        if (posVelF.position) {
+          const fGd = sat.eciToGeodetic(posVelF.position, gmstF)
+          fLng = sat.degreesLong(fGd.longitude)
+          fLat = sat.degreesLat(fGd.latitude)
+          fAlt = fGd.height * 1000
+          if (isNaN(fLng) || isNaN(fLat) || isNaN(fAlt)) { fLng = lng; fLat = lat; fAlt = alt }
+        }
+
         // Apply country/circle filter if active
         if (this.hasActiveFilter() && !this.pointPassesFilter(lat, lng)) return
 
@@ -2317,35 +2381,58 @@ export default class extends Controller {
         currentIds.add(id)
         const color = this.satCategoryColors[s.category] || "#ab47bc"
 
-        // Update selected satellite footprint (hex grid + beam)
+        // Update selected satellite footprint (hex grid + beam) — store lerp targets for smooth footprint
         if (this.selectedSatNoradId === s.norad_id) {
           this._selectedSatPosition = { lat, lng, alt, altKm: posGd.height, color }
+          this._selectedSatGeoLerp = {
+            fromLat: lat, fromLng: lng, fromAlt: alt, fromAltKm: posGd.height,
+            toLat: fLat, toLng: fLng, toAlt: fAlt, toAltKm: fAlt / 1000,
+            startTime: performance.now(), duration: 2000, color,
+          }
         }
+
+        // Store lerp data with per-satellite scratch for interpolation
+        const posNow = Cesium.Cartesian3.fromDegrees(lng, lat, alt)
+        const posNext = Cesium.Cartesian3.fromDegrees(fLng, fLat, fAlt)
+        const prev = this._satPrevPositions.get(s.norad_id)
+        this._satPrevPositions.set(s.norad_id, {
+          from: posNow, to: posNext, startTime: performance.now(), duration: 2000,
+          scratch: prev?.scratch || new Cesium.Cartesian3(),
+        })
 
         const existing = this.satelliteEntities.get(id)
         if (existing) {
-          existing.position = Cesium.Cartesian3.fromDegrees(lng, lat, alt)
+          // Position updates via CallbackProperty reading _satPrevPositions — no direct assignment needed
         } else {
+          const isStation = s.category === "stations"
+          const icon = this._getSatIcon(color)
+          const noradIdRef = s.norad_id
+          const positionCallback = new Cesium.CallbackProperty(() => {
+            const ld = this._satPrevPositions.get(noradIdRef)
+            if (!ld) return posNow
+            const t = Math.min((performance.now() - ld.startTime) / ld.duration, 1.0)
+            return Cesium.Cartesian3.lerp(ld.from, ld.to, t, ld.scratch)
+          }, false)
           const entity = dataSource.entities.add({
             id,
-            position: Cesium.Cartesian3.fromDegrees(lng, lat, alt),
-            point: {
-              pixelSize: s.category === "stations" ? 12 : 6,
-              color: Cesium.Color.fromCssColorString(color),
-              outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.3),
-              outlineWidth: s.category === "stations" ? 3 : 1,
+            position: positionCallback,
+            billboard: {
+              image: icon,
+              scale: isStation ? 1.2 : 0.8,
               scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 5e7, 0.6),
+              alignedAxis: Cesium.Cartesian3.UNIT_Z,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
             label: {
-              text: s.name,
-              font: s.category === "stations" ? "bold 15px JetBrains Mono, monospace" : "14px JetBrains Mono, monospace",
-              fillColor: Cesium.Color.fromCssColorString(color).withAlpha(s.category === "stations" ? 1.0 : 0.9),
+              text: s.category === "analyst" && s.purpose ? `${s.norad_id} [${s.purpose}]` : s.name,
+              font: isStation ? "bold 15px JetBrains Mono, monospace" : "14px JetBrains Mono, monospace",
+              fillColor: Cesium.Color.fromCssColorString(color).withAlpha(isStation ? 1.0 : 0.9),
               outlineColor: Cesium.Color.BLACK,
               outlineWidth: 3,
               style: Cesium.LabelStyle.FILL_AND_OUTLINE,
               verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-              pixelOffset: new Cesium.Cartesian2(0, s.category === "stations" ? -14 : -10),
+              pixelOffset: new Cesium.Cartesian2(0, isStation ? -16 : -12),
               scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 1e7, 0),
               translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 8e6, 0),
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -2363,6 +2450,9 @@ export default class extends Controller {
       if (!currentIds.has(id)) {
         dataSource.entities.remove(entity)
         this.satelliteEntities.delete(id)
+        // Clean up lerp data
+        const noradId = parseInt(id.replace("sat-", ""))
+        if (!isNaN(noradId)) this._satPrevPositions.delete(noradId)
       }
     }
 
@@ -2371,7 +2461,7 @@ export default class extends Controller {
       this.clearSatFootprint()
     }
 
-    // Render hex footprint for selected satellite
+    // Render hex footprint for selected satellite (animation loop handles smooth updates between ticks)
     if (this._selectedSatPosition) {
       this.renderSatHexFootprint(this._selectedSatPosition)
     }
@@ -2525,13 +2615,20 @@ export default class extends Controller {
     this.updateSatellitePositions()
   }
 
-  clearSatFootprint() {
-    this.selectedSatNoradId = null
-    this._selectedSatPosition = null
+  _clearNadirFootprint() {
     if (this._satFootprintEntities.length > 0 && this._ds["satellites"]) {
       this._satFootprintEntities.forEach(e => this._ds["satellites"].entities.remove(e))
       this._satFootprintEntities = []
     }
+    this._nadirLinePositions = null
+    this._nadirDotPosition = null
+  }
+
+  clearSatFootprint() {
+    this.selectedSatNoradId = null
+    this._selectedSatPosition = null
+    this._selectedSatGeoLerp = null
+    this._clearNadirFootprint()
   }
 
   // ── Satellite Coverage Heatmap ───────────────────────────
@@ -2945,9 +3042,6 @@ export default class extends Controller {
     const Cesium = window.Cesium
     const dataSource = this.getSatellitesDataSource()
 
-    this._satFootprintEntities.forEach(e => dataSource.entities.remove(e))
-    this._satFootprintEntities = []
-
     const baseColor = Cesium.Color.fromCssColorString(color)
     const satPos = Cesium.Cartesian3.fromDegrees(lng, lat, alt)
 
@@ -2956,72 +3050,86 @@ export default class extends Controller {
     const scanRadiusDeg = scanRadiusKm / 111.32
     const cosLat = Math.cos(lat * Math.PI / 180) || 0.01
 
-    // Country-constrained mode: fill selected countries with hex grid
-    // clipped to the satellite's scan radius
+    // Country-constrained mode: destroy & rebuild (infrequent, complex geometry)
     if (this._satFootprintCountryMode && this.selectedCountries.size > 0 && this._selectedCountriesBbox) {
+      this._clearNadirFootprint()
       this._renderCountryConstrainedHexes(baseColor, lat, lng, scanRadiusKm, scanRadiusDeg, satPos)
       return
     }
 
-    // Small 2-3-2 hex diamond directly below satellite (nadir)
-    // Place hexes at exact relative positions (no grid snapping)
     const S = 0.12
-    const rowH = S * 1.5               // vertical distance between row centers
-    const colW = S * Math.sqrt(3)      // horizontal distance between column centers
+    const rowH = S * 1.5
+    const colW = S * Math.sqrt(3)
     const cosCenter = Math.cos(lat * Math.PI / 180) || 0.01
 
-    // 7 hex offsets: 2-3-2 honeycomb diamond (row, col)
-    // Odd rows (±1) are shifted right by half a column
     const hexOffsets = [
-      [-1, -0.5], [-1, 0.5],           // top 2
-      [ 0, -1],   [ 0, 0], [ 0, 1],    // middle 3
-      [ 1, -0.5], [ 1, 0.5],           // bottom 2
+      [-1, -0.5], [-1, 0.5],
+      [ 0, -1],   [ 0, 0], [ 0, 1],
+      [ 1, -0.5], [ 1, 0.5],
     ]
 
-    hexOffsets.forEach(([dr, dc]) => {
-      const hexLat = lat + dr * rowH
-      const hexLng = lng + dc * colW / cosCenter
+    // Reuse existing entities if count matches (7 hexes + 1 line + 1 dot = 9)
+    const needsCreate = !this._satFootprintEntities || this._satFootprintEntities.length !== 9
 
-      const dLat = dr * rowH * 111.32
-      const dLng = dc * colW * 111.32
-      const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
-      const falloff = Math.max(0, 1 - distKm / (scanRadiusKm * 0.05))
-      const fillAlpha = 0.12 + falloff * 0.25
-      const outlineAlpha = 0.35 + falloff * 0.5
+    if (needsCreate) {
+      // Clear old entities
+      this._clearNadirFootprint()
 
-      const verts = this._buildHexVerts(hexLat, hexLng, S)
-      const entity = dataSource.entities.add({
-        polygon: {
-          hierarchy: verts,
-          material: baseColor.withAlpha(fillAlpha),
-          outline: true,
-          outlineColor: baseColor.withAlpha(outlineAlpha),
-          outlineWidth: 1.5,
-          height: 0,
-        },
+      // Create 7 hex polygons
+      hexOffsets.forEach(([dr, dc]) => {
+        const hexLat = lat + dr * rowH
+        const hexLng = lng + dc * colW / cosCenter
+        const dLat = dr * rowH * 111.32
+        const dLng = dc * colW * 111.32
+        const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+        const falloff = Math.max(0, 1 - distKm / (scanRadiusKm * 0.05))
+
+        const entity = dataSource.entities.add({
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(this._buildHexVerts(hexLat, hexLng, S)),
+            material: baseColor.withAlpha(0.12 + falloff * 0.25),
+            outline: true,
+            outlineColor: baseColor.withAlpha(0.35 + falloff * 0.5),
+            outlineWidth: 1.5,
+            height: 0,
+          },
+        })
+        this._satFootprintEntities.push(entity)
       })
-      this._satFootprintEntities.push(entity)
-    })
 
-    // Nadir line
-    this._satFootprintEntities.push(dataSource.entities.add({
-      polyline: {
-        positions: [satPos, Cesium.Cartesian3.fromDegrees(lng, lat, 0)],
-        width: 2,
-        material: baseColor.withAlpha(0.6),
-      },
-    }))
+      // Nadir line — use CallbackProperty so Cesium doesn't rebuild geometry each frame
+      this._nadirLinePositions = [satPos, Cesium.Cartesian3.fromDegrees(lng, lat, 0)]
+      this._satFootprintEntities.push(dataSource.entities.add({
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => this._nadirLinePositions, false),
+          width: 3,
+          material: baseColor.withAlpha(0.6),
+        },
+      }))
 
-    // Nadir dot
-    this._satFootprintEntities.push(dataSource.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
-      point: {
-        pixelSize: 7,
-        color: baseColor.withAlpha(0.9),
-        outlineColor: baseColor.withAlpha(0.3),
-        outlineWidth: 8,
-      },
-    }))
+      // Nadir dot — use CallbackProperty for position
+      this._nadirDotPosition = Cesium.Cartesian3.fromDegrees(lng, lat, 0)
+      this._satFootprintEntities.push(dataSource.entities.add({
+        position: new Cesium.CallbackProperty(() => this._nadirDotPosition, false),
+        point: {
+          pixelSize: 7,
+          color: baseColor.withAlpha(0.9),
+          outlineColor: baseColor.withAlpha(0.3),
+          outlineWidth: 8,
+        },
+      }))
+    } else {
+      // Update existing entities in-place — no destroy/recreate
+      hexOffsets.forEach(([dr, dc], i) => {
+        const hexLat = lat + dr * rowH
+        const hexLng = lng + dc * colW / cosCenter
+        this._satFootprintEntities[i].polygon.hierarchy = new Cesium.PolygonHierarchy(this._buildHexVerts(hexLat, hexLng, S))
+      })
+
+      // Update nadir line + dot via their backing references (CallbackProperty reads these)
+      this._nadirLinePositions = [satPos, Cesium.Cartesian3.fromDegrees(lng, lat, 0)]
+      this._nadirDotPosition = Cesium.Cartesian3.fromDegrees(lng, lat, 0)
+    }
   }
 
   _renderCountryConstrainedHexes(baseColor, satLat, satLng, scanRadiusKm, scanRadiusDeg, satPos) {

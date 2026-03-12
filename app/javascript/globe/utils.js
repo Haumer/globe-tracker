@@ -88,6 +88,55 @@ export function createPlaneIcon(color) {
   return canvas.toDataURL()
 }
 
+export function createSatelliteIcon(color, size = 36) {
+  const canvas = document.createElement("canvas")
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext("2d")
+  const cx = size / 2, cy = size / 2
+
+  ctx.translate(cx, cy)
+
+  // Main body — rectangular bus
+  ctx.fillStyle = color
+  ctx.fillRect(-3, -5, 6, 10)
+
+  // Solar panels — two rectangles on each side
+  ctx.fillStyle = color
+  // Left panel
+  ctx.fillRect(-13, -4, 9, 8)
+  // Right panel
+  ctx.fillRect(4, -4, 9, 8)
+
+  // Panel lines (grid pattern)
+  ctx.strokeStyle = "rgba(0,0,0,0.4)"
+  ctx.lineWidth = 0.5
+  // Left panel grid
+  ctx.strokeRect(-13, -4, 9, 8)
+  ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(-4, 0); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(-8.5, -4); ctx.lineTo(-8.5, 4); ctx.stroke()
+  // Right panel grid
+  ctx.strokeRect(4, -4, 9, 8)
+  ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(13, 0); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(8.5, -4); ctx.lineTo(8.5, 4); ctx.stroke()
+
+  // Antenna dish — small circle on top
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(0, -7, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Antenna stalk
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, -5)
+  ctx.lineTo(0, -7)
+  ctx.stroke()
+
+  return canvas.toDataURL()
+}
+
 export function getDataSource(viewer, cache, name) {
   if (!cache[name]) {
     const Cesium = C()

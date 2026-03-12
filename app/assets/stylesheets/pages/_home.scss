@@ -831,6 +831,7 @@
   position: fixed;
   top: 42px;
   right: 12px;
+  bottom: 68px;
   z-index: 55;
   background: var(--gt-panel);
   backdrop-filter: var(--gt-blur);
@@ -839,11 +840,11 @@
   border-radius: 8px;
   border: 1px solid var(--gt-border);
   width: 300px;
-  max-height: calc(100vh - 64px);
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   animation: panel-in 0.2s ease-out;
   display: flex;
   flex-direction: column;
+  transition: right 0.2s ease;
 
   .detail-close {
     position: absolute;
@@ -910,7 +911,8 @@
 
   .entity-list-content {
     overflow-y: auto;
-    max-height: calc(100vh - 200px);
+    flex: 1;
+    min-height: 0;
     padding: 2px 0;
 
     &::-webkit-scrollbar { width: 3px; }
@@ -1046,6 +1048,7 @@
   gap: 8px;
   align-items: flex-end;
   pointer-events: none;
+  transition: right 0.2s ease;
   > * { pointer-events: auto; }
 }
 
@@ -1171,6 +1174,7 @@
   animation: panel-in 0.2s ease-out;
   display: flex;
   flex-direction: column;
+  transition: right 0.2s ease;
 
   .detail-close {
     position: absolute;
@@ -1317,6 +1321,7 @@
   animation: panel-in 0.2s ease-out;
   display: flex;
   flex-direction: column;
+  transition: right 0.2s ease;
 
   .detail-close {
     position: absolute;
@@ -1607,8 +1612,6 @@
   display: flex;
   flex-direction: column;
   transition: right 0.2s ease;
-
-  &.shifted { right: 384px; }
 
   .detail-close {
     position: absolute;
@@ -2041,6 +2044,7 @@
   padding: 3px 4px;
   backdrop-filter: var(--gt-blur);
   -webkit-backdrop-filter: var(--gt-blur);
+  transition: right 0.2s ease;
 
   .cb-group {
     display: flex;

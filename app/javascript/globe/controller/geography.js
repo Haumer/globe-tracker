@@ -392,6 +392,7 @@ export function applyGeographyMethods(GlobeController) {
         if (this.camerasVisible) this.fetchWebcams()
         if (this.citiesVisible) this.renderCities()
         if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
+        this._entityListRequested = true
         this.updateEntityList()
         // Init build heatmap if it was pending
         if (this._pendingBuildHeatmap) {
@@ -420,6 +421,7 @@ export function applyGeographyMethods(GlobeController) {
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     if (this.camerasVisible) this.fetchWebcams()
+    this._entityListRequested = this.selectedCountries.size > 0
     this.updateEntityList()
     if (this.citiesVisible) this.renderCities()
     if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
@@ -442,6 +444,7 @@ export function applyGeographyMethods(GlobeController) {
     if (this.flightsVisible) this.fetchFlights()
     if (this.shipsVisible) this.fetchShips()
     if (this.camerasVisible) this.fetchWebcams()
+    this._entityListRequested = false
     this.updateEntityList()
   }
 
@@ -614,6 +617,7 @@ export function applyGeographyMethods(GlobeController) {
     if (this.camerasVisible) this.fetchWebcams()
     if (this.citiesVisible) this.renderCities()
     if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
+    this._entityListRequested = true
     this.updateEntityList()
     if (this._buildHeatmapActive) this._initBuildHeatmap()
   }

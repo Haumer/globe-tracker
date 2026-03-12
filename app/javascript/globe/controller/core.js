@@ -114,6 +114,7 @@ export function applyCoreMethods(GlobeController) {
     this._airlineFilter = new Set() // active airline ICAO codes (empty = show all)
     this._detectedAirlines = new Map() // code → count
     this._pendingCountryRestore = null
+    this._entityListRequested = false
     this._ds = {} // shared datasource cache for getDataSource()
     this._backgroundRefreshRetryTimers = {}
     this._backgroundRefreshRetryCounts = {}

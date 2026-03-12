@@ -4,7 +4,9 @@ export function applySelectionMethods(GlobeController) {
   GlobeController.prototype.updateEntityList = function() {
     const anySatsVisible = Object.values(this.satCategoryVisible).some(Boolean)
     if (!this.hasActiveFilter() || (!this.flightsVisible && !this.shipsVisible && !anySatsVisible)) {
+      const wasVisible = this.entityListPanelTarget.style.display !== "none"
       this.entityListPanelTarget.style.display = "none"
+      if (wasVisible && this._syncRightPanels) this._syncRightPanels()
       return
     }
 
@@ -46,7 +48,13 @@ export function applySelectionMethods(GlobeController) {
       : [...this.selectedCountries].join(", ")
     this.entityListHeaderTarget.textContent = label
 
-    this.entityListPanelTarget.style.display = "block"
+    // Only open the panel if it was explicitly requested (country/circle selection),
+    // not from background refresh calls. If already visible, update content.
+    if (this._entityListRequested) {
+      this.entityListPanelTarget.style.display = "block"
+      if (this._syncRightPanels) this._syncRightPanels()
+    }
+    if (this.entityListPanelTarget.style.display === "none") return
 
     // Render active tab
     const activeTab = this.entityListPanelTarget.querySelector(".entity-tab.active")?.dataset.tab || "flights"
@@ -174,6 +182,7 @@ export function applySelectionMethods(GlobeController) {
 
   GlobeController.prototype.closeEntityList = function() {
     this.entityListPanelTarget.style.display = "none"
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   // ── Selection Tray ───────────────────────────────────────

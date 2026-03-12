@@ -842,12 +842,34 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype.closeCamFeed = function() {
     if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = "none"
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   GlobeController.prototype._syncRightPanels = function() {
-    if (!this.hasCamFeedPanelTarget) return
-    const newsVisible = this.hasNewsFeedPanelTarget && this.newsFeedPanelTarget.style.display !== "none"
-    this.camFeedPanelTarget.classList.toggle("shifted", newsVisible)
+    // Collect all visible right-side panels in stacking priority (rightmost first)
+    const panels = []
+    const _vis = (t, key) => this[`has${key}Target`] && this[`${key}Target`].style.display !== "none"
+
+    if (_vis(null, "entityListPanel")) panels.push({ key: "entityListPanel", w: 312 })
+    if (_vis(null, "newsFeedPanel"))   panels.push({ key: "newsFeedPanel",   w: 372 })
+    if (_vis(null, "threatsPanel"))    panels.push({ key: "threatsPanel",    w: 292 })
+    if (_vis(null, "camFeedPanel"))    panels.push({ key: "camFeedPanel",    w: 352 })
+
+    // Position each panel: first at right:12, subsequent panels shift further right
+    let rightOffset = 12
+    for (const p of panels) {
+      this[`${p.key}Target`].style.right = `${rightOffset}px`
+      rightOffset += p.w
+    }
+
+    // Shift detail-stack and controls-bar so they don't hide behind panels
+    const firstPanelW = panels.length > 0 ? panels[0].w : 0
+    const detailRight = panels.length > 0 ? firstPanelW + 12 : 12
+    const detailStack = document.getElementById("detail-stack")
+    if (detailStack) detailStack.style.right = `${detailRight}px`
+
+    const controlsBar = document.getElementById("controls-bar")
+    if (controlsBar) controlsBar.style.right = `${detailRight + 4}px`
   }
 
   GlobeController.prototype.focusCamFeedItem = function(event) {

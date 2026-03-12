@@ -441,6 +441,7 @@ export function applyInfrastructureMethods(GlobeController) {
       this._clearPowerPlantEntities()
       if (this._ppCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._ppCameraCb); this._ppCameraCb = null }
       if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
     this._savePrefs()
@@ -565,6 +566,7 @@ export function applyInfrastructureMethods(GlobeController) {
     const attacked = this._attackedCountries
     if (!attacked?.size || !this._powerPlantAll?.length) {
       if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+      if (this._syncRightPanels) this._syncRightPanels()
       return
     }
 
@@ -580,6 +582,7 @@ export function applyInfrastructureMethods(GlobeController) {
     }
 
     if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = ""
+    if (this._syncRightPanels) this._syncRightPanels()
     if (this.hasThreatsCountTarget) {
       this.threatsCountTarget.textContent = `${threatened.length} target${threatened.length !== 1 ? "s" : ""}`
     }
@@ -630,6 +633,7 @@ export function applyInfrastructureMethods(GlobeController) {
 
   GlobeController.prototype.closeThreats = function() {
     if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   GlobeController.prototype.focusThreat = function(event) {
@@ -1317,6 +1321,7 @@ export function applyInfrastructureMethods(GlobeController) {
     this._attackedCountries = null
     this._clearCableAttackHighlights()
     if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   GlobeController.prototype._stopTrafficBlobAnim = function() {

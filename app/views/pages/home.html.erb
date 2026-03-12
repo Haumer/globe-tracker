@@ -407,6 +407,19 @@
     </div>
   </div>
 
+  <%# ── Camera Feed Panel ── right side ────────────────────────── %>
+  <div id="cam-feed-panel" data-globe-target="camFeedPanel" style="display:none;">
+    <button class="detail-close" data-action="click->globe#closeCamFeed">&times;</button>
+    <div class="cam-feed-header">
+      <span class="cam-feed-title"><i class="fa-solid fa-video"></i> CAMERAS</span>
+      <span class="cam-feed-count" data-globe-target="camFeedCount">0 cameras</span>
+    </div>
+    <div class="cam-feed-filter">
+      <input type="text" class="cam-feed-search" placeholder="Search cameras..." data-globe-target="camFeedSearch" data-action="input->globe#filterCamFeed">
+    </div>
+    <div class="cam-feed-list" data-globe-target="camFeedList"></div>
+  </div>
+
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>
   <div id="detail-stack">
     <div id="detail-panel" data-globe-target="detailPanel" style="display: none;">

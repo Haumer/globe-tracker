@@ -25,6 +25,7 @@ export function applyNewsMethods(GlobeController) {
       if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
     }
     this._syncQuickBar()
+    if (this._syncRightPanels) this._syncRightPanels()
     this._savePrefs()
   }
 
@@ -485,6 +486,7 @@ export function applyNewsMethods(GlobeController) {
   GlobeController.prototype.closeNewsFeed = function() {
     if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
     this._setNewsDotOpacity(1.0)
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   GlobeController.prototype.switchNewsTab = function(event) {

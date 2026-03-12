@@ -2,7 +2,8 @@ import { getDataSource } from "../utils"
 
 export function applySelectionMethods(GlobeController) {
   GlobeController.prototype.updateEntityList = function() {
-    if (!this.hasActiveFilter()) {
+    const anySatsVisible = Object.values(this.satCategoryVisible).some(Boolean)
+    if (!this.hasActiveFilter() || (!this.flightsVisible && !this.shipsVisible && !anySatsVisible)) {
       this.entityListPanelTarget.style.display = "none"
       return
     }

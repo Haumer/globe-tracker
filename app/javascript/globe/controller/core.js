@@ -101,7 +101,6 @@ export function applyCoreMethods(GlobeController) {
     this._webcamData = []
     this._webcamEntities = []
     this._webcamEntityMap = new Map()
-    this._webcamClusteringReady = false
     this._webcamFetchToken = 0
     this._webcamLastFetchCenter = null
     this.countrySelectMode = false
@@ -214,15 +213,6 @@ export function applyCoreMethods(GlobeController) {
       if (this.drawMode) return
 
       const picked = this.viewer.scene.pick(click.position)
-      const clusterId = picked?.id?.kind === "webcam-cluster"
-        ? picked.id
-        : picked?.primitive?.id?.kind === "webcam-cluster"
-          ? picked.primitive.id
-          : null
-      if (clusterId?.clusteredEntities?.length) {
-        this.zoomToWebcamCluster(clusterId.clusteredEntities)
-        return
-      }
 
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id

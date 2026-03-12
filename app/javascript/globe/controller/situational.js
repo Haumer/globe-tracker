@@ -111,52 +111,7 @@ export function applySituationalMethods(GlobeController) {
   GlobeController.prototype.getWebcamsDataSource = function() {
     const dataSource = getDataSource(this.viewer, this._ds, "webcams")
     dataSource.show = this.camerasVisible
-    this._configureWebcamClustering(dataSource)
     return dataSource
-  }
-
-  GlobeController.prototype._configureWebcamClustering = function(dataSource) {
-    if (this._webcamClusteringReady) return
-
-    const Cesium = window.Cesium
-    const clustering = dataSource.clustering
-    clustering.enabled = true
-    clustering.pixelRange = 32
-    clustering.minimumClusterSize = 2
-    clustering.clusterBillboards = false
-    clustering.clusterLabels = true
-    clustering.clusterPoints = true
-
-    clustering.clusterEvent.addEventListener((clusteredEntities, cluster) => {
-      const clusterId = { kind: "webcam-cluster", clusteredEntities }
-      const size = clusteredEntities.length >= 50 ? 34 : clusteredEntities.length >= 15 ? 30 : 26
-
-      cluster.billboard.show = false
-      cluster.billboard.id = clusterId
-
-      cluster.point.show = true
-      cluster.point.id = clusterId
-      cluster.point.pixelSize = size
-      cluster.point.color = Cesium.Color.fromCssColorString("#ef6c00").withAlpha(0.92)
-      cluster.point.outlineColor = Cesium.Color.WHITE.withAlpha(0.95)
-      cluster.point.outlineWidth = 3
-      cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY
-
-      cluster.label.show = true
-      cluster.label.id = clusterId
-      cluster.label.text = String(clusteredEntities.length)
-      cluster.label.font = "700 13px JetBrains Mono, monospace"
-      cluster.label.fillColor = Cesium.Color.WHITE
-      cluster.label.outlineColor = Cesium.Color.BLACK.withAlpha(0.9)
-      cluster.label.outlineWidth = 4
-      cluster.label.style = Cesium.LabelStyle.FILL_AND_OUTLINE
-      cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER
-      cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER
-      cluster.label.pixelOffset = new Cesium.Cartesian2(0, 0)
-      cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY
-    })
-
-    this._webcamClusteringReady = true
   }
 
   GlobeController.prototype.toggleEarthquakes = function() {
@@ -518,6 +473,8 @@ export function applySituationalMethods(GlobeController) {
     if (this.camerasVisible) {
       this.getWebcamsDataSource().show = true
       this.fetchWebcams()
+      if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = ""
+      this._syncRightPanels()
       // Re-fetch when camera moves significantly
       if (!this._webcamMoveHandler) {
         this._webcamMoveHandler = () => {
@@ -531,6 +488,7 @@ export function applySituationalMethods(GlobeController) {
       this._webcamData = []
       const dataSource = this._ds["webcams"]
       if (dataSource) dataSource.show = false
+      if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = "none"
     }
     this._updateStats()
     this._requestRender()
@@ -628,37 +586,31 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype._buildWebcamFetchPlan = function(center) {
-    if (this.hasActiveFilter()) {
-      const bounds = this.getFilterBounds()
-      if (bounds) {
-        const latPad = Math.max((bounds.lamax - bounds.lamin) * 0.1, 0.15)
-        const lngPad = Math.max((bounds.lomax - bounds.lomin) * 0.1, 0.15)
-        const wideFilter = (bounds.lamax - bounds.lamin) > 8 || (bounds.lomax - bounds.lomin) > 8
-        return {
-          query: [
-            `north=${Math.min(bounds.lamax + latPad, 85).toFixed(4)}`,
-            `south=${Math.max(bounds.lamin - latPad, -85).toFixed(4)}`,
-            `east=${Math.min(bounds.lomax + lngPad, 180).toFixed(4)}`,
-            `west=${Math.max(bounds.lomin - lngPad, -180).toFixed(4)}`,
-          ].join("&"),
-          realtimeLimit: wideFilter ? 35 : 25,
-          windyLimit: wideFilter ? 90 : 70,
-        }
+    const viewport = this._getViewportBbox()
+    const filterBounds = this.hasActiveFilter() ? this.getFilterBounds() : null
+
+    // Use viewport bbox, optionally clamped to country filter bounds
+    if (viewport && center.height > 300000) {
+      let north = viewport.north, south = viewport.south
+      let east = viewport.east, west = viewport.west
+
+      // Clamp to filter bounds so we don't fetch outside selected countries
+      if (filterBounds) {
+        north = Math.min(north, filterBounds.lamax + 0.15)
+        south = Math.max(south, filterBounds.lamin - 0.15)
+        east = Math.min(east, filterBounds.lomax + 0.15)
+        west = Math.max(west, filterBounds.lomin - 0.15)
       }
-    }
 
-    const bbox = this._getViewportBbox()
-
-    if (bbox && center.height > 300000) {
-      const latPad = Math.max((bbox.north - bbox.south) * 0.15, 0.25)
-      const lngPad = Math.max((bbox.east - bbox.west) * 0.15, 0.25)
+      const latPad = Math.max((north - south) * 0.15, 0.25)
+      const lngPad = Math.max((east - west) * 0.15, 0.25)
       const wideView = center.height > 1500000
       return {
         query: [
-          `north=${Math.min(bbox.north + latPad, 85).toFixed(4)}`,
-          `south=${Math.max(bbox.south - latPad, -85).toFixed(4)}`,
-          `east=${Math.min(bbox.east + lngPad, 180).toFixed(4)}`,
-          `west=${Math.max(bbox.west - lngPad, -180).toFixed(4)}`,
+          `north=${Math.min(north + latPad, 85).toFixed(4)}`,
+          `south=${Math.max(south - latPad, -85).toFixed(4)}`,
+          `east=${Math.min(east + lngPad, 180).toFixed(4)}`,
+          `west=${Math.max(west - lngPad, -180).toFixed(4)}`,
         ].join("&"),
         realtimeLimit: wideView ? 40 : 30,
         windyLimit: wideView ? 100 : 80,
@@ -739,8 +691,7 @@ export function applySituationalMethods(GlobeController) {
       country: w.location?.country,
       thumbnail: w.images?.current?.preview || w.images?.daylight?.preview,
       thumbnailIcon: w.images?.current?.icon || w.images?.daylight?.icon,
-      playerUrl: this._extractWindyUrl(w.player?.day, "embed") || this._extractWindyUrl(w.player?.live, "embed"),
-      playerLink: this._extractWindyUrl(w.player?.day) || this._extractWindyUrl(w.player?.live) || (typeof w.url === "string" ? w.url : null),
+      playerLink: this._extractWindyUrl(w.player?.live) || this._extractWindyUrl(w.player?.day) || (typeof w.url === "string" ? w.url : null),
       videoId: w.videoId || null,
       channelTitle: w.channelTitle || null,
       lastUpdated: w.lastUpdatedOn,
@@ -768,7 +719,9 @@ export function applySituationalMethods(GlobeController) {
     }
     this._webcamEntityMap.clear()
     const visibleCams = this._webcamData.filter(w => !this.hasActiveFilter() || this.pointPassesFilter(w.lat, w.lng))
-    dataSource.clustering.enabled = visibleCams.length >= 25
+
+    // Default height offset above ground (meters)
+    const CAM_HEIGHT_OFFSET = 25
 
     visibleCams.forEach(w => {
       const realtime = w.source === "youtube" || w.source === "nycdot"
@@ -778,31 +731,16 @@ export function applySituationalMethods(GlobeController) {
           ? (this._webcamIconLive || (this._webcamIconLive = this._makeWebcamIcon("#4caf50")))
           : (this._webcamIcon || (this._webcamIcon = this._makeWebcamIcon("#29b6f6")))
       const labelPrefix = w.source === "nycdot" ? "🚦 " : w.source === "youtube" ? "▶ " : ""
-      const pointColor = realtime
-        ? Cesium.Color.fromCssColorString("#ff4444")
-        : w.live
-          ? Cesium.Color.fromCssColorString("#4caf50")
-          : Cesium.Color.fromCssColorString("#29b6f6")
       const entity = dataSource.entities.add({
         id: `cam-${w.id}`,
-        position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, 300),
+        position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, CAM_HEIGHT_OFFSET),
         properties: {
           webcamId: w.id,
-        },
-        point: {
-          pixelSize: realtime ? 9 : 8,
-          color: pointColor.withAlpha(0.9),
-          outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
-          outlineWidth: 2,
-          scaleByDistance: new Cesium.NearFarScalar(5e4, 1.1, 1e7, 0.45),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          heightReference: Cesium.HeightReference.NONE,
         },
         billboard: {
           image: icon,
           scale: 0.7,
           scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5e6, 0.4),
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6e6),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           heightReference: Cesium.HeightReference.NONE,
         },
@@ -817,7 +755,6 @@ export function applySituationalMethods(GlobeController) {
           pixelOffset: new Cesium.Cartesian2(0, -14),
           scaleByDistance: new Cesium.NearFarScalar(500, 1, 3e6, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(500, 1, 1.5e6, 0),
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1200000),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           heightReference: Cesium.HeightReference.NONE,
         },
@@ -827,6 +764,97 @@ export function applySituationalMethods(GlobeController) {
     })
 
     this._requestRender()
+    this._renderCamFeed()
+
+    // Sample actual ground height from terrain/3D tiles and reposition cameras
+    if (visibleCams.length > 0 && this.viewer.scene.sampleHeightMostDetailed) {
+      const cartographics = visibleCams.map(w =>
+        Cesium.Cartographic.fromDegrees(w.lng, w.lat)
+      )
+      this.viewer.scene.sampleHeightMostDetailed(cartographics).then(updated => {
+        updated.forEach((carto, i) => {
+          const entity = this._webcamEntities[i]
+          if (!entity) return
+          const groundHeight = carto.height || 0
+          entity.position = Cesium.Cartesian3.fromDegrees(
+            Cesium.Math.toDegrees(carto.longitude),
+            Cesium.Math.toDegrees(carto.latitude),
+            groundHeight + CAM_HEIGHT_OFFSET
+          )
+        })
+        this._requestRender()
+      }).catch(() => {})
+    }
+  }
+
+  GlobeController.prototype._renderCamFeed = function() {
+    if (!this.hasCamFeedListTarget) return
+    const search = this.hasCamFeedSearchTarget ? this.camFeedSearchTarget.value.toLowerCase().trim() : ""
+    const cams = this._webcamData.filter(w => {
+      if (search && !(w.title || "").toLowerCase().includes(search) &&
+          !(w.city || "").toLowerCase().includes(search) &&
+          !(w.country || "").toLowerCase().includes(search)) return false
+      return true
+    })
+
+    if (this.hasCamFeedCountTarget) {
+      this.camFeedCountTarget.textContent = `${cams.length} camera${cams.length !== 1 ? "s" : ""}`
+    }
+
+    if (cams.length === 0) {
+      this.camFeedListTarget.innerHTML = '<div style="padding:24px 14px;text-align:center;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">No cameras found</div>'
+      return
+    }
+
+    const html = cams.map((cam, idx) => {
+      const sourceColors = { youtube: "#ff4444", nycdot: "#ff6d00", windy: "#29b6f6" }
+      const barColor = sourceColors[cam.source] || "#29b6f6"
+      const sourceLabel = { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube" }[cam.source] || cam.source
+      const location = [cam.city, cam.country].filter(Boolean).join(", ")
+      const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
+      const badgeBg = isRealtime ? "#ff4444" : cam.live ? "#4caf50" : "#666"
+      const badgeText = isRealtime ? "LIVE" : cam.live ? "PERIODIC" : "TIMELAPSE"
+      const title = this._escapeHtml((cam.title || "").length > 40 ? cam.title.substring(0, 38) + "…" : (cam.title || "Untitled"))
+      const thumbHtml = cam.thumbnailIcon
+        ? `<img class="cf-card-thumb" src="${cam.thumbnailIcon}" alt="" loading="lazy">`
+        : ""
+
+      return `<div class="cf-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${idx}">
+        <div class="cf-card-bar" style="background:${barColor};"></div>
+        <div class="cf-card-body">
+          <div class="cf-card-title">${title}</div>
+          <div class="cf-card-meta">
+            <span class="cf-card-source">${sourceLabel}</span>
+            ${location ? `<span style="color:var(--gt-text-dim);font:500 9px var(--gt-mono);">&middot;</span><span class="cf-card-location">${this._escapeHtml(location)}</span>` : ""}
+            <span class="cf-card-badge" style="background:${badgeBg};color:#fff;">${badgeText}</span>
+          </div>
+        </div>
+        ${thumbHtml}
+      </div>`
+    }).join("")
+
+    this.camFeedListTarget.innerHTML = html
+  }
+
+  GlobeController.prototype.filterCamFeed = function() {
+    this._renderCamFeed()
+  }
+
+  GlobeController.prototype.closeCamFeed = function() {
+    if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = "none"
+  }
+
+  GlobeController.prototype._syncRightPanels = function() {
+    if (!this.hasCamFeedPanelTarget) return
+    const newsVisible = this.hasNewsFeedPanelTarget && this.newsFeedPanelTarget.style.display !== "none"
+    this.camFeedPanelTarget.classList.toggle("shifted", newsVisible)
+  }
+
+  GlobeController.prototype.focusCamFeedItem = function(event) {
+    const idx = parseInt(event.currentTarget.dataset.camIdx)
+    const cam = this._webcamData[idx]
+    if (!cam) return
+    this.showWebcamDetail(cam)
   }
 
   GlobeController.prototype._clearWebcamEntities = function() {
@@ -837,27 +865,7 @@ export function applySituationalMethods(GlobeController) {
     this._requestRender()
   }
 
-  GlobeController.prototype.zoomToWebcamCluster = function(clusteredEntities) {
-    const Cesium = window.Cesium
-    const positions = []
 
-    for (const entity of clusteredEntities) {
-      const position = entity.position?.getValue?.(Cesium.JulianDate.now())
-      if (position) positions.push(position)
-    }
-
-    if (positions.length === 0) return
-
-    try {
-      const sphere = Cesium.BoundingSphere.fromPoints(positions)
-      this.viewer.camera.flyToBoundingSphere(sphere, {
-        duration: 1.2,
-        offset: new Cesium.HeadingPitchRange(0, -0.9, Math.max(sphere.radius * 2.5, 15000)),
-      })
-    } catch (error) {
-      console.warn("Webcam cluster zoom failed:", error)
-    }
-  }
 
   GlobeController.prototype.showWebcamDetail = function(cam) {
     // Stop any existing auto-refresh
@@ -883,19 +891,14 @@ export function applySituationalMethods(GlobeController) {
         : (typeof cam.playerLink === "string" && cam.playerLink.startsWith("http") ? cam.playerLink : `https://www.windy.com/webcams/${cam.id}`)
 
     let thumbHtml
-    if (cam.source === "youtube" && cam.videoId && thumbUrl) {
-      thumbHtml = `<a class="webcam-thumb" href="${watchUrl}" target="_blank" rel="noopener" style="position:relative;display:block;">
-        <img id="webcam-detail-img" src="${thumbUrl}" alt="${this._escapeHtml(cam.title)}" loading="lazy" style="width:100%;border-radius:4px;">
-        <span class="detail-track-btn" style="position:absolute;left:12px;bottom:12px;margin:0;">
-          <i class="fa-solid fa-play"></i> Watch on YouTube
-        </span>
-      </a>`
-    } else if (cam.source === "youtube" && cam.videoId) {
-      thumbHtml = `<a class="webcam-thumb detail-track-btn" href="${watchUrl}" target="_blank" rel="noopener">
-        <i class="fa-solid fa-play"></i> Watch on YouTube
-      </a>`
+    if (cam.source === "youtube" && cam.videoId) {
+      thumbHtml = `<div class="webcam-thumb"><iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`
     } else if (thumbUrl) {
-      thumbHtml = `<div class="webcam-thumb"><img id="webcam-detail-img" src="${thumbUrl}" alt="${this._escapeHtml(cam.title)}" loading="lazy" style="width:100%;border-radius:4px;"></div>`
+      // Show preview image — auto-refreshes for live cameras
+      thumbHtml = `<div class="webcam-thumb" style="position:relative;">
+        <img id="webcam-detail-img" src="${thumbUrl}${thumbUrl.includes('?') ? '&' : '?'}t=${Date.now()}" alt="${this._escapeHtml(cam.title)}" style="width:100%;border-radius:4px;transition:opacity 0.3s;">
+        <span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.6);color:#ff4444;font:700 9px var(--gt-mono);padding:2px 6px;border-radius:3px;letter-spacing:0.5px;">● LIVE</span>
+      </div>`
     } else {
       thumbHtml = ""
     }
@@ -926,16 +929,18 @@ export function applySituationalMethods(GlobeController) {
           <span class="detail-value">${cam.lat.toFixed(3)}°, ${cam.lng.toFixed(3)}°</span>
         </div>
       </div>
-      <a href="${watchUrl}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-play"></i> Watch Live</a>
+      <a href="${watchUrl}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-${cam.playerLink ? 'play' : 'arrow-up-right-from-square'}"></i> ${cam.playerLink ? 'Watch Live' : 'View Source'}</a>
     `
     this.detailPanelTarget.style.display = ""
 
-    // Auto-refresh DOT camera images every 5 seconds
-    if (cam.source === "nycdot" && cam.thumbnail) {
+    // Auto-refresh camera preview images (Windy updates ~30s, DOT ~5s)
+    const refreshable = (cam.source === "nycdot" || cam.source === "windy") && cam.thumbnail
+    if (refreshable) {
+      const interval = cam.source === "nycdot" ? 5000 : 15000
       this._webcamRefreshInterval = setInterval(() => {
         const img = document.getElementById("webcam-detail-img")
         if (img) img.src = `${cam.thumbnail}?t=${Date.now()}`
-      }, 5000)
+      }, interval)
     }
 
     if (this.viewer?.camera && Number.isFinite(cam.lng) && Number.isFinite(cam.lat)) {

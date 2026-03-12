@@ -29,14 +29,13 @@ module Api
           if bbox_overlaps_nyc?(north, south, east, west)
             threads << Thread.new { fetch_nyc_dot(north, south, east, west) }
           end
-        elsif lat && lng && haversine_approx(lat, lng, 40.7128, -74.006) < 100
+        elsif params[:lat].present? && params[:lng].present? && haversine_approx(lat, lng, 40.7128, -74.006) < 100
           threads << Thread.new { fetch_nyc_dot(lat + 0.5, lat - 0.5, lng + 0.5, lng - 0.5) }
         end
       end
 
       # Source 3: YouTube Live webcams (location-based search)
       yt_key = ENV["YOUTUBE_API_KEY"]
-      Rails.logger.info("YouTube check: key=#{yt_key.present?}, sources=#{requested_sources.inspect}, has_bbox=#{has_bbox}")
       if yt_key.present? && (requested_sources.nil? || requested_sources.include?("youtube"))
         center_lat = has_bbox ? (north + south) / 2.0 : lat
         center_lng = has_bbox ? (east + west) / 2.0 : lng
@@ -60,8 +59,8 @@ module Api
         else w["live"] ? 1 : 2
         end
       end
-      # Hard cap stays bounded, but clustering lets the client handle more cameras safely.
-      max = (params[:limit]&.to_i || 80).clamp(1, 160)
+      # Hard cap to prevent Cesium entity overflow crash
+      max = (params[:limit]&.to_i || 50).clamp(1, 150)
       all_webcams = all_webcams.first(max)
       render json: { webcams: all_webcams }
     end
@@ -82,10 +81,10 @@ module Api
     # ── Windy ──────────────────────────────────────────────────
 
     def fetch_windy(api_key, has_bbox, north, south, east, west, lat, lng)
-      limit = (params[:limit]&.to_i || 50).clamp(1, 100)
+      limit = 50
 
       # Prefer radius-based nearby query (capped at 100 km) to avoid overwhelming the globe
-      if lat && lng
+      if params[:lat].present? && params[:lng].present?
         radius = params[:radius]&.to_i&.clamp(10, 100) || 100
         query = "nearby=#{lat},#{lng},#{radius}"
       elsif has_bbox

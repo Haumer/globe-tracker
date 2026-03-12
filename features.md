@@ -21,7 +21,7 @@
 ### Events
 - **Earthquakes** — USGS real-time feed (M2.5+ last 24h), magnitude-colored markers with impact rings, detail panel with depth/magnitude/alert
 - **Natural Events** — NASA EONET (wildfires, volcanoes, storms, floods, ice, etc.), category-colored markers with event trails, source links
-- **Live Cameras** — Windy Webcams API (70k+ worldwide), viewport-aware loading, thumbnail preview in detail panel, "Watch Live" link, re-fetches on camera move
+- **Live Cameras** — Windy Webcams API (70k+ worldwide), NYC DOT, YouTube Live, ASFINAG (AT), Autobahn.de (DE), Viasuisse (CH); viewport-aware loading, clustering, camera sidebar panel, auto-refresh preview, re-fetches on camera move
 
 ### Infrastructure
 - Collapsible sidebar with organized sections
@@ -69,6 +69,34 @@
 
 ### Country Borders → News
 - Auto-fetch and display news events when a country is selected
+
+---
+
+## Camera Sources
+
+### Active
+- **Windy Webcams API** — 70k+ webcams worldwide, periodic image updates (~30s), free tier with API key
+- **NYC DOT** — ~800 NYC traffic cameras, live image feed, no key needed
+- **YouTube Live** — location-based live stream search, embeddable video, requires API key (quota limited)
+
+### To Add — European Traffic Cameras
+- **ASFINAG** (Austria) — `https://www.asfinag.at/verkehr/verkehrskameras/` — Austrian highway cameras, JSON API, hundreds of cams across the Autobahn network
+- **Autobahn.de** (Germany) — `https://verkehr.autobahn.de/o/autobahn/` — Official German federal highway REST API with webcams endpoint, free, no key needed
+- **Viasuisse / ASTRA** (Switzerland) — Swiss national road traffic cameras, public feeds
+
+### To Add — US Traffic Cameras (DOT)
+- **Caltrans CCTV** (California) — `https://cwwp2.dot.ca.gov/data/d{n}/cctv/cctvStatusLog.json` — thousands of highway cams across 12 districts
+- **WSDOT** (Washington) — `https://data.wsdot.wa.gov/log/camera/cameras.json` — ~1,000 cams
+- **PennDOT** (Pennsylvania) — `https://www.511pa.com/api/cameras`
+- **TxDOT** (Texas) — `https://its.txdot.gov/` — JSON feed
+- **511 systems** — many states (Florida, Virginia, Colorado, etc.) have 511 APIs with camera endpoints
+
+### To Add — Global
+- **Skyline Webcams** — tourism and city cams, embeddable players
+- **EarthCam** — landmark cams worldwide (Times Square, Abbey Road, etc.)
+
+### Not Adding
+- **Insecam** — large aggregator of publicly accessible IP cameras. Not adding because these are unsecured cameras whose owners likely don't know they're being indexed. Ethically questionable — the cameras are "public" only because they lack authentication, not because the owners intended them to be broadcast. Using this source would mean profiting from poor security practices.
 
 ---
 

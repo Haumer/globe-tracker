@@ -846,6 +846,9 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype._syncRightPanels = function() {
+    // On mobile, panels are full-screen overlays — no stacking needed
+    if (this._isMobile && this._isMobile()) return
+
     // Collect all visible right-side panels in stacking priority (rightmost first)
     const panels = []
     const _vis = (t, key) => this[`has${key}Target`] && this[`${key}Target`].style.display !== "none"

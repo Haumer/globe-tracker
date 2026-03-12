@@ -183,6 +183,12 @@ export function applyCoreMethods(GlobeController) {
       maximumRenderTimeChange: Infinity,
     })
 
+    // Mobile performance tuning
+    if (this._isMobile && this._isMobile()) {
+      this.viewer.scene.fxaa = false
+      this.viewer.scene.globe.maximumScreenSpaceError = 4
+    }
+
     this.viewer.scene.globe.enableLighting = true
     this.viewer.scene.skyAtmosphere.show = true
     this.viewer.scene.fog.enabled = true

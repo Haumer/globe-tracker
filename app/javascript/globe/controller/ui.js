@@ -1,6 +1,22 @@
 export function applyUiMethods(GlobeController) {
+  GlobeController.prototype._isMobile = function() {
+    return window.matchMedia("(max-width: 768px)").matches
+  }
+
   GlobeController.prototype.toggleSidebar = function() {
-    if (this.hasSidebarTarget) {
+    if (this._isMobile()) {
+      // Bottom sheet: cycle collapsed → peek → expanded → collapsed
+      const sb = this.sidebarTarget
+      if (sb.classList.contains("mobile-expanded")) {
+        sb.classList.remove("mobile-expanded", "mobile-peek")
+        // collapsed (default transform kicks in)
+      } else if (sb.classList.contains("mobile-peek")) {
+        sb.classList.remove("mobile-peek")
+        sb.classList.add("mobile-expanded")
+      } else {
+        sb.classList.add("mobile-peek")
+      }
+    } else {
       this.sidebarTarget.classList.toggle("collapsed")
     }
     this._savePrefs()
@@ -466,6 +482,12 @@ export function applyUiMethods(GlobeController) {
     // Sync quick bar and badges after restore
     this._syncQuickBar()
     this._updateSatBadge()
+
+    // Mobile: start sidebar in peek mode so quick bar is visible
+    if (this._isMobile()) {
+      this.sidebarTarget.classList.remove("collapsed")
+      this.sidebarTarget.classList.add("mobile-peek")
+    }
   }
 
 }

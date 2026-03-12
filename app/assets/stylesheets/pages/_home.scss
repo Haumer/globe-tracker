@@ -2329,3 +2329,156 @@
 #flight-count {
   display: none;
 }
+
+// ─── Sheet handle (hidden on desktop, visible on mobile) ────────
+.sb-sheet-handle {
+  display: none;
+}
+
+// ─── Mobile Responsive ──────────────────────────────────────────
+@media (max-width: 768px) {
+
+  // 1. Stats bar — compact
+  #stats-bar {
+    height: 28px;
+    padding: 0 2px;
+    .stat-cell { padding: 0 6px; gap: 4px; }
+    .stat-label { font-size: 7px; }
+    .stat-value { font-size: 10px; min-width: 20px; }
+    .stat-sep { height: 12px; }
+  }
+
+  // 2. Sidebar as bottom sheet
+  #sidebar {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 14px 14px 0 0;
+    border-right: none;
+    border-top: 1px solid var(--gt-border);
+    transform: translateY(100%);
+    &.mobile-peek {
+      transform: translateY(calc(100% - 160px));
+    }
+    &.mobile-expanded {
+      transform: translateY(0);
+    }
+    .sb-search { padding: 10px 12px 6px 12px; }
+    .sb-search-icon { left: 22px; }
+  }
+
+  // 3. Sidebar toggle — reposition for mobile
+  #sidebar-toggle {
+    top: auto;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    z-index: 70;
+  }
+
+  // 4. Right panels as full-screen overlays
+  #entity-list-panel,
+  #news-feed-panel,
+  #threats-panel,
+  #cam-feed-panel {
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0;
+    z-index: 200 !important;
+    .detail-close {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+  }
+
+  // 5. Detail stack as full-width bottom sheet
+  #detail-stack {
+    right: 0 !important;
+    left: 0;
+    bottom: 0 !important;
+    padding: 0 8px 8px;
+  }
+  #detail-panel {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+  }
+  #selection-tray {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  // 6. Controls bar — minimal, hide non-essential buttons
+  #controls-bar {
+    right: 8px !important;
+    bottom: 68px;
+    .cb-group:nth-child(1) { display: none; }
+    .cb-sep:nth-child(2) { display: none; }
+    .cb-group:nth-child(3) {
+      .cb-btn:nth-child(2),
+      .cb-btn:nth-child(3) { display: none; }
+    }
+    .cb-btn {
+      width: 44px;
+      height: 44px;
+      font-size: 14px;
+    }
+  }
+
+  // 7. Timeline bar — remove min-width, hide time labels, bigger thumb
+  #timeline-bar {
+    min-width: 0;
+    width: calc(100vw - 16px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    bottom: 68px;
+    padding: 6px 8px;
+    gap: 6px;
+    .tl-time { display: none; }
+    .tl-scrubber {
+      &::-webkit-slider-thumb { width: 20px; height: 20px; }
+      &::-moz-range-thumb { width: 20px; height: 20px; }
+    }
+    .tl-btn { width: 44px; height: 44px; }
+  }
+
+  // 8. Hide controls hint
+  #controls-hint { display: none; }
+
+  // 9. Sheet handle for sidebar bottom sheet
+  .sb-sheet-handle {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px;
+    cursor: grab;
+    &::after {
+      content: '';
+      width: 32px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+}
+
+// ─── Very small screens ─────────────────────────────────────────
+@media (max-width: 480px) {
+  #stats-bar .stat-cell:last-child { display: none; }
+}

@@ -306,7 +306,15 @@
                    data-action="input->globe#setTerrainExaggeration">
             <span class="sb-slider-val">1×</span>
           </div>
-          <%= globe_toggle target: "buildingsToggle", action: "toggleBuildings", label: "3D Buildings" %>
+          <div class="sb-tool-row">
+            <i class="fa-solid fa-building"></i>
+            <span class="sb-tool-label">3D Buildings</span>
+            <select class="sb-select-sm" data-globe-target="buildingsSelect" data-action="change->globe#toggleBuildings">
+              <option value="off">Off</option>
+              <option value="osm">OSM Blocks</option>
+              <option value="google">Photorealistic</option>
+            </select>
+          </div>
           <div class="sb-mini-divider"></div>
           <div class="sb-tool-row" data-action="click->globe#toggleCountrySelect" id="country-select-btn" data-tip="Click countries on the globe to select" data-tip-pos="right">
             <i class="fa-solid fa-hand-pointer"></i>

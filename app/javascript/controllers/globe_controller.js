@@ -5,7 +5,7 @@ import { renderDetailHTML, detailField } from "../globe/details"
 
 export default class extends Controller {
   static values = { cesiumToken: String, signedIn: Boolean, savedPrefs: Object }
-  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "newsArcControls", "newsArcFrom", "newsArcTo", "newsArcMax", "newsArcsToggle", "newsBlobsToggle", "newsFeedPanel", "newsFeedCount", "newsFeedContent", "newsArticlesPane", "newsFlowsPane", "newsArticleCatFilter", "newsArticleSearch", "newsArticleList", "threatsPanel", "threatsCount", "threatsContent", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "trafficArcsToggle", "trafficBlobsToggle", "trafficArcControls", "notamsToggle", "qlNotams"]
+  static targets = ["flightsToggle", "trainsToggle", "camerasToggle", "civilianToggle", "militaryToggle", "detailPanel", "detailContent", "flightCount", "trailsToggle", "satStationsToggle", "satStarlinkToggle", "satGpsToggle", "satWeatherToggle", "satOrbitsToggle", "satHeatmapToggle", "buildHeatmapToggle", "shipsToggle", "bordersToggle", "citiesToggle", "airportsToggle", "earthquakesToggle", "naturalEventsToggle", "terrainToggle", "terrainExaggeration", "buildingsToggle", "buildingsSelect", "searchInput", "searchResults", "searchClear", "entityListPanel", "entityListHeader", "entityListContent", "entityFlightCount", "entityShipCount", "entitySatCount", "sidebar", "statsBar", "statFlights", "statSats", "statShips", "statEvents", "statClock", "airlineFilter", "airlineChips", "entityAirlineBar", "entityAirlineChips", "recordBtn", "recordIcon", "deselectAllBtn", "qlFlights", "qlSatellites", "qlShips", "qlCities", "qlAirports", "qlBorders", "qlTerrain", "qlEarthquakes", "qlEvents", "qlCameras", "flightsBadge", "satBadge", "timelineBar", "timelinePlayBtn", "timelinePlayIcon", "timelineScrubber", "timelineTimeStart", "timelineTimeEnd", "timelineCursorDate", "timelineCursorTime", "timelineCursorDisplay", "timelineSpeed", "timelineLiveBadge", "gpsJammingToggle", "qlGpsJamming", "newsToggle", "qlNews", "newsArcControls", "newsArcFrom", "newsArcTo", "newsArcMax", "newsArcsToggle", "newsBlobsToggle", "newsFeedPanel", "newsFeedCount", "newsFeedContent", "newsArticlesPane", "newsFlowsPane", "newsArticleCatFilter", "newsArticleSearch", "newsArticleList", "threatsPanel", "threatsCount", "threatsContent", "cablesToggle", "qlCables", "outagesToggle", "qlOutages", "selectionTray", "selectionTrayItems", "powerPlantsToggle", "qlPowerPlants", "conflictsToggle", "qlConflicts", "trafficToggle", "qlTraffic", "trafficArcsToggle", "trafficBlobsToggle", "trafficArcControls", "notamsToggle", "qlNotams"]
 
   connect() {
     this.flightsVisible = false
@@ -4499,7 +4499,7 @@ export default class extends Controller {
       notams: this.notamsVisible,
       terrain: this.terrainEnabled || false,
       terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
-      buildings: this.buildingsEnabled || false,
+      buildings: this.hasBuildingsSelectTarget ? this.buildingsSelectTarget.value : "off",
       showCivilian: this.showCivilian,
       showMilitary: this.showMilitary,
       satCategories: { ...this.satCategoryVisible },
@@ -4669,8 +4669,8 @@ export default class extends Controller {
         this.terrainExaggerationTarget.value = l.terrainExaggeration
         this.setTerrainExaggeration()
       }
-      if (l.buildings && this.hasBuildingsToggleTarget) {
-        this.buildingsToggleTarget.checked = true
+      if (l.buildings && l.buildings !== "off" && this.hasBuildingsSelectTarget) {
+        this.buildingsSelectTarget.value = l.buildings
         this.toggleBuildings()
       }
       // Civilian/military filter (default both on)
@@ -5058,22 +5058,48 @@ export default class extends Controller {
 
   async toggleBuildings() {
     const Cesium = window.Cesium
-    this.buildingsEnabled = this.hasBuildingsToggleTarget && this.buildingsToggleTarget.checked
-    if (this.buildingsEnabled) {
+    const mode = this.hasBuildingsSelectTarget ? this.buildingsSelectTarget.value : "off"
+    this.buildingsEnabled = mode !== "off"
+
+    // Hide both tilesets first
+    if (this._buildingsTileset) this._buildingsTileset.show = false
+    if (this._googleTileset) this._googleTileset.show = false
+
+    if (mode === "osm") {
       if (!this._buildingsTileset) {
         try {
           this._buildingsTileset = await Cesium.createOsmBuildingsAsync()
           this.viewer.scene.primitives.add(this._buildingsTileset)
         } catch (e) {
           console.warn("Failed to load OSM buildings:", e)
+          if (this.hasBuildingsSelectTarget) this.buildingsSelectTarget.value = "off"
           this.buildingsEnabled = false
-          if (this.hasBuildingsToggleTarget) this.buildingsToggleTarget.checked = false
           return
         }
       }
       this._buildingsTileset.show = true
-    } else {
-      if (this._buildingsTileset) this._buildingsTileset.show = false
+    } else if (mode === "google") {
+      if (!this._googleTileset) {
+        try {
+          this._googleTileset = await Cesium.Cesium3DTileset.fromIonAssetId(2275207)
+          // Improve visual quality
+          this._googleTileset.maximumScreenSpaceError = 8
+          this.viewer.scene.primitives.add(this._googleTileset)
+        } catch (e) {
+          console.warn("Failed to load Google Photorealistic 3D Tiles:", e)
+          if (this.hasBuildingsSelectTarget) this.buildingsSelectTarget.value = "off"
+          this.buildingsEnabled = false
+          return
+        }
+      }
+      this._googleTileset.show = true
+      // Hide globe base imagery to avoid z-fighting with Google's ground textures
+      this.viewer.scene.globe.show = false
+    }
+
+    // Restore globe when not using Google tiles
+    if (mode !== "google") {
+      this.viewer.scene.globe.show = true
     }
     this._savePrefs()
   }

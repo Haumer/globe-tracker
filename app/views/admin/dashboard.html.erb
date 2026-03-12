@@ -15,7 +15,9 @@
           <div style="display: flex; gap: 24px; flex-wrap: wrap;">
             <span>
               Status:
-              <% if @poller_status[:running] %>
+              <% if @poller_status[:running] && @poller_status[:paused] %>
+                <span style="color: #ffa726; font-weight: 600;">Paused</span>
+              <% elsif @poller_status[:running] %>
                 <span style="color: #66bb6a; font-weight: 600;">Running</span>
               <% else %>
                 <span style="color: #ef5350; font-weight: 600;">Stopped</span>
@@ -30,11 +32,26 @@
             <span>Polls: <strong><%= @poller_status[:poll_count] %></strong></span>
           </div>
         </div>
-        <%= form_tag admin_toggle_poller_path, method: :post, style: "margin: 0;" do %>
-          <button type="submit" style="background: <%= @poller_status[:running] ? '#ef5350' : '#66bb6a' %>; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
-            <%= @poller_status[:running] ? "Stop Poller" : "Start Poller" %>
-          </button>
-        <% end %>
+        <div style="display: flex; gap: 8px;">
+          <% if @poller_status[:running] %>
+            <%= form_tag admin_pause_poller_path, method: :post, style: "margin: 0;" do %>
+              <button type="submit" style="background: <%= @poller_status[:paused] ? '#ffa726' : '#42a5f5' %>; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                <%= @poller_status[:paused] ? "Resume" : "Pause" %>
+              </button>
+            <% end %>
+            <%= form_tag admin_stop_poller_path, method: :post, style: "margin: 0;" do %>
+              <button type="submit" style="background: #ef5350; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                Stop
+              </button>
+            <% end %>
+          <% else %>
+            <%= form_tag admin_toggle_poller_path, method: :post, style: "margin: 0;" do %>
+              <button type="submit" style="background: #66bb6a; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                Start Poller
+              </button>
+            <% end %>
+          <% end %>
+        </div>
       </div>
     </div>
 

@@ -5,6 +5,8 @@ Rails.application.routes.draw do
 
   get "admin", to: "admin#dashboard", as: :admin
   post "admin/toggle_poller", to: "admin#toggle_poller", as: :admin_toggle_poller
+  post "admin/pause_poller", to: "admin#pause_poller", as: :admin_pause_poller
+  post "admin/stop_poller", to: "admin#stop_poller", as: :admin_stop_poller
 
   namespace :api do
     resources :flights, only: [:index, :show]

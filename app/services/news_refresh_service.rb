@@ -73,6 +73,7 @@ class NewsRefreshService
       records << {
         url: url,
         name: props["name"],
+        title: props["name"],
         latitude: lat,
         longitude: lng,
         tone: tone.round(1),
@@ -81,6 +82,7 @@ class NewsRefreshService
         themes: matched_themes.first(5),
         published_at: published_at,
         fetched_at: now,
+        source: "gdelt",
         created_at: now,
         updated_at: now,
       }

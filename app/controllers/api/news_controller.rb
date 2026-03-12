@@ -20,11 +20,13 @@ module Api
           lat: ev.latitude,
           lng: ev.longitude,
           name: ev.name,
+          title: ev.title,
           url: ev.url,
           tone: ev.tone,
           level: ev.level,
           category: ev.category,
           themes: themes,
+          source: ev.source,
           time: ev.published_at&.iso8601,
         }
       }

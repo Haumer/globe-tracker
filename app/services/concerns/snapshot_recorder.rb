@@ -88,7 +88,7 @@ module SnapshotRecorder
     end
   end
 
-  MAX_SNAPSHOT_AGE = 60 # Always record if last snapshot is older than 60s
+  MAX_SNAPSHOT_AGE = 60 # Record if last snapshot is older than 60s; moving entities still record on position change
 
   def snapshot_unchanged?(last, record)
     return false unless last # no previous record — always insert

@@ -20,9 +20,13 @@ class AdminController < ApplicationController
         "MAX(created_at) as last_poll_at"
       )
 
-    # Snapshot counts
+    # Snapshot counts (use estimated total to avoid slow full-table count)
+    estimated_total = ActiveRecord::Base.connection.execute(
+      "SELECT reltuples::bigint FROM pg_class WHERE relname = 'position_snapshots'"
+    ).first&.fetch("reltuples", 0) || 0
+
     @snapshot_counts = {
-      total: PositionSnapshot.count,
+      total: estimated_total,
       last_hour: PositionSnapshot.where("recorded_at > ?", 1.hour.ago).count,
       flights_hour: PositionSnapshot.where(entity_type: "flight").where("recorded_at > ?", 1.hour.ago).count,
       ships_hour: PositionSnapshot.where(entity_type: "ship").where("recorded_at > ?", 1.hour.ago).count,
@@ -35,6 +39,9 @@ class AdminController < ApplicationController
       satellites: Satellite.maximum(:updated_at),
       earthquakes: Earthquake.maximum(:updated_at),
       news: NewsEvent.maximum(:updated_at),
+      natural_events: NaturalEvent.maximum(:updated_at),
+      conflict_events: ConflictEvent.maximum(:updated_at),
+      internet_outages: InternetOutage.maximum(:updated_at),
       airports: Airport.maximum(:fetched_at),
     }
   end
@@ -45,6 +52,20 @@ class AdminController < ApplicationController
     else
       GlobalPollerService.start
     end
+    redirect_to admin_path
+  end
+
+  def pause_poller
+    if GlobalPollerService.paused?
+      GlobalPollerService.resume
+    else
+      GlobalPollerService.pause
+    end
+    redirect_to admin_path
+  end
+
+  def stop_poller
+    GlobalPollerService.stop
     redirect_to admin_path
   end
 

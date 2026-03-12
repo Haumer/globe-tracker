@@ -5515,13 +5515,13 @@ export default class extends Controller {
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
         label: {
-          text: ev.name ? ev.name.split(",")[0] : "",
-          font: `${pixelSize >= 28 ? 14 : pixelSize >= 20 ? 12 : 11}px JetBrains Mono, monospace`,
-          fillColor: Cesium.Color.fromCssColorString(color).withAlpha(pixelSize >= 28 ? 1.0 : 0.9),
+          text: this._truncateNewsLabel(ev.title || ev.name, pixelSize >= 28 ? 50 : 30),
+          font: `${pixelSize >= 28 ? 15 : pixelSize >= 20 ? 14 : 13}px DM Sans, sans-serif`,
+          fillColor: Cesium.Color.WHITE.withAlpha(pixelSize >= 28 ? 0.95 : 0.85),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: pixelSize >= 28 ? 4 : 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -(pixelSize / 2 + 6)),
+          pixelOffset: new Cesium.Cartesian2(0, -(pixelSize + 12)),
           scaleByDistance: pixelSize >= 28
             ? new Cesium.NearFarScalar(1e5, 1.2, 1.5e7, 0.5)
             : new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
@@ -5531,10 +5531,11 @@ export default class extends Controller {
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: pixelSize >= 28 ? Number.POSITIVE_INFINITY : 0,
         },
-        description: `<div style="font-family: sans-serif; max-width: 350px;">
-          <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${ev.category}</div>
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">${ev.name || "Unknown location"}</div>
-          <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Tone: ${ev.tone} &middot; ${ev.level}</div>
+        description: `<div style="font-family: 'DM Sans', sans-serif; max-width: 380px;">
+          <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${ev.category}${ev.source ? ' · ' + ev.source : ''}</div>
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px; line-height: 1.3;">${ev.title || ev.name || "Unknown"}</div>
+          ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 6px;">' + ev.name + '</div>' : ''}
+          <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Tone: ${ev.tone} · ${ev.level}</div>
           <div style="font-size: 11px; margin-bottom: 8px;">${(ev.themes || []).map(t => '<span style="display:inline-block;background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:3px;margin:2px;font-size:10px;">' + t.replace(/^.*_/, '') + '</span>').join("")}</div>
           <a href="${ev.url}" target="_blank" rel="noopener" style="color: ${color}; font-size: 11px;">Read article →</a>
           ${ev.time ? '<div style="font-size: 10px; color: #666; margin-top: 6px;">' + new Date(ev.time).toUTCString() + '</div>' : ''}
@@ -5651,6 +5652,14 @@ export default class extends Controller {
 
     // .com with no known mapping — skip
     return null
+  }
+
+  _truncateNewsLabel(text, maxLen) {
+    if (!text) return ""
+    // Take first meaningful segment (before | or - or :)
+    const clean = text.split(/\s*[|–—]\s*/)[0].trim()
+    if (clean.length <= maxLen) return clean
+    return clean.substring(0, maxLen - 1).trim() + "…"
   }
 
   _renderNewsArcs(events) {
@@ -6045,60 +6054,83 @@ export default class extends Controller {
   _renderGpsJamming(cells) {
     this._clearGpsJammingEntities()
     const dataSource = this.getGpsJammingDataSource()
+    const Cesium = window.Cesium
+
+    if (cells.length === 0) return
 
     const colors = {
-      low: Cesium.Color.fromCssColorString("rgba(76, 175, 80, 0.25)"),
-      medium: Cesium.Color.fromCssColorString("rgba(255, 193, 7, 0.45)"),
+      low: Cesium.Color.fromCssColorString("rgba(255, 152, 0, 0.25)"),
+      medium: Cesium.Color.fromCssColorString("rgba(255, 87, 34, 0.45)"),
       high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.55)")
     }
     const outlines = {
-      low: Cesium.Color.fromCssColorString("rgba(76, 175, 80, 0.5)"),
-      medium: Cesium.Color.fromCssColorString("rgba(255, 193, 7, 0.7)"),
-      high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.8)")
+      low: Cesium.Color.fromCssColorString("rgba(255, 152, 0, 0.5)"),
+      medium: Cesium.Color.fromCssColorString("rgba(255, 87, 34, 0.8)"),
+      high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.9)")
     }
 
-    const halfCell = 0.5 // half of 1° cell
+    const hexRadius = 0.5 // degrees — matches backend HEX_SIZE for flush tiling
 
     cells.forEach(cell => {
-      // Rectangle entity for the cell
-      const rectEntity = dataSource.entities.add({
+      const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
+      const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
+
+      const hexEntity = dataSource.entities.add({
         id: `jam-${cell.lat}-${cell.lng}`,
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            cell.lng - halfCell, cell.lat - halfCell,
-            cell.lng + halfCell, cell.lat + halfCell
-          ),
-          material: colors[cell.level] || colors.low,
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(positions),
+          material: colors[cell.level] || colors.medium,
           outline: true,
-          outlineColor: outlines[cell.level] || outlines.low,
-          outlineWidth: 1,
+          outlineColor: outlines[cell.level] || outlines.medium,
+          outlineWidth: 2,
           height: 0,
         },
-        description: `<b>GPS Interference</b><br>Level: ${cell.level.toUpperCase()}<br>Bad accuracy: ${cell.pct}% (${cell.bad}/${cell.total} aircraft)<br>NACp ≤ 6 indicates degraded GPS`,
+        description: `<div style="font-family: 'DM Sans', sans-serif;">
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">GPS Interference</div>
+          <div style="font-size: 13px; color: ${cell.level === 'high' ? '#f44336' : '#ffc107'}; font-weight: 600; margin-bottom: 4px;">${cell.level.toUpperCase()} — ${cell.pct}%</div>
+          <div style="font-size: 12px; color: #aaa;">${cell.bad} of ${cell.total} aircraft with degraded accuracy</div>
+          <div style="font-size: 11px; color: #666; margin-top: 6px;">NACp ≤ 6 indicates GPS jamming or spoofing</div>
+        </div>`,
       })
-      this._gpsJammingEntities.push(rectEntity)
+      this._gpsJammingEntities.push(hexEntity)
 
-      // Label for medium/high cells
+      // Label only for medium/high
       if (cell.level !== "low") {
         const labelEntity = dataSource.entities.add({
           id: `jam-lbl-${cell.lat}-${cell.lng}`,
-          position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 100),
+          position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 200),
           label: {
-            text: `${cell.pct}%`,
-            font: "11px monospace",
-            fillColor: Cesium.Color.WHITE,
+            text: `⚠ ${cell.pct}%`,
+            font: "13px DM Sans, sans-serif",
+            fillColor: cell.level === "high" ? Cesium.Color.fromCssColorString("#ff5252") : Cesium.Color.fromCssColorString("#ffd54f"),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            scale: 0.8,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 8e6, 0.4),
           },
         })
         this._gpsJammingEntities.push(labelEntity)
       }
     })
+  }
+
+  // Generate 6 vertices of a flat-top hexagon at (lat, lng) with given radius in degrees.
+  // Corrects longitude for latitude so hexagons appear regular on the globe.
+  _hexVertices(lat, lng, radius) {
+    const vertices = []
+    const cosLat = Math.cos(lat * Math.PI / 180)
+    const lngR = cosLat > 0.01 ? radius / cosLat : radius
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i  // flat-top: 0°, 60°, 120°...
+      vertices.push([
+        lat + radius * Math.sin(angle),
+        lng + lngR * Math.cos(angle),
+      ])
+    }
+    return vertices
   }
 
   _clearGpsJammingEntities() {

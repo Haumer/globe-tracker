@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_11_160001) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_11_224743) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -185,9 +185,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_11_160001) do
     t.datetime "fetched_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "source"
+    t.string "title"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
     t.index ["published_at"], name: "index_news_events_on_published_at"
+    t.index ["source"], name: "index_news_events_on_source"
+    t.index ["title"], name: "index_news_events_on_title"
     t.index ["url"], name: "index_news_events_on_url", unique: true
   end
 

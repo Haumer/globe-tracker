@@ -11,15 +11,35 @@ class PositionSnapshot < ApplicationRecord
     end
   }
 
-  # Returns snapshots grouped into time buckets for efficient playback
-  # Each bucket contains all entity positions at that moment
-  def self.playback_frames(entity_type:, from:, to:, bounds: {}, interval: 10)
-    snaps = where(entity_type: entity_type).in_range(from, to).within_bounds(bounds)
-                .order(:recorded_at)
+  MAX_PLAYBACK_ENTITIES = 2000
 
-    # Group by time bucket (rounded to interval seconds)
+  # Returns snapshots grouped into time buckets for efficient playback.
+  # Caps to MAX_PLAYBACK_ENTITIES unique entities to keep response size manageable.
+  def self.playback_frames(entity_type:, from:, to:, bounds: {}, interval: 30)
+    # First, find which entities to include (capped)
+    entity_ids = where(entity_type: entity_type)
+      .in_range(from, to)
+      .within_bounds(bounds)
+      .select(:entity_id).distinct
+      .limit(MAX_PLAYBACK_ENTITIES)
+      .pluck(:entity_id)
+
+    return {} if entity_ids.empty?
+
+    # Fetch snapshots only for selected entities, ordered for grouping
+    snaps = where(entity_type: entity_type, entity_id: entity_ids)
+      .in_range(from, to)
+      .order(:recorded_at)
+
+    # Group by time bucket
     snaps.group_by { |s| (s.recorded_at.to_i / interval) * interval }
          .transform_keys { |t| Time.at(t).utc.iso8601 }
+         .transform_values { |bucket_snaps|
+           # Keep only the latest snapshot per entity in each bucket
+           bucket_snaps.group_by(&:entity_id)
+                       .values
+                       .map(&:last)
+         }
   end
 
   # Purge snapshots older than retention period

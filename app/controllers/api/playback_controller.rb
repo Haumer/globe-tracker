@@ -18,7 +18,7 @@ module Api
         lomax: params[:lomax]&.to_f
       }.compact
 
-      interval = (params[:interval] || 10).to_i.clamp(5, 60)
+      interval = (params[:interval] || 30).to_i.clamp(10, 120)
       effective_bounds = bounds.size == 4 ? bounds : {}
 
       if entity_type == "all"

@@ -1,5 +1,6 @@
 class GlobalPollerService
-  POLL_INTERVAL = 30 # seconds
+  FLIGHT_POLL_INTERVAL = 10 # seconds
+  FULL_POLL_INTERVAL   = 30 # seconds (for non-flight sources)
 
   class << self
     def start
@@ -10,9 +11,21 @@ class GlobalPollerService
       Rails.logger.info("GlobalPollerService: started")
     end
 
+    def pause
+      @paused = true
+      Rails.logger.info("GlobalPollerService: paused")
+    end
+
+    def resume
+      @paused = false
+      Rails.logger.info("GlobalPollerService: resumed")
+    end
+
     def stop
       @running = false
+      @paused = false
       @thread&.join(5)
+      @thread = nil
       Rails.logger.info("GlobalPollerService: stopped")
     end
 
@@ -20,9 +33,14 @@ class GlobalPollerService
       @running && @thread&.alive?
     end
 
+    def paused?
+      @paused == true
+    end
+
     def status
       {
         running: running?,
+        paused: paused?,
         started_at: @started_at,
         last_poll_at: @last_poll_at,
         poll_count: @poll_count || 0,
@@ -35,16 +53,30 @@ class GlobalPollerService
       @started_at = Time.current
       @poll_count = 0
 
+      @last_full_poll = 0
+
       while @running
-        begin
-          poll_all
-          @last_poll_at = Time.current
-          @poll_count += 1
-        rescue => e
-          Rails.logger.error("GlobalPollerService: #{e.message}")
+        unless @paused
+          begin
+            poll_flights
+            @poll_count += 1
+
+            # Run full poll (non-flight sources) every FULL_POLL_INTERVAL
+            elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_full_poll
+            if elapsed >= FULL_POLL_INTERVAL
+              poll_secondary
+              @last_full_poll = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            end
+
+            @last_poll_at = Time.current
+          rescue => e
+            Rails.logger.error("GlobalPollerService: #{e.message}")
+          ensure
+            ActiveRecord::Base.connection_pool.release_connection
+          end
         end
 
-        sleep POLL_INTERVAL
+        sleep FLIGHT_POLL_INTERVAL
       end
     end
 
@@ -62,7 +94,7 @@ class GlobalPollerService
       { name: "india",     lat: 22, lon: 78 },
     ].freeze
 
-    def poll_all
+    def poll_flights
       # Flights - OpenSky (global, no bounds)
       poll_source("opensky", "flight") do
         OpenskyService.fetch_flights(bounds: {})
@@ -82,13 +114,52 @@ class GlobalPollerService
       poll_source("adsb-mil", "flight") do
         AdsbService.fetch_military
       end
+    end
 
+    def poll_secondary
       # Ships - AIS (WebSocket stream, just ensure it's running)
       poll_source("ais", "ship") do
         unless AisStreamService.running?
           AisStreamService.start
         end
         Ship.where("updated_at > ?", 2.minutes.ago)
+      end
+
+      poll_source("usgs", "earthquake") do
+        EarthquakeRefreshService.refresh_if_stale
+      end
+
+      poll_source("gdelt", "news") do
+        NewsRefreshService.refresh_if_stale
+      end
+
+      poll_source("multi-news", "news") do
+        MultiNewsService.refresh_if_stale
+      end
+
+      poll_source("eonet", "natural_event") do
+        NaturalEventRefreshService.refresh_if_stale
+      end
+
+      poll_source("acled", "conflict_event") do
+        ConflictEventService.refresh_if_stale
+      end
+
+      poll_source("cloudflare", "internet_outage") do
+        InternetOutageRefreshService.refresh_if_stale
+      end
+
+      poll_source("cloudflare-traffic", "internet_traffic") do
+        result = CloudflareRadarService.refresh_if_stale
+        result.is_a?(Hash) ? (result[:traffic]&.size || 0) : 0
+      end
+
+      poll_source("celestrak", "satellite") do
+        CelestrakService.refresh_if_stale
+      end
+
+      poll_source("submarine-cables", "submarine_cable") do
+        SubmarineCableRefreshService.refresh_if_stale
       end
     end
 

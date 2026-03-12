@@ -60,6 +60,9 @@ module Api
         else w["live"] ? 1 : 2
         end
       end
+      # Hard cap to prevent Cesium entity overflow crash
+      max = (params[:limit]&.to_i || 50).clamp(1, 50)
+      all_webcams = all_webcams.first(max)
       render json: { webcams: all_webcams }
     end
 
@@ -79,7 +82,7 @@ module Api
     # ── Windy ──────────────────────────────────────────────────
 
     def fetch_windy(api_key, has_bbox, north, south, east, west, lat, lng)
-      limit = 50
+      limit = 30
 
       # Prefer radius-based nearby query (capped at 100 km) to avoid overwhelming the globe
       if lat && lng
@@ -164,14 +167,18 @@ module Api
 
       return [] unless resp.is_a?(Net::HTTPSuccess)
 
+      center_lat = (north + south) / 2.0
+      center_lng = (east + west) / 2.0
+
       cameras = JSON.parse(resp.body)
-      cameras.filter_map do |cam|
+      results = cameras.filter_map do |cam|
         lat = cam["latitude"]&.to_f
         lng = cam["longitude"]&.to_f
         next unless lat && lng
         next unless lat.between?(south, north) && lng.between?(west, east)
         next if cam["isOnline"].to_s == "false"
 
+        dist = haversine_approx(lat, lng, center_lat, center_lng)
         {
           "webcamId" => "nycdot-#{cam['id']}",
           "title" => cam["name"] || "NYC Traffic Cam",
@@ -193,8 +200,12 @@ module Api
           "player" => nil,
           "lastUpdatedOn" => Time.current.iso8601,
           "viewCount" => nil,
+          "_dist" => dist,
         }
       end
+      # Return only the 20 nearest to bbox center
+      results.sort_by! { |c| c["_dist"] }
+      results.first(20).each { |c| c.delete("_dist") }
     rescue => e
       Rails.logger.warn("NYC DOT fetch error: #{e.message}")
       []
@@ -211,7 +222,7 @@ module Api
         location: "#{lat},#{lng}",
         locationRadius: "#{radius_km}km",
         q: "webcam OR camera OR live OR street OR traffic OR weather",
-        maxResults: 25,
+        maxResults: 10,
         key: api_key,
       )
 

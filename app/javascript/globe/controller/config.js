@@ -122,6 +122,18 @@ export const GLOBE_TARGETS = [
   "workspaceBar",
   "workspaceSelect",
   "workspaceDeleteBtn",
+  "rightPanel",
+  "rpTabEntities",
+  "rpTabNews",
+  "rpTabThreats",
+  "rpTabCameras",
+  "rpTabAlerts",
+  "alertBadge",
+  "alertFeedContent",
+  "miniTimeline",
+  "miniTimelineDots",
+  "fireHotspotsToggle",
+  "qlFireHotspots",
 ]
 
 export const NEWS_REGIONS = {

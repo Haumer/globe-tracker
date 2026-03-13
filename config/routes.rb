@@ -10,11 +10,24 @@ Rails.application.routes.draw do
 
   namespace :api do
     resources :flights, only: [:index, :show]
-    resources :satellites, only: [:index]
+    resources :satellites, only: [:index] do
+      collection do
+        get :search
+      end
+    end
     resources :ships, only: [:index]
     resources :webcams, only: [:index]
     resource :preferences, only: [:show, :update]
     resources :workspaces, only: [:index, :create, :update, :destroy]
+    resources :watches, only: [:index, :create, :update, :destroy]
+    resources :alerts, only: [:index, :update] do
+      collection do
+        post :mark_all_seen
+      end
+    end
+    resource :connections, only: [:show]
+    resources :anomalies, only: [:index]
+    resource :area_report, only: [:show]
     resources :news, only: [:index]
     resources :earthquakes, only: [:index]
     resources :natural_events, only: [:index]
@@ -26,6 +39,7 @@ Rails.application.routes.draw do
     resources :internet_traffic, only: [:index]
     resources :notams, only: [:index]
     resources :airports, only: [:index]
+    resources :fire_hotspots, only: [:index]
     resources :playback, only: [:index] do
       collection do
         get :range

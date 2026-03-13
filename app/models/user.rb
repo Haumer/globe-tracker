@@ -5,6 +5,8 @@ class User < ApplicationRecord
          :recoverable, :rememberable, :validatable
 
   has_many :workspaces, dependent: :destroy
+  has_many :watches, dependent: :destroy
+  has_many :alerts, dependent: :destroy
 
   def admin?
     admin == true

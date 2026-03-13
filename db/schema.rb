@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_12_225000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_13_010344) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -34,6 +34,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_12_225000) do
     t.index ["icao_code"], name: "index_airports_on_icao_code", unique: true
     t.index ["is_military"], name: "index_airports_on_is_military"
     t.index ["latitude", "longitude"], name: "index_airports_on_latitude_and_longitude"
+  end
+
+  create_table "alerts", force: :cascade do |t|
+    t.bigint "watch_id"
+    t.bigint "user_id", null: false
+    t.string "title", null: false
+    t.jsonb "details", default: {}
+    t.string "entity_type"
+    t.string "entity_id"
+    t.float "lat"
+    t.float "lng"
+    t.boolean "seen", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "seen", "created_at"], name: "index_alerts_on_user_id_and_seen_and_created_at"
+    t.index ["user_id"], name: "index_alerts_on_user_id"
+    t.index ["watch_id"], name: "index_alerts_on_watch_id"
   end
 
   create_table "conflict_events", force: :cascade do |t|
@@ -80,6 +97,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_12_225000) do
     t.index ["event_time"], name: "index_earthquakes_on_event_time"
     t.index ["external_id"], name: "index_earthquakes_on_external_id", unique: true
     t.index ["fetched_at"], name: "index_earthquakes_on_fetched_at"
+  end
+
+  create_table "fire_hotspots", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.float "brightness"
+    t.string "confidence"
+    t.string "satellite"
+    t.string "instrument"
+    t.float "frp"
+    t.float "bright_t31"
+    t.string "daynight"
+    t.datetime "acq_datetime"
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["acq_datetime"], name: "index_fire_hotspots_on_acq_datetime"
+    t.index ["external_id"], name: "index_fire_hotspots_on_external_id", unique: true
+    t.index ["latitude", "longitude"], name: "index_fire_hotspots_on_latitude_and_longitude"
   end
 
   create_table "flights", force: :cascade do |t|
@@ -356,6 +393,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_12_225000) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  create_table "watches", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.string "watch_type", null: false
+    t.jsonb "conditions", default: {}
+    t.string "notify_via", default: "in_app"
+    t.boolean "active", default: true
+    t.datetime "last_triggered_at"
+    t.integer "cooldown_minutes", default: 15
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "active"], name: "index_watches_on_user_id_and_active"
+    t.index ["user_id"], name: "index_watches_on_user_id"
+  end
+
   create_table "workspaces", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "name", null: false
@@ -376,5 +428,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_12_225000) do
     t.index ["user_id"], name: "index_workspaces_on_user_id"
   end
 
+  add_foreign_key "alerts", "users"
+  add_foreign_key "alerts", "watches"
+  add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"
 end

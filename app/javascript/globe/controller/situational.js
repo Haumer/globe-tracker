@@ -270,8 +270,10 @@ export function applySituationalMethods(GlobeController) {
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${eq.lat}" data-lng="${eq.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
+      ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
+    this._fetchConnections("earthquake", eq.lat, eq.lng)
 
     // Fly to earthquake
     const Cesium = window.Cesium
@@ -473,8 +475,7 @@ export function applySituationalMethods(GlobeController) {
     if (this.camerasVisible) {
       this.getWebcamsDataSource().show = true
       this.fetchWebcams()
-      if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = ""
-      this._syncRightPanels()
+      this._showRightPanel("cameras")
       // Re-fetch when camera moves significantly
       if (!this._webcamMoveHandler) {
         this._webcamMoveHandler = () => {
@@ -488,7 +489,7 @@ export function applySituationalMethods(GlobeController) {
       this._webcamData = []
       const dataSource = this._ds["webcams"]
       if (dataSource) dataSource.show = false
-      if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = "none"
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._updateStats()
     this._requestRender()
@@ -651,6 +652,7 @@ export function applySituationalMethods(GlobeController) {
           this._mergeWebcams(rtCams)
           this.renderWebcams()
           this._updateStats()
+          if (this._syncRightPanels) this._syncRightPanels()
         }
       }
     } catch (e) { console.warn("Real-time webcam fetch failed:", e) }
@@ -674,6 +676,7 @@ export function applySituationalMethods(GlobeController) {
 
     if (fetchId === this._webcamFetchToken) {
       this._webcamLastFetchCenter = center
+      if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
     }
   }
@@ -841,38 +844,87 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeCamFeed = function() {
-    if (this.hasCamFeedPanelTarget) this.camFeedPanelTarget.style.display = "none"
     if (this._syncRightPanels) this._syncRightPanels()
   }
 
+  // ── Unified Right Panel ─────────────────────────────────
+
   GlobeController.prototype._syncRightPanels = function() {
-    // On mobile, panels are full-screen overlays — no stacking needed
-    if (this._isMobile && this._isMobile()) return
+    // Determine which tabs should be visible based on active layers/data
+    const hasEntities = this._entityListRequested && this.hasActiveFilter()
+    const hasNews = this.newsVisible && this._newsData?.length > 0
+    const hasThreats = !!this._threatsActive
+    const hasCameras = this.camerasVisible && this._webcamData?.length > 0
+    const hasAlerts = this.signedInValue && this._alertData?.length > 0
 
-    // Collect all visible right-side panels in stacking priority (rightmost first)
-    const panels = []
-    const _vis = (t, key) => this[`has${key}Target`] && this[`${key}Target`].style.display !== "none"
+    // Show/hide tab buttons
+    if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
+    if (this.hasRpTabNewsTarget) this.rpTabNewsTarget.style.display = hasNews ? "" : "none"
+    if (this.hasRpTabThreatsTarget) this.rpTabThreatsTarget.style.display = hasThreats ? "" : "none"
+    if (this.hasRpTabCamerasTarget) this.rpTabCamerasTarget.style.display = hasCameras ? "" : "none"
+    if (this.hasRpTabAlertsTarget) this.rpTabAlertsTarget.style.display = hasAlerts ? "" : "none"
 
-    if (_vis(null, "entityListPanel")) panels.push({ key: "entityListPanel", w: 312 })
-    if (_vis(null, "newsFeedPanel"))   panels.push({ key: "newsFeedPanel",   w: 372 })
-    if (_vis(null, "threatsPanel"))    panels.push({ key: "threatsPanel",    w: 292 })
-    if (_vis(null, "camFeedPanel"))    panels.push({ key: "camFeedPanel",    w: 352 })
-
-    // Position each panel: first at right:12, subsequent panels shift further right
-    let rightOffset = 12
-    for (const p of panels) {
-      this[`${p.key}Target`].style.right = `${rightOffset}px`
-      rightOffset += p.w
+    const anyTabVisible = hasEntities || hasNews || hasThreats || hasCameras || hasAlerts
+    if (!anyTabVisible) {
+      if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
+      this._repositionDetailStack(12)
+      return
     }
 
-    // Shift detail-stack and controls-bar so they don't hide behind panels
-    const firstPanelW = panels.length > 0 ? panels[0].w : 0
-    const detailRight = panels.length > 0 ? firstPanelW + 12 : 12
+    if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
+
+    // If current active tab is now hidden, switch to first visible tab
+    const activePane = this.hasRightPanelTarget && this.rightPanelTarget.querySelector(".rp-pane--active")
+    const activePaneKey = activePane?.dataset.rpPane
+    const activeTabHidden = (activePaneKey === "entities" && !hasEntities) ||
+                            (activePaneKey === "news" && !hasNews) ||
+                            (activePaneKey === "threats" && !hasThreats) ||
+                            (activePaneKey === "cameras" && !hasCameras) ||
+                            (activePaneKey === "alerts" && !hasAlerts)
+
+    if (activeTabHidden || !activePaneKey) {
+      const firstVisible = hasEntities ? "entities" : hasNews ? "news" : hasThreats ? "threats" : hasCameras ? "cameras" : "alerts"
+      this._activateRightTab(firstVisible)
+    }
+
+    this._repositionDetailStack(372)
+  }
+
+  GlobeController.prototype._repositionDetailStack = function(panelWidth) {
+    if (this._isMobile && this._isMobile()) return
+    const detailRight = panelWidth > 12 ? panelWidth + 12 : 12
     const detailStack = document.getElementById("detail-stack")
     if (detailStack) detailStack.style.right = `${detailRight}px`
-
     const controlsBar = document.getElementById("controls-bar")
     if (controlsBar) controlsBar.style.right = `${detailRight + 4}px`
+  }
+
+  GlobeController.prototype.switchRightTab = function(event) {
+    const tab = event.currentTarget.dataset.rpTab
+    this._activateRightTab(tab)
+  }
+
+  GlobeController.prototype._activateRightTab = function(tabKey) {
+    if (!this.hasRightPanelTarget) return
+    // Update tab buttons
+    this.rightPanelTarget.querySelectorAll(".rp-tab").forEach(t => t.classList.remove("active"))
+    const btn = this.rightPanelTarget.querySelector(`.rp-tab[data-rp-tab="${tabKey}"]`)
+    if (btn) btn.classList.add("active")
+    // Update panes
+    this.rightPanelTarget.querySelectorAll(".rp-pane").forEach(p => p.classList.remove("rp-pane--active"))
+    const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="${tabKey}"]`)
+    if (pane) pane.classList.add("rp-pane--active")
+  }
+
+  GlobeController.prototype._showRightPanel = function(tabKey) {
+    if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
+    this._activateRightTab(tabKey)
+    this._syncRightPanels()
+  }
+
+  GlobeController.prototype.closeRightPanel = function() {
+    if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
+    this._repositionDetailStack(12)
   }
 
   GlobeController.prototype.focusCamFeedItem = function(event) {

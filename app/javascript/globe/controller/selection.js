@@ -4,9 +4,8 @@ export function applySelectionMethods(GlobeController) {
   GlobeController.prototype.updateEntityList = function() {
     const anySatsVisible = Object.values(this.satCategoryVisible).some(Boolean)
     if (!this.hasActiveFilter() || (!this.flightsVisible && !this.shipsVisible && !anySatsVisible)) {
-      const wasVisible = this.entityListPanelTarget.style.display !== "none"
-      this.entityListPanelTarget.style.display = "none"
-      if (wasVisible && this._syncRightPanels) this._syncRightPanels()
+      this._entityListRequested = false
+      if (this._syncRightPanels) this._syncRightPanels()
       return
     }
 
@@ -21,7 +20,6 @@ export function applySelectionMethods(GlobeController) {
       const entity = this.satelliteEntities.get(`sat-${s.norad_id}`)
       return !!entity
     }).filter(s => {
-      // Check if the satellite entity is within the filter
       const sat = window.satellite
       if (!sat) return false
       try {
@@ -48,15 +46,12 @@ export function applySelectionMethods(GlobeController) {
       : [...this.selectedCountries].join(", ")
     this.entityListHeaderTarget.textContent = label
 
-    // Only open the panel if it was explicitly requested (country/circle selection),
-    // not from background refresh calls. If already visible, update content.
+    // Only open the panel if it was explicitly requested (country/circle selection)
     if (this._entityListRequested) {
-      this.entityListPanelTarget.style.display = "block"
-      if (this._syncRightPanels) this._syncRightPanels()
+      if (this._showRightPanel) this._showRightPanel("entities")
     }
-    if (this.entityListPanelTarget.style.display === "none") return
 
-    // Render active tab
+    // Render active tab if entities pane is showing
     const activeTab = this.entityListPanelTarget.querySelector(".entity-tab.active")?.dataset.tab || "flights"
     this.renderEntityTab(activeTab)
   }
@@ -181,7 +176,7 @@ export function applySelectionMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeEntityList = function() {
-    this.entityListPanelTarget.style.display = "none"
+    this._entityListRequested = false
     if (this._syncRightPanels) this._syncRightPanels()
   }
 
@@ -196,7 +191,7 @@ export function applySelectionMethods(GlobeController) {
       this._addFlightHighlight(id)
     }
     this._renderSelectionTray()
-    if (this.entityListPanelTarget.style.display !== "none") {
+    if (this.entityListPanelTarget.classList.contains("rp-pane--active")) {
       this.renderEntityTab("flights")
     }
   }
@@ -509,7 +504,7 @@ export function applySelectionMethods(GlobeController) {
     }
     this.selectedFlights.clear()
     this._renderSelectionTray()
-    if (this.entityListPanelTarget.style.display !== "none") {
+    if (this.entityListPanelTarget.classList.contains("rp-pane--active")) {
       this.renderEntityTab("flights")
     }
   }
@@ -580,7 +575,34 @@ export function applySelectionMethods(GlobeController) {
   GlobeController.prototype.onSearchKeydown = function(event) {
     if (event.key === "Escape") {
       this.clearSearch()
+      return
     }
+
+    const rows = this.searchResultsTarget?.querySelectorAll(".search-result-row")
+    if (!rows || rows.length === 0) return
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      this._searchHighlight = Math.min((this._searchHighlight ?? -1) + 1, rows.length - 1)
+      this._highlightSearchRow(rows)
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault()
+      this._searchHighlight = Math.max((this._searchHighlight ?? 0) - 1, 0)
+      this._highlightSearchRow(rows)
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      const idx = this._searchHighlight ?? 0
+      if (this._searchResults?.[idx]) {
+        this._activateSearchResult(idx)
+      }
+    }
+  }
+
+  GlobeController.prototype._highlightSearchRow = function(rows) {
+    rows.forEach((r, i) => {
+      r.style.background = i === this._searchHighlight ? "rgba(255,255,255,0.08)" : ""
+    })
+    rows[this._searchHighlight]?.scrollIntoView({ block: "nearest" })
   }
 
   GlobeController.prototype.clearSearch = function() {
@@ -589,10 +611,10 @@ export function applySelectionMethods(GlobeController) {
     this.searchClearTarget.style.display = "none"
   }
 
-  GlobeController.prototype._runSearch = function(query) {
+  GlobeController.prototype._runSearch = async function(query) {
     const q = query.toLowerCase()
     const results = []
-    const MAX = 8
+    const MAX = 12
 
     // Search flights (by callsign, ICAO, or airline name)
     for (const [id, f] of this.flightData) {
@@ -636,37 +658,31 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
-    // Search satellites
+    // Search satellites — local loaded data first
+    const localSatIds = new Set()
     for (const s of this.satelliteData) {
       if (results.length >= MAX) break
       const name = (s.name || "").toLowerCase()
       const norad = String(s.norad_id)
       if (name.includes(q) || norad.includes(q)) {
-        const sat = window.satellite
-        let lat = 0, lng = 0, alt = 500000
-        if (sat) {
-          try {
-            const now = new Date()
-            const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
-            const posVel = sat.propagate(satrec, now)
-            if (posVel.position) {
-              const gmst = sat.gstime(now)
-              const posGd = sat.eciToGeodetic(posVel.position, gmst)
-              lng = sat.degreesLong(posGd.longitude)
-              lat = sat.degreesLat(posGd.latitude)
-              alt = posGd.height * 1000 + 500000
-            }
-          } catch { /* skip */ }
-        }
-        results.push({
-          type: "satellite",
-          icon: "fa-satellite",
-          color: this.satCategoryColors[s.category] || "#ab47bc",
-          name: s.name,
-          detail: s.category,
-          lat, lng, alt,
-        })
+        localSatIds.add(s.norad_id)
+        results.push(this._satSearchResult(s))
       }
+    }
+
+    // If few local satellite matches and query is 2+ chars, search server for all satellites
+    if (q.length >= 2 && results.filter(r => r.type === "satellite").length < 4) {
+      try {
+        const resp = await fetch(`/api/satellites/search?q=${encodeURIComponent(query)}`)
+        if (resp.ok) {
+          const serverSats = await resp.json()
+          for (const s of serverSats) {
+            if (results.length >= MAX) break
+            if (localSatIds.has(s.norad_id)) continue
+            results.push(this._satSearchResult(s))
+          }
+        }
+      } catch { /* ignore */ }
     }
 
     // Search earthquakes
@@ -683,6 +699,7 @@ export function applySelectionMethods(GlobeController) {
           lat: eq.lat,
           lng: eq.lng,
           alt: 500000,
+          data: eq,
         })
       }
     }
@@ -762,7 +779,101 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
+    // Search power plants
+    if (this._powerPlantAll) {
+      for (const p of this._powerPlantAll) {
+        if (results.length >= MAX) break
+        const name = (p.name || "").toLowerCase()
+        const fuel = (p.fuel || "").toLowerCase()
+        const country = (p.country || "").toLowerCase()
+        if (name.includes(q) || fuel.includes(q) || country.includes(q)) {
+          results.push({
+            type: "power_plant",
+            icon: "fa-plug",
+            color: p.fuel === "Nuclear" ? "#fdd835" : "#ff9800",
+            name: p.name,
+            detail: `${p.fuel || "?"} · ${p.capacity ? p.capacity.toLocaleString() + " MW" : "?"}`,
+            lat: p.lat,
+            lng: p.lng,
+            alt: 200000,
+            data: p,
+          })
+        }
+      }
+    }
+
+    // Search conflicts
+    if (this._conflictData) {
+      for (const c of this._conflictData) {
+        if (results.length >= MAX) break
+        const name = (c.name || "").toLowerCase()
+        const conflict = (c.conflict || "").toLowerCase()
+        if (name.includes(q) || conflict.includes(q)) {
+          results.push({
+            type: "conflict",
+            icon: "fa-crosshairs",
+            color: "#f44336",
+            name: c.name || c.conflict,
+            detail: c.conflict || "",
+            lat: c.lat,
+            lng: c.lng,
+            alt: 300000,
+            data: c,
+          })
+        }
+      }
+    }
+
+    // Search fire hotspots
+    if (this._fireHotspotData) {
+      for (const f of this._fireHotspotData) {
+        if (results.length >= MAX) break
+        const sat = (f.satellite || "").toLowerCase()
+        if (sat.includes(q) || "fire".includes(q) || "hotspot".includes(q)) {
+          results.push({
+            type: "fire_hotspot",
+            icon: "fa-fire",
+            color: "#ff5722",
+            name: `Fire ${f.lat.toFixed(2)}°, ${f.lng.toFixed(2)}°`,
+            detail: `${f.satellite || "?"} · ${f.frp ? f.frp.toFixed(0) + " MW" : "?"}`,
+            lat: f.lat,
+            lng: f.lng,
+            alt: 300000,
+            data: f,
+          })
+        }
+      }
+    }
+
     this._renderSearchResults(results, query)
+  }
+
+  GlobeController.prototype._satSearchResult = function(s) {
+    const sat = window.satellite
+    let lat = 0, lng = 0, alt = 500000
+    if (sat && s.tle_line1 && s.tle_line2) {
+      try {
+        const now = new Date()
+        const satrec = sat.twoline2satrec(s.tle_line1, s.tle_line2)
+        const posVel = sat.propagate(satrec, now)
+        if (posVel.position) {
+          const gmst = sat.gstime(now)
+          const posGd = sat.eciToGeodetic(posVel.position, gmst)
+          lng = sat.degreesLong(posGd.longitude)
+          lat = sat.degreesLat(posGd.latitude)
+          alt = posGd.height * 1000 + 500000
+        }
+      } catch { /* skip */ }
+    }
+    return {
+      type: "satellite",
+      icon: "fa-satellite",
+      color: this.satCategoryColors?.[s.category] || "#ab47bc",
+      name: s.name,
+      detail: s.category + (s.country_owner ? ` · ${s.country_owner}` : ""),
+      lat, lng, alt,
+      data: s,
+    }
   }
 
   GlobeController.prototype._renderSearchResults = function(results, query) {
@@ -783,10 +894,16 @@ export function applySelectionMethods(GlobeController) {
     this.searchResultsTarget.innerHTML = html
     this.searchResultsTarget.style.display = "block"
     this._searchResults = results
+    this._searchHighlight = 0
+    this._highlightSearchRow(this.searchResultsTarget.querySelectorAll(".search-result-row"))
   }
 
   GlobeController.prototype.searchResultClick = function(event) {
     const idx = parseInt(event.currentTarget.dataset.idx)
+    this._activateSearchResult(idx)
+  }
+
+  GlobeController.prototype._activateSearchResult = function(idx) {
     const r = this._searchResults?.[idx]
     if (!r) return
 
@@ -796,11 +913,21 @@ export function applySelectionMethods(GlobeController) {
       duration: 1.5,
     })
 
-    // Select/highlight the entity
+    // Open detail panel for the entity
     if (r.type === "flight" && r.id) {
       this.toggleFlightSelection(r.id)
       const f = this.flightData.get(r.id)
       if (f) this.showDetail(r.id, f)
+    } else if (r.type === "earthquake" && r.data) {
+      this.showEarthquakeDetail(r.data)
+    } else if (r.type === "power_plant" && r.data) {
+      this.showPowerPlantDetail(r.data)
+    } else if (r.type === "conflict" && r.data) {
+      this.showConflictDetail(r.data)
+    } else if (r.type === "fire_hotspot" && r.data) {
+      this.showFireHotspotDetail(r.data)
+    } else if (r.type === "satellite" && r.data) {
+      this.showSatelliteDetail(r.data)
     }
 
     this.clearSearch()
@@ -893,7 +1020,7 @@ export function applySelectionMethods(GlobeController) {
 
     // Update entity list chips
     if (this.hasEntityAirlineBarTarget && this.hasEntityAirlineChipsTarget) {
-      const entityListVisible = this.entityListPanelTarget.style.display !== "none"
+      const entityListVisible = this.entityListPanelTarget.classList.contains("rp-pane--active")
       const activeTab = this.entityListPanelTarget.querySelector(".entity-tab.active")?.dataset.tab
       this.entityAirlineBarTarget.style.display = (entityListVisible && activeTab === "flights") ? "" : "none"
       this.entityAirlineChipsTarget.innerHTML = html
@@ -909,7 +1036,7 @@ export function applySelectionMethods(GlobeController) {
     }
     this._updateAirlineChips()
     // Refresh entity list flights tab if visible
-    if (this.entityListPanelTarget.style.display !== "none") {
+    if (this.entityListPanelTarget.classList.contains("rp-pane--active")) {
       this.renderEntityTab("flights")
     }
     this._savePrefs()

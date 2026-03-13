@@ -90,6 +90,15 @@ export function applyFlightMethods(GlobeController) {
         existing.source = flight.source
         existing.registration = flight.registration
         existing.aircraftType = flight.aircraft_type
+        existing.squawk = flight.squawk
+        existing.emergency = flight.emergency
+        existing.category = flight.category
+        existing.mach = flight.mach
+        existing.trueAirspeed = flight.true_airspeed
+        existing.windDirection = flight.wind_direction
+        existing.windSpeed = flight.wind_speed
+        existing.outsideAirTemp = flight.outside_air_temp
+        existing.navAltitudeFms = flight.nav_altitude_fms
 
         // Only correct position if the server has genuinely new data
         const newTimePos = flight.time_position || 0
@@ -109,31 +118,34 @@ export function applyFlightMethods(GlobeController) {
           existing.lastTimePosition = newTimePos
         }
 
-        const milCheck = { id, callsign }
+        const milCheck = { id, callsign, military: flight.military }
         const isMil = this._isMilitaryFlight(milCheck)
-        existing.entity.billboard.image = onGround ? this.planeIconGround : (isMil ? this.planeIconMil : this.planeIcon)
+        const isEmergency = this._isEmergencyFlight(flight)
+        existing.entity.billboard.image = this._flightIcon(flight, isMil)
         existing.entity.billboard.rotation = -Cesium.Math.toRadians(heading)
-        existing.entity.label.text = callsign
+        existing.entity.label.text = isEmergency ? `${callsign} [${flight.squawk || "EMG"}]` : callsign
+        existing.entity.label.fillColor = isEmergency ? Cesium.Color.fromCssColorString("#ff9800") : Cesium.Color.WHITE.withAlpha(0.95)
       } else {
-        const milCheck = { id, callsign }
+        const milCheck = { id, callsign, military: flight.military }
         const isMil = this._isMilitaryFlight(milCheck)
+        const isEmergency = this._isEmergencyFlight(flight)
         const pos = Cesium.Cartesian3.fromDegrees(projLng, projLat, projAlt)
         const entity = dataSource.entities.add({
           id: id,
           position: pos,
           billboard: {
-            image: onGround ? this.planeIconGround : (isMil ? this.planeIconMil : this.planeIcon),
-            scale: 0.8,
+            image: this._flightIcon(flight, isMil),
+            scale: isEmergency ? 1.1 : 0.8,
             rotation: -Cesium.Math.toRadians(heading),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.3),
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, isEmergency ? 0.5 : 0.3),
           },
           label: {
-            text: callsign,
+            text: isEmergency ? `${callsign} [${flight.squawk || "EMG"}]` : callsign,
             font: "15px JetBrains Mono, monospace",
-            fillColor: Cesium.Color.WHITE.withAlpha(0.95),
+            fillColor: isEmergency ? Cesium.Color.fromCssColorString("#ff9800") : Cesium.Color.WHITE.withAlpha(0.95),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -164,6 +176,15 @@ export function applyFlightMethods(GlobeController) {
           source: flight.source,
           registration: flight.registration,
           aircraftType: flight.aircraft_type,
+          squawk: flight.squawk,
+          emergency: flight.emergency,
+          category: flight.category,
+          mach: flight.mach,
+          trueAirspeed: flight.true_airspeed,
+          windDirection: flight.wind_direction,
+          windSpeed: flight.wind_speed,
+          outsideAirTemp: flight.outside_air_temp,
+          navAltitudeFms: flight.nav_altitude_fms,
         })
         // Apply civilian/military filter
         entity.show = isMil ? this.showMilitary : this.showCivilian
@@ -193,7 +214,7 @@ export function applyFlightMethods(GlobeController) {
     if (this.trailsVisible) this.renderTrails()
 
     // Update entity list if visible
-    if (this.hasActiveFilter() && this.entityListPanelTarget.style.display !== "none") {
+    if (this.hasActiveFilter() && this.entityListPanelTarget.classList.contains("rp-pane--active")) {
       this.updateEntityList()
     }
 
@@ -353,7 +374,12 @@ export function applyFlightMethods(GlobeController) {
     else if (vrate < -0.5) vrateDisplay = `${Math.round(vrate)} m/s ↓`
     else if (!data.onGround) vrateDisplay = "Level"
 
+    const isEmergency = this._isEmergencyFlight(data)
+    const squawkLabels = { "7500": "HIJACK", "7600": "RADIO FAIL", "7700": "EMERGENCY" }
+    const squawkDisplay = data.squawk ? (squawkLabels[data.squawk] ? `${data.squawk} (${squawkLabels[data.squawk]})` : data.squawk) : null
+
     this.detailContentTarget.innerHTML = `
+      ${isEmergency ? `<div class="detail-emergency-banner">${squawkLabels[data.squawk] || (data.emergency || "EMERGENCY").toUpperCase()}</div>` : ""}
       <div class="detail-callsign">${callsign || id}</div>
       <div class="detail-country">${data.originCountry || "Unknown"}</div>
       <div class="detail-route" id="detail-route">Loading route...</div>
@@ -374,6 +400,14 @@ export function applyFlightMethods(GlobeController) {
           <span class="detail-label">V/S</span>
           <span class="detail-value">${vrateDisplay}</span>
         </div>
+        ${data.mach ? `<div class="detail-field">
+          <span class="detail-label">Mach</span>
+          <span class="detail-value">${data.mach.toFixed(3)}</span>
+        </div>` : ""}
+        ${squawkDisplay ? `<div class="detail-field">
+          <span class="detail-label">Squawk</span>
+          <span class="detail-value" ${isEmergency ? 'style="color:#ff9800;font-weight:bold;"' : ""}>${squawkDisplay}</span>
+        </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">ICAO24</span>
           <span class="detail-value" style="font-size:12px; opacity:0.7;">${id}</span>
@@ -390,6 +424,22 @@ export function applyFlightMethods(GlobeController) {
           <span class="detail-label">Type</span>
           <span class="detail-value">${data.aircraftType}</span>
         </div>` : ""}
+        ${data.category ? `<div class="detail-field">
+          <span class="detail-label">Category</span>
+          <span class="detail-value">${data.category}</span>
+        </div>` : ""}
+        ${data.windDirection != null && data.windSpeed != null ? `<div class="detail-field">
+          <span class="detail-label">Wind</span>
+          <span class="detail-value">${data.windDirection}° / ${data.windSpeed} kt</span>
+        </div>` : ""}
+        ${data.outsideAirTemp != null ? `<div class="detail-field">
+          <span class="detail-label">OAT</span>
+          <span class="detail-value">${data.outsideAirTemp}°C</span>
+        </div>` : ""}
+        ${data.navAltitudeFms ? `<div class="detail-field">
+          <span class="detail-label">Target Alt</span>
+          <span class="detail-value">${Math.round(data.navAltitudeFms).toLocaleString()} ft</span>
+        </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">Source</span>
           <span class="detail-value" style="font-size:11px;">${data.source === "adsb" ? "ADS-B Exchange" : "OpenSky"}</span>
@@ -403,6 +453,13 @@ export function applyFlightMethods(GlobeController) {
       <button class="detail-track-btn ${isTracking ? "tracking" : ""}" data-flight-id="${id}">
         ${isTracking ? "Stop Tracking" : "Track Flight"}
       </button>
+      ${this.signedInValue ? `<button class="detail-watch-btn" data-action="click->globe#createWatch"
+        data-watch-type="entity"
+        data-watch-name="Watch ${callsign || id}"
+        data-watch-conditions='${JSON.stringify({ entity_type: "flight", identifier: callsign || id, match: "callsign_exact" })}'>
+        <i class="fa-solid fa-eye"></i> Watch
+      </button>` : ""}
+      ${this._connectionsPlaceholder()}
     `
 
     // Bind track button
@@ -418,6 +475,12 @@ export function applyFlightMethods(GlobeController) {
     })
 
     this.detailPanelTarget.style.display = ""
+
+    // Fetch connections
+    this._fetchConnections("flight", data.currentLat, data.currentLng, {
+      squawk: data.squawk || "",
+      origin_country: data.originCountry || "",
+    })
 
     // Show cached route immediately, or fetch async
     const cached = this._routeCache && this._routeCache[callsign]
@@ -723,6 +786,20 @@ export function applyFlightMethods(GlobeController) {
     }
 
     return false
+  }
+
+  GlobeController.prototype._isEmergencyFlight = function(flight) {
+    const sq = flight.squawk || ""
+    if (sq === "7500" || sq === "7600" || sq === "7700") return true
+    const em = (flight.emergency || "").toLowerCase()
+    return em !== "" && em !== "none"
+  }
+
+  GlobeController.prototype._flightIcon = function(flight, isMil) {
+    if (flight.onGround || flight.on_ground) return this.planeIconGround
+    if (this._isEmergencyFlight(flight)) return this.planeIconEmergency
+    if (isMil) return this.planeIconMil
+    return this.planeIcon
   }
 
   // ── Airline Lookup & Filter ─────────────────────────────────

@@ -217,8 +217,10 @@ export function applyMaritimeMethods(GlobeController) {
         <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${data.entity.id.replace("ship-", "")}" target="_blank" rel="noopener">MarineTraffic</a>
         <a href="https://www.vesselfinder.com/vessels?mmsi=${data.entity.id.replace("ship-", "")}" target="_blank" rel="noopener">VesselFinder</a>
       </div>
+      ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
+    this._fetchConnections("ship", data.latitude || data.lat, data.longitude || data.lng)
   }
 
   GlobeController.prototype.toggleShips = function() {

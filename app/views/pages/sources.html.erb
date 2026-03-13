@@ -11,30 +11,30 @@
       </div>
       <h1 class="src-hero-title">Open Source<br>Intelligence</h1>
       <p class="src-hero-sub">
-        GlobeTracker aggregates <strong>13 open data sources</strong> across aviation, maritime,
-        space, earth science, and world news &mdash; all rendered in real-time on a 3D globe.
-        Every feed listed below is publicly accessible or community-driven.
+        GlobeTracker aggregates <strong>25+ data sources</strong> across aviation, maritime,
+        space, earth science, security, and world news &mdash; all rendered in real-time on a 3D globe.
+        Every feed listed below is publicly accessible, community-driven, or computed in-house.
       </p>
     </div>
 
     <div class="src-stats">
       <div class="src-stat">
-        <span class="src-stat-num">13</span>
+        <span class="src-stat-num">25+</span>
         <span class="src-stat-label">Data Feeds</span>
       </div>
       <div class="src-stat-sep"></div>
       <div class="src-stat">
-        <span class="src-stat-num">7</span>
+        <span class="src-stat-num">8</span>
         <span class="src-stat-label">Categories</span>
       </div>
       <div class="src-stat-sep"></div>
       <div class="src-stat">
-        <span class="src-stat-num">9</span>
+        <span class="src-stat-num">14</span>
         <span class="src-stat-label">Free / No Auth</span>
       </div>
       <div class="src-stat-sep"></div>
       <div class="src-stat">
-        <span class="src-stat-num">3</span>
+        <span class="src-stat-num">5</span>
         <span class="src-stat-label">Real-time Streams</span>
       </div>
     </div>
@@ -47,11 +47,14 @@
       <span class="src-cat" style="--cat: #66bb6a;">Imagery & Maps</span>
       <span class="src-cat" style="--cat: #ff9800;">News & Events</span>
       <span class="src-cat" style="--cat: #e040fb;">Infrastructure</span>
+      <span class="src-cat" style="--cat: #f44336;">Security</span>
     </div>
   </header>
 
   <!-- Source Grid -->
   <section class="src-grid">
+
+    <!-- ═══════════════ AVIATION ═══════════════ -->
 
     <article class="src-card" style="--accent: #4fc3f7;">
       <div class="src-card-head">
@@ -109,33 +112,88 @@
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #ab47bc;">
+    <article class="src-card" style="--accent: #4fc3f7;">
       <div class="src-card-head">
-        <div class="src-card-icon"><i class="fa-solid fa-satellite"></i></div>
+        <div class="src-card-icon"><i class="fa-solid fa-plane-lock"></i></div>
         <div class="src-card-meta">
-          <h3>CelesTrak</h3>
-          <span class="src-card-url">celestrak.org</span>
+          <h3>OpenAIP</h3>
+          <span class="src-card-url">openaip.net</span>
         </div>
         <span class="src-card-status">API</span>
       </div>
       <p class="src-card-desc">
-        NORAD satellite orbital elements in Two-Line Element format.
-        Tracks 10,000+ objects including ISS, Starlink, GPS, military and
-        scientific satellites. SGP4-propagated positions.
+        Global aeronautical data including restricted airspace zones, military
+        operating areas, danger zones, and warning areas. Rendered as colored
+        polygons over the globe.
       </p>
       <div class="src-card-tags">
-        <span class="src-tag">TLE Format</span>
-        <span class="src-tag">SGP4</span>
-        <span class="src-tag src-tag--free">Free</span>
-        <span class="src-tag">10K+ Objects</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">API Key</span>
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag">Airspace</span>
       </div>
       <div class="src-card-foot">
-        <span class="src-card-cat">Space</span>
-        <a href="https://celestrak.org" target="_blank" rel="noopener" class="src-card-link">
+        <span class="src-card-cat">Aviation</span>
+        <a href="https://www.openaip.net" target="_blank" rel="noopener" class="src-card-link">
           <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
       </div>
     </article>
+
+    <article class="src-card" style="--accent: #4fc3f7;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-plane-departure"></i></div>
+        <div class="src-card-meta">
+          <h3>OurAirports</h3>
+          <span class="src-card-url">ourairports.com</span>
+        </div>
+        <span class="src-card-status src-card-status--oss">OSS</span>
+      </div>
+      <p class="src-card-desc">
+        Open database of airports worldwide. Locations, types, elevations,
+        and runway data for large, medium, and military airfields.
+        Community-maintained on GitHub.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">CSV</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">GitHub</span>
+        <span class="src-tag">55K+ Airports</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Aviation</span>
+        <a href="https://ourairports.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #4fc3f7;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-jet-fighter"></i></div>
+        <div class="src-card-meta">
+          <h3>Military Classifier</h3>
+          <span class="src-card-url">Built-in rules engine</span>
+        </div>
+        <span class="src-card-status src-card-status--computed">COMPUTED</span>
+      </div>
+      <p class="src-card-desc">
+        Identifies military aircraft using ICAO hex ranges and callsign prefix
+        patterns for NATO, USAF, RAF, and other armed forces. Applied in real-time
+        to all incoming flight data.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">ICAO Ranges</span>
+        <span class="src-tag">Callsign Rules</span>
+        <span class="src-tag">Derived</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Aviation / Security</span>
+      </div>
+    </article>
+
+    <!-- ═══════════════ MARITIME ═══════════════ -->
 
     <article class="src-card" style="--accent: #26c6da;">
       <div class="src-card-head">
@@ -165,6 +223,91 @@
       </div>
     </article>
 
+    <!-- ═══════════════ SPACE ═══════════════ -->
+
+    <article class="src-card" style="--accent: #ab47bc;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-satellite"></i></div>
+        <div class="src-card-meta">
+          <h3>CelesTrak</h3>
+          <span class="src-card-url">celestrak.org</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        NORAD satellite orbital elements in Two-Line Element format.
+        Tracks 10,000+ objects including ISS, Starlink, GPS, military and
+        scientific satellites. SGP4-propagated positions.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">TLE Format</span>
+        <span class="src-tag">SGP4</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">10K+ Objects</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Space</span>
+        <a href="https://celestrak.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #ab47bc;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-user-astronaut"></i></div>
+        <div class="src-card-meta">
+          <h3>UCS Satellite Database</h3>
+          <span class="src-card-url">ucsusa.org</span>
+        </div>
+        <span class="src-card-status src-card-status--oss">OSS</span>
+      </div>
+      <p class="src-card-desc">
+        Union of Concerned Scientists satellite database. Enriches orbital data with
+        operator, purpose, users (military/civil/commercial), launch details,
+        contractor, and expected lifetime.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">TSV Database</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Enrichment</span>
+        <span class="src-tag">2,500+ Sats</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Space</span>
+        <a href="https://www.ucsusa.org/resources/satellite-database" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #ab47bc;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-user-secret"></i></div>
+        <div class="src-card-meta">
+          <h3>Classified Satellite Analysis</h3>
+          <span class="src-card-url">Orbital mechanics engine</span>
+        </div>
+        <span class="src-card-status src-card-status--computed">COMPUTED</span>
+      </div>
+      <p class="src-card-desc">
+        Identifies classified reconnaissance satellites using orbital mechanics analysis.
+        Matches orbital parameters to known programs: KH-11 Keyhole, Lacrosse/Onyx,
+        Mentor/Orion, Bars-M, Yaogan, and more.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">Orbital Analysis</span>
+        <span class="src-tag">Pattern Matching</span>
+        <span class="src-tag">Derived</span>
+        <span class="src-tag">SIGINT/IMINT</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Space / Security</span>
+      </div>
+    </article>
+
+    <!-- ═══════════════ EARTH SCIENCE ═══════════════ -->
+
     <article class="src-card" style="--accent: #ff7043;">
       <div class="src-card-head">
         <div class="src-card-icon"><i class="fa-solid fa-house-crack"></i></div>
@@ -193,7 +336,7 @@
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #66bb6a;">
+    <article class="src-card" style="--accent: #ff7043;">
       <div class="src-card-head">
         <div class="src-card-icon"><i class="fa-solid fa-bolt"></i></div>
         <div class="src-card-meta">
@@ -221,7 +364,37 @@
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #29b6f6;">
+    <article class="src-card" style="--accent: #ff5722;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-fire"></i></div>
+        <div class="src-card-meta">
+          <h3>NASA FIRMS</h3>
+          <span class="src-card-url">firms.modaps.eosdis.nasa.gov</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        Fire Information for Resource Management System.
+        Near real-time active fire and thermal hotspot data from MODIS and VIIRS
+        instruments aboard Terra, Aqua, Suomi NPP, NOAA-20, and NOAA-21 satellites.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">REST API</span>
+        <span class="src-tag">CSV</span>
+        <span class="src-tag src-tag--free">Free (key required)</span>
+        <span class="src-tag">Satellite</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Earth Science</span>
+        <a href="https://firms.modaps.eosdis.nasa.gov/api/" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <!-- ═══════════════ IMAGERY & MAPS ═══════════════ -->
+
+    <article class="src-card" style="--accent: #66bb6a;">
       <div class="src-card-head">
         <div class="src-card-icon"><i class="fa-solid fa-video"></i></div>
         <div class="src-card-meta">
@@ -248,6 +421,148 @@
         </a>
       </div>
     </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-brands fa-youtube"></i></div>
+        <div class="src-card-meta">
+          <h3>YouTube Live</h3>
+          <span class="src-card-url">googleapis.com</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Live webcam streams from YouTube with geolocation data.
+        Searches for live broadcasts tagged with locations and embeds
+        them directly on the globe as viewable video feeds.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">API Key</span>
+        <span class="src-tag">Video</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery</span>
+        <a href="https://developers.google.com/youtube/v3" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-traffic-light"></i></div>
+        <div class="src-card-meta">
+          <h3>NYC Traffic Cams</h3>
+          <span class="src-card-url">nyctmc.org</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Real-time traffic camera feeds from the New York City Traffic
+        Management Center. Hundreds of cameras across NYC boroughs
+        with live image streams.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">NYC</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery</span>
+        <a href="https://webcams.nyctmc.org" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-globe"></i></div>
+        <div class="src-card-meta">
+          <h3>Cesium Ion</h3>
+          <span class="src-card-url">cesium.com</span>
+        </div>
+        <span class="src-card-status">ENGINE</span>
+      </div>
+      <p class="src-card-desc">
+        3D geospatial visualization platform. Provides the globe renderer,
+        world terrain with water masks, satellite imagery, and
+        OpenStreetMap 3D building tiles.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">3D Tiles</span>
+        <span class="src-tag src-tag--auth">Token</span>
+        <span class="src-tag">Terrain</span>
+        <span class="src-tag">Buildings</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery & Maps</span>
+        <a href="https://cesium.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-building"></i></div>
+        <div class="src-card-meta">
+          <h3>Google 3D Tiles</h3>
+          <span class="src-card-url">Photorealistic 3D Tiles</span>
+        </div>
+        <span class="src-card-status">ENGINE</span>
+      </div>
+      <p class="src-card-desc">
+        Google Photorealistic 3D Tiles via Cesium Ion. High-fidelity
+        textured 3D buildings and terrain as an alternative to
+        OpenStreetMap building blocks for street-level detail.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">3D Tiles</span>
+        <span class="src-tag src-tag--auth">Token</span>
+        <span class="src-tag">Photorealistic</span>
+        <span class="src-tag">Global</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery & Maps</span>
+        <a href="https://cesium.com/platform/cesium-ion/content/google-photorealistic-3d-tiles/" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #66bb6a;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-map"></i></div>
+        <div class="src-card-meta">
+          <h3>Natural Earth</h3>
+          <span class="src-card-url">naturalearthdata.com</span>
+        </div>
+        <span class="src-card-status src-card-status--oss">OSS</span>
+      </div>
+      <p class="src-card-desc">
+        Public domain map dataset. Country borders, coastlines,
+        populated places, and urban area polygons. Hosted on GitHub
+        as GeoJSON at multiple resolutions.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Public Domain</span>
+        <span class="src-tag">GitHub</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Imagery & Maps</span>
+        <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <!-- ═══════════════ NEWS & EVENTS ═══════════════ -->
 
     <article class="src-card" style="--accent: #ff9800;">
       <div class="src-card-head">
@@ -277,61 +592,32 @@
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #78909c;">
+    <article class="src-card" style="--accent: #ff9800;">
       <div class="src-card-head">
-        <div class="src-card-icon"><i class="fa-solid fa-globe"></i></div>
+        <div class="src-card-icon"><i class="fa-solid fa-rss"></i></div>
         <div class="src-card-meta">
-          <h3>Cesium Ion</h3>
-          <span class="src-card-url">cesium.com</span>
+          <h3>Multi-source News</h3>
+          <span class="src-card-url">6 aggregated APIs</span>
         </div>
-        <span class="src-card-status">ENGINE</span>
+        <span class="src-card-status">API</span>
       </div>
       <p class="src-card-desc">
-        3D geospatial visualization platform. Provides the globe renderer,
-        world terrain with water masks, satellite imagery, and
-        OpenStreetMap 3D building tiles.
+        Aggregates geolocated news from six providers: WorldNewsAPI,
+        Currents API, TheNewsAPI, GNews, Mediastack, and Hacker News (Algolia).
+        Cross-references and deduplicates for global event coverage.
       </p>
       <div class="src-card-tags">
-        <span class="src-tag">3D Tiles</span>
-        <span class="src-tag src-tag--auth">Token</span>
-        <span class="src-tag">Terrain</span>
-        <span class="src-tag">Buildings</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">API Keys</span>
+        <span class="src-tag">Multi-source</span>
+        <span class="src-tag">Geo-tagged</span>
       </div>
       <div class="src-card-foot">
-        <span class="src-card-cat">Imagery & Maps</span>
-        <a href="https://cesium.com" target="_blank" rel="noopener" class="src-card-link">
-          <i class="fa-solid fa-arrow-up-right-from-square"></i>
-        </a>
+        <span class="src-card-cat">News & Events</span>
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #a1887f;">
-      <div class="src-card-head">
-        <div class="src-card-icon"><i class="fa-solid fa-map"></i></div>
-        <div class="src-card-meta">
-          <h3>Natural Earth</h3>
-          <span class="src-card-url">naturalearthdata.com</span>
-        </div>
-        <span class="src-card-status src-card-status--oss">OSS</span>
-      </div>
-      <p class="src-card-desc">
-        Public domain map dataset. Country borders, coastlines,
-        populated places, and urban area polygons. Hosted on GitHub
-        as GeoJSON at multiple resolutions.
-      </p>
-      <div class="src-card-tags">
-        <span class="src-tag">GeoJSON</span>
-        <span class="src-tag src-tag--free">Free</span>
-        <span class="src-tag">Public Domain</span>
-        <span class="src-tag">GitHub</span>
-      </div>
-      <div class="src-card-foot">
-        <span class="src-card-cat">Imagery & Maps</span>
-        <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener" class="src-card-link">
-          <i class="fa-solid fa-arrow-up-right-from-square"></i>
-        </a>
-      </div>
-    </article>
+    <!-- ═══════════════ SECURITY ═══════════════ -->
 
     <article class="src-card" style="--accent: #f44336;">
       <div class="src-card-head">
@@ -354,14 +640,72 @@
         <span class="src-tag">Derived</span>
       </div>
       <div class="src-card-foot">
-        <span class="src-card-cat">Aviation / Security</span>
+        <span class="src-card-cat">Security</span>
         <a href="https://gpsjam.org" target="_blank" rel="noopener" class="src-card-link">
           <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
       </div>
     </article>
 
-    <article class="src-card" style="--accent: #00bcd4;">
+    <article class="src-card" style="--accent: #f44336;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-crosshairs"></i></div>
+        <div class="src-card-meta">
+          <h3>UCDP Conflict Events</h3>
+          <span class="src-card-url">ucdp.uu.se</span>
+        </div>
+        <span class="src-card-status">API</span>
+      </div>
+      <p class="src-card-desc">
+        Uppsala Conflict Data Program from Uppsala University. Geolocated military
+        conflict events worldwide including state-based violence, non-state conflicts,
+        and one-sided violence with casualty data.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">REST API</span>
+        <span class="src-tag">GeoJSON</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">Conflict Data</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Security</span>
+        <a href="https://ucdp.uu.se" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <!-- ═══════════════ INFRASTRUCTURE ═══════════════ -->
+
+    <article class="src-card" style="--accent: #e040fb;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-cloud"></i></div>
+        <div class="src-card-meta">
+          <h3>Cloudflare Radar</h3>
+          <span class="src-card-url">radar.cloudflare.com</span>
+        </div>
+        <span class="src-card-status src-card-status--live">LIVE</span>
+      </div>
+      <p class="src-card-desc">
+        Internet traffic patterns and DDoS attack data from Cloudflare's global network.
+        Visualizes HTTP traffic flows between countries and highlights active
+        attack origins and targets.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag src-tag--rt">Real-time</span>
+        <span class="src-tag">REST API</span>
+        <span class="src-tag src-tag--auth">API Token</span>
+        <span class="src-tag">Traffic Flows</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Infrastructure</span>
+        <a href="https://radar.cloudflare.com" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #e040fb;">
       <div class="src-card-head">
         <div class="src-card-icon"><i class="fa-solid fa-network-wired"></i></div>
         <div class="src-card-meta">
@@ -412,6 +756,34 @@
       <div class="src-card-foot">
         <span class="src-card-cat">Infrastructure</span>
         <a href="https://ioda.inetintel.cc.gatech.edu" target="_blank" rel="noopener" class="src-card-link">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </article>
+
+    <article class="src-card" style="--accent: #e040fb;">
+      <div class="src-card-head">
+        <div class="src-card-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="src-card-meta">
+          <h3>Global Power Plants</h3>
+          <span class="src-card-url">World Resources Institute</span>
+        </div>
+        <span class="src-card-status src-card-status--oss">OSS</span>
+      </div>
+      <p class="src-card-desc">
+        World Resources Institute global power plant database. Locations, capacity,
+        fuel types, and operators for 35,000+ power plants across 167 countries.
+        Open data on GitHub.
+      </p>
+      <div class="src-card-tags">
+        <span class="src-tag">CSV</span>
+        <span class="src-tag src-tag--free">Free</span>
+        <span class="src-tag">GitHub</span>
+        <span class="src-tag">35K+ Plants</span>
+      </div>
+      <div class="src-card-foot">
+        <span class="src-card-cat">Infrastructure</span>
+        <a href="https://github.com/wri/global-power-plant-database" target="_blank" rel="noopener" class="src-card-link">
           <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
       </div>

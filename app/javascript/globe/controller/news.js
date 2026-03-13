@@ -16,16 +16,15 @@ export function applyNewsMethods(GlobeController) {
       this.fetchNews()
       this._newsInterval = setInterval(() => this.fetchNews(), 900000) // 15 min
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = ""
-      if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = ""
     } else {
       if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
       this._clearNewsEntities()
       this._newsData = []
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = "none"
-      if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
     }
     this._syncQuickBar()
     if (this._syncRightPanels) this._syncRightPanels()
+    if (this.newsVisible && this._newsData?.length > 0) this._showRightPanel("news")
     this._savePrefs()
   }
 
@@ -76,6 +75,7 @@ export function applyNewsMethods(GlobeController) {
       this._newsData = events
       this._renderNews(events)
       this._markFresh("news")
+      if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch news:", e)
@@ -485,7 +485,6 @@ export function applyNewsMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeNewsFeed = function() {
-    if (this.hasNewsFeedPanelTarget) this.newsFeedPanelTarget.style.display = "none"
     this._setNewsDotOpacity(1.0)
     if (this._syncRightPanels) this._syncRightPanels()
   }

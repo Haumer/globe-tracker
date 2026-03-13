@@ -5,6 +5,7 @@ module Api
 
     NACP_THRESHOLD = 6
     HEX_SIZE = 0.5 # degrees — radius of each hexagon
+    STALE_AFTER = 5.minutes
 
     def index
       # Timeline mode: return historical snapshots
@@ -22,16 +23,43 @@ module Api
         end
       end
 
+      # Recompute if latest snapshot is stale
+      latest_at = GpsJammingSnapshot.maximum(:recorded_at)
+      compute_snapshot if latest_at.nil? || latest_at < STALE_AFTER.ago
+
+      # Render latest reading per cell from the last hour — stale cells expire naturally
+      cutoff = 1.hour.ago
+      snaps = GpsJammingSnapshot
+                .where("recorded_at > ?", cutoff)
+                .where("percentage > 0 OR total >= 2")
+                .select(
+                  "DISTINCT ON (cell_lat, cell_lng) cell_lat, cell_lng, total, bad, percentage, level, recorded_at"
+                )
+                .order("cell_lat, cell_lng, recorded_at DESC")
+
+      now = Time.current
+      render json: snaps.map { |s|
+        age_minutes = ((now - s.recorded_at) / 60.0)
+        # Degrade confidence: fade percentage linearly over 1 hour
+        fade = [1.0 - (age_minutes / 60.0), 0.0].max
+        pct = (s.percentage.to_f * fade).round(1)
+        level = if pct > 10 then "high"
+                elsif pct > 2 then "medium"
+                else "low"
+                end
+        { lat: s.cell_lat, lng: s.cell_lng, total: s.total, bad: s.bad, pct: pct, level: level }
+      }
+    end
+
+    private
+
+    def compute_snapshot
       flights = Flight.where(source: "adsb")
                       .where.not(latitude: nil, longitude: nil, nac_p: nil)
                       .where("updated_at > ?", 1.hour.ago)
                       .select(:id, :latitude, :longitude, :nac_p)
 
       cells = {}
-
-      # Hex grid: flat-top hexagons with latitude correction
-      # Row height (lat) = size * sqrt(3)
-      # Col width (lng) = size * 1.5, adjusted by cos(lat) so hexagons are regular
       row_h = HEX_SIZE * Math.sqrt(3)
 
       flights.find_each do |f|
@@ -40,7 +68,6 @@ module Api
         row = (f.latitude / row_h).round
         center_lat = row * row_h
 
-        # Longitude spacing corrected for latitude
         cos_lat = Math.cos(center_lat * Math::PI / 180)
         cos_lat = 0.01 if cos_lat < 0.01
         col_w = HEX_SIZE * 1.5 / cos_lat
@@ -64,51 +91,32 @@ module Api
                 elsif pct > 2 then "medium"
                 else "low"
                 end
+        { lat: c[:lat], lng: c[:lng], total: c[:total], bad: c[:bad], pct: pct, level: level }
+      end
+
+      return unless result.any?
+
+      snapshots = result.map do |c|
         {
-          lat: c[:lat],
-          lng: c[:lng],
-          total: c[:total],
-          bad: c[:bad],
-          pct: pct,
-          level: level,
+          cell_lat: c[:lat], cell_lng: c[:lng],
+          total: c[:total], bad: c[:bad],
+          percentage: c[:pct], level: c[:level],
+          recorded_at: now, created_at: now, updated_at: now,
         }
       end
+      GpsJammingSnapshot.insert_all(snapshots)
 
-      # Persist snapshot
-      if result.any?
-        snapshots = result.map do |c|
-          {
-            cell_lat: c[:lat],
-            cell_lng: c[:lng],
-            total: c[:total],
-            bad: c[:bad],
-            percentage: c[:pct],
-            level: c[:level],
-            recorded_at: now,
-            created_at: now,
-            updated_at: now,
-          }
-        end
-        GpsJammingSnapshot.insert_all(snapshots)
-
-        # Record significant jamming cells to timeline (medium/high only)
-        significant = GpsJammingSnapshot.where(recorded_at: now, level: %w[medium high])
-        tl_rows = significant.map do |s|
-          {
-            event_type: "gps_jamming",
-            eventable_type: "GpsJammingSnapshot",
-            eventable_id: s.id,
-            latitude: s.cell_lat,
-            longitude: s.cell_lng,
-            recorded_at: s.recorded_at,
-            created_at: now,
-            updated_at: now,
-          }
-        end
-        TimelineEvent.insert_all(tl_rows) if tl_rows.any?
+      # Record significant jamming cells to timeline
+      significant = GpsJammingSnapshot.where(recorded_at: now, level: %w[medium high])
+      tl_rows = significant.map do |s|
+        {
+          event_type: "gps_jamming",
+          eventable_type: "GpsJammingSnapshot", eventable_id: s.id,
+          latitude: s.cell_lat, longitude: s.cell_lng,
+          recorded_at: s.recorded_at, created_at: now, updated_at: now,
+        }
       end
-
-      render json: result
+      TimelineEvent.insert_all(tl_rows) if tl_rows.any?
     end
   end
 end

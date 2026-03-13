@@ -6,31 +6,38 @@
   <div id="cesium-viewer"></div>
 
   <%# ── Stats bar ── top edge, telemetry-style ────────────────── %>
-  <div id="stats-bar" data-globe-target="statsBar">
-    <div class="stat-cell" data-tip="Active flights tracked" data-tip-pos="below">
-      <span class="stat-label">FLT</span>
-      <span class="stat-value" data-globe-target="statFlights">0</span>
+  <div id="stats-bar" data-globe-target="statsBar" style="position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;height:36px;background:#1e2028;border:1px solid #444;border-top:none;border-radius:0 0 8px 8px;padding:0 6px;font-family:monospace;">
+    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
+      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">FLT</span>
+      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statFlights">0</span>
     </div>
-    <div class="stat-sep"></div>
-    <div class="stat-cell" data-tip="Visible satellites" data-tip-pos="below">
-      <span class="stat-label">SAT</span>
-      <span class="stat-value" data-globe-target="statSats">0</span>
+    <div style="width:1px;height:16px;background:#444;"></div>
+    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
+      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">SAT</span>
+      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statSats">0</span>
     </div>
-    <div class="stat-sep"></div>
-    <div class="stat-cell" data-tip="AIS marine vessels" data-tip-pos="below">
-      <span class="stat-label">AIS</span>
-      <span class="stat-value" data-globe-target="statShips">0</span>
+    <div style="width:1px;height:16px;background:#444;"></div>
+    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
+      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">AIS</span>
+      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statShips">0</span>
     </div>
-    <div class="stat-sep"></div>
-    <div class="stat-cell" data-tip="Active events & cameras" data-tip-pos="below">
-      <span class="stat-label">EVT</span>
-      <span class="stat-value" data-globe-target="statEvents">0</span>
+    <div style="width:1px;height:16px;background:#444;"></div>
+    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
+      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">EVT</span>
+      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statEvents">0</span>
     </div>
-    <div class="stat-sep"></div>
-    <div class="stat-cell" data-tip="Coordinated Universal Time" data-tip-pos="below">
-      <span class="stat-label">UTC</span>
-      <span class="stat-value" data-globe-target="statClock">--:--</span>
+    <div style="width:1px;height:16px;background:#444;"></div>
+    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
+      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">UTC</span>
+      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statClock">--:--</span>
     </div>
+    <% if user_signed_in? %>
+    <div style="width:1px;height:16px;background:#444;"></div>
+    <div class="stat-cell stat-bell" data-action="click->globe#toggleAlertsFeed" style="display:flex;align-items:center;padding:0 12px;cursor:pointer;position:relative;">
+      <i class="fa-solid fa-bell" style="font-size:13px;color:#ccc;"></i>
+      <span class="alert-badge" data-globe-target="alertBadge" style="display:none;position:absolute;top:-2px;right:-4px;min-width:14px;height:14px;font-size:8px;font-weight:700;color:#fff;background:#f44336;border-radius:7px;text-align:center;line-height:14px;">0</span>
+    </div>
+    <% end %>
   </div>
 
   <%# ── Sidebar toggle ── ─────────────────────────────────────── %>
@@ -177,6 +184,9 @@
           <button class="ql-btn" data-globe-target="qlConflicts" data-action="click->globe#quickToggle" data-layer="conflicts" data-tip="Armed conflicts (UCDP)" data-tip-pos="right" style="--ql-color: #f44336;">
             <i class="fa-solid fa-crosshairs"></i><span class="ql-label">WAR</span>
           </button>
+          <button class="ql-btn" data-globe-target="qlFireHotspots" data-action="click->globe#quickToggle" data-layer="fireHotspots" data-tip="Active fires & hotspots (NASA FIRMS)" data-tip-pos="right" style="--ql-color: #ff5722;">
+            <i class="fa-solid fa-fire"></i><span class="ql-label">FIRE</span>
+          </button>
         </div>
       </div>
       <div class="ql-category">
@@ -315,6 +325,7 @@
           <input type="checkbox" style="display:none;" data-globe-target="conflictsToggle" data-action="change->globe#toggleConflicts">
           <input type="checkbox" style="display:none;" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
           <input type="checkbox" style="display:none;" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
+          <input type="checkbox" style="display:none;" data-globe-target="fireHotspotsToggle" data-action="change->globe#toggleFireHotspots">
           <div class="sb-slider-row">
             <span class="sb-slider-label">Terrain Exag.</span>
             <input type="range" min="1" max="10" step="0.5" value="1"
@@ -361,80 +372,111 @@
     </div>
   </div>
 
-  <%# ── Entity List Panel ── right side ───────────────────────── %>
-  <div id="entity-list-panel" data-globe-target="entityListPanel" style="display: none;">
-    <button class="detail-close" data-action="click->globe#closeEntityList">&times;</button>
-    <div class="entity-list-header" data-globe-target="entityListHeader"></div>
-    <div class="entity-list-tabs">
-      <button class="entity-tab active" data-action="click->globe#switchEntityTab" data-tab="flights">
-        <i class="fa-solid fa-plane"></i> <span data-globe-target="entityFlightCount">0</span>
+  <%# ── Unified Right Panel ── tabbed container ──────────────── %>
+  <div id="right-panel" data-globe-target="rightPanel" style="display:none;">
+    <button class="detail-close" data-action="click->globe#closeRightPanel">&times;</button>
+    <div class="rp-tabs">
+      <button class="rp-tab active" data-action="click->globe#switchRightTab" data-rp-tab="entities" data-globe-target="rpTabEntities">
+        <i class="fa-solid fa-list"></i> <span class="rp-tab-label">Entities</span>
       </button>
-      <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="ships">
-        <i class="fa-solid fa-ship"></i> <span data-globe-target="entityShipCount">0</span>
+      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="news" data-globe-target="rpTabNews" style="display:none;">
+        <i class="fa-solid fa-newspaper"></i> <span class="rp-tab-label">News</span>
       </button>
-      <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="satellites">
-        <i class="fa-solid fa-satellite"></i> <span data-globe-target="entitySatCount">0</span>
+      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="threats" data-globe-target="rpTabThreats" style="display:none;">
+        <i class="fa-solid fa-shield-halved"></i> <span class="rp-tab-label">Threats</span>
       </button>
+      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="cameras" data-globe-target="rpTabCameras" style="display:none;">
+        <i class="fa-solid fa-video"></i> <span class="rp-tab-label">Cameras</span>
+      </button>
+      <% if user_signed_in? %>
+      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="alerts" data-globe-target="rpTabAlerts" style="display:none;">
+        <i class="fa-solid fa-bell"></i> <span class="rp-tab-label">Alerts</span>
+      </button>
+      <% end %>
     </div>
-    <div class="entity-airline-bar" data-globe-target="entityAirlineBar" style="display:none;">
-      <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
-    </div>
-    <div class="entity-list-content" data-globe-target="entityListContent"></div>
-  </div>
 
-  <%# ── Threats Panel ── right side ────────────────────────────── %>
-  <div id="threats-panel" data-globe-target="threatsPanel" style="display:none;">
-    <button class="detail-close" data-action="click->globe#closeThreats">&times;</button>
-    <div class="threats-header">
-      <span class="threats-title"><i class="fa-solid fa-shield-halved"></i> CYBER THREATS</span>
-      <span class="threats-count" data-globe-target="threatsCount">0 targets</span>
-    </div>
-    <div class="threats-content" data-globe-target="threatsContent"></div>
-  </div>
-
-  <%# ── News Feed Panel ── right side ──────────────────────────── %>
-  <div id="news-feed-panel" data-globe-target="newsFeedPanel" style="display:none;">
-    <button class="detail-close" data-action="click->globe#closeNewsFeed">&times;</button>
-    <div class="news-feed-header">
-      <span class="news-feed-title">NEWS</span>
-      <span class="news-feed-count" data-globe-target="newsFeedCount">0 articles</span>
-    </div>
-    <div class="nf-tabs">
-      <button class="nf-tab nf-tab--active" data-action="click->globe#switchNewsTab" data-tab="articles">ARTICLES</button>
-      <button class="nf-tab" data-action="click->globe#switchNewsTab" data-tab="flows">FLOWS</button>
-    </div>
-    <div class="nf-tab-pane nf-tab-articles" data-globe-target="newsArticlesPane">
-      <div class="nf-filter-row">
-        <select class="nf-cat-filter" data-globe-target="newsArticleCatFilter" data-action="change->globe#filterNewsArticles">
-          <option value="all">All</option>
-          <option value="conflict">Conflict</option>
-          <option value="unrest">Unrest</option>
-          <option value="disaster">Disaster</option>
-          <option value="health">Health</option>
-          <option value="economy">Economy</option>
-          <option value="diplomacy">Diplomacy</option>
-          <option value="other">Other</option>
-        </select>
-        <input type="text" class="nf-search" placeholder="Search headlines..." data-globe-target="newsArticleSearch" data-action="input->globe#filterNewsArticles">
+    <%# ── Entities pane ── %>
+    <div id="entity-list-panel" class="rp-pane rp-pane--active" data-rp-pane="entities" data-globe-target="entityListPanel">
+      <div class="entity-list-header" data-globe-target="entityListHeader"></div>
+      <div class="entity-list-tabs">
+        <button class="entity-tab active" data-action="click->globe#switchEntityTab" data-tab="flights">
+          <i class="fa-solid fa-plane"></i> <span data-globe-target="entityFlightCount">0</span>
+        </button>
+        <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="ships">
+          <i class="fa-solid fa-ship"></i> <span data-globe-target="entityShipCount">0</span>
+        </button>
+        <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="satellites">
+          <i class="fa-solid fa-satellite"></i> <span data-globe-target="entitySatCount">0</span>
+        </button>
       </div>
-      <div class="nf-article-list" data-globe-target="newsArticleList"></div>
+      <div class="entity-airline-bar" data-globe-target="entityAirlineBar" style="display:none;">
+        <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
+      </div>
+      <div class="entity-list-content" data-globe-target="entityListContent"></div>
     </div>
-    <div class="nf-tab-pane nf-tab-flows" data-globe-target="newsFlowsPane" style="display:none;">
-      <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
-    </div>
-  </div>
 
-  <%# ── Camera Feed Panel ── right side ────────────────────────── %>
-  <div id="cam-feed-panel" data-globe-target="camFeedPanel" style="display:none;">
-    <button class="detail-close" data-action="click->globe#closeCamFeed">&times;</button>
-    <div class="cam-feed-header">
-      <span class="cam-feed-title"><i class="fa-solid fa-video"></i> CAMERAS</span>
-      <span class="cam-feed-count" data-globe-target="camFeedCount">0 cameras</span>
+    <%# ── News pane ── %>
+    <div class="rp-pane" data-rp-pane="news" data-globe-target="newsFeedPanel">
+      <div class="news-feed-header">
+        <span class="news-feed-title">NEWS</span>
+        <span class="news-feed-count" data-globe-target="newsFeedCount">0 articles</span>
+      </div>
+      <div class="nf-tabs">
+        <button class="nf-tab nf-tab--active" data-action="click->globe#switchNewsTab" data-tab="articles">ARTICLES</button>
+        <button class="nf-tab" data-action="click->globe#switchNewsTab" data-tab="flows">FLOWS</button>
+      </div>
+      <div class="nf-tab-pane nf-tab-articles" data-globe-target="newsArticlesPane">
+        <div class="nf-filter-row">
+          <select class="nf-cat-filter" data-globe-target="newsArticleCatFilter" data-action="change->globe#filterNewsArticles">
+            <option value="all">All</option>
+            <option value="conflict">Conflict</option>
+            <option value="unrest">Unrest</option>
+            <option value="disaster">Disaster</option>
+            <option value="health">Health</option>
+            <option value="economy">Economy</option>
+            <option value="diplomacy">Diplomacy</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="text" class="nf-search" placeholder="Search headlines..." data-globe-target="newsArticleSearch" data-action="input->globe#filterNewsArticles">
+        </div>
+        <div class="nf-article-list" data-globe-target="newsArticleList"></div>
+      </div>
+      <div class="nf-tab-pane nf-tab-flows" data-globe-target="newsFlowsPane" style="display:none;">
+        <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
+      </div>
     </div>
-    <div class="cam-feed-filter">
-      <input type="text" class="cam-feed-search" placeholder="Search cameras..." data-globe-target="camFeedSearch" data-action="input->globe#filterCamFeed">
+
+    <%# ── Threats pane ── %>
+    <div class="rp-pane" data-rp-pane="threats" data-globe-target="threatsPanel">
+      <div class="threats-header">
+        <span class="threats-title"><i class="fa-solid fa-shield-halved"></i> CYBER THREATS</span>
+        <span class="threats-count" data-globe-target="threatsCount">0 targets</span>
+      </div>
+      <div class="threats-content" data-globe-target="threatsContent"></div>
     </div>
-    <div class="cam-feed-list" data-globe-target="camFeedList"></div>
+
+    <%# ── Cameras pane ── %>
+    <div class="rp-pane" data-rp-pane="cameras" data-globe-target="camFeedPanel">
+      <div class="cam-feed-header">
+        <span class="cam-feed-title"><i class="fa-solid fa-video"></i> CAMERAS</span>
+        <span class="cam-feed-count" data-globe-target="camFeedCount">0 cameras</span>
+      </div>
+      <div class="cam-feed-filter">
+        <input type="text" class="cam-feed-search" placeholder="Search cameras..." data-globe-target="camFeedSearch" data-action="input->globe#filterCamFeed">
+      </div>
+      <div class="cam-feed-list" data-globe-target="camFeedList"></div>
+    </div>
+
+    <%# ── Alerts pane ── %>
+    <% if user_signed_in? %>
+    <div class="rp-pane" data-rp-pane="alerts">
+      <div class="alert-feed-header">
+        <span class="alert-feed-title"><i class="fa-solid fa-bell"></i> ALERTS</span>
+        <button class="alert-mark-all" data-action="click->globe#markAllAlertsSeen">Mark all read</button>
+      </div>
+      <div class="alert-feed-list" data-globe-target="alertFeedContent"></div>
+    </div>
+    <% end %>
   </div>
 
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>
@@ -493,6 +535,13 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
+  </div>
+
+  <%# ── Mini-Timeline ── recent events strip above controls ─────── %>
+  <div id="mini-timeline" data-globe-target="miniTimeline" style="position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:54;display:flex;align-items:center;height:28px;background:#1a1c24;border:1px solid #333;border-radius:6px;padding:0 8px;font-family:monospace;gap:6px;opacity:0.95;">
+    <span style="font-size:9px;color:#666;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">24H</span>
+    <div data-globe-target="miniTimelineDots" style="position:relative;width:320px;height:16px;background:#13151b;border-radius:3px;overflow:hidden;cursor:pointer;" data-action="click->globe#miniTimelineClick"></div>
+    <span id="mt-count" style="font-size:10px;color:#888;white-space:nowrap;">—</span>
   </div>
 
   <%# ── Controls ── horizontal toolbar at bottom ─────────────────── %>

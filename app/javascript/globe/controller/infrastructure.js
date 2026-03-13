@@ -442,7 +442,6 @@ export function applyInfrastructureMethods(GlobeController) {
     } else {
       this._clearPowerPlantEntities()
       if (this._ppCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._ppCameraCb); this._ppCameraCb = null }
-      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
       if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
@@ -567,7 +566,6 @@ export function applyInfrastructureMethods(GlobeController) {
     if (!this.hasThreatsContentTarget) return
     const attacked = this._attackedCountries
     if (!attacked?.size || !this._powerPlantAll?.length) {
-      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
       if (this._syncRightPanels) this._syncRightPanels()
       return
     }
@@ -579,12 +577,13 @@ export function applyInfrastructureMethods(GlobeController) {
       .slice(0, 200)
 
     if (!threatened.length) {
-      if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+      this._threatsActive = false
+      if (this._syncRightPanels) this._syncRightPanels()
       return
     }
 
-    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = ""
-    if (this._syncRightPanels) this._syncRightPanels()
+    this._threatsActive = true
+    if (this._showRightPanel) this._showRightPanel("threats")
     if (this.hasThreatsCountTarget) {
       this.threatsCountTarget.textContent = `${threatened.length} target${threatened.length !== 1 ? "s" : ""}`
     }
@@ -634,7 +633,7 @@ export function applyInfrastructureMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeThreats = function() {
-    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
+    this._threatsActive = false
     if (this._syncRightPanels) this._syncRightPanels()
   }
 
@@ -662,6 +661,22 @@ export function applyInfrastructureMethods(GlobeController) {
     }
     const color = fuelColors[pp.fuel] || "#78909c"
 
+    // Compute national capacity share
+    let shareHtml = ""
+    if (pp.country && pp.capacity && this._powerPlantAll) {
+      const nationalMw = this._powerPlantAll
+        .filter(p => p.country === pp.country)
+        .reduce((sum, p) => sum + (p.capacity || 0), 0)
+      if (nationalMw > 0) {
+        const pct = (pp.capacity / nationalMw * 100).toFixed(1)
+        shareHtml = `
+        <div class="detail-field">
+          <span class="detail-label">National Share</span>
+          <span class="detail-value">${pct}% of ${nationalMw.toLocaleString()} MW</span>
+        </div>`
+      }
+    }
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${color};">
         <i class="fa-solid fa-plug" style="margin-right:6px;"></i>${this._escapeHtml(pp.name)}
@@ -676,6 +691,7 @@ export function applyInfrastructureMethods(GlobeController) {
           <span class="detail-label">Capacity</span>
           <span class="detail-value">${pp.capacity ? pp.capacity.toLocaleString() + " MW" : "—"}</span>
         </div>
+        ${shareHtml}
       </div>
       ${this.trafficVisible && this._attackedCountries?.has(pp.country) ? `
         <div style="margin-top:10px;padding:6px 8px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);border-radius:4px;">
@@ -685,8 +701,11 @@ export function applyInfrastructureMethods(GlobeController) {
           ).join("")}
         </div>
       ` : ""}
+      ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
+    this._fetchConnections("power_plant", pp.lat, pp.lng, { country_code: pp.country })
+
   }
 
   // ── Conflict Events ───────────────────────────────────────────
@@ -835,8 +854,10 @@ export function applyInfrastructureMethods(GlobeController) {
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${c.lat}" data-lng="${c.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
+      ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
+    this._fetchConnections("conflict", c.lat, c.lng)
   }
 
   // ── Satellite-to-Ground Visibility ─────────────────────────
@@ -1194,12 +1215,17 @@ export function applyInfrastructureMethods(GlobeController) {
     const pairs = this._trafficData.attack_pairs || []
 
     // Build set of attacked country codes for cross-layer correlation
+    const prevAttacked = this._attackedCountries || new Set()
     this._attackedCountries = new Set()
     pairs.forEach(p => { if (p.pct > 0.5) this._attackedCountries.add(p.target) })
 
-    // Re-render infra layers if visible to show attack highlighting
-    if (this.powerPlantsVisible) this.renderPowerPlants()
-    if (this.cablesVisible) this._refreshCableAttackHighlights()
+    // Only re-render infra layers if attacked countries actually changed
+    const attacksChanged = prevAttacked.size !== this._attackedCountries.size ||
+      [...this._attackedCountries].some(c => !prevAttacked.has(c))
+    if (attacksChanged) {
+      if (this.powerPlantsVisible) this.renderPowerPlants()
+      if (this.cablesVisible) this._refreshCableAttackHighlights()
+    }
     this._updateThreatsPanel()
 
     if (!this.trafficArcsVisible) {
@@ -1322,8 +1348,8 @@ export function applyInfrastructureMethods(GlobeController) {
     }
     this._trafficEntities = []
     this._attackedCountries = null
+    this._threatsActive = false
     this._clearCableAttackHighlights()
-    if (this.hasThreatsPanelTarget) this.threatsPanelTarget.style.display = "none"
     if (this._syncRightPanels) this._syncRightPanels()
   }
 

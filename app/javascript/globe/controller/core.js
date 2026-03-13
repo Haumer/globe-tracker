@@ -62,6 +62,9 @@ export function applyCoreMethods(GlobeController) {
     this._naturalEventData = []
     this._naturalEventEntities = []
     this._eventsInterval = null
+    this.fireHotspotsVisible = false
+    this._fireHotspotData = []
+    this._fireHotspotEntities = []
     this.camerasVisible = false
     this.gpsJammingVisible = false
     this._gpsJammingEntities = []
@@ -116,6 +119,8 @@ export function applyCoreMethods(GlobeController) {
     this._detectedAirlines = new Map() // code → count
     this._pendingCountryRestore = null
     this._entityListRequested = false
+    this._alertData = []
+    this._alertUnseenCount = 0
     this._ds = {} // shared datasource cache for getDataSource()
     this._backgroundRefreshRetryTimers = {}
     this._backgroundRefreshRetryCounts = {}
@@ -282,6 +287,11 @@ export function applyCoreMethods(GlobeController) {
           const eq = this._earthquakeData.find(e => e.id === eqId)
           if (eq) { this.showEarthquakeDetail(eq); return }
         }
+        if (typeof entityId === "string" && entityId.startsWith("fire-") && !entityId.startsWith("fire-ring-")) {
+          const fireId = entityId.replace("fire-", "")
+          const fire = this._fireHotspotData?.find(f => f.id === fireId)
+          if (fire) { this.showFireHotspotDetail(fire); return }
+        }
         if (typeof entityId === "string" && entityId.startsWith("eonet-")) {
           const eoId = entityId.replace("eonet-", "")
           const ev = this._naturalEventData.find(e => e.id === eoId)
@@ -414,6 +424,8 @@ export function applyCoreMethods(GlobeController) {
 
     // Load workspace list for signed-in users
     this._loadWorkspaceList()
+    this._startAlertPolling()
+    this._startMiniTimeline()
 
     // Start animation loop
     this.lastAnimTime = performance.now()

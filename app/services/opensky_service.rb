@@ -2,8 +2,10 @@ class OpenskyService
   extend HttpClient
   extend SnapshotRecorder
 
-  BASE_URL = "https://opensky-network.org/api"
-  TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
+  # Use Cloudflare Worker proxy when OPENSKY_PROXY_URL is set (bypasses cloud IP blocking)
+  PROXY_URL = ENV["OPENSKY_PROXY_URL"]&.chomp("/")
+  BASE_URL = PROXY_URL ? "#{PROXY_URL}/api" : "https://opensky-network.org/api"
+  TOKEN_URL = PROXY_URL ? "#{PROXY_URL}/auth/token" : "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
   CACHE_TTL = 15
 
   @last_fetch_at = nil
@@ -12,6 +14,9 @@ class OpenskyService
   @token_expires_at = 0
 
   def self.fetch_flights(bounds: {})
+    # OpenSky blocks cloud provider IPs (Heroku/AWS) — skip when disabled
+    return [] if ENV["OPENSKY_DISABLED"].present?
+
     if @last_fetch_at.nil? || (Time.now.to_f - @last_fetch_at) > CACHE_TTL
       response = fetch_from_api(bounds)
       if response
@@ -25,13 +30,14 @@ class OpenskyService
 
   def self.fetch_route(callsign)
     return { error: "No callsign" } if callsign.blank?
+    return { error: "OpenSky disabled" } if ENV["OPENSKY_DISABLED"].present?
 
     cached = @route_cache[callsign]
     return cached if cached
 
     uri = URI("#{BASE_URL}/routes?callsign=#{CGI.escape(callsign)}")
     token = obtain_token
-    headers = {}
+    headers = self.proxy_headers
     headers["Authorization"] = "Bearer #{token}" if token
 
     data = http_get(uri, headers: headers, open_timeout: 5, read_timeout: 10)
@@ -73,10 +79,16 @@ class OpenskyService
     uri.query = URI.encode_www_form(bounds) if bounds.size == 4
 
     token = obtain_token
-    headers = {}
+    headers = proxy_headers
     headers["Authorization"] = "Bearer #{token}" if token
 
     http_get(uri, headers: headers)
+  end
+
+  def self.proxy_headers
+    h = {}
+    h["X-Proxy-Key"] = ENV["OPENSKY_PROXY_KEY"] if ENV["OPENSKY_PROXY_KEY"].present?
+    h
   end
 
   def self.upsert_flights(data)

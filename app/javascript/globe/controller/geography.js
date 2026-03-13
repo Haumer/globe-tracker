@@ -486,12 +486,17 @@ export function applyGeographyMethods(GlobeController) {
         <button class="detail-track-btn" id="draw-circle-btn">
           <i class="fa-solid fa-circle-dot"></i> Draw Circle
         </button>
+        <button class="detail-track-btn" id="area-report-btn" style="background:rgba(79,195,247,0.15);border-color:rgba(79,195,247,0.3);color:#4fc3f7;">
+          <i class="fa-solid fa-chart-bar"></i> Area Report
+        </button>
         <button class="detail-track-btn" id="clear-selection-btn">Clear Selection</button>
       </div>
+      <div id="area-report-content"></div>
     `
 
     document.getElementById("draw-circle-btn")?.addEventListener("click", () => this.enterDrawMode())
     document.getElementById("clear-selection-btn")?.addEventListener("click", () => this.clearCountrySelection())
+    document.getElementById("area-report-btn")?.addEventListener("click", () => this._generateAreaReport())
 
     this.detailPanelTarget.style.display = ""
   }
@@ -733,6 +738,130 @@ export function applyGeographyMethods(GlobeController) {
 
   GlobeController.prototype.toggleTrains = function() {
     // Placeholder
+  }
+
+  // ── Area Reports ───────────────────────────────────────────
+
+  GlobeController.prototype._generateAreaReport = async function() {
+    const container = document.getElementById("area-report-content")
+    if (!container) return
+
+    const bounds = this.getFilterBounds()
+    if (!bounds) {
+      container.innerHTML = `<div style="font:400 10px monospace;color:#888;padding:8px 0;">Select a country or draw a circle first.</div>`
+      return
+    }
+
+    container.innerHTML = `<div style="font:400 10px monospace;color:#888;padding:8px 0;">Generating report...</div>`
+
+    try {
+      const params = new URLSearchParams(bounds)
+      const resp = await fetch(`/api/area_report?${params}`)
+      if (!resp.ok) { container.innerHTML = ""; return }
+      const report = await resp.json()
+      container.innerHTML = this._renderAreaReport(report)
+    } catch (e) {
+      console.warn("Area report failed:", e)
+      container.innerHTML = ""
+    }
+  }
+
+  GlobeController.prototype._renderAreaReport = function(r) {
+    let html = `<div style="margin-top:10px;border-top:1px solid #333;padding-top:8px;">`
+    html += `<div style="font:600 9px monospace;color:#4fc3f7;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">AREA REPORT</div>`
+
+    // Flights
+    if (r.flights) {
+      const f = r.flights
+      html += this._reportSection("fa-plane", "#4fc3f7", "Aviation", [
+        `${f.total} flights (${f.military} military, ${f.civilian} civilian)`,
+        f.emergency > 0 ? `<span style="color:#f44336;">${f.emergency} emergency</span>` : null,
+        f.top_countries ? `Top: ${Object.entries(f.top_countries).map(([c, n]) => `${c} (${n})`).join(", ")}` : null,
+      ])
+    }
+
+    // Earthquakes
+    if (r.earthquakes) {
+      const e = r.earthquakes
+      html += this._reportSection("fa-house-crack", "#ff7043", "Seismic (7d)", [
+        `${e.total} earthquakes, avg M${e.avg_magnitude}`,
+        `Strongest: M${e.max_magnitude} ${e.max_title}`,
+        e.tsunami_warnings > 0 ? `<span style="color:#f44336;">${e.tsunami_warnings} tsunami warnings</span>` : null,
+      ])
+    }
+
+    // Fires
+    if (r.fires) {
+      const f = r.fires
+      html += this._reportSection("fa-fire", "#ff5722", `Active Fires (48h)`, [
+        `${f.total} hotspots${f.high_confidence > 0 ? ` (${f.high_confidence} high confidence)` : ""}`,
+        f.max_frp ? `Max fire power: ${f.max_frp} MW` : null,
+        f.satellites?.length > 0 ? `Detected by: ${f.satellites.join(", ")}` : null,
+      ])
+    }
+
+    // Conflicts
+    if (r.conflicts) {
+      const c = r.conflicts
+      html += this._reportSection("fa-crosshairs", "#f44336", "Conflicts", [
+        `${c.total} events, ${c.casualties} casualties`,
+        c.conflicts.join(", "),
+      ])
+    }
+
+    // Jamming
+    if (r.jamming) {
+      const j = r.jamming
+      html += this._reportSection("fa-satellite-dish", "#ff9800", "GPS Jamming", [
+        j.high_cells > 0 ? `${j.high_cells} high-intensity cells` : null,
+        j.medium_cells > 0 ? `${j.medium_cells} medium-intensity cells` : null,
+      ])
+    }
+
+    // Infrastructure
+    if (r.infrastructure) {
+      const i = r.infrastructure
+      const infraItems = [
+        `${i.power_plants} power plants (${i.total_capacity_mw.toLocaleString()} MW)`,
+        i.nuclear > 0 ? `<span style="color:#fdd835;">${i.nuclear} nuclear</span>` : null,
+        i.submarine_cables > 0 ? `${i.submarine_cables} submarine cables` : null,
+        i.fuel_mix ? Object.entries(i.fuel_mix).map(([f, n]) => `${f}: ${n}`).join(", ") : null,
+      ]
+      if (i.country_shares && i.country_shares.length > 0) {
+        infraItems.push(`<span style="color:#fdd835;font-weight:600;">National capacity share:</span>`)
+        i.country_shares.forEach(s => {
+          infraItems.push(`${s.country}: ${s.area_mw.toLocaleString()} / ${s.national_mw.toLocaleString()} MW (${s.pct}%)`)
+        })
+      }
+      html += this._reportSection("fa-bolt", "#fdd835", "Infrastructure", infraItems)
+    }
+
+    // Anomalies
+    if (r.anomalies && r.anomalies.length > 0) {
+      const items = r.anomalies.map(a => `<span style="color:${a.color};">${a.title}</span>`)
+      html += this._reportSection("fa-triangle-exclamation", "#f44336", "Active Anomalies", items)
+    }
+
+    // No data
+    const sections = [r.flights, r.earthquakes, r.fires, r.conflicts, r.jamming, r.infrastructure, r.anomalies]
+    if (sections.every(s => !s)) {
+      html += `<div style="font:400 10px monospace;color:#666;padding:4px 0;">No significant data in this area.</div>`
+    }
+
+    html += `</div>`
+    return html
+  }
+
+  GlobeController.prototype._reportSection = function(icon, color, title, items) {
+    const filtered = items.filter(Boolean)
+    if (filtered.length === 0) return ""
+    return `<div style="margin-bottom:8px;padding:5px 7px;background:rgba(255,255,255,0.03);border-left:3px solid ${color};border-radius:0 4px 4px 0;">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+        <i class="fa-solid ${icon}" style="color:${color};font-size:10px;"></i>
+        <span style="font:600 10px monospace;color:${color};">${title}</span>
+      </div>
+      ${filtered.map(item => `<div style="font:400 10px monospace;color:#aaa;padding:1px 0;">${item}</div>`).join("")}
+    </div>`
   }
 
   // ── News Events ────────────────────────────────────────────

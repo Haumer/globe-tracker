@@ -1293,8 +1293,8 @@ export function applySatelliteMethods(GlobeController) {
 
     // Collect ground events within footprint
     const events = []
-    const catIcons = { earthquake: "house-crack", natural: "bolt", conflict: "crosshairs", news: "newspaper" }
-    const catColors = { earthquake: "#ff7043", natural: "#66bb6a", conflict: "#f44336", news: "#ff9800" }
+    const catIcons = { earthquake: "house-crack", natural: "bolt", conflict: "crosshairs", fire: "fire", news: "newspaper" }
+    const catColors = { earthquake: "#ff7043", natural: "#66bb6a", conflict: "#f44336", fire: "#ff5722", news: "#ff9800" }
 
     // Earthquakes
     if (this._earthquakeData?.length) {
@@ -1323,6 +1323,16 @@ export function applySatelliteMethods(GlobeController) {
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: c.lat, lng: c.lng })
         if (dist <= footprintM) {
           events.push({ type: "conflict", label: `${c.conflict || "Conflict"} — ${c.country || ""}`, lat: c.lat, lng: c.lng, dist })
+        }
+      })
+    }
+
+    // Fire hotspots
+    if (this._fireHotspotData?.length) {
+      this._fireHotspotData.forEach(f => {
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: f.lat, lng: f.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "fire", label: `Fire ${f.lat.toFixed(2)}°, ${f.lng.toFixed(2)}° (${f.satellite || "?"})`, lat: f.lat, lng: f.lng, dist })
         }
       })
     }
@@ -1390,7 +1400,7 @@ export function applySatelliteMethods(GlobeController) {
             <span style="flex-shrink:0;color:${color};">${distKm} km</span>
           </div>`
         }).join("")
-      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No active events in footprint. Enable event layers (EQ, EVT, WAR, NEWS).</div>`
+      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No active events in footprint. Enable event layers (EQ, EVT, WAR, FIRE, NEWS).</div>`
 
     const container = document.createElement("div")
     container.id = "ground-events-results"

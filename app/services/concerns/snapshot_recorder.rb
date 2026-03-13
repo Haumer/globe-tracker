@@ -28,7 +28,7 @@ module SnapshotRecorder
         speed: r[:speed],
         vertical_rate: r[:vertical_rate],
         on_ground: r[:on_ground],
-        extra: { source: r[:source], registration: r[:registration], aircraft_type: r[:aircraft_type], origin_country: r[:origin_country] }.compact.to_json,
+        extra: { source: r[:source], registration: r[:registration], aircraft_type: r[:aircraft_type], origin_country: r[:origin_country], squawk: r[:squawk], emergency: r[:emergency], category: r[:category], mach: r[:mach], military: r[:military] }.compact.to_json,
         recorded_at: now,
       }
     end

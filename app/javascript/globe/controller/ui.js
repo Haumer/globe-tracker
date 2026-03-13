@@ -51,6 +51,7 @@ export function applyUiMethods(GlobeController) {
       conflicts:   { target: "conflictsToggle",    method: "toggleConflicts" },
       traffic:     { target: "trafficToggle",      method: "toggleTraffic" },
       notams:      { target: "notamsToggle",        method: "toggleNotams" },
+      fireHotspots: { target: "fireHotspotsToggle", method: "toggleFireHotspots" },
     }
 
     if (layer === "satellites") {
@@ -112,6 +113,7 @@ export function applyUiMethods(GlobeController) {
     sync("qlConflicts", this.conflictsVisible)
     sync("qlTraffic", this.trafficVisible)
     sync("qlNotams", this.notamsVisible)
+    sync("qlFireHotspots", this.fireHotspotsVisible)
 
     const anySat = Object.values(this.satCategoryVisible).some(v => v)
     sync("qlSatellites", anySat)
@@ -148,7 +150,8 @@ export function applyUiMethods(GlobeController) {
                     (this.naturalEventsVisible ? this._naturalEventData.length : 0) +
                     (this.camerasVisible ? this._webcamData.length : 0) +
                     (this.powerPlantsVisible ? this._powerPlantData.length : 0) +
-                    (this.conflictsVisible ? this._conflictData.length : 0)
+                    (this.conflictsVisible ? this._conflictData.length : 0) +
+                    (this.fireHotspotsVisible ? this._fireHotspotData.length : 0)
       this.statEventsTarget.textContent = count.toLocaleString()
       if (this.earthquakesVisible && this._earthquakeData.length > 0) this._markFresh("earthquakes")
       if (this.naturalEventsVisible && this._naturalEventData.length > 0) this._markFresh("naturalEvents")
@@ -274,6 +277,7 @@ export function applyUiMethods(GlobeController) {
       conflicts: this.conflictsVisible,
       traffic: this.trafficVisible,
       notams: this.notamsVisible,
+      fireHotspots: this.fireHotspotsVisible,
       terrain: this.terrainEnabled || false,
       terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
       buildings: this.hasBuildingsSelectTarget ? this.buildingsSelectTarget.value : "off",
@@ -437,6 +441,10 @@ export function applyUiMethods(GlobeController) {
       if (l.notams && this.hasNotamsToggleTarget) {
         this.notamsToggleTarget.checked = true
         this.toggleNotams()
+      }
+      if (l.fireHotspots && this.hasFireHotspotsToggleTarget) {
+        this.fireHotspotsToggleTarget.checked = true
+        this.toggleFireHotspots()
       }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true

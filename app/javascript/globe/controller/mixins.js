@@ -10,6 +10,10 @@ import { applyNewsMethods } from "./news"
 import { applyInfrastructureMethods } from "./infrastructure"
 import { applyTimelineMethods } from "./timeline"
 import { applyWorkspaceMethods } from "./workspaces"
+import { applyAlertsMethods } from "./alerts"
+import { applyConnectionsMethods } from "./connections"
+import { applyMiniTimelineMethods } from "./mini_timeline"
+import { applyFiresMethods } from "./fires"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
@@ -24,4 +28,8 @@ export function applyGlobeControllerMixins(GlobeController) {
   applyInfrastructureMethods(GlobeController)
   applyTimelineMethods(GlobeController)
   applyWorkspaceMethods(GlobeController)
+  applyAlertsMethods(GlobeController)
+  applyConnectionsMethods(GlobeController)
+  applyMiniTimelineMethods(GlobeController)
+  applyFiresMethods(GlobeController)
 }

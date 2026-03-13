@@ -32,8 +32,8 @@ class MilitaryClassifier
     ["480000", "480fff", "NO"],
     # Spain
     ["340000", "340fff", "ES"],
-    # Belgium
-    ["448000", "44ffff", "BE"],
+    # Belgium (military sub-block only — 448000-44807f; 449000+ is civil)
+    ["448000", "44807f", "BE"],
     # Turkey (military sub-block)
     ["4b8000", "4b8fff", "TR"],
     # Greece

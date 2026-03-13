@@ -42,3 +42,13 @@ pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
 
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
+
+# Auto-start the global poller after Puma boots (production & development)
+on_worker_boot do
+  GlobalPollerService.start
+end
+
+# For single-mode (no workers), use on_booted instead
+on_booted do
+  GlobalPollerService.start unless GlobalPollerService.running?
+end

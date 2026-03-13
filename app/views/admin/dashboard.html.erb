@@ -1,4 +1,4 @@
-<%= tag.meta("http-equiv": "refresh", content: "10") %>
+<%= turbo_frame_tag "admin-dashboard" do %>
 
 <div style="background: #0a0e17; min-height: 100vh; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #c8d2e1;">
 
@@ -180,3 +180,12 @@
 
   </div>
 </div>
+<% end %>
+
+<script>
+  // Auto-refresh the turbo frame every 10 seconds
+  setInterval(() => {
+    const frame = document.querySelector("turbo-frame#admin-dashboard")
+    if (frame) frame.reload()
+  }, 10000)
+</script>

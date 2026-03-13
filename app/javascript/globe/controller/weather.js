@@ -3,10 +3,10 @@ import { getDataSource } from "../utils"
 export function applyWeatherMethods(GlobeController) {
 
   // Available weather overlay layers
-  // OWM layers need an API key; RainViewer is free (no key)
+  // Rain & Clouds use RainViewer (free); Temp/Wind/Pressure need OWM paid key
   const WEATHER_LAYERS = {
-    precipitation: { label: "Rain",   icon: "fa-cloud-rain",      color: "#42a5f5", owmId: "precipitation_new" },
-    clouds:        { label: "Clouds", icon: "fa-cloud",            color: "#90a4ae", owmId: "clouds_new" },
+    precipitation: { label: "Rain",   icon: "fa-cloud-rain",      color: "#42a5f5", free: true },
+    clouds:        { label: "Clouds", icon: "fa-cloud",            color: "#90a4ae", free: true },
     temperature:   { label: "Temp",   icon: "fa-temperature-half", color: "#ef5350", owmId: "temp_new" },
     wind:          { label: "Wind",   icon: "fa-wind",             color: "#26c6da", owmId: "wind_new" },
     pressure:      { label: "Hpa",    icon: "fa-gauge-high",       color: "#ab47bc", owmId: "pressure_new" },
@@ -14,6 +14,29 @@ export function applyWeatherMethods(GlobeController) {
 
   GlobeController.prototype.getWeatherDataSource = function() {
     return getDataSource(this.viewer, this._ds, "weather")
+  }
+
+  // ── Weather satellite mapping ──────────────────────────────────
+  // Maps weather imagery sources to the satellites that provide them.
+  // NORAD IDs for key geostationary weather satellites.
+  const WEATHER_SAT_SOURCES = {
+    clouds: [
+      { norad: 41866, name: "GOES-16 (East)", region: "Americas" },
+      { norad: 51850, name: "GOES-18 (West)", region: "Pacific/Americas" },
+      { norad: 60133, name: "GOES-19",        region: "Americas" },
+      { norad: 40732, name: "Meteosat-11",    region: "Europe/Africa" },
+      { norad: 54743, name: "Meteosat-12",    region: "Europe/Africa" },
+      { norad: 38552, name: "Meteosat-10",    region: "Indian Ocean" },
+      { norad: 40267, name: "Himawari-8",     region: "Asia/Pacific" },
+      { norad: 41836, name: "Himawari-9",     region: "Asia/Pacific" },
+    ],
+    precipitation: [
+      // Radar data is ground-based, but polar-orbiting sats provide
+      // additional precipitation estimates in areas without radar coverage
+      { norad: 37849, name: "Suomi NPP",      region: "Global (polar)" },
+      { norad: 43013, name: "NOAA-20",        region: "Global (polar)" },
+      { norad: 54234, name: "NOAA-21",        region: "Global (polar)" },
+    ],
   }
 
   // ── Main toggle ──────────────────────────────────────────────
@@ -30,10 +53,12 @@ export function applyWeatherMethods(GlobeController) {
         this.toggleWeatherSublayer("precipitation")
       }
       this._fetchWeatherAlerts()
+      this._enableWeatherSatellites()
     } else {
       this._removeAllWeatherLayers()
       this._showWeatherPanel(false)
       this._clearWeatherAlertEntities()
+      this._clearWeatherSatBeams()
     }
     this._updateStats()
     this._requestRender()
@@ -75,17 +100,22 @@ export function applyWeatherMethods(GlobeController) {
     }
 
     this._syncWeatherChips()
+    this._renderWeatherSatBeams()
     this._requestRender()
     this._savePrefs()
   }
 
-  // ── Provider factory: OWM if key present, RainViewer for precip fallback ──
+  // ── Provider factory: RainViewer for rain/clouds (free), OWM for temp/wind/pressure ──
 
   GlobeController.prototype._createWeatherProvider = async function(layerKey, cfg, Cesium) {
-    const apiKey = this._weatherApiKey()
+    // Free layers via RainViewer
+    if (cfg.free) {
+      return await this._createRainViewerProvider(layerKey, Cesium)
+    }
 
-    // Try OpenWeatherMap first (all layers supported)
-    if (apiKey) {
+    // OWM paid layers
+    const apiKey = this._weatherApiKey()
+    if (apiKey && cfg.owmId) {
       return new Cesium.UrlTemplateImageryProvider({
         url: `https://tile.openweathermap.org/map/${cfg.owmId}/{z}/{x}/{y}.png?appid=${apiKey}`,
         minimumLevel: 1,
@@ -94,33 +124,68 @@ export function applyWeatherMethods(GlobeController) {
       })
     }
 
-    // Fallback: RainViewer for precipitation (free, no key)
-    if (layerKey === "precipitation") {
-      return await this._createRainViewerProvider(Cesium)
-    }
-
-    // Other layers need OWM key
     return null
   }
 
-  GlobeController.prototype._createRainViewerProvider = async function(Cesium) {
+  GlobeController.prototype._fetchRainViewerMaps = async function() {
+    // Cache the RainViewer response for 5 minutes
+    if (this._rainViewerData && (Date.now() - this._rainViewerFetchedAt) < 300000) {
+      return this._rainViewerData
+    }
     try {
-      // RainViewer provides the latest radar frame timestamp
       const resp = await fetch("https://api.rainviewer.com/public/weather-maps.json")
       if (!resp.ok) return null
-      const data = await resp.json()
-      const frames = data.radar?.past || []
-      if (frames.length === 0) return null
-      const latest = frames[frames.length - 1]
+      this._rainViewerData = await resp.json()
+      this._rainViewerFetchedAt = Date.now()
+      return this._rainViewerData
+    } catch {
+      return null
+    }
+  }
 
-      return new Cesium.UrlTemplateImageryProvider({
-        url: `https://tilecache.rainviewer.com/v2/radar/${latest.path}/256/{z}/{x}/{y}/2/1_1.png`,
-        minimumLevel: 1,
-        maximumLevel: 12,
-        credit: new Cesium.Credit("RainViewer"),
-      })
+  GlobeController.prototype._createRainViewerProvider = async function(layerKey, Cesium) {
+    try {
+      const data = await this._fetchRainViewerMaps()
+      if (!data) return null
+
+      const host = data.host || "https://tilecache.rainviewer.com"
+
+      if (layerKey === "precipitation") {
+        const frames = data.radar?.past || []
+        if (frames.length === 0) return null
+        const latest = frames[frames.length - 1]
+        return new Cesium.UrlTemplateImageryProvider({
+          url: `${host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`,
+          minimumLevel: 1,
+          maximumLevel: 7,
+          credit: new Cesium.Credit("RainViewer"),
+        })
+      }
+
+      if (layerKey === "clouds") {
+        // Try satellite infrared first, fall back to radar coverage overlay
+        const irFrames = data.satellite?.infrared || []
+        if (irFrames.length > 0) {
+          const latest = irFrames[irFrames.length - 1]
+          return new Cesium.UrlTemplateImageryProvider({
+            url: `${host}${latest.path}/256/{z}/{x}/{y}/0/0_0.png`,
+            minimumLevel: 1,
+            maximumLevel: 7,
+            credit: new Cesium.Credit("RainViewer Satellite"),
+          })
+        }
+        // Fallback: use radar coverage mask as a rough cloud indicator
+        return new Cesium.UrlTemplateImageryProvider({
+          url: `${host}/v2/coverage/0/256/{z}/{x}/{y}/0/0_0.png`,
+          minimumLevel: 1,
+          maximumLevel: 7,
+          credit: new Cesium.Credit("RainViewer"),
+        })
+      }
+
+      return null
     } catch (e) {
-      console.warn("RainViewer fallback failed:", e)
+      console.warn("RainViewer provider failed:", e)
       return null
     }
   }
@@ -147,6 +212,7 @@ export function applyWeatherMethods(GlobeController) {
       const data = await resp.json()
       this._weatherAlerts = data.alerts || []
       this._renderWeatherAlerts()
+      this._markFresh("weather")
     } catch (e) {
       // Silent — alerts are optional enrichment
     }
@@ -246,11 +312,10 @@ export function applyWeatherMethods(GlobeController) {
 
     let html = '<div class="wx-chips">'
     for (const [key, cfg] of Object.entries(WEATHER_LAYERS)) {
-      // Without OWM key, only precipitation (RainViewer fallback) is available
-      const disabled = !apiKey && key !== "precipitation"
+      const disabled = !cfg.free && !apiKey
       html += `<button class="wx-chip${disabled ? ' wx-disabled' : ''}" data-wx-layer="${key}"
                 data-action="click->globe#onWeatherChip"
-                style="--wx-color: ${cfg.color};"${disabled ? ' title="Requires OPENWEATHERMAP_API_KEY"' : ''}>
+                style="--wx-color: ${cfg.color};"${disabled ? ' title="Requires OWM paid plan"' : ''}>
                 <i class="fa-solid ${cfg.icon}"></i> ${cfg.label}
               </button>`
     }
@@ -260,9 +325,11 @@ export function applyWeatherMethods(GlobeController) {
       <input type="range" min="0.1" max="1" step="0.05" value="${this._weatherOpacity || 0.6}"
              data-action="input->globe#setWeatherOpacity">
     </div>`
-    if (!apiKey) {
-      html += `<div style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);padding:4px 0 0;">Rain via RainViewer · Add OPENWEATHERMAP_API_KEY for all layers</div>`
-    }
+    html += `<div class="wx-sat-sources" style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);padding:4px 0 0;">
+      <i class="fa-solid fa-satellite" style="color:#ffa726;margin-right:3px;"></i>
+      Clouds: GOES · Meteosat · Himawari &nbsp;|&nbsp; Precip: ground radar + NOAA/Suomi NPP
+    </div>
+    <div style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);padding:2px 0 0;">Rain & Clouds via RainViewer${!apiKey ? " · Temp/Wind/Hpa need OWM paid key" : ""}</div>`
 
     panel.innerHTML = html
   }
@@ -285,6 +352,98 @@ export function applyWeatherMethods(GlobeController) {
   GlobeController.prototype._showWeatherPanel = function(show) {
     const panel = this.element.querySelector('[data-globe-target="weatherPanel"]')
     if (panel) panel.style.display = show ? "" : "none"
+  }
+
+  // ── Weather ↔ Satellite link ────────────────────────────────
+
+  // Auto-enable the "weather" satellite category so users see the source sats
+  GlobeController.prototype._enableWeatherSatellites = function() {
+    if (this.satCategoryVisible.weather) return // already on
+    this.satCategoryVisible.weather = true
+    if (!this._loadedSatCategories.has("weather")) {
+      this.fetchSatCategory("weather")
+    }
+    // Sync checkbox if it exists
+    const cb = this.element.querySelector('[data-category="weather"]')
+    if (cb) cb.checked = true
+  }
+
+  // Draw dashed scan beams from geostationary weather sats to the ground
+  // when the clouds (IR) layer is active — these are the sats providing imagery.
+  GlobeController.prototype._renderWeatherSatBeams = function() {
+    this._clearWeatherSatBeams()
+    if (!this.weatherVisible) return
+
+    const Cesium = window.Cesium
+    const ds = this.getWeatherDataSource()
+    this._weatherSatBeamEntities = []
+
+    // Determine which source sats to highlight based on active layers
+    const activeSources = []
+    for (const layerKey of Object.keys(this._weatherActiveLayers || {})) {
+      const sources = WEATHER_SAT_SOURCES[layerKey]
+      if (sources) activeSources.push(...sources)
+    }
+    if (activeSources.length === 0) return
+
+    // Find satellite positions and draw beams
+    const clock = this.viewer.clock.currentTime
+    for (const src of activeSources) {
+      const satEntity = this._findSatelliteByNorad(src.norad)
+      if (!satEntity) continue
+
+      const satPos = satEntity.position?.getValue?.(clock)
+      if (!satPos) continue
+
+      const carto = Cesium.Cartographic.fromCartesian(satPos)
+      const groundPos = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, 0)
+
+      // Dashed beam line from satellite to ground (nadir point)
+      const beam = ds.entities.add({
+        id: `wx-beam-${src.norad}`,
+        polyline: {
+          positions: [satPos, groundPos],
+          width: 1.5,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.4),
+            dashLength: 16,
+          }),
+          arcType: Cesium.ArcType.NONE,
+        },
+      })
+      this._weatherSatBeamEntities.push(beam)
+
+      // Small label at nadir showing satellite name + region
+      const label = ds.entities.add({
+        id: `wx-beam-lbl-${src.norad}`,
+        position: groundPos,
+        label: {
+          text: `${src.name}\n${src.region}`,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.7),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, 14),
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 2e7, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1, 2e7, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._weatherSatBeamEntities.push(label)
+    }
+    this._requestRender()
+  }
+
+  GlobeController.prototype._clearWeatherSatBeams = function() {
+    if (!this._weatherSatBeamEntities?.length) return
+    const ds = this._ds["weather"]
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._weatherSatBeamEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
+    this._weatherSatBeamEntities = []
   }
 
   // ── Detail popup for weather alerts ───────────────────────────

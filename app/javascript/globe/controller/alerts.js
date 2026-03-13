@@ -58,16 +58,18 @@ export function applyAlertsMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderAlertBadge = function() {
-    if (!this.hasAlertBadgeTarget) return
+    const badge = document.getElementById("stat-alert-badge")
+    if (!badge) return
     const count = this._alertUnseenCount || 0
-    this.alertBadgeTarget.textContent = count
-    this.alertBadgeTarget.style.display = count > 0 ? "" : "none"
+    badge.textContent = count
+    badge.style.display = count > 0 ? "" : "none"
   }
 
   GlobeController.prototype._flashAlertBadge = function() {
-    if (!this.hasAlertBadgeTarget) return
-    this.alertBadgeTarget.classList.add("alert-badge--pulse")
-    setTimeout(() => this.alertBadgeTarget.classList.remove("alert-badge--pulse"), 2000)
+    const badge = document.getElementById("stat-alert-badge")
+    if (!badge) return
+    badge.classList.add("alert-badge--pulse")
+    setTimeout(() => badge.classList.remove("alert-badge--pulse"), 2000)
   }
 
   GlobeController.prototype.toggleAlertsFeed = function() {

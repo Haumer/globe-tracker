@@ -6,6 +6,8 @@ class ConflictEventService
 
   BASE_URL = "https://ucdpapi.pcr.uu.se/api/gedevents/24.1".freeze
   PAGE_SIZE = 1000
+  DAILY_REQUEST_LIMIT = 5000
+  RATE_LIMIT_CACHE_KEY = "ucdp_api_requests_today".freeze
 
   refreshes model: ConflictEvent, interval: 1.day, column: :updated_at
 
@@ -22,10 +24,20 @@ class ConflictEventService
         return 0
       end
 
+      if rate_limit_exhausted?
+        Rails.logger.warn("ConflictEventService: daily request limit (#{DAILY_REQUEST_LIMIT}) reached — skipping")
+        return 0
+      end
+
       total = 0
       page = 1
 
       loop do
+        if rate_limit_exhausted?
+          Rails.logger.warn("ConflictEventService: hit daily limit mid-fetch at page #{page}")
+          break
+        end
+
         uri = URI("#{BASE_URL}?pagesize=#{PAGE_SIZE}&page=#{page}&StartDate=#{year}-01-01&EndDate=#{year}-12-31")
         req = Net::HTTP::Get.new(uri)
         req["x-ucdp-access-token"] = token
@@ -33,6 +45,7 @@ class ConflictEventService
         response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 30) do |http|
           http.request(req)
         end
+        increment_request_count!
 
         unless response.is_a?(Net::HTTPSuccess)
           Rails.logger.error("ConflictEventService: HTTP #{response.code} — #{response.body[0..200]}")
@@ -46,17 +59,25 @@ class ConflictEventService
         upsert_events(results)
         total += results.size
 
-        Rails.logger.info("ConflictEventService: page #{page}, #{total}/#{data['TotalCount']} events")
+        Rails.logger.info("ConflictEventService: page #{page}, #{total}/#{data['TotalCount']} events (#{requests_today}/#{DAILY_REQUEST_LIMIT} requests today)")
 
         break if page >= (data["TotalPages"] || 1)
         page += 1
       end
 
-      Rails.logger.info("ConflictEventService: imported #{total} events")
+      Rails.logger.info("ConflictEventService: imported #{total} events (#{requests_today}/#{DAILY_REQUEST_LIMIT} requests used today)")
       total
     rescue => e
       Rails.logger.error("ConflictEventService: #{e.message}")
       0
+    end
+
+    def requests_today
+      Rails.cache.read(RATE_LIMIT_CACHE_KEY).to_i
+    end
+
+    def rate_limit_exhausted?
+      requests_today >= DAILY_REQUEST_LIMIT
     end
 
     def api_token
@@ -65,6 +86,13 @@ class ConflictEventService
     end
 
     private
+
+    def increment_request_count!
+      count = requests_today + 1
+      # Expire at end of day (UTC)
+      ttl = Time.current.end_of_day - Time.current
+      Rails.cache.write(RATE_LIMIT_CACHE_KEY, count, expires_in: ttl)
+    end
 
     def upsert_events(results)
       now = Time.current

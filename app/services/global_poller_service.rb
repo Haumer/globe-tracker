@@ -149,8 +149,12 @@ class GlobalPollerService
         NaturalEventRefreshService.refresh_if_stale
       end
 
-      poll_source("acled", "conflict_event") do
+      poll_source("ucdp", "conflict_event") do
         ConflictEventService.refresh_if_stale
+      end
+
+      poll_source("acled", "conflict_event") do
+        AcledService.refresh_if_stale
       end
 
       poll_source("cloudflare", "internet_outage") do

@@ -1,0 +1,2 @@
+class Railway < ApplicationRecord
+end

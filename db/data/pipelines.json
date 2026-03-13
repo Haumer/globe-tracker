@@ -1,0 +1,302 @@
+[
+  {
+    "id": "druzhba",
+    "name": "Druzhba Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 5327,
+    "country": "RU/BY/PL/DE/UA/CZ/SK/HU",
+    "coordinates": [[52.26, 40.40], [52.97, 36.07], [53.90, 30.33], [53.13, 23.80], [52.23, 21.01], [52.41, 16.93], [51.34, 12.38]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "druzhba-south",
+    "name": "Druzhba Pipeline (South)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 2000,
+    "country": "RU/BY/UA/SK/HU",
+    "coordinates": [[52.97, 36.07], [53.90, 30.33], [51.50, 28.00], [50.45, 24.00], [48.72, 21.25], [47.50, 19.04]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "nord-stream-1",
+    "name": "Nord Stream 1",
+    "type": "gas",
+    "status": "damaged",
+    "length_km": 1224,
+    "country": "RU/DE",
+    "coordinates": [[59.95, 29.07], [59.70, 27.50], [59.40, 24.00], [58.50, 20.00], [56.50, 16.00], [55.50, 13.50], [54.60, 12.10], [54.14, 13.14]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "nord-stream-2",
+    "name": "Nord Stream 2",
+    "type": "gas",
+    "status": "damaged",
+    "length_km": 1234,
+    "country": "RU/DE",
+    "coordinates": [[59.95, 29.07], [59.50, 27.00], [59.10, 24.50], [58.20, 20.50], [56.20, 16.50], [55.20, 14.00], [54.50, 12.50], [54.10, 13.65]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "turkstream",
+    "name": "TurkStream",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 930,
+    "country": "RU/TR",
+    "coordinates": [[44.60, 37.90], [43.80, 36.50], [42.80, 35.00], [42.00, 33.00], [41.50, 31.00], [41.20, 29.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "transmed",
+    "name": "TransMed (Enrico Mattei)",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 2475,
+    "country": "DZ/TN/IT",
+    "coordinates": [[31.63, 2.88], [33.00, 3.50], [35.50, 6.00], [36.80, 8.80], [37.10, 10.20], [37.50, 11.80], [38.20, 13.30], [39.20, 14.00], [40.50, 14.80]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "btc",
+    "name": "Baku-Tbilisi-Ceyhan (BTC)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 1768,
+    "country": "AZ/GE/TR",
+    "coordinates": [[40.37, 49.89], [40.50, 48.00], [41.20, 46.00], [41.72, 44.79], [41.50, 43.50], [40.80, 42.00], [39.80, 40.50], [38.50, 38.50], [37.50, 37.00], [36.85, 35.95]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "tap",
+    "name": "Trans Adriatic Pipeline (TAP)",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 878,
+    "country": "GR/AL/IT",
+    "coordinates": [[40.50, 26.50], [40.80, 24.50], [40.60, 21.00], [40.50, 20.00], [40.80, 19.50], [41.00, 18.50], [40.80, 17.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "tanap",
+    "name": "Trans-Anatolian Pipeline (TANAP)",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 1850,
+    "country": "TR",
+    "coordinates": [[41.72, 44.79], [41.00, 43.00], [40.00, 41.00], [39.50, 38.50], [39.00, 36.00], [38.50, 34.00], [38.00, 32.00], [37.80, 30.00], [38.50, 28.00], [40.50, 26.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "east-west",
+    "name": "East-West Pipeline (Petroline)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 1200,
+    "country": "SA",
+    "coordinates": [[25.38, 49.59], [25.50, 47.50], [25.00, 45.00], [24.50, 43.00], [23.50, 41.00], [22.69, 39.15]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "kirkuk-ceyhan",
+    "name": "Kirkuk-Ceyhan Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 970,
+    "country": "IQ/TR",
+    "coordinates": [[35.47, 44.39], [36.00, 43.50], [36.80, 42.50], [37.20, 41.50], [37.00, 40.00], [37.00, 38.00], [36.85, 35.95]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "keystone",
+    "name": "Keystone Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 3462,
+    "country": "CA/US",
+    "coordinates": [[52.13, -110.00], [50.45, -108.25], [49.00, -106.66], [48.00, -104.00], [46.50, -100.00], [44.50, -97.50], [42.00, -97.00], [40.50, -96.50], [39.00, -96.00], [37.80, -97.30], [36.00, -96.00], [34.50, -95.50], [31.00, -94.00], [29.76, -95.37]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "trans-alaska",
+    "name": "Trans-Alaska Pipeline (TAPS)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 1288,
+    "country": "US",
+    "coordinates": [[70.26, -148.69], [69.00, -148.80], [68.00, -149.80], [67.00, -150.00], [66.00, -150.00], [65.00, -149.00], [64.84, -147.72], [64.00, -146.00], [63.50, -145.80], [63.00, -145.50], [62.10, -145.50], [61.13, -146.35], [60.77, -146.42]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "espo",
+    "name": "Eastern Siberia-Pacific Ocean (ESPO)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 4857,
+    "country": "RU",
+    "coordinates": [[56.87, 114.90], [55.00, 118.00], [53.00, 122.00], [51.00, 126.00], [49.50, 129.00], [48.80, 131.50], [48.00, 132.00], [47.00, 133.00], [44.00, 132.50], [43.11, 131.87]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "power-of-siberia",
+    "name": "Power of Siberia",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 2200,
+    "country": "RU/CN",
+    "coordinates": [[62.00, 130.00], [60.00, 131.00], [58.00, 131.50], [56.00, 132.00], [54.00, 132.50], [52.50, 133.00], [50.50, 132.00], [48.50, 130.50], [47.00, 129.00], [45.50, 127.00]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "central-asia-china",
+    "name": "Central Asia-China Gas Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 1833,
+    "country": "TM/UZ/KZ/CN",
+    "coordinates": [[37.95, 58.39], [38.50, 60.00], [39.50, 62.00], [40.50, 64.00], [41.30, 66.00], [41.50, 68.00], [42.00, 70.00], [42.50, 73.00], [43.50, 76.00], [44.50, 80.00]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "west-east-china",
+    "name": "West-East Gas Pipeline (China)",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 4200,
+    "country": "CN",
+    "coordinates": [[39.47, 75.99], [40.00, 78.00], [41.00, 82.00], [41.50, 86.00], [42.00, 90.00], [41.00, 94.00], [40.00, 98.00], [38.50, 101.00], [37.00, 104.00], [36.00, 107.00], [35.00, 109.00], [34.50, 112.00], [33.50, 115.00], [32.50, 118.00], [31.23, 121.47]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "chad-cameroon",
+    "name": "Chad-Cameroon Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 1070,
+    "country": "TD/CM",
+    "coordinates": [[10.00, 18.43], [9.00, 16.50], [7.50, 14.50], [6.50, 12.50], [5.50, 11.00], [4.50, 10.00], [3.95, 9.90]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "medgaz",
+    "name": "Medgaz Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 210,
+    "country": "DZ/ES",
+    "coordinates": [[36.77, 3.05], [37.00, 1.50], [36.80, -0.50], [36.72, -2.19]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "sumed",
+    "name": "SUMED Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 320,
+    "country": "EG",
+    "coordinates": [[29.05, 32.55], [29.50, 32.00], [30.00, 31.50], [30.50, 31.00], [30.87, 29.83]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "cpc",
+    "name": "Caspian Pipeline Consortium (CPC)",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 1510,
+    "country": "KZ/RU",
+    "coordinates": [[47.10, 51.92], [46.50, 50.00], [46.00, 48.00], [45.50, 46.00], [45.00, 44.50], [44.70, 42.00], [44.60, 40.00], [44.72, 37.78]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "yamal-europe",
+    "name": "Yamal-Europe Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 4196,
+    "country": "RU/BY/PL/DE",
+    "coordinates": [[67.55, 72.53], [64.00, 68.00], [60.00, 60.00], [57.00, 52.00], [55.00, 45.00], [54.00, 38.00], [53.90, 30.33], [53.13, 23.80], [52.50, 21.00], [52.40, 16.90], [52.52, 13.41]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "trans-mediterranean",
+    "name": "Greenstream Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 540,
+    "country": "LY/IT",
+    "coordinates": [[32.90, 12.50], [34.00, 12.50], [35.50, 12.00], [36.50, 12.00], [37.80, 12.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "tapi",
+    "name": "TAPI Pipeline (Turkmenistan-Afghanistan-Pakistan-India)",
+    "type": "gas",
+    "status": "under_construction",
+    "length_km": 1814,
+    "country": "TM/AF/PK/IN",
+    "coordinates": [[37.95, 58.39], [36.50, 62.00], [34.50, 63.50], [33.00, 65.00], [31.00, 66.50], [29.00, 67.50], [27.00, 68.50], [25.40, 68.37]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "eastmed",
+    "name": "EastMed Pipeline (Proposed)",
+    "type": "gas",
+    "status": "proposed",
+    "length_km": 1900,
+    "country": "IL/CY/GR/IT",
+    "coordinates": [[32.08, 34.78], [33.50, 33.50], [34.70, 33.00], [35.00, 32.00], [35.50, 30.00], [36.00, 28.00], [36.50, 26.00], [37.00, 23.00], [38.50, 20.00], [40.00, 18.00], [40.80, 17.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "transgabonais",
+    "name": "Trans-Gabon Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 365,
+    "country": "GA",
+    "coordinates": [[-1.50, 13.60], [-1.00, 12.50], [-0.50, 11.00], [-0.72, 8.78]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "norpipe",
+    "name": "Norpipe Pipeline",
+    "type": "oil",
+    "status": "operational",
+    "length_km": 354,
+    "country": "NO/GB",
+    "coordinates": [[56.44, 3.21], [56.00, 3.00], [55.50, 3.00], [54.80, 3.50], [54.61, 4.30], [53.58, 6.84]],
+    "color": "#ff6d00"
+  },
+  {
+    "id": "langeled",
+    "name": "Langeled Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 1166,
+    "country": "NO/GB",
+    "coordinates": [[61.20, 1.87], [60.50, 1.50], [59.50, 1.00], [58.50, 0.50], [57.50, 0.00], [56.50, -0.50], [55.75, -0.25], [54.00, 0.26], [53.69, 0.32]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "baltic-pipe",
+    "name": "Baltic Pipe",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 900,
+    "country": "NO/DK/PL",
+    "coordinates": [[61.20, 1.87], [59.50, 4.00], [58.00, 6.00], [57.00, 8.00], [56.50, 10.00], [55.50, 12.50], [55.00, 14.00], [54.50, 16.00], [54.00, 17.50]],
+    "color": "#76ff03"
+  },
+  {
+    "id": "mozambique-lng-pipe",
+    "name": "Mozambique Gas Pipeline",
+    "type": "gas",
+    "status": "operational",
+    "length_km": 865,
+    "country": "MZ/ZA",
+    "coordinates": [[-23.86, 35.38], [-24.50, 34.50], [-25.50, 33.00], [-26.50, 31.50], [-26.20, 28.04]],
+    "color": "#76ff03"
+  }
+]

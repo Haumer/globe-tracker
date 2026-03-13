@@ -17,7 +17,11 @@ module Api
       # 1. Return cached cameras from DB immediately
       max = (params[:limit]&.to_i || 50).clamp(1, 150)
       cameras = Camera.alive.in_bbox(north: north, south: south, east: east, west: west)
-                       .order(Arel.sql("CASE source WHEN 'youtube' THEN 0 WHEN 'nycdot' THEN 0 ELSE CASE WHEN is_live THEN 1 ELSE 2 END END, fetched_at DESC"))
+      # Exclude stale YouTube cameras when quota is exhausted (streams likely ended, can't verify)
+      if Rails.cache.read("youtube_api_quota_exhausted").present?
+        cameras = cameras.where.not("source = 'youtube' AND expires_at < ?", Time.current)
+      end
+      cameras = cameras.order(Arel.sql("CASE source WHEN 'youtube' THEN 0 WHEN 'nycdot' THEN 0 ELSE CASE WHEN is_live THEN 1 ELSE 2 END END, fetched_at DESC"))
                        .limit(max)
       camera_records = cameras.to_a
 

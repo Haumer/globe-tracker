@@ -26,9 +26,11 @@ class Rack::Attack
 
   # ── Blocklist ──────────────────────────────────────────────────
 
-  # Block requests with suspicious patterns
-  blocklist("bad-agents") do |req|
-    req.user_agent.blank? && req.path.start_with?("/api/") && !req.path.include?("health")
+  # Block requests with suspicious patterns (skip in test environment)
+  unless Rails.env.test?
+    blocklist("bad-agents") do |req|
+      req.user_agent.blank? && req.path.start_with?("/api/") && !req.path.include?("health")
+    end
   end
 
   # ── Response ───────────────────────────────────────────────────

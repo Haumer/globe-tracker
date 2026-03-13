@@ -151,14 +151,15 @@ export function applyNewsMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `news-${lead._idx}`,
-        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 0),
+        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 50),
         point: {
           pixelSize,
           color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
           outlineColor: cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
           outlineWidth: 2 + Math.floor(coverageBoost * 4),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: labelText,

@@ -32,7 +32,8 @@ class SubmarineCableRefreshService
   private
 
   def refresh_cables(now)
-    data = self.class.http_get(URI(CABLE_GEO_URL), open_timeout: 15, read_timeout: 60)
+    data = self.class.http_get(URI(CABLE_GEO_URL), open_timeout: 15, read_timeout: 60,
+                                cache_key: "http:submarine_cables", cache_ttl: 24.hours)
     return 0 unless data
 
     features = data["features"] || []
@@ -65,7 +66,8 @@ class SubmarineCableRefreshService
   end
 
   def write_landing_points
-    data = self.class.http_get(URI(LANDING_GEO_URL), open_timeout: 15, read_timeout: 60)
+    data = self.class.http_get(URI(LANDING_GEO_URL), open_timeout: 15, read_timeout: 60,
+                                cache_key: "http:submarine_landings", cache_ttl: 24.hours)
     landing_points = (data&.dig("features") || []).filter_map do |feature|
       coords = feature.dig("geometry", "coordinates")
       props = feature["properties"] || {}

@@ -23,8 +23,13 @@ export function applyUiMethods(GlobeController) {
   }
 
   GlobeController.prototype.toggleSection = function(event) {
+    // Support keyboard activation (Enter/Space)
+    if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return
+    if (event.key === " ") event.preventDefault()
+
     const head = event.currentTarget
     head.classList.toggle("open")
+    head.setAttribute("aria-expanded", String(head.classList.contains("open")))
     this._savePrefs()
   }
 
@@ -46,6 +51,8 @@ export function applyUiMethods(GlobeController) {
       gpsJamming:  { target: "gpsJammingToggle",    method: "toggleGpsJamming" },
       news:        { target: "newsToggle",          method: "toggleNews" },
       cables:      { target: "cablesToggle",        method: "toggleCables" },
+      pipelines:   { target: "pipelinesToggle",    method: "togglePipelines" },
+      railways:    { target: "railwaysToggle",     method: "toggleRailways" },
       outages:     { target: "outagesToggle",       method: "toggleOutages" },
       powerPlants: { target: "powerPlantsToggle",  method: "togglePowerPlants" },
       conflicts:   { target: "conflictsToggle",    method: "toggleConflicts" },
@@ -53,17 +60,36 @@ export function applyUiMethods(GlobeController) {
       notams:      { target: "notamsToggle",        method: "toggleNotams" },
       fireHotspots: { target: "fireHotspotsToggle", method: "toggleFireHotspots" },
       weather:      { target: "weatherToggle",      method: "toggleWeather" },
+      trains:       { target: "trainsToggle",       method: "toggleTrains" },
       financial:    { target: "financialToggle",   method: "toggleFinancial" },
     }
 
     if (layer === "satellites") {
-      // Open the satellite section so user can pick categories
-      const satSection = this.element.querySelector('[data-section="satellites"] .sb-section-head')
-      if (satSection && !satSection.classList.contains("open")) {
-        satSection.classList.add("open")
+      const anySat = Object.values(this.satCategoryVisible).some(v => v)
+      const defaults = ["stations", "gps-ops", "weather", "military"]
+      if (anySat) {
+        // Turn all off
+        for (const cat of Object.keys(this.satCategoryVisible)) {
+          if (this.satCategoryVisible[cat]) {
+            const ev = { target: { dataset: { category: cat }, checked: false } }
+            this.toggleSatCategory(ev)
+          }
+        }
+      } else {
+        // Turn defaults on
+        for (const cat of defaults) {
+          const ev = { target: { dataset: { category: cat }, checked: true } }
+          this.toggleSatCategory(ev)
+        }
       }
-      // Scroll it into view
-      satSection?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      // Sync chip UI
+      this.element.querySelectorAll(".sb-chip[data-category]").forEach(chip => {
+        const cat = chip.dataset.category
+        chip.classList.toggle("active", this.satCategoryVisible[cat])
+        chip.setAttribute("aria-pressed", String(this.satCategoryVisible[cat]))
+      })
+      this._syncQuickBar()
+      this._updateSatBadge()
       return
     }
 
@@ -80,6 +106,16 @@ export function applyUiMethods(GlobeController) {
     this._syncQuickBar()
   }
 
+  GlobeController.prototype.toggleRightPanel = function() {
+    if (!this.hasRightPanelTarget) return
+    const visible = this.rightPanelTarget.style.display !== "none"
+    if (visible) {
+      this.closeRightPanel()
+    } else {
+      this._showRightPanel("entities")
+    }
+  }
+
   GlobeController.prototype.toggleSatChip = function(event) {
     const btn = event.currentTarget
     const category = btn.dataset.category
@@ -88,6 +124,7 @@ export function applyUiMethods(GlobeController) {
     syntheticEvent.target.checked = !this.satCategoryVisible[category]
     this.toggleSatCategory(syntheticEvent)
     btn.classList.toggle("active", this.satCategoryVisible[category])
+    btn.setAttribute("aria-pressed", String(this.satCategoryVisible[category]))
     this._syncQuickBar()
     this._updateSatBadge()
   }
@@ -95,7 +132,10 @@ export function applyUiMethods(GlobeController) {
   GlobeController.prototype._syncQuickBar = function() {
     const sync = (targetName, active) => {
       const has = "has" + targetName.charAt(0).toUpperCase() + targetName.slice(1) + "Target"
-      if (this[has]) this[targetName + "Target"].classList.toggle("active", active)
+      if (this[has]) {
+        this[targetName + "Target"].classList.toggle("active", active)
+        this[targetName + "Target"].setAttribute("aria-pressed", String(active))
+      }
     }
 
     sync("qlFlights", this.flightsVisible)
@@ -110,6 +150,9 @@ export function applyUiMethods(GlobeController) {
     sync("qlGpsJamming", this.gpsJammingVisible)
     sync("qlNews", this.newsVisible)
     sync("qlCables", this.cablesVisible)
+    sync("qlPipelines", this.pipelinesVisible)
+    sync("qlRailways", this.railwaysVisible)
+    sync("qlTrains", this.trainsVisible)
     sync("qlOutages", this.outagesVisible)
     sync("qlPowerPlants", this.powerPlantsVisible)
     sync("qlConflicts", this.conflictsVisible)
@@ -121,6 +164,90 @@ export function applyUiMethods(GlobeController) {
 
     const anySat = Object.values(this.satCategoryVisible).some(v => v)
     sync("qlSatellites", anySat)
+
+    // Show/hide flight sub-options
+    if (this.hasFlightSubOptionsTarget) {
+      this.flightSubOptionsTarget.style.display = this.flightsVisible ? "" : "none"
+    }
+
+    // Show/hide weather panel
+    if (this._weatherPanelBuilt) this._showWeatherPanel(this.weatherVisible)
+
+    // Update section active counts
+    this._updateSectionCounts()
+    this._renderActiveLayerPills()
+    this._updateSidebarBadge()
+  }
+
+  GlobeController.prototype._updateSectionCounts = function() {
+    const sections = {
+      tracking: [this.flightsVisible, this.shipsVisible, Object.values(this.satCategoryVisible).some(v => v), this.notamsVisible, this.trainsVisible],
+      events: [this.earthquakesVisible, this.naturalEventsVisible, this.fireHotspotsVisible, this.weatherVisible, this.conflictsVisible, this.newsVisible],
+      infrastructure: [this.cablesVisible, this.pipelinesVisible, this.railwaysVisible, this.powerPlantsVisible, this.camerasVisible, this.financialVisible],
+      cyber: [this.trafficVisible, this.outagesVisible, this.gpsJammingVisible],
+    }
+    for (const [key, flags] of Object.entries(sections)) {
+      const count = flags.filter(Boolean).length
+      const el = document.getElementById("sec-count-" + key)
+      if (el) el.textContent = count > 0 ? count + " on" : ""
+    }
+  }
+
+  GlobeController.prototype._updateSidebarBadge = function() {
+    const badge = document.getElementById("sidebar-layer-badge")
+    if (!badge) return
+    const count = [
+      this.flightsVisible, this.shipsVisible, this.citiesVisible,
+      this.airportsVisible, this.bordersVisible, this.terrainEnabled,
+      this.earthquakesVisible, this.naturalEventsVisible, this.camerasVisible,
+      this.gpsJammingVisible, this.newsVisible, this.cablesVisible,
+      this.pipelinesVisible, this.railwaysVisible, this.trainsVisible, this.outagesVisible, this.powerPlantsVisible,
+      this.conflictsVisible, this.trafficVisible, this.notamsVisible,
+      this.fireHotspotsVisible, this.weatherVisible, this.financialVisible,
+      Object.values(this.satCategoryVisible).some(v => v)
+    ].filter(Boolean).length
+    badge.textContent = count
+    badge.style.display = count > 0 ? "" : "none"
+  }
+
+  GlobeController.prototype._renderActiveLayerPills = function() {
+    if (!this.hasActiveLayerPillsTarget) return
+
+    const layers = [
+      { key: "flights",      active: this.flightsVisible,       color: "#4fc3f7", label: "FLT" },
+      { key: "ships",        active: this.shipsVisible,         color: "#26c6da", label: "AIS" },
+      { key: "satellites",   active: Object.values(this.satCategoryVisible).some(v => v), color: "#ab47bc", label: "SAT" },
+      { key: "earthquakes",  active: this.earthquakesVisible,   color: "#ff5252", label: "EQ" },
+      { key: "events",       active: this.naturalEventsVisible, color: "#ff9800", label: "EVT" },
+      { key: "fires",        active: this.fireHotspotsVisible,  color: "#ff6d00", label: "FIRE" },
+      { key: "weather",      active: this.weatherVisible,       color: "#64b5f6", label: "WX" },
+      { key: "conflicts",    active: this.conflictsVisible,     color: "#ef5350", label: "WAR" },
+      { key: "cables",       active: this.cablesVisible,        color: "#00bcd4", label: "CBL" },
+      { key: "pipelines",    active: this.pipelinesVisible,     color: "#ff6d00", label: "PIPE" },
+      { key: "railways",     active: this.railwaysVisible,      color: "#90a4ae", label: "RAIL" },
+      { key: "trains",      active: this.trainsVisible,        color: "#e53935", label: "TRAIN" },
+      { key: "outages",      active: this.outagesVisible,       color: "#e040fb", label: "OUT" },
+      { key: "powerPlants",  active: this.powerPlantsVisible,   color: "#ffc107", label: "PWR" },
+      { key: "gpsJamming",   active: this.gpsJammingVisible,    color: "#ff1744", label: "GPS" },
+      { key: "traffic",      active: this.trafficVisible,       color: "#69f0ae", label: "NET" },
+      { key: "notams",       active: this.notamsVisible,        color: "#ffab40", label: "NOTAM" },
+      { key: "cameras",      active: this.camerasVisible,       color: "#29b6f6", label: "CAM" },
+      { key: "news",         active: this.newsVisible,          color: "#7c4dff", label: "NEWS" },
+      { key: "financial",    active: this.financialVisible,     color: "#66bb6a", label: "MKT" },
+      { key: "cities",       active: this.citiesVisible,        color: "#ffd54f", label: "CITY" },
+      { key: "airports",     active: this.airportsVisible,      color: "#81d4fa", label: "APT" },
+      { key: "borders",      active: this.bordersVisible,       color: "#ffd54f", label: "BDR" },
+    ]
+
+    const active = layers.filter(l => l.active)
+    if (active.length === 0) {
+      this.activeLayerPillsTarget.innerHTML = '<span class="bs-no-layers">No layers active</span>'
+      return
+    }
+
+    this.activeLayerPillsTarget.innerHTML = active.map(l =>
+      `<span class="bs-pill" style="--pill-color: ${l.color};">${l.label}</span>`
+    ).join("")
   }
 
   GlobeController.prototype._updateSatBadge = function() {
@@ -137,26 +264,29 @@ export function applyUiMethods(GlobeController) {
   // ── Stats Bar ───────────────────────────────────────────────
 
   GlobeController.prototype._updateStats = function() {
-    if (this.hasStatFlightsTarget) {
-      this.statFlightsTarget.textContent = this.flightData.size.toLocaleString()
+    const elFlt = document.getElementById("stat-flights")
+    if (elFlt) {
+      elFlt.textContent = this.flightData.size.toLocaleString()
       if (this.flightsVisible && this.flightData.size > 0) this._markFresh("flights")
     }
-    if (this.hasStatSatsTarget) {
-      const visibleSats = this.satelliteEntities.size
-      this.statSatsTarget.textContent = visibleSats.toLocaleString()
+    const elSat = document.getElementById("stat-sats")
+    if (elSat) {
+      elSat.textContent = this.satelliteEntities.size.toLocaleString()
     }
-    if (this.hasStatShipsTarget) {
-      this.statShipsTarget.textContent = this.shipData.size.toLocaleString()
+    const elShip = document.getElementById("stat-ships")
+    if (elShip) {
+      elShip.textContent = this.shipData.size.toLocaleString()
       if (this.shipsVisible && this.shipData.size > 0) this._markFresh("ships")
     }
-    if (this.hasStatEventsTarget) {
+    const elEvt = document.getElementById("stat-events")
+    if (elEvt) {
       const count = (this.earthquakesVisible ? this._earthquakeData.length : 0) +
                     (this.naturalEventsVisible ? this._naturalEventData.length : 0) +
                     (this.camerasVisible ? this._webcamData.length : 0) +
                     (this.powerPlantsVisible ? this._powerPlantData.length : 0) +
                     (this.conflictsVisible ? this._conflictData.length : 0) +
                     (this.fireHotspotsVisible ? this._fireHotspotData.length : 0)
-      this.statEventsTarget.textContent = count.toLocaleString()
+      elEvt.textContent = count.toLocaleString()
       if (this.earthquakesVisible && this._earthquakeData.length > 0) this._markFresh("earthquakes")
       if (this.naturalEventsVisible && this._naturalEventData.length > 0) this._markFresh("naturalEvents")
       if (this.camerasVisible && this._webcamData.length > 0) this._markFresh("cameras")
@@ -169,9 +299,10 @@ export function applyUiMethods(GlobeController) {
   }
 
   GlobeController.prototype._updateClock = function() {
-    if (this.hasStatClockTarget) {
+    const elClk = document.getElementById("stat-clock")
+    if (elClk) {
       const now = new Date()
-      this.statClockTarget.textContent = now.toUTCString().slice(17, 22)
+      elClk.textContent = now.toUTCString().slice(17, 22)
     }
   }
 
@@ -276,6 +407,9 @@ export function applyUiMethods(GlobeController) {
       gpsJamming: this.gpsJammingVisible,
       news: this.newsVisible,
       cables: this.cablesVisible,
+      pipelines: this.pipelinesVisible,
+      railways: this.railwaysVisible,
+      trains: this.trainsVisible,
       outages: this.outagesVisible,
       powerPlants: this.powerPlantsVisible,
       conflicts: this.conflictsVisible,
@@ -307,6 +441,7 @@ export function applyUiMethods(GlobeController) {
       camera_heading: this.viewer.camera.heading,
       camera_pitch: this.viewer.camera.pitch,
       sidebar_collapsed: this.hasSidebarTarget && this.sidebarTarget.classList.contains("collapsed"),
+      right_panel_closed: !!this._rightPanelUserClosed,
       layers,
       selected_countries: [...this.selectedCountries],
       airline_filter: [...this._airlineFilter],
@@ -355,6 +490,11 @@ export function applyUiMethods(GlobeController) {
     // Sidebar
     if (prefs.sidebar_collapsed && this.hasSidebarTarget) {
       this.sidebarTarget.classList.add("collapsed")
+    }
+
+    // Right panel
+    if (prefs.right_panel_closed) {
+      this._rightPanelUserClosed = true
     }
 
     // Open sections
@@ -429,6 +569,18 @@ export function applyUiMethods(GlobeController) {
       if (l.cables && this.hasCablesToggleTarget) {
         this.cablesToggleTarget.checked = true
         this.toggleCables()
+      }
+      if (l.pipelines && this.hasPipelinesToggleTarget) {
+        this.pipelinesToggleTarget.checked = true
+        this.togglePipelines()
+      }
+      if (l.railways && this.hasRailwaysToggleTarget) {
+        this.railwaysToggleTarget.checked = true
+        this.toggleRailways()
+      }
+      if (l.trains && this.hasTrainsToggleTarget) {
+        this.trainsToggleTarget.checked = true
+        this.toggleTrains()
       }
       if (l.outages && this.hasOutagesToggleTarget) {
         this.outagesToggleTarget.checked = true

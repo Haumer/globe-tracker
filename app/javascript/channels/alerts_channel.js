@@ -11,13 +11,9 @@ export function connectAlertsChannel() {
   consumer = createConsumer()
 
   subscription = consumer.subscriptions.create("AlertsChannel", {
-    connected() {
-      console.log("[AlertsChannel] Connected")
-    },
+    connected() {},
 
-    disconnected() {
-      console.log("[AlertsChannel] Disconnected")
-    },
+    disconnected() {},
 
     received(data) {
       if (data.type === "new_alert") {
@@ -34,7 +30,7 @@ function handleNewAlert(alert) {
   showAlertToast(alert)
 
   // Update badge count
-  const badge = document.querySelector('[data-globe-target="alertBadge"]')
+  const badge = document.getElementById("stat-alert-badge")
   if (badge) {
     const current = parseInt(badge.textContent) || 0
     badge.textContent = current + 1
@@ -46,7 +42,7 @@ function handleNewAlert(alert) {
 }
 
 function updateBadge(count) {
-  const badge = document.querySelector('[data-globe-target="alertBadge"]')
+  const badge = document.getElementById("stat-alert-badge")
   if (badge) {
     badge.textContent = count
     badge.style.display = count > 0 ? "" : "none"

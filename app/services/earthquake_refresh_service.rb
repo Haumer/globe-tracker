@@ -8,7 +8,8 @@ class EarthquakeRefreshService
   refreshes model: Earthquake, interval: 5.minutes
 
   def refresh
-    data = self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30)
+    data = self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30,
+                                cache_key: "http:earthquake_feed", cache_ttl: 15.minutes)
     return 0 unless data
 
     features = data["features"] || []

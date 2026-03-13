@@ -67,6 +67,7 @@ export function applyMaritimeMethods(GlobeController) {
       this._shipIcon = this.createShipIcon("#26c6da")
     }
 
+    dataSource.entities.suspendEvents()
     ships.forEach(ship => {
       if (!ship.latitude || !ship.longitude) return
 
@@ -153,6 +154,7 @@ export function applyMaritimeMethods(GlobeController) {
         }
       }
     }
+    dataSource.entities.resumeEvents()
 
     this._updateStats()
   }

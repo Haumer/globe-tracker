@@ -5,471 +5,58 @@
      data-globe-saved-prefs-value="<%= (current_user&.preferences || {}).to_json %>">
   <div id="cesium-viewer"></div>
 
-  <%# ── Stats bar ── top edge, telemetry-style ────────────────── %>
-  <div id="stats-bar" data-globe-target="statsBar" style="position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;height:36px;background:#1e2028;border:1px solid #444;border-top:none;border-radius:0 0 8px 8px;padding:0 6px;font-family:monospace;">
-    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
-      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">FLT</span>
-      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statFlights">0</span>
-    </div>
-    <div style="width:1px;height:16px;background:#444;"></div>
-    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
-      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">SAT</span>
-      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statSats">0</span>
-    </div>
-    <div style="width:1px;height:16px;background:#444;"></div>
-    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
-      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">AIS</span>
-      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statShips">0</span>
-    </div>
-    <div style="width:1px;height:16px;background:#444;"></div>
-    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
-      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">EVT</span>
-      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statEvents">0</span>
-    </div>
-    <div style="width:1px;height:16px;background:#444;"></div>
-    <div class="stat-cell" style="display:flex;align-items:center;gap:6px;padding:0 12px;">
-      <span style="font-size:9px;font-weight:500;color:#999;letter-spacing:1.5px;">UTC</span>
-      <span style="font-size:12px;font-weight:600;color:#4fc3f7;" data-globe-target="statClock">--:--</span>
-    </div>
-    <% if user_signed_in? %>
-    <div style="width:1px;height:16px;background:#444;"></div>
-    <div class="stat-cell stat-bell" data-action="click->globe#toggleAlertsFeed" style="display:flex;align-items:center;padding:0 12px;cursor:pointer;position:relative;">
-      <i class="fa-solid fa-bell" style="font-size:13px;color:#ccc;"></i>
-      <span class="alert-badge" data-globe-target="alertBadge" style="display:none;position:absolute;top:-2px;right:-4px;min-width:14px;height:14px;font-size:8px;font-weight:700;color:#fff;background:#f44336;border-radius:7px;text-align:center;line-height:14px;">0</span>
-    </div>
-    <% end %>
-  </div>
-
   <%# ── Sidebar toggle ── ─────────────────────────────────────── %>
-  <button id="sidebar-toggle" data-action="click->globe#toggleSidebar" data-tip="Toggle panel" data-tip-pos="right">
-    <i class="fa-solid fa-bars"></i>
+  <button id="sidebar-toggle" data-action="click->globe#toggleSidebar" data-tip="Toggle panel" data-tip-pos="right" aria-label="Toggle sidebar">
+    <i class="fa-solid fa-bars" aria-hidden="true"></i>
+    <span class="sb-toggle-badge" id="sidebar-layer-badge" style="display:none;">0</span>
   </button>
 
-  <%# ── Sidebar ── left side, redesigned ────────────────────────── %>
-  <div id="sidebar" data-globe-target="sidebar">
+  <%# ── Sidebar ── left side ────────────────────────────────────── %>
+  <div id="sidebar" data-globe-target="sidebar" role="navigation" aria-label="Layer controls">
     <div class="sb-sheet-handle" data-action="click->globe#toggleSidebar"></div>
 
     <%# Workspace selector (logged-in users only) %>
     <% if user_signed_in? %>
     <div class="ws-bar" data-globe-target="workspaceBar">
-      <select class="ws-select" data-globe-target="workspaceSelect" data-action="change->globe#loadWorkspace">
+      <select class="ws-select" data-globe-target="workspaceSelect" data-action="change->globe#loadWorkspace" aria-label="Select workspace">
         <option value="">— Workspaces —</option>
       </select>
-      <button class="ws-btn" data-action="click->globe#saveWorkspace" data-tip="Save current view" data-tip-pos="below">
-        <i class="fa-solid fa-floppy-disk"></i>
+      <button class="ws-btn" data-action="click->globe#saveWorkspace" data-tip="Save current view" data-tip-pos="below" aria-label="Save workspace">
+        <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
       </button>
-      <button class="ws-btn" data-action="click->globe#deleteWorkspace" data-tip="Delete workspace" data-tip-pos="below" data-globe-target="workspaceDeleteBtn" style="display:none;">
-        <i class="fa-solid fa-trash-can"></i>
+      <button class="ws-btn" data-action="click->globe#deleteWorkspace" data-tip="Delete workspace" data-tip-pos="below" data-globe-target="workspaceDeleteBtn" style="display:none;" aria-label="Delete workspace">
+        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
       </button>
     </div>
     <% end %>
 
     <%# Search %>
     <div class="sb-search">
-      <i class="fa-solid fa-magnifying-glass sb-search-icon"></i>
+      <i class="fa-solid fa-magnifying-glass sb-search-icon" aria-hidden="true"></i>
       <input type="text"
              class="sb-search-input"
              placeholder="Search..."
              data-globe-target="searchInput"
              data-action="input->globe#onSearchInput keydown->globe#onSearchKeydown"
-             autocomplete="off">
-      <button class="sb-search-clear" data-globe-target="searchClear" data-action="click->globe#clearSearch" style="display:none;">&times;</button>
+             autocomplete="off"
+             aria-label="Search entities">
+      <button class="sb-search-clear" data-globe-target="searchClear" data-action="click->globe#clearSearch" style="display:none;" aria-label="Clear search">&times;</button>
     </div>
-    <div class="sb-search-results" data-globe-target="searchResults" style="display:none;"></div>
+    <div class="sb-search-results" data-globe-target="searchResults" style="display:none;" role="listbox"></div>
 
-    <%# ── Quick Layer Bar ── categorized one-click toggles ────────── %>
-    <div class="ql-bar">
-      <div class="ql-category">
-        <span class="ql-cat-label">TRACKING</span>
-        <div class="ql-row">
-          <button class="ql-btn" data-globe-target="qlFlights" data-action="click->globe#quickToggle" data-layer="flights" data-tip="Live flights from OpenSky & ADS-B" data-tip-pos="right" style="--ql-color: #4fc3f7;">
-            <i class="fa-solid fa-plane"></i><span class="ql-label">FLT</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlSatellites" data-action="click->globe#quickToggle" data-layer="satellites" data-tip="Satellite constellations" data-tip-pos="right" style="--ql-color: #ab47bc;">
-            <i class="fa-solid fa-satellite"></i><span class="ql-label">SAT</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlShips" data-action="click->globe#quickToggle" data-layer="ships" data-tip="AIS marine vessels" data-tip-pos="right" style="--ql-color: #26c6da;">
-            <i class="fa-solid fa-ship"></i><span class="ql-label">AIS</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlNotams" data-action="click->globe#quickToggle" data-layer="notams" data-tip="No-fly zones & TFRs (FAA)" data-tip-pos="right" style="--ql-color: #ef5350;">
-            <i class="fa-solid fa-ban"></i><span class="ql-label">TFR</span>
-          </button>
-        </div>
-      </div>
-      <div class="ql-category">
-        <span class="ql-cat-label">MAP</span>
-        <div class="ql-row">
-          <button class="ql-btn" data-globe-target="qlCities" data-action="click->globe#quickToggle" data-layer="cities" data-tip="Major cities & urban areas" data-tip-pos="right" style="--ql-color: #ffd54f;">
-            <i class="fa-solid fa-city"></i><span class="ql-label">CTY</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlAirports" data-action="click->globe#quickToggle" data-layer="airports" data-tip="Airports & airfields" data-tip-pos="right" style="--ql-color: #81c784;">
-            <i class="fa-solid fa-tower-broadcast"></i><span class="ql-label">APT</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlBorders" data-action="click->globe#quickToggle" data-layer="borders" data-tip="Country borders" data-tip-pos="right" style="--ql-color: #4fc3f7;">
-            <i class="fa-solid fa-map"></i><span class="ql-label">BDR</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlTerrain" data-action="click->globe#quickToggle" data-layer="terrain" data-tip="3D terrain elevation" data-tip-pos="right" style="--ql-color: #a1887f;">
-            <i class="fa-solid fa-mountain"></i><span class="ql-label">3D</span>
-          </button>
-        </div>
-      </div>
-      <div class="ql-category">
-        <span class="ql-cat-label">EVENTS</span>
-        <div class="ql-row">
-          <button class="ql-btn" data-globe-target="qlEarthquakes" data-action="click->globe#quickToggle" data-layer="earthquakes" data-tip="Seismic activity (USGS)" data-tip-pos="right" style="--ql-color: #ff7043;">
-            <i class="fa-solid fa-house-crack"></i><span class="ql-label">EQ</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlEvents" data-action="click->globe#quickToggle" data-layer="events" data-tip="Wildfires, storms, volcanoes" data-tip-pos="right" style="--ql-color: #66bb6a;">
-            <i class="fa-solid fa-bolt"></i><span class="ql-label">EVT</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlNews" data-action="click->globe#quickToggle" data-layer="news" data-tip="World news (GDELT)" data-tip-pos="right" style="--ql-color: #ff9800;">
-            <i class="fa-solid fa-newspaper"></i><span class="ql-label">NEWS</span>
-          </button>
-          <!-- News arc controls popover -->
-          <div class="arc-controls" data-globe-target="newsArcControls" style="display:none;">
-            <div class="arc-controls-title">NEWS ARCS</div>
-            <div class="arc-controls-row">
-              <label class="arc-mini-toggle">
-                <input type="checkbox" checked data-globe-target="newsArcsToggle" data-action="change->globe#toggleNewsArcs">
-                <span class="arc-mini-track"></span>
-                <span>Arcs</span>
-              </label>
-              <label class="arc-mini-toggle">
-                <input type="checkbox" checked data-globe-target="newsBlobsToggle" data-action="change->globe#toggleNewsBlobs">
-                <span class="arc-mini-track"></span>
-                <span>Blobs</span>
-              </label>
-            </div>
-            <div style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);padding:4px 0 0;">Click a story or flow to reveal arcs</div>
-          </div>
-          <button class="ql-btn" data-globe-target="qlConflicts" data-action="click->globe#quickToggle" data-layer="conflicts" data-tip="Armed conflicts (UCDP)" data-tip-pos="right" style="--ql-color: #f44336;">
-            <i class="fa-solid fa-crosshairs"></i><span class="ql-label">WAR</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlFireHotspots" data-action="click->globe#quickToggle" data-layer="fireHotspots" data-tip="Active fires & hotspots (NASA FIRMS)" data-tip-pos="right" style="--ql-color: #ff5722;">
-            <i class="fa-solid fa-fire"></i><span class="ql-label">FIRE</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlWeather" data-action="click->globe#quickToggle" data-layer="weather" data-tip="Weather radar, temperature, wind, pressure" data-tip-pos="right" style="--ql-color: #1e88e5;">
-            <i class="fa-solid fa-cloud-sun-rain"></i><span class="ql-label">WX</span>
-          </button>
-          <%# Weather sublayer panel (populated by JS) %>
-          <div data-globe-target="weatherPanel" style="display:none;" class="wx-panel"></div>
-        </div>
-      </div>
-      <div class="ql-category">
-        <span class="ql-cat-label">INFRA</span>
-        <div class="ql-row">
-          <button class="ql-btn" data-globe-target="qlCables" data-action="click->globe#quickToggle" data-layer="cables" data-tip="Submarine cables" data-tip-pos="right" style="--ql-color: #00bcd4;">
-            <i class="fa-solid fa-network-wired"></i><span class="ql-label">CABLE</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlPowerPlants" data-action="click->globe#quickToggle" data-layer="powerPlants" data-tip="Power plants (WRI)" data-tip-pos="right" style="--ql-color: #ffc107;">
-            <i class="fa-solid fa-plug"></i><span class="ql-label">PWR</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlCameras" data-action="click->globe#quickToggle" data-layer="cameras" data-tip="Live webcams" data-tip-pos="right" style="--ql-color: #29b6f6;">
-            <i class="fa-solid fa-video"></i><span class="ql-label">CAM</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlFinancial" data-action="click->globe#quickToggle" data-layer="financial" data-tip="Commodities & currencies" data-tip-pos="right" style="--ql-color: #66bb6a;">
-            <i class="fa-solid fa-chart-line"></i><span class="ql-label">MKT</span>
-          </button>
-        </div>
-      </div>
-      <div class="ql-category">
-        <span class="ql-cat-label">CYBER</span>
-        <div class="ql-row">
-          <button class="ql-btn" data-globe-target="qlTraffic" data-action="click->globe#quickToggle" data-layer="traffic" data-tip="Internet traffic & DDoS (Cloudflare)" data-tip-pos="right" style="--ql-color: #69f0ae;">
-            <i class="fa-solid fa-globe"></i><span class="ql-label">RADAR</span>
-          </button>
-          <!-- Traffic arc controls popover -->
-          <div class="arc-controls" data-globe-target="trafficArcControls" style="display:none;">
-            <div class="arc-controls-title" style="color: #69f0ae;">ATTACK ARCS</div>
-            <div class="arc-controls-row">
-              <label class="arc-mini-toggle">
-                <input type="checkbox" checked data-globe-target="trafficArcsToggle" data-action="change->globe#toggleTrafficArcs">
-                <span class="arc-mini-track"></span>
-                <span>Arcs</span>
-              </label>
-              <label class="arc-mini-toggle">
-                <input type="checkbox" checked data-globe-target="trafficBlobsToggle" data-action="change->globe#toggleTrafficBlobs">
-                <span class="arc-mini-track"></span>
-                <span>Blobs</span>
-              </label>
-            </div>
-          </div>
-          <button class="ql-btn" data-globe-target="qlOutages" data-action="click->globe#quickToggle" data-layer="outages" data-tip="Internet outages (IODA)" data-tip-pos="right" style="--ql-color: #e040fb;">
-            <i class="fa-solid fa-wifi"></i><span class="ql-label">NET</span>
-          </button>
-          <button class="ql-btn" data-globe-target="qlGpsJamming" data-action="click->globe#quickToggle" data-layer="gpsJamming" data-tip="GPS interference zones" data-tip-pos="right" style="--ql-color: #f44336;">
-            <i class="fa-solid fa-satellite-dish"></i><span class="ql-label">JAM</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="sb-sections">
-      <%# ── Section: Flights ── %>
-      <div class="sb-section" data-section="flights">
-        <div class="sb-section-head" data-action="click->globe#toggleSection">
-          <span class="sb-section-dot" style="--dot: #4fc3f7;"></span>
-          <span class="sb-section-title">Flights</span>
-          <span class="sb-active-badge" data-globe-target="flightsBadge" style="display:none;"></span>
-          <i class="fa-solid fa-chevron-down sb-chevron"></i>
-        </div>
-        <div class="sb-section-body">
-          <%# Primary toggle hidden — controlled by quick bar %>
-          <input type="checkbox" style="display:none;" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
-          <%= globe_toggle target: "civilianToggle", action: "toggleFlightFilter", label: "Civilian", dot: "#4fc3f7", checked: true %>
-          <%= globe_toggle target: "militaryToggle", action: "toggleFlightFilter", label: "Military", dot: "#ef5350", checked: true %>
-          <%= globe_toggle target: "trailsToggle", action: "toggleTrails", label: "Flight Trails" %>
-          <div class="sb-airline-filter" data-globe-target="airlineFilter" style="display:none;">
-            <div class="sb-filter-label">AIRLINES</div>
-            <div class="sb-airline-chips" data-globe-target="airlineChips"></div>
-          </div>
-        </div>
-      </div>
-
-      <%# ── Section: Satellites ── %>
-      <div class="sb-section" data-section="satellites">
-        <div class="sb-section-head" data-action="click->globe#toggleSection">
-          <span class="sb-section-dot" style="--dot: #ab47bc;"></span>
-          <span class="sb-section-title">Satellites</span>
-          <span class="sb-active-badge" data-globe-target="satBadge" style="display:none;"></span>
-          <i class="fa-solid fa-chevron-down sb-chevron"></i>
-        </div>
-        <div class="sb-section-body">
-          <div class="sb-chip-grid">
-            <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations" style="--chip-color: #ff5252;">ISS</button>
-            <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink constellation" style="--chip-color: #ab47bc;">Starlink</button>
-            <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation satellites" style="--chip-color: #66bb6a;">GPS</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass" data-tip="Russian GLONASS navigation" style="--chip-color: #5c6bc0;">GLONASS</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo" data-tip="European Galileo navigation" style="--chip-color: #0288d1;">Galileo</button>
-            <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather" data-tip="Meteorological satellites" style="--chip-color: #ffa726;">Weather</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource" data-tip="Earth observation & imaging" style="--chip-color: #29b6f6;">Earth Res</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science" data-tip="Scientific research satellites" style="--chip-color: #ec407a;">Science</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military" data-tip="Military & reconnaissance" style="--chip-color: #ef5350;">Military</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst" data-tip="Classified / spy satellites (NRO, etc.)" style="--chip-color: #b71c1c;">Classified</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo" data-tip="Geostationary orbit (36,000 km)" style="--chip-color: #78909c;">GEO</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium" data-tip="Iridium communications" style="--chip-color: #26c6da;">Iridium</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb" data-tip="OneWeb broadband constellation" style="--chip-color: #7e57c2;">OneWeb</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet" data-tip="Planet Labs Earth imaging" style="--chip-color: #8d6e63;">Planet</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire" data-tip="Spire Global weather & AIS" style="--chip-color: #9ccc65;">Spire</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss" data-tip="Other GNSS (QZSS, IRNSS, etc.)" style="--chip-color: #42a5f5;">GNSS</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss" data-tip="Tracking & Data Relay satellites" style="--chip-color: #78909c;">TDRS</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar" data-tip="Radar calibration satellites" style="--chip-color: #8d6e63;">Radar</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas" data-tip="Satellite-Based Augmentation System" style="--chip-color: #26a69a;">SBAS</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="cubesat" data-tip="CubeSat small satellites" style="--chip-color: #ffee58;">CubeSat</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="amateur" data-tip="Amateur (ham) radio satellites" style="--chip-color: #ef5350;">Ham Radio</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat" data-tip="Search & Rescue satellites" style="--chip-color: #ff8a65;">SAR</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="last-30-days" data-tip="Recently launched (last 30 days)" style="--chip-color: #ff1744;">New Launch</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="beidou" data-tip="BeiDou navigation (Chinese)" style="--chip-color: #ff6e40;">BeiDou</button>
-            <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="molniya" data-tip="Molniya orbit (Russian comms)" style="--chip-color: #d50000;">Molniya</button>
-          </div>
-          <div class="sb-mini-divider"></div>
-          <%= globe_toggle target: "satOrbitsToggle", action: "toggleSatOrbits", label: "Orbit Trails" %>
-          <%= globe_toggle target: "satHeatmapToggle", action: "toggleSatHeatmap", label: "Coverage Heatmap" %>
-          <%= globe_toggle target: "buildHeatmapToggle", action: "toggleBuildHeatmap", label: "Build Heatmap" %>
-        </div>
-      </div>
-
-      <%# ── Section: Map & Tools ── (merged geography + tools) %>
-      <div class="sb-section" data-section="geography">
-        <div class="sb-section-head" data-action="click->globe#toggleSection">
-          <span class="sb-section-dot" style="--dot: #ffd54f;"></span>
-          <span class="sb-section-title">Map & Tools</span>
-          <i class="fa-solid fa-chevron-down sb-chevron"></i>
-        </div>
-        <div class="sb-section-body">
-          <%# Primary toggles hidden — controlled by quick bar %>
-          <input type="checkbox" style="display:none;" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
-          <input type="checkbox" style="display:none;" data-globe-target="citiesToggle" data-action="change->globe#toggleCities">
-          <input type="checkbox" style="display:none;" data-globe-target="airportsToggle" data-action="change->globe#toggleAirports">
-          <input type="checkbox" style="display:none;" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
-          <input type="checkbox" style="display:none;" data-globe-target="terrainToggle" data-action="change->globe#toggleTerrain">
-          <input type="checkbox" style="display:none;" data-globe-target="earthquakesToggle" data-action="change->globe#toggleEarthquakes">
-          <input type="checkbox" style="display:none;" data-globe-target="naturalEventsToggle" data-action="change->globe#toggleNaturalEvents">
-          <input type="checkbox" style="display:none;" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras">
-          <input type="checkbox" style="display:none;" data-globe-target="gpsJammingToggle" data-action="change->globe#toggleGpsJamming">
-          <input type="checkbox" style="display:none;" data-globe-target="newsToggle" data-action="change->globe#toggleNews">
-          <input type="checkbox" style="display:none;" data-globe-target="cablesToggle" data-action="change->globe#toggleCables">
-          <input type="checkbox" style="display:none;" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
-          <input type="checkbox" style="display:none;" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
-          <input type="checkbox" style="display:none;" data-globe-target="conflictsToggle" data-action="change->globe#toggleConflicts">
-          <input type="checkbox" style="display:none;" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
-          <input type="checkbox" style="display:none;" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
-          <input type="checkbox" style="display:none;" data-globe-target="fireHotspotsToggle" data-action="change->globe#toggleFireHotspots">
-          <input type="checkbox" style="display:none;" data-globe-target="weatherToggle" data-action="change->globe#toggleWeather">
-          <input type="checkbox" style="display:none;" data-globe-target="financialToggle" data-action="change->globe#toggleFinancial">
-          <div class="sb-slider-row">
-            <span class="sb-slider-label">Terrain Exag.</span>
-            <input type="range" min="1" max="10" step="0.5" value="1"
-                   class="sb-slider"
-                   data-globe-target="terrainExaggeration"
-                   data-action="input->globe#setTerrainExaggeration">
-            <span class="sb-slider-val">1×</span>
-          </div>
-          <div class="sb-tool-row">
-            <i class="fa-solid fa-building"></i>
-            <span class="sb-tool-label">3D Buildings</span>
-            <select class="sb-select-sm" data-globe-target="buildingsSelect" data-action="change->globe#toggleBuildings">
-              <option value="off">Off</option>
-              <option value="osm">OSM Blocks</option>
-              <option value="google">Photorealistic</option>
-            </select>
-          </div>
-          <div class="sb-mini-divider"></div>
-          <div class="sb-tool-row" data-action="click->globe#toggleCountrySelect" id="country-select-btn" data-tip="Click countries on the globe to select" data-tip-pos="right">
-            <i class="fa-solid fa-hand-pointer"></i>
-            <span>Select Countries</span>
-          </div>
-          <div class="sb-tool-row" data-action="click->globe#enterDrawMode" data-tip="Draw a circle to filter area" data-tip-pos="right">
-            <i class="fa-solid fa-circle-dot"></i>
-            <span>Draw Select</span>
-          </div>
-          <div class="sb-tool-row sb-deselect-row" data-globe-target="deselectAllBtn" data-action="click->globe#clearCountrySelection" style="display:none;" data-tip="Clear all selected countries" data-tip-pos="right">
-            <i class="fa-solid fa-xmark"></i>
-            <span>Deselect All</span>
-          </div>
-        </div>
-      </div>
-
-      <%# ── Section: Coming Soon ── %>
-      <div class="sb-section sb-disabled" data-section="upcoming">
-        <div class="sb-section-head">
-          <span class="sb-section-dot" style="--dot: rgba(255,255,255,0.15);"></span>
-          <span class="sb-section-title">Coming Soon</span>
-        </div>
-        <div class="sb-section-body" style="display:block;">
-          <%= globe_toggle target: "trainsToggle", action: "toggleTrains", label: "Trains", muted: true, disabled: true %>
-        </div>
-      </div>
-    </div>
+    <%= render "pages/quick_bar" %>
+    <%= render "pages/sidebar_sections" %>
   </div>
 
-  <%# ── Unified Right Panel ── tabbed container ──────────────── %>
-  <div id="right-panel" data-globe-target="rightPanel" style="display:none;">
-    <button class="detail-close" data-action="click->globe#closeRightPanel">&times;</button>
-    <div class="rp-tabs">
-      <button class="rp-tab active" data-action="click->globe#switchRightTab" data-rp-tab="entities" data-globe-target="rpTabEntities">
-        <i class="fa-solid fa-list"></i> <span class="rp-tab-label">Entities</span>
-      </button>
-      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="news" data-globe-target="rpTabNews" style="display:none;">
-        <i class="fa-solid fa-newspaper"></i> <span class="rp-tab-label">News</span>
-      </button>
-      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="threats" data-globe-target="rpTabThreats" style="display:none;">
-        <i class="fa-solid fa-shield-halved"></i> <span class="rp-tab-label">Threats</span>
-      </button>
-      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="insights" data-globe-target="rpTabInsights" style="display:none;">
-        <i class="fa-solid fa-brain"></i> <span class="rp-tab-label">Insights</span>
-      </button>
-      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="cameras" data-globe-target="rpTabCameras" style="display:none;">
-        <i class="fa-solid fa-video"></i> <span class="rp-tab-label">Cameras</span>
-      </button>
-      <% if user_signed_in? %>
-      <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="alerts" data-globe-target="rpTabAlerts" style="display:none;">
-        <i class="fa-solid fa-bell"></i> <span class="rp-tab-label">Alerts</span>
-      </button>
-      <% end %>
-    </div>
-
-    <%# ── Entities pane ── %>
-    <div id="entity-list-panel" class="rp-pane rp-pane--active" data-rp-pane="entities" data-globe-target="entityListPanel">
-      <div class="entity-list-header" data-globe-target="entityListHeader"></div>
-      <div class="entity-list-tabs">
-        <button class="entity-tab active" data-action="click->globe#switchEntityTab" data-tab="flights">
-          <i class="fa-solid fa-plane"></i> <span data-globe-target="entityFlightCount">0</span>
-        </button>
-        <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="ships">
-          <i class="fa-solid fa-ship"></i> <span data-globe-target="entityShipCount">0</span>
-        </button>
-        <button class="entity-tab" data-action="click->globe#switchEntityTab" data-tab="satellites">
-          <i class="fa-solid fa-satellite"></i> <span data-globe-target="entitySatCount">0</span>
-        </button>
-      </div>
-      <div class="entity-airline-bar" data-globe-target="entityAirlineBar" style="display:none;">
-        <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
-      </div>
-      <div class="entity-list-content" data-globe-target="entityListContent"></div>
-    </div>
-
-    <%# ── News pane ── %>
-    <div class="rp-pane" data-rp-pane="news" data-globe-target="newsFeedPanel">
-      <div class="news-feed-header">
-        <span class="news-feed-title">NEWS</span>
-        <span class="news-feed-count" data-globe-target="newsFeedCount">0 articles</span>
-      </div>
-      <div class="nf-tabs">
-        <button class="nf-tab nf-tab--active" data-action="click->globe#switchNewsTab" data-tab="articles">ARTICLES</button>
-        <button class="nf-tab" data-action="click->globe#switchNewsTab" data-tab="flows">FLOWS</button>
-      </div>
-      <div class="nf-tab-pane nf-tab-articles" data-globe-target="newsArticlesPane">
-        <div class="nf-filter-row">
-          <select class="nf-cat-filter" data-globe-target="newsArticleCatFilter" data-action="change->globe#filterNewsArticles">
-            <option value="all">All</option>
-            <option value="conflict">Conflict</option>
-            <option value="unrest">Unrest</option>
-            <option value="disaster">Disaster</option>
-            <option value="health">Health</option>
-            <option value="economy">Economy</option>
-            <option value="diplomacy">Diplomacy</option>
-            <option value="cyber">Cyber</option>
-            <option value="other">Other</option>
-          </select>
-          <input type="text" class="nf-search" placeholder="Search headlines..." data-globe-target="newsArticleSearch" data-action="input->globe#filterNewsArticles">
-        </div>
-        <div class="nf-article-list" data-globe-target="newsArticleList"></div>
-      </div>
-      <div class="nf-tab-pane nf-tab-flows" data-globe-target="newsFlowsPane" style="display:none;">
-        <div class="news-feed-content" data-globe-target="newsFeedContent"></div>
-      </div>
-    </div>
-
-    <%# ── Threats pane ── %>
-    <div class="rp-pane" data-rp-pane="threats" data-globe-target="threatsPanel">
-      <div class="threats-header">
-        <span class="threats-title"><i class="fa-solid fa-shield-halved"></i> CYBER THREATS</span>
-        <span class="threats-count" data-globe-target="threatsCount">0 targets</span>
-      </div>
-      <div class="threats-content" data-globe-target="threatsContent"></div>
-    </div>
-
-    <%# ── Insights pane ── %>
-    <div class="rp-pane" data-rp-pane="insights">
-      <div class="insight-feed-header">
-        <span class="insight-feed-title"><i class="fa-solid fa-brain"></i> CROSS-LAYER INSIGHTS</span>
-        <span class="insight-feed-count" data-globe-target="insightFeedCount">0 insights</span>
-      </div>
-      <div class="insight-feed-list" data-globe-target="insightFeedContent"></div>
-    </div>
-
-    <%# ── Cameras pane ── %>
-    <div class="rp-pane" data-rp-pane="cameras" data-globe-target="camFeedPanel">
-      <div class="cam-feed-header">
-        <span class="cam-feed-title"><i class="fa-solid fa-video"></i> CAMERAS</span>
-        <span class="cam-feed-count" data-globe-target="camFeedCount">0 cameras</span>
-      </div>
-      <div class="cam-feed-filter">
-        <input type="text" class="cam-feed-search" placeholder="Search cameras..." data-globe-target="camFeedSearch" data-action="input->globe#filterCamFeed">
-      </div>
-      <div class="cam-feed-list" data-globe-target="camFeedList"></div>
-    </div>
-
-    <%# ── Alerts pane ── %>
-    <% if user_signed_in? %>
-    <div class="rp-pane" data-rp-pane="alerts">
-      <div class="alert-feed-header">
-        <span class="alert-feed-title"><i class="fa-solid fa-bell"></i> ALERTS</span>
-        <button class="alert-mark-all" data-action="click->globe#markAllAlertsSeen">Mark all read</button>
-      </div>
-      <div class="alert-feed-list" data-globe-target="alertFeedContent"></div>
-    </div>
-    <% end %>
-  </div>
+  <%= render "pages/right_panel" %>
 
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>
   <div id="detail-stack">
-    <div id="detail-panel" data-globe-target="detailPanel" style="display: none;">
-      <button class="detail-close" data-action="click->globe#closeDetail">&times;</button>
+    <div id="detail-panel" data-globe-target="detailPanel" style="display: none;" role="complementary" aria-label="Entity details">
+      <button class="detail-close" data-action="click->globe#closeDetail" aria-label="Close details">&times;</button>
       <div class="detail-content" data-globe-target="detailContent"></div>
     </div>
-    <div id="selection-tray" data-globe-target="selectionTray" style="display:none;">
+    <div id="selection-tray" data-globe-target="selectionTray" style="display:none;" role="region" aria-label="Selected entities">
       <div class="sel-tray-header">
         <span class="sel-tray-title">Selected</span>
         <button class="sel-tray-clear" data-action="click->globe#clearAllSelections">Clear all</button>
@@ -478,135 +65,9 @@
     </div>
   </div>
 
-  <%# ── Timeline Bar ── unified time travel ─────────────────────── %>
-  <div id="timeline-bar" data-globe-target="timelineBar" style="display:none;">
-    <div class="tl-controls">
-      <button class="tl-btn" data-action="click->globe#timelineStepBack" data-tip="Step back">
-        <i class="fa-solid fa-backward-step"></i>
-      </button>
-      <button class="tl-btn tl-play" data-globe-target="timelinePlayBtn" data-action="click->globe#timelineToggle" data-tip="Play / Pause">
-        <i class="fa-solid fa-play" data-globe-target="timelinePlayIcon"></i>
-      </button>
-      <button class="tl-btn" data-action="click->globe#timelineStepForward" data-tip="Step forward">
-        <i class="fa-solid fa-forward-step"></i>
-      </button>
-    </div>
-    <div class="tl-timeline">
-      <span class="tl-time tl-time-start" data-globe-target="timelineTimeStart">--</span>
-      <input type="range" class="tl-scrubber" min="0" max="10000" value="0"
-             data-globe-target="timelineScrubber"
-             data-action="input->globe#timelineScrub">
-      <span class="tl-time tl-time-end" data-globe-target="timelineTimeEnd">--</span>
-    </div>
-    <div class="tl-meta">
-      <div class="tl-cursor-display" data-globe-target="timelineCursorDisplay">
-        <span class="tl-cursor-date" data-globe-target="timelineCursorDate">----</span>
-        <span class="tl-cursor-time" data-globe-target="timelineCursorTime">--:--:--</span>
-      </div>
-      <select class="tl-speed" data-globe-target="timelineSpeed" data-action="change->globe#timelineSetSpeed">
-        <option value="1">1x</option>
-        <option value="2">2x</option>
-        <option value="5" selected>5x</option>
-        <option value="10">10x</option>
-        <option value="30">30x</option>
-        <option value="60">60x</option>
-      </select>
-      <div class="tl-live-badge" data-globe-target="timelineLiveBadge" style="display:none;">LIVE</div>
-      <button class="tl-btn tl-live-btn" data-action="click->globe#timelineGoLive" data-tip="Jump to live">
-        <i class="fa-solid fa-tower-broadcast"></i>
-      </button>
-      <button class="tl-btn" data-action="click->globe#timelineExport" data-tip="Export data (GeoJSON/CSV)">
-        <i class="fa-solid fa-download"></i>
-      </button>
-      <button class="tl-btn tl-close" data-action="click->globe#timelineClose" data-tip="Exit timeline">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-  </div>
-
-  <%# ── Mini-Timeline ── recent events strip above controls ─────── %>
-  <div id="mini-timeline" data-globe-target="miniTimeline" style="position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:54;display:flex;align-items:center;height:28px;background:#1a1c24;border:1px solid #333;border-radius:6px;padding:0 8px;font-family:monospace;gap:6px;opacity:0.95;">
-    <span style="font-size:9px;color:#666;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">24H</span>
-    <div data-globe-target="miniTimelineDots" style="position:relative;width:320px;height:16px;background:#13151b;border-radius:3px;overflow:hidden;cursor:pointer;" data-action="click->globe#miniTimelineClick"></div>
-    <span id="mt-count" style="font-size:10px;color:#888;white-space:nowrap;">—</span>
-  </div>
-
-  <%# ── Controls ── horizontal toolbar at bottom ─────────────────── %>
-  <div id="controls-bar">
-    <div class="cb-group">
-      <button class="cb-btn" data-action="click->globe#zoomIn" data-tip="Zoom in">
-        <i class="fa-solid fa-plus"></i>
-      </button>
-      <button class="cb-btn" data-action="click->globe#zoomOut" data-tip="Zoom out">
-        <i class="fa-solid fa-minus"></i>
-      </button>
-    </div>
-    <div class="cb-sep"></div>
-    <div class="cb-group">
-      <button class="cb-btn" data-action="click->globe#resetView" data-tip="Reset to default view">
-        <i class="fa-solid fa-globe"></i>
-      </button>
-      <button class="cb-btn" data-action="click->globe#viewTopDown" data-tip="Top-down view">
-        <i class="fa-solid fa-arrow-down"></i>
-      </button>
-      <button class="cb-btn" data-action="click->globe#resetTilt" data-tip="Reset camera tilt">
-        <i class="fa-solid fa-arrows-up-down"></i>
-      </button>
-    </div>
-    <div class="cb-sep"></div>
-    <div class="cb-group">
-      <button class="cb-btn cb-record" data-globe-target="recordBtn" data-action="click->globe#toggleRecording" data-tip="Record globe video">
-        <i class="fa-solid fa-circle" data-globe-target="recordIcon"></i>
-      </button>
-      <button class="cb-btn" data-action="click->globe#takeScreenshot" data-tip="Take screenshot">
-        <i class="fa-solid fa-camera"></i>
-      </button>
-    </div>
-    <div class="cb-sep"></div>
-    <div class="cb-group">
-      <button class="cb-btn" data-action="click->globe#shareView" data-tip="Copy shareable link">
-        <i class="fa-solid fa-share-nodes"></i>
-      </button>
-    </div>
-    <div class="cb-sep"></div>
-    <div class="cb-group">
-      <button class="cb-btn cb-timeline" data-action="click->globe#timelineOpen" data-tip="Time travel — scroll through history">
-        <i class="fa-solid fa-clock-rotate-left"></i>
-      </button>
-    </div>
-  </div>
-
-  <%# ── Onboarding overlay for first-time users ─────────────────── %>
-  <div id="onboarding-overlay" style="display:none;">
-    <div class="onboarding-card" data-scenario="aviation">
-      <div class="onboarding-icon" style="--ql-color:#4fc3f7;"><i class="fa-solid fa-plane"></i></div>
-      <div class="onboarding-title">Live Aviation</div>
-      <div class="onboarding-desc">Track flights worldwide with ADS-B and OpenSky data</div>
-    </div>
-    <div class="onboarding-card" data-scenario="events">
-      <div class="onboarding-icon" style="--ql-color:#ff7043;"><i class="fa-solid fa-bolt"></i></div>
-      <div class="onboarding-title">Global Events</div>
-      <div class="onboarding-desc">Earthquakes, conflicts, natural events and news</div>
-    </div>
-    <div class="onboarding-card" data-scenario="space">
-      <div class="onboarding-icon" style="--ql-color:#ab47bc;"><i class="fa-solid fa-satellite"></i></div>
-      <div class="onboarding-title">Space Watch</div>
-      <div class="onboarding-desc">Track satellites including ISS, GPS, and classified objects</div>
-    </div>
-    <div class="onboarding-card" data-scenario="infrastructure">
-      <div class="onboarding-icon" style="--ql-color:#ffc107;"><i class="fa-solid fa-network-wired"></i></div>
-      <div class="onboarding-title">Infrastructure</div>
-      <div class="onboarding-desc">Submarine cables, power plants, GPS jamming and outages</div>
-    </div>
-    <button class="onboarding-dismiss" id="onboarding-dismiss">Explore freely</button>
-  </div>
-
-  <div id="controls-hint">
-    <span>Scroll: zoom</span>
-    <span>Drag: rotate</span>
-    <span>Right-drag: tilt</span>
-    <span>Middle-drag: pan</span>
-  </div>
+  <%= render "pages/timeline" %>
+  <%= render "pages/bottom_strip" %>
+  <%= render "pages/onboarding" %>
 </div>
-<div id="gt-tooltip"></div>
-<div id="gt-toast"></div>
+<div id="gt-tooltip" role="tooltip"></div>
+<div id="gt-toast" role="status" aria-live="polite"></div>

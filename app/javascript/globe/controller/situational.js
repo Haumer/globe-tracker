@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource, createAirportIcon, LABEL_DEFAULTS } from "../utils"
 
 export function applySituationalMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }
@@ -29,43 +29,54 @@ export function applySituationalMethods(GlobeController) {
       entries = entries.filter(([, ap]) => this.pointPassesFilter(ap.lat, ap.lng))
     }
 
-    const civilColor = Cesium.Color.fromCssColorString("#ffd54f")
-    const milColor = Cesium.Color.fromCssColorString("#ef5350")
+    const civilColorHex = "#ffd54f"
+    const milColorHex = "#ef5350"
+    const civilIcon = createAirportIcon(civilColorHex, false)
+    const milIcon = createAirportIcon(milColorHex, true)
+    const civilColor = Cesium.Color.fromCssColorString(civilColorHex)
+    const milColor = Cesium.Color.fromCssColorString(milColorHex)
 
+    dataSource.entities.suspendEvents()
     for (const [icao, ap] of entries) {
       const isMil = ap.military
       const color = isMil ? milColor : civilColor
 
       const entity = dataSource.entities.add({
         id: `airport-${icao}`,
-        position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 100),
-        point: {
-          pixelSize: isMil ? 5 : 6,
-          color: color.withAlpha(0.9),
-          outlineColor: color.withAlpha(0.35),
-          outlineWidth: 4,
+        position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 50),
+        billboard: {
+          image: isMil ? milIcon : civilIcon,
+          scale: 1,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 1e7, 0.4),
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: icao,
-          font: "12px JetBrains Mono, monospace",
+          font: LABEL_DEFAULTS.font,
           fillColor: color.withAlpha(0.95),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          outlineColor: LABEL_DEFAULTS.outlineColor(),
+          outlineWidth: LABEL_DEFAULTS.outlineWidth,
+          style: LABEL_DEFAULTS.style(),
           verticalOrigin: Cesium.VerticalOrigin.TOP,
-          pixelOffset: new Cesium.Cartesian2(0, 10),
-          scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
-          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+          pixelOffset: LABEL_DEFAULTS.pixelOffsetBelow(),
+          scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
+          translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
         },
       })
       this._airportEntities.push(entity)
     }
+    dataSource.entities.resumeEvents()
   }
 
   GlobeController.prototype._clearAirportEntities = function() {
     const ds = this._ds["airports"]
-    if (ds) this._airportEntities.forEach(e => ds.entities.remove(e))
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._airportEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
     this._airportEntities = []
   }
 
@@ -173,6 +184,7 @@ export function applySituationalMethods(GlobeController) {
     this._clearEarthquakeEntities()
     const dataSource = this.getEventsDataSource()
 
+    dataSource.entities.suspendEvents()
     this._earthquakeData.forEach(eq => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(eq.lat, eq.lng)) return
 
@@ -208,33 +220,40 @@ export function applySituationalMethods(GlobeController) {
       // Center point
       const entity = dataSource.entities.add({
         id: `eq-${eq.id}`,
-        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 0),
+        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 50),
         point: {
           pixelSize,
           color: color.withAlpha(0.85),
           outlineColor: color.withAlpha(0.4),
           outlineWidth: pulseScale,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: `M${mag.toFixed(1)}`,
-          font: "13px JetBrains Mono, monospace",
+          font: LABEL_DEFAULTS.font,
           fillColor: Cesium.Color.WHITE.withAlpha(0.95),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-          outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          outlineColor: LABEL_DEFAULTS.outlineColor(),
+          outlineWidth: LABEL_DEFAULTS.outlineWidth,
+          style: LABEL_DEFAULTS.style(),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -pixelSize - 4),
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 5e6, 0.4),
-          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+          pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
+          scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
+          translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
         },
       })
       this._earthquakeEntities.push(entity)
     })
+    dataSource.entities.resumeEvents()
   }
 
   GlobeController.prototype._clearEarthquakeEntities = function() {
     const ds = this._ds["events"]
-    if (ds) this._earthquakeEntities.forEach(e => ds.entities.remove(e))
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._earthquakeEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
     this._earthquakeEntities = []
   }
 
@@ -549,6 +568,7 @@ export function applySituationalMethods(GlobeController) {
     this._clearNaturalEventEntities()
     const dataSource = this.getEventsDataSource()
 
+    dataSource.entities.suspendEvents()
     this._naturalEventData.forEach(ev => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(ev.lat, ev.lng)) return
 
@@ -593,33 +613,40 @@ export function applySituationalMethods(GlobeController) {
       // Center point
       const entity = dataSource.entities.add({
         id: `eonet-${ev.id}`,
-        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 50),
         point: {
           pixelSize: 8,
           color: color.withAlpha(0.9),
           outlineColor: color.withAlpha(0.35),
           outlineWidth: 3,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
-          font: "12px JetBrains Mono, monospace",
+          font: LABEL_DEFAULTS.font,
           fillColor: Cesium.Color.WHITE.withAlpha(0.9),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-          outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          outlineColor: LABEL_DEFAULTS.outlineColor(),
+          outlineWidth: LABEL_DEFAULTS.outlineWidth,
+          style: LABEL_DEFAULTS.style(),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -14),
-          scaleByDistance: new Cesium.NearFarScalar(5e4, 1, 5e6, 0.3),
-          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1, 8e6, 0),
+          pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
+          scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
+          translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
         },
       })
       this._naturalEventEntities.push(entity)
     })
+    dataSource.entities.resumeEvents()
   }
 
   GlobeController.prototype._clearNaturalEventEntities = function() {
     const ds = this._ds["events"]
-    if (ds) this._naturalEventEntities.forEach(e => ds.entities.remove(e))
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._naturalEventEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
     this._naturalEventEntities = []
   }
 
@@ -951,6 +978,7 @@ export function applySituationalMethods(GlobeController) {
     // Default height offset above ground (meters)
     const CAM_HEIGHT_OFFSET = 25
 
+    dataSource.entities.suspendEvents()
     visibleCams.forEach(w => {
       const realtime = w.source === "youtube" || w.source === "nycdot"
       const icon = realtime
@@ -990,6 +1018,7 @@ export function applySituationalMethods(GlobeController) {
       this._webcamEntities.push(entity)
       this._webcamEntityMap.set(entity.id, w)
     })
+    dataSource.entities.resumeEvents()
 
     this._requestRender()
     this._renderCamFeed()
@@ -1076,20 +1105,26 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype._syncRightPanels = function() {
     // Determine which tabs should be visible based on active layers/data
-    const hasEntities = this._entityListRequested && this.hasActiveFilter()
+    const hasEntities = true // Always show entities tab
     const hasNews = this.newsVisible && this._newsData?.length > 0
     const hasThreats = !!this._threatsActive
     const hasCameras = this.camerasVisible && this._webcamData?.length > 0
     const hasAlerts = this.signedInValue && this._alertData?.length > 0
     const hasInsights = this._insightsData?.length > 0
 
-    // Show/hide tab buttons
-    if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
+    // Show/hide tab buttons (entities always visible)
+    if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = ""
     if (this.hasRpTabNewsTarget) this.rpTabNewsTarget.style.display = hasNews ? "" : "none"
     if (this.hasRpTabThreatsTarget) this.rpTabThreatsTarget.style.display = hasThreats ? "" : "none"
     if (this.hasRpTabCamerasTarget) this.rpTabCamerasTarget.style.display = hasCameras ? "" : "none"
     if (this.hasRpTabAlertsTarget) this.rpTabAlertsTarget.style.display = hasAlerts ? "" : "none"
     if (this.hasRpTabInsightsTarget) this.rpTabInsightsTarget.style.display = hasInsights ? "" : "none"
+
+    // Respect user's close action — don't auto-show
+    if (this._rightPanelUserClosed) {
+      this._repositionDetailStack(12)
+      return
+    }
 
     const anyTabVisible = hasEntities || hasNews || hasThreats || hasCameras || hasAlerts || hasInsights
     if (!anyTabVisible) {
@@ -1103,8 +1138,7 @@ export function applySituationalMethods(GlobeController) {
     // If current active tab is now hidden, switch to first visible tab
     const activePane = this.hasRightPanelTarget && this.rightPanelTarget.querySelector(".rp-pane--active")
     const activePaneKey = activePane?.dataset.rpPane
-    const activeTabHidden = (activePaneKey === "entities" && !hasEntities) ||
-                            (activePaneKey === "news" && !hasNews) ||
+    const activeTabHidden = (activePaneKey === "news" && !hasNews) ||
                             (activePaneKey === "threats" && !hasThreats) ||
                             (activePaneKey === "cameras" && !hasCameras) ||
                             (activePaneKey === "alerts" && !hasAlerts) ||
@@ -1123,8 +1157,6 @@ export function applySituationalMethods(GlobeController) {
     const detailRight = panelWidth > 12 ? panelWidth + 12 : 12
     const detailStack = document.getElementById("detail-stack")
     if (detailStack) detailStack.style.right = `${detailRight}px`
-    const controlsBar = document.getElementById("controls-bar")
-    if (controlsBar) controlsBar.style.right = `${detailRight + 4}px`
   }
 
   GlobeController.prototype.switchRightTab = function(event) {
@@ -1145,14 +1177,24 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype._showRightPanel = function(tabKey) {
+    this._rightPanelUserClosed = false
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
     this._activateRightTab(tabKey)
     this._syncRightPanels()
+    this._syncPanelToggle(true)
   }
 
   GlobeController.prototype.closeRightPanel = function() {
+    this._rightPanelUserClosed = true
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
     this._repositionDetailStack(12)
+    this._syncPanelToggle(false)
+    this._savePrefs()
+  }
+
+  GlobeController.prototype._syncPanelToggle = function(active) {
+    const toggle = this.element?.querySelector(".stat-panel-toggle")
+    if (toggle) toggle.classList.toggle("active", active)
   }
 
   GlobeController.prototype.focusCamFeedItem = function(event) {
@@ -1164,7 +1206,11 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype._clearWebcamEntities = function() {
     const ds = this._ds["webcams"]
-    if (ds) this._webcamEntities.forEach(e => ds.entities.remove(e))
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._webcamEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
     this._webcamEntities = []
     this._webcamEntityMap.clear()
     this._requestRender()
@@ -1173,8 +1219,9 @@ export function applySituationalMethods(GlobeController) {
 
 
   GlobeController.prototype.showWebcamDetail = function(cam) {
-    // Stop any existing auto-refresh
+    // Stop any existing auto-refresh and clean up YouTube error listener
     if (this._webcamRefreshInterval) { clearInterval(this._webcamRefreshInterval); this._webcamRefreshInterval = null }
+    if (this._ytMessageCleanup) { this._ytMessageCleanup(); this._ytMessageCleanup = null }
 
     const updated = cam.lastUpdated ? this._timeAgo(new Date(cam.lastUpdated)) : "—"
     const location = [cam.city, cam.region, cam.country].filter(Boolean).join(", ")
@@ -1197,7 +1244,38 @@ export function applySituationalMethods(GlobeController) {
 
     let thumbHtml
     if (cam.source === "youtube" && cam.videoId) {
-      thumbHtml = `<div class="webcam-thumb"><iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`
+      const ytThumb = cam.thumbnail || `https://img.youtube.com/vi/${cam.videoId}/hqdefault.jpg`
+      thumbHtml = `<div class="webcam-thumb" style="position:relative;">
+        <iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        <div id="webcam-yt-fallback" style="display:none;position:relative;">
+          <img src="${ytThumb}" alt="${this._escapeHtml(cam.title)}" style="width:100%;border-radius:4px;">
+          <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#ff6b6b;font:500 11px var(--gt-mono);padding:6px 12px;border-radius:4px;">Stream unavailable</span>
+        </div>
+      </div>`
+      // Listen for YouTube player errors via postMessage (enablejsapi=1 makes YT send error events)
+      const showFallback = () => {
+        const iframe = document.getElementById("webcam-detail-iframe")
+        const fallback = document.getElementById("webcam-yt-fallback")
+        if (iframe) iframe.style.display = "none"
+        if (fallback) fallback.style.display = "block"
+      }
+      const onYtMessage = (e) => {
+        if (typeof e.data !== "string") return
+        try {
+          const msg = JSON.parse(e.data)
+          // YT sends {event:"onError",info:<code>} for unavailable/removed videos
+          if (msg.event === "onError") { showFallback(); window.removeEventListener("message", onYtMessage) }
+        } catch { /* not a YT message */ }
+      }
+      window.addEventListener("message", onYtMessage)
+      // Also send "listening" command after iframe loads so YT starts posting events
+      setTimeout(() => {
+        const iframe = document.getElementById("webcam-detail-iframe")
+        if (iframe?.contentWindow) {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1 }), "https://www.youtube.com")
+        }
+      }, 1500)
+      this._ytMessageCleanup = () => window.removeEventListener("message", onYtMessage)
     } else if (thumbUrl) {
       // Show preview image — auto-refreshes for live cameras
       thumbHtml = `<div class="webcam-thumb" style="position:relative;">

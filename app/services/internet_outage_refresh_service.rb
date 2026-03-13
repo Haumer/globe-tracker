@@ -1,3 +1,5 @@
+require "digest"
+
 class InternetOutageRefreshService
   extend HttpClient
   extend Refreshable
@@ -38,7 +40,8 @@ class InternetOutageRefreshService
   private
 
   def fetch_ioda(url)
-    data = self.class.http_get(URI(url), open_timeout: 10, read_timeout: 30)
+    data = self.class.http_get(URI(url), open_timeout: 10, read_timeout: 30,
+                                cache_key: "http:ioda:#{Digest::MD5.hexdigest(url)}", cache_ttl: 15.minutes)
     data&.dig("data")
   end
 

@@ -1,5 +1,5 @@
 import { resetTilt, resetView, viewTopDown, zoomIn, zoomOut } from "../camera"
-import { getDataSource } from "../utils"
+import { getDataSource, LABEL_DEFAULTS } from "../utils"
 
 export function applyGeographyMethods(GlobeController) {
   GlobeController.prototype.toggleCities = function() {
@@ -115,28 +115,28 @@ export function applyGeographyMethods(GlobeController) {
           ? Cesium.Color.fromCssColorString("#ffd54f")
           : Cesium.Color.fromCssColorString("#e0e0e0")
 
-        const height = terrainHeights ? terrainHeights[idx].height || 0 : 0
-
         const entity = dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, height),
+          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 50),
           point: {
             pixelSize,
             color: color.withAlpha(0.9),
             outlineColor: color.withAlpha(0.5),
             outlineWidth: 1,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
           label: {
             text: city.name,
-            font: city.capital ? "bold 15px JetBrains Mono, monospace" : "13px JetBrains Mono, monospace",
+            font: city.capital ? "bold 15px JetBrains Mono, monospace" : LABEL_DEFAULTS.font,
             fillColor: Cesium.Color.WHITE.withAlpha(0.95),
-            outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 3,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineColor: LABEL_DEFAULTS.outlineColor(),
+            outlineWidth: LABEL_DEFAULTS.outlineWidth,
+            style: LABEL_DEFAULTS.style(),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            pixelOffset: new Cesium.Cartesian2(0, -10),
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 1e7, 0.3),
+            pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
+            scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
+            translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         })
@@ -715,7 +715,9 @@ export function applyGeographyMethods(GlobeController) {
     if (!badge) {
       badge = document.createElement("div")
       badge.id = "record-timer"
-      document.getElementById("controls-bar")?.appendChild(badge)
+      const strip = document.getElementById("bottom-strip")
+      const controls = strip?.querySelector(".bs-controls")
+      ;(controls || strip)?.appendChild(badge)
     }
     badge.textContent = `${min}:${sec}`
   }

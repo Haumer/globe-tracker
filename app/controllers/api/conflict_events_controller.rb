@@ -7,7 +7,9 @@ module Api
         enqueue_background_refresh(RefreshConflictEventsJob, key: "conflict-events", debounce: 15.minutes) if ConflictEventService.stale?
       end
 
-      scope = time_scoped(ConflictEvent)
+      # UCDP data is historical (annual releases) — default to all events, not just "recent"
+      range = parse_time_range
+      scope = range ? ConflictEvent.in_range(*range) : ConflictEvent.all
       bounds = parse_bounds
       scope = scope.within_bounds(bounds) if bounds.present?
 

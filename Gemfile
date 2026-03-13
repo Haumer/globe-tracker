@@ -54,6 +54,7 @@ gem "sassc-rails"
 gem "websocket-client-simple"
 gem "rss"
 gem "rack-attack"
+gem "rubyzip", require: "zip"
 
 group :development, :test do
   gem "dotenv-rails"
@@ -79,4 +80,5 @@ group :test do
   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
   gem "capybara"
   gem "selenium-webdriver"
+  gem "webmock"
 end

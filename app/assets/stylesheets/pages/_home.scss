@@ -190,21 +190,12 @@
   .cesium-viewer-toolbar { display: none !important; }
 }
 
-// ─── Stats bar ── top edge telemetry strip ──────────────────────
+// ─── Stats bar ── inside navbar, center section ─────────────────
 #stats-bar {
-  position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9000;
   display: flex;
   align-items: center;
   gap: 0;
   height: 36px;
-  background: #1a1d24;
-  border: 1px solid #333;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
   padding: 0 6px;
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
 
@@ -236,7 +227,18 @@
   .stat-sep {
     width: 1px;
     height: 16px;
-    background: #333;
+    background: #1e2028;
+  }
+
+  .stat-panel-toggle {
+    cursor: pointer;
+    i {
+      font-size: 12px;
+      color: #666;
+      transition: color 0.12s;
+    }
+    &:hover i { color: var(--gt-accent); }
+    &.active i { color: var(--gt-accent); }
   }
 }
 
@@ -264,6 +266,23 @@
   &:hover {
     color: var(--gt-accent);
     border-color: var(--gt-border-hover);
+  }
+
+  .sb-toggle-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: var(--gt-accent);
+    color: #000;
+    font: 700 8px var(--gt-mono);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 }
 
@@ -352,69 +371,61 @@
     animation: detail-in 0.12s ease-out;
   }
 
-  // Quick layer bar — categorized
-  .ql-bar {
-    padding: 6px 10px 2px;
-    border-bottom: 1px solid var(--gt-border);
-    flex-shrink: 0;
-  }
-
-  .ql-category {
-    margin-bottom: 4px;
-
-    &:last-child { margin-bottom: 2px; }
-  }
-
-  .ql-cat-label {
-    display: block;
-    font: 600 7px var(--gt-mono);
-    letter-spacing: 2px;
-    color: var(--gt-text-dim);
-    opacity: 0.4;
-    padding: 2px 2px 2px;
-  }
-
-  .ql-row {
-    display: flex;
-    gap: 3px;
-    position: relative;
-  }
-
-  .ql-btn {
-    position: relative;
-    flex: 1;
+  // Layer rows — clickable toggle rows inside sections
+  .sb-layer-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 6px 4px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid transparent;
-    border-radius: 5px;
-    color: var(--gt-text-dim);
+    gap: 10px;
+    padding: 7px 14px;
     cursor: pointer;
-    transition: all 0.15s;
-
-    i { font-size: 11px; }
-
-    .ql-label {
-      font: 600 8px var(--gt-mono);
-      letter-spacing: 0.5px;
-      opacity: 0.6;
-    }
+    transition: background 0.12s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--gt-text);
+      background: rgba(255, 255, 255, 0.04);
     }
 
     &.active {
-      background: color-mix(in srgb, var(--ql-color) 12%, transparent);
-      border-color: color-mix(in srgb, var(--ql-color) 30%, transparent);
-      color: var(--ql-color);
-
-      .ql-label { opacity: 1; }
+      .sb-layer-name { color: var(--gt-text-bright); }
+      .sb-layer-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--gt-accent);
+        animation: ql-pulse 2s infinite;
+      }
     }
+  }
+
+  .sb-layer-icon {
+    font-size: 12px;
+    width: 16px;
+    text-align: center;
+    opacity: 0.7;
+
+    .active > & { opacity: 1; }
+  }
+
+  .sb-layer-name {
+    flex: 1;
+    font: 500 11px 'DM Sans', sans-serif;
+    color: var(--gt-text-dim);
+  }
+
+  .sb-layer-dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+  }
+
+  .sb-section-count {
+    font: 600 9px var(--gt-mono);
+    color: var(--gt-accent);
+    margin-left: auto;
+    margin-right: 4px;
+  }
+
+  .sb-sub-options {
+    padding: 0 8px 4px;
   }
 
   // Sections container — scrollable
@@ -828,8 +839,8 @@
   position: fixed;
   top: 42px;
   right: 12px;
-  bottom: 68px;
-  z-index: 100;
+  bottom: 48px;
+  z-index: 30;
   background: var(--gt-panel);
   backdrop-filter: var(--gt-blur);
   -webkit-backdrop-filter: var(--gt-blur);
@@ -1263,9 +1274,9 @@
 // ─── Detail + Selection Stack ─────────────────────────────────
 #detail-stack {
   position: fixed;
-  bottom: 56px;
+  bottom: 48px;
   right: 12px;
-  z-index: 55;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2517,34 +2528,108 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-// ─── Controls bar ── horizontal toolbar at bottom ───────────────
-#controls-bar {
+// ─── Bottom Strip ── unified bar: layers | mini-timeline | controls ─
+#bottom-strip {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 55;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 0;
-  background: var(--gt-void);
-  border: 1px solid var(--gt-border);
-  border-radius: 8px;
-  padding: 3px 4px;
-  backdrop-filter: var(--gt-blur);
-  -webkit-backdrop-filter: var(--gt-blur);
-  transition: right 0.2s ease;
+  height: 40px;
+  background: #0d0f13;
+  border-top: 1px solid #1e2028;
+  padding: 0 12px;
+  gap: 8px;
 
-  .cb-group {
+  .bs-layers {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar { display: none; }
+    min-width: 0;
+    padding: 2px 0;
+  }
+
+  .bs-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font: 600 9px var(--gt-mono);
+    letter-spacing: 0.5px;
+    color: var(--pill-color);
+    background: color-mix(in srgb, var(--pill-color) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pill-color) 25%, transparent);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .bs-no-layers {
+    font: 400 9px var(--gt-mono);
+    color: #555;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .bs-center {
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .bs-mini-tl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 400px;
+    width: 100%;
+  }
+
+  .bs-tl-label {
+    font: 600 8px var(--gt-mono);
+    color: #555;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .bs-tl-track {
+    position: relative;
+    flex: 1;
+    height: 14px;
+    background: #13151b;
+    border-radius: 3px;
+    overflow: hidden;
+    cursor: pointer;
+    min-width: 80px;
+  }
+
+  .bs-tl-count {
+    font: 400 10px var(--gt-mono);
+    color: #666;
+    white-space: nowrap;
+  }
+
+  .bs-controls {
     display: flex;
     align-items: center;
     gap: 1px;
+    flex-shrink: 0;
   }
 
   .cb-sep {
     width: 1px;
-    height: 18px;
-    background: var(--gt-border);
-    margin: 0 4px;
+    height: 16px;
+    background: #1e2028;
+    margin: 0 3px;
     flex-shrink: 0;
   }
 
@@ -2552,13 +2637,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     background: none;
     border: none;
-    border-radius: 5px;
-    color: var(--gt-text-dim);
-    font-size: 11px;
+    border-radius: 4px;
+    color: #888;
+    font-size: 10px;
     cursor: pointer;
     transition: all 0.12s;
     position: relative;
@@ -2575,7 +2660,7 @@
 
   .cb-record {
     color: var(--gt-red);
-    font-size: 10px;
+    font-size: 9px;
 
     &:hover {
       background: rgba(239, 83, 80, 0.08);
@@ -2612,7 +2697,7 @@
 // ─── Playback bar ── bottom timeline ────────────────────────────
 #timeline-bar {
   position: fixed;
-  bottom: 56px;
+  bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 58;
@@ -2790,28 +2875,7 @@
   font-size: 12px !important;
 }
 
-// ─── Controls hint ──────────────────────────────────────────────
-#controls-hint {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  display: flex;
-  gap: 14px;
-  font: 400 9px var(--gt-mono);
-  letter-spacing: 0.5px;
-  color: var(--gt-text-dim);
-  pointer-events: none;
-  animation: hint-fade 8s ease-out forwards;
-
-  span { white-space: nowrap; }
-}
-
-@keyframes hint-fade {
-  0%, 60% { opacity: 1; }
-  100% { opacity: 0; }
-}
+// Controls hint removed — replaced by bottom strip
 
 // ─── Flight count badge (removed, replaced by stats bar) ────────
 #flight-count {
@@ -2858,10 +2922,10 @@
     .sb-search-icon { left: 22px; }
   }
 
-  // 3. Sidebar toggle — reposition for mobile
+  // 3. Sidebar toggle — reposition for mobile (above bottom strip)
   #sidebar-toggle {
     top: auto;
-    bottom: 16px;
+    bottom: 44px;
     left: 50%;
     transform: translateX(-50%);
     width: 44px;
@@ -2894,7 +2958,7 @@
   #detail-stack {
     right: 0 !important;
     left: 0;
-    bottom: 0 !important;
+    bottom: 36px !important;
     padding: 0 8px 8px;
   }
   #detail-panel {
@@ -2909,21 +2973,20 @@
     width: 100%;
   }
 
-  // 6. Controls bar — minimal, hide non-essential buttons
-  #controls-bar {
-    right: 8px !important;
-    bottom: 68px;
-    .cb-group:nth-child(1) { display: none; }
-    .cb-sep:nth-child(2) { display: none; }
-    .cb-group:nth-child(3) {
+  // 6. Bottom strip — compact on mobile
+  #bottom-strip {
+    height: 36px;
+    padding: 0 6px;
+    .bs-controls {
+      // Hide zoom and some view buttons on mobile
+      .cb-btn:nth-child(1),
       .cb-btn:nth-child(2),
-      .cb-btn:nth-child(3) { display: none; }
+      .cb-sep:nth-child(3),
+      .cb-btn:nth-child(4),
+      .cb-btn:nth-child(5) { display: none; }
     }
-    .cb-btn {
-      width: 44px;
-      height: 44px;
-      font-size: 14px;
-    }
+    .bs-center { display: none; }
+    .cb-btn { width: 36px; height: 36px; font-size: 13px; }
   }
 
   // 7. Timeline bar — remove min-width, hide time labels, bigger thumb
@@ -2933,7 +2996,7 @@
     left: 8px;
     right: 8px;
     transform: none;
-    bottom: 68px;
+    bottom: 36px;
     padding: 6px 8px;
     gap: 6px;
     .tl-time { display: none; }
@@ -2944,10 +3007,7 @@
     .tl-btn { width: 44px; height: 44px; }
   }
 
-  // 8. Hide controls hint
-  #controls-hint { display: none; }
-
-  // 9. Sheet handle for sidebar bottom sheet
+  // 8. Sheet handle for sidebar bottom sheet
   .sb-sheet-handle {
     display: flex;
     justify-content: center;
@@ -3015,18 +3075,33 @@
 }
 
 // ─── Freshness Dots ─────────────────────────────────────────────
+// Shape + color for colorblind accessibility: circle=fresh, diamond=warm, square=stale
 .freshness-dot {
   position: absolute;
   top: 3px;
   right: 3px;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
   pointer-events: none;
 
-  &[data-freshness="fresh"] { background: #66bb6a; box-shadow: 0 0 4px #66bb6a; }
-  &[data-freshness="warm"]  { background: #ffa726; box-shadow: 0 0 4px #ffa726; }
-  &[data-freshness="stale"] { background: #ef5350; box-shadow: 0 0 4px #ef5350; }
+  &[data-freshness="fresh"] {
+    background: #66bb6a;
+    box-shadow: 0 0 4px #66bb6a;
+    border-radius: 50%; // circle
+  }
+  &[data-freshness="warm"] {
+    background: #ffa726;
+    box-shadow: 0 0 4px #ffa726;
+    border-radius: 50%;
+    transform: rotate(45deg); // diamond
+    width: 5px;
+    height: 5px;
+  }
+  &[data-freshness="stale"] {
+    background: #ef5350;
+    box-shadow: 0 0 4px #ef5350;
+    border-radius: 1px; // square
+  }
 }
 
 // ─── Onboarding Overlay ─────────────────────────────────────────
@@ -3268,9 +3343,38 @@
   &:hover { color: var(--gt-text); }
 }
 
+// ─── Accessibility Utilities ────────────────────────────────────
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+// Focus-visible outline for keyboard navigation
+.ql-btn:focus-visible,
+.cb-btn:focus-visible,
+.rp-tab:focus-visible,
+.sb-chip:focus-visible,
+.sb-section-head:focus-visible,
+.sb-tool-row:focus-visible,
+.onboarding-card:focus-visible {
+  outline: 2px solid var(--gt-accent);
+  outline-offset: 2px;
+}
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ql-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 // ─── Very small screens ─────────────────────────────────────────

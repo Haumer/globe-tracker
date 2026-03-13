@@ -1,0 +1,38 @@
+<%# ── Stats bar ── top edge, telemetry-style ────────────────── %>
+<div id="stats-bar">
+  <div class="stat-cell">
+    <span class="stat-label">FLT</span>
+    <span class="stat-value" id="stat-flights">0</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-cell">
+    <span class="stat-label">SAT</span>
+    <span class="stat-value" id="stat-sats">0</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-cell">
+    <span class="stat-label">AIS</span>
+    <span class="stat-value" id="stat-ships">0</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-cell">
+    <span class="stat-label">EVT</span>
+    <span class="stat-value" id="stat-events">0</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-cell">
+    <span class="stat-label">UTC</span>
+    <span class="stat-value" id="stat-clock">--:--</span>
+  </div>
+  <% if user_signed_in? %>
+  <div class="stat-sep"></div>
+  <div class="stat-cell stat-bell" id="stat-bell-btn" role="button" aria-label="Toggle alerts">
+    <i class="fa-solid fa-bell" aria-hidden="true"></i>
+    <span class="alert-badge" id="stat-alert-badge" style="display:none;" aria-live="polite">0</span>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-cell stat-panel-toggle" id="stat-panel-toggle" role="button" aria-label="Toggle data panel" data-tip="Toggle data panel" data-tip-pos="below">
+    <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+  </div>
+  <% end %>
+</div>

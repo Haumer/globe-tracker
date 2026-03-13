@@ -35,6 +35,7 @@ export function applyFlightMethods(GlobeController) {
     const dataSource = this.getFlightsDataSource()
     const currentIds = new Set()
 
+    dataSource.entities.suspendEvents()
     flights.forEach(flight => {
       if (!flight.latitude || !flight.longitude) return
 
@@ -205,6 +206,7 @@ export function applyFlightMethods(GlobeController) {
         }
       }
     }
+    dataSource.entities.resumeEvents()
 
     // Update stats and airline detection
     this._updateStats()
@@ -450,9 +452,12 @@ export function applyFlightMethods(GlobeController) {
         <a href="https://www.flightaware.com/live/flight/${callsign}" target="_blank" rel="noopener">FlightAware</a>
         <a href="https://globe.adsbexchange.com/?icao=${id}" target="_blank" rel="noopener">ADS-B</a>
       </div>
-      <button class="detail-track-btn ${isTracking ? "tracking" : ""}" data-flight-id="${id}">
-        ${isTracking ? "Stop Tracking" : "Track Flight"}
-      </button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="detail-track-btn ${isTracking ? "tracking" : ""}" data-flight-id="${id}" style="flex:1;">
+          ${isTracking ? "Stop Tracking" : "Track Flight"}
+        </button>
+        ${isTracking ? `<button class="detail-track-btn" id="tracking-height-btn" style="flex:0;white-space:nowrap;">${this._trackingHeightLabels[this._trackingHeightIdx]}</button>` : ""}
+      </div>
       ${this.signedInValue ? `<button class="detail-watch-btn" data-action="click->globe#createWatch"
         data-watch-type="entity"
         data-watch-name="Watch ${callsign || id}"
@@ -466,14 +471,21 @@ export function applyFlightMethods(GlobeController) {
     `
 
     // Bind track button
-    this.detailContentTarget.querySelector(".detail-track-btn").addEventListener("click", (e) => {
-      const fid = e.target.dataset.flightId
+    this.detailContentTarget.querySelector(".detail-track-btn[data-flight-id]").addEventListener("click", (e) => {
+      const fid = e.currentTarget.dataset.flightId
       if (this.trackedFlightId === fid) {
         this.stopTracking()
       } else {
         this.trackFlight(fid)
       }
       const d = this.flightData.get(fid)
+      if (d) this.showDetail(fid, d)
+    })
+    const hBtn = document.getElementById("tracking-height-btn")
+    if (hBtn) hBtn.addEventListener("click", () => {
+      this.cycleTrackingHeight()
+      const fid = this.trackedFlightId
+      const d = fid && this.flightData.get(fid)
       if (d) this.showDetail(fid, d)
     })
 
@@ -780,11 +792,13 @@ export function applyFlightMethods(GlobeController) {
 
   GlobeController.prototype.trackFlight = function(id) {
     this.trackedFlightId = id
+    this.trackedTrainId = null
     const data = this.flightData.get(id)
     if (data) {
       const Cesium = window.Cesium
+      const h = this._trackingHeights[this._trackingHeightIdx]
       this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(data.currentLng, data.currentLat, 200000),
+        destination: Cesium.Cartesian3.fromDegrees(data.currentLng, data.currentLat, h),
         duration: 1.5,
       })
     }
@@ -794,11 +808,20 @@ export function applyFlightMethods(GlobeController) {
     this.trackedFlightId = null
   }
 
+  GlobeController.prototype.cycleTrackingHeight = function() {
+    this._trackingHeightIdx = (this._trackingHeightIdx + 1) % this._trackingHeights.length
+    const label = this._trackingHeightLabels[this._trackingHeightIdx]
+    this._toast(`Tracking: ${label}`)
+    const btn = document.getElementById("tracking-height-btn")
+    if (btn) btn.textContent = label
+  }
+
   GlobeController.prototype.closeDetail = function() {
     this.detailPanelTarget.style.display = "none"
     this._focusedSelection = null
     this._renderSelectionTray()
     this.stopTracking()
+    this.stopTrainTracking()
     this.clearSatFootprint()
     this._clearFlightRoute()
     this._clearSatVisEntities()
@@ -806,6 +829,7 @@ export function applyFlightMethods(GlobeController) {
     if (this._clearShakeMap) this._clearShakeMap()
     if (this._clearFlightHistory) this._clearFlightHistory()
     if (this._webcamRefreshInterval) { clearInterval(this._webcamRefreshInterval); this._webcamRefreshInterval = null }
+    if (this._ytMessageCleanup) { this._ytMessageCleanup(); this._ytMessageCleanup = null }
   }
 
   // ── Entity List Panel ─────────────────────────────────────

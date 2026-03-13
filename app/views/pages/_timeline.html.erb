@@ -1,0 +1,48 @@
+<%# ── Timeline Bar ── unified time travel ─────────────────────── %>
+<div id="timeline-bar" data-globe-target="timelineBar" style="display:none;" role="region" aria-label="Timeline playback">
+  <div class="tl-controls">
+    <button class="tl-btn" data-action="click->globe#timelineStepBack" data-tip="Step back" aria-label="Step back">
+      <i class="fa-solid fa-backward-step" aria-hidden="true"></i>
+    </button>
+    <button class="tl-btn tl-play" data-globe-target="timelinePlayBtn" data-action="click->globe#timelineToggle" data-tip="Play / Pause" aria-label="Play or pause">
+      <i class="fa-solid fa-play" data-globe-target="timelinePlayIcon" aria-hidden="true"></i>
+    </button>
+    <button class="tl-btn" data-action="click->globe#timelineStepForward" data-tip="Step forward" aria-label="Step forward">
+      <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
+    </button>
+  </div>
+  <div class="tl-timeline">
+    <span class="tl-time tl-time-start" data-globe-target="timelineTimeStart">--</span>
+    <input type="range" class="tl-scrubber" min="0" max="10000" value="0"
+           data-globe-target="timelineScrubber"
+           data-action="input->globe#timelineScrub"
+           aria-label="Timeline scrubber">
+    <span class="tl-time tl-time-end" data-globe-target="timelineTimeEnd">--</span>
+  </div>
+  <div class="tl-meta">
+    <div class="tl-cursor-display" data-globe-target="timelineCursorDisplay">
+      <span class="tl-cursor-date" data-globe-target="timelineCursorDate">----</span>
+      <span class="tl-cursor-time" data-globe-target="timelineCursorTime">--:--:--</span>
+    </div>
+    <select class="tl-speed" data-globe-target="timelineSpeed" data-action="change->globe#timelineSetSpeed" aria-label="Playback speed">
+      <option value="1">1x</option>
+      <option value="2">2x</option>
+      <option value="5" selected>5x</option>
+      <option value="10">10x</option>
+      <option value="30">30x</option>
+      <option value="60">60x</option>
+    </select>
+    <div class="tl-live-badge" data-globe-target="timelineLiveBadge" style="display:none;" aria-live="polite">LIVE</div>
+    <button class="tl-btn tl-live-btn" data-action="click->globe#timelineGoLive" data-tip="Jump to live" aria-label="Jump to live">
+      <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+    </button>
+    <button class="tl-btn" data-action="click->globe#timelineExport" data-tip="Export data (GeoJSON/CSV)" aria-label="Export data">
+      <i class="fa-solid fa-download" aria-hidden="true"></i>
+    </button>
+    <button class="tl-btn tl-close" data-action="click->globe#timelineClose" data-tip="Exit timeline" aria-label="Close timeline">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+  </div>
+</div>
+
+<%# Mini-timeline is now part of _bottom_strip.html.erb %>

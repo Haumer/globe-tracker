@@ -1,0 +1,49 @@
+<%# ── Bottom Strip ── unified bar: active layers | mini-timeline | controls ── %>
+<div id="bottom-strip" role="toolbar" aria-label="Bottom toolbar">
+  <%# Left: active layer pills %>
+  <div class="bs-layers" data-globe-target="activeLayerPills" aria-label="Active layers"></div>
+
+  <%# Center: mini-timeline %>
+  <div class="bs-center">
+    <div class="bs-mini-tl" data-globe-target="miniTimeline" aria-label="Recent events timeline">
+      <span class="bs-tl-label">24H</span>
+      <div class="bs-tl-track" data-globe-target="miniTimelineDots" data-action="click->globe#miniTimelineClick"></div>
+      <span class="bs-tl-count" id="mt-count">&mdash;</span>
+    </div>
+  </div>
+
+  <%# Right: controls %>
+  <div class="bs-controls" role="group" aria-label="Globe controls">
+    <button class="cb-btn" data-action="click->globe#zoomIn" data-tip="Zoom in" aria-label="Zoom in">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+    </button>
+    <button class="cb-btn" data-action="click->globe#zoomOut" data-tip="Zoom out" aria-label="Zoom out">
+      <i class="fa-solid fa-minus" aria-hidden="true"></i>
+    </button>
+    <div class="cb-sep"></div>
+    <button class="cb-btn" data-action="click->globe#resetView" data-tip="Reset view" aria-label="Reset view">
+      <i class="fa-solid fa-globe" aria-hidden="true"></i>
+    </button>
+    <button class="cb-btn" data-action="click->globe#viewTopDown" data-tip="Top-down" aria-label="Top-down view">
+      <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+    </button>
+    <button class="cb-btn" data-action="click->globe#resetTilt" data-tip="Reset tilt" aria-label="Reset tilt">
+      <i class="fa-solid fa-arrows-up-down" aria-hidden="true"></i>
+    </button>
+    <div class="cb-sep"></div>
+    <button class="cb-btn cb-record" data-globe-target="recordBtn" data-action="click->globe#toggleRecording" data-tip="Record video" aria-label="Record video">
+      <i class="fa-solid fa-circle" data-globe-target="recordIcon" aria-hidden="true"></i>
+    </button>
+    <button class="cb-btn" data-action="click->globe#takeScreenshot" data-tip="Screenshot" aria-label="Screenshot">
+      <i class="fa-solid fa-camera" aria-hidden="true"></i>
+    </button>
+    <div class="cb-sep"></div>
+    <button class="cb-btn" data-action="click->globe#shareView" data-tip="Share link" aria-label="Share link">
+      <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+    </button>
+    <div class="cb-sep"></div>
+    <button class="cb-btn cb-timeline" data-action="click->globe#timelineOpen" data-tip="Time travel" aria-label="Open timeline">
+      <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+    </button>
+  </div>
+</div>

@@ -1,0 +1,24 @@
+<%# ── Onboarding overlay for first-time users ─────────────────── %>
+<div id="onboarding-overlay" style="display:none;" role="dialog" aria-label="Welcome — choose a scenario">
+  <div class="onboarding-card" data-scenario="aviation" role="button" tabindex="0">
+    <div class="onboarding-icon" style="--ql-color:#4fc3f7;"><i class="fa-solid fa-plane" aria-hidden="true"></i></div>
+    <div class="onboarding-title">Live Aviation</div>
+    <div class="onboarding-desc">Track flights worldwide with ADS-B and OpenSky data</div>
+  </div>
+  <div class="onboarding-card" data-scenario="events" role="button" tabindex="0">
+    <div class="onboarding-icon" style="--ql-color:#ff7043;"><i class="fa-solid fa-bolt" aria-hidden="true"></i></div>
+    <div class="onboarding-title">Global Events</div>
+    <div class="onboarding-desc">Earthquakes, conflicts, natural events and news</div>
+  </div>
+  <div class="onboarding-card" data-scenario="space" role="button" tabindex="0">
+    <div class="onboarding-icon" style="--ql-color:#ab47bc;"><i class="fa-solid fa-satellite" aria-hidden="true"></i></div>
+    <div class="onboarding-title">Space Watch</div>
+    <div class="onboarding-desc">Track satellites including ISS, GPS, and classified objects</div>
+  </div>
+  <div class="onboarding-card" data-scenario="infrastructure" role="button" tabindex="0">
+    <div class="onboarding-icon" style="--ql-color:#ffc107;"><i class="fa-solid fa-network-wired" aria-hidden="true"></i></div>
+    <div class="onboarding-title">Infrastructure</div>
+    <div class="onboarding-desc">Submarine cables, power plants, GPS jamming and outages</div>
+  </div>
+  <button class="onboarding-dismiss" id="onboarding-dismiss">Explore freely</button>
+</div>

@@ -44,6 +44,7 @@ export function applyFiresMethods(GlobeController) {
         if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
       })
       this.renderFireHotspots()
+      this._markFresh("fireHotspots")
       this._updateStats()
       this._toastHide()
     } catch (e) {
@@ -58,6 +59,7 @@ export function applyFiresMethods(GlobeController) {
 
     const bounds = this.getViewportBounds()
 
+    dataSource.entities.suspendEvents()
     this._fireHotspotData.forEach(f => {
       if (bounds && (f.lat < bounds.lamin || f.lat > bounds.lamax || f.lng < bounds.lomin || f.lng > bounds.lomax)) return
       if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(f.lat, f.lng)) return
@@ -95,18 +97,20 @@ export function applyFiresMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `fire-${f.id}`,
-        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 0),
+        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 50),
         point: {
           pixelSize,
           color: color.withAlpha(0.9),
           outlineColor: color.withAlpha(0.3),
           outlineWidth: 1,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._fireHotspotEntities.push(entity)
     })
+    dataSource.entities.resumeEvents()
 
     this._requestRender()
   }

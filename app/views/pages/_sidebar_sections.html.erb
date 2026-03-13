@@ -1,0 +1,326 @@
+<%# Hidden layer toggles — controlled programmatically, must stay in Stimulus scope %>
+<div style="display:none;" aria-hidden="true">
+  <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
+  <input type="checkbox" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
+  <input type="checkbox" data-globe-target="citiesToggle" data-action="change->globe#toggleCities">
+  <input type="checkbox" data-globe-target="airportsToggle" data-action="change->globe#toggleAirports">
+  <input type="checkbox" data-globe-target="bordersToggle" data-action="change->globe#toggleBorders">
+  <input type="checkbox" data-globe-target="terrainToggle" data-action="change->globe#toggleTerrain">
+  <input type="checkbox" data-globe-target="earthquakesToggle" data-action="change->globe#toggleEarthquakes">
+  <input type="checkbox" data-globe-target="naturalEventsToggle" data-action="change->globe#toggleNaturalEvents">
+  <input type="checkbox" data-globe-target="camerasToggle" data-action="change->globe#toggleCameras">
+  <input type="checkbox" data-globe-target="gpsJammingToggle" data-action="change->globe#toggleGpsJamming">
+  <input type="checkbox" data-globe-target="newsToggle" data-action="change->globe#toggleNews">
+  <input type="checkbox" data-globe-target="cablesToggle" data-action="change->globe#toggleCables">
+  <input type="checkbox" data-globe-target="pipelinesToggle" data-action="change->globe#togglePipelines">
+  <input type="checkbox" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
+  <input type="checkbox" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
+  <input type="checkbox" data-globe-target="conflictsToggle" data-action="change->globe#toggleConflicts">
+  <input type="checkbox" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
+  <input type="checkbox" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
+  <input type="checkbox" data-globe-target="fireHotspotsToggle" data-action="change->globe#toggleFireHotspots">
+  <input type="checkbox" data-globe-target="weatherToggle" data-action="change->globe#toggleWeather">
+  <input type="checkbox" data-globe-target="financialToggle" data-action="change->globe#toggleFinancial">
+  <input type="checkbox" data-globe-target="railwaysToggle" data-action="change->globe#toggleRailways">
+  <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains">
+</div>
+
+<div class="sb-sections">
+  <%# ── Tracking ── %>
+  <div class="sb-section" data-section="tracking">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #4fc3f7;"></span>
+      <span class="sb-section-title">Tracking</span>
+      <span class="sb-section-count" id="sec-count-tracking"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="flights" data-globe-target="qlFlights">
+        <i class="fa-solid fa-plane sb-layer-icon" style="color: #4fc3f7;"></i>
+        <span class="sb-layer-name">Flights</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="ships" data-globe-target="qlShips">
+        <i class="fa-solid fa-ship sb-layer-icon" style="color: #26c6da;"></i>
+        <span class="sb-layer-name">Ships (AIS)</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="trains" data-globe-target="qlTrains">
+        <i class="fa-solid fa-train-subway sb-layer-icon" style="color: #e53935;"></i>
+        <span class="sb-layer-name">Live Trains</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="satellites" data-globe-target="qlSatellites">
+        <i class="fa-solid fa-satellite sb-layer-icon" style="color: #ab47bc;"></i>
+        <span class="sb-layer-name">Satellites</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="notams" data-globe-target="qlNotams">
+        <i class="fa-solid fa-ban sb-layer-icon" style="color: #ef5350;"></i>
+        <span class="sb-layer-name">NOTAMs / TFRs</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+
+      <%# Flight sub-options (shown when flights active) %>
+      <div class="sb-sub-options" data-globe-target="flightSubOptions" style="display:none;">
+        <div class="sb-mini-divider"></div>
+        <%= globe_toggle target: "civilianToggle", action: "toggleFlightFilter", label: "Civilian", dot: "#4fc3f7", checked: true %>
+        <%= globe_toggle target: "militaryToggle", action: "toggleFlightFilter", label: "Military", dot: "#ef5350", checked: true %>
+        <%= globe_toggle target: "trailsToggle", action: "toggleTrails", label: "Flight Trails" %>
+        <div class="sb-airline-filter" data-globe-target="airlineFilter" style="display:none;">
+          <div class="sb-filter-label">AIRLINES</div>
+          <div class="sb-airline-chips" data-globe-target="airlineChips"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Events ── %>
+  <div class="sb-section" data-section="events">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #ff7043;"></span>
+      <span class="sb-section-title">Events</span>
+      <span class="sb-section-count" id="sec-count-events"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="earthquakes" data-globe-target="qlEarthquakes">
+        <i class="fa-solid fa-house-crack sb-layer-icon" style="color: #ff7043;"></i>
+        <span class="sb-layer-name">Earthquakes</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="events" data-globe-target="qlEvents">
+        <i class="fa-solid fa-bolt sb-layer-icon" style="color: #66bb6a;"></i>
+        <span class="sb-layer-name">Natural Events</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="fireHotspots" data-globe-target="qlFireHotspots">
+        <i class="fa-solid fa-fire sb-layer-icon" style="color: #ff5722;"></i>
+        <span class="sb-layer-name">Fire Hotspots</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="weather" data-globe-target="qlWeather">
+        <i class="fa-solid fa-cloud-sun-rain sb-layer-icon" style="color: #1e88e5;"></i>
+        <span class="sb-layer-name">Weather</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <%# Weather sublayer panel %>
+      <div data-globe-target="weatherPanel" style="display:none;" class="wx-panel"></div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="conflicts" data-globe-target="qlConflicts">
+        <i class="fa-solid fa-crosshairs sb-layer-icon" style="color: #f44336;"></i>
+        <span class="sb-layer-name">Armed Conflicts</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="news" data-globe-target="qlNews">
+        <i class="fa-solid fa-newspaper sb-layer-icon" style="color: #ff9800;"></i>
+        <span class="sb-layer-name">News</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <%# News arc controls %>
+      <div class="arc-controls" data-globe-target="newsArcControls" style="display:none;">
+        <div class="arc-controls-row">
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="newsArcsToggle" data-action="change->globe#toggleNewsArcs">
+            <span class="arc-mini-track"></span>
+            <span>Arcs</span>
+          </label>
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="newsBlobsToggle" data-action="change->globe#toggleNewsBlobs">
+            <span class="arc-mini-track"></span>
+            <span>Blobs</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Infrastructure ── %>
+  <div class="sb-section" data-section="infrastructure">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #00bcd4;"></span>
+      <span class="sb-section-title">Infrastructure</span>
+      <span class="sb-section-count" id="sec-count-infrastructure"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="cables" data-globe-target="qlCables">
+        <i class="fa-solid fa-network-wired sb-layer-icon" style="color: #00bcd4;"></i>
+        <span class="sb-layer-name">Submarine Cables</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="pipelines" data-globe-target="qlPipelines">
+        <i class="fa-solid fa-oil-well sb-layer-icon" style="color: #ff6d00;"></i>
+        <span class="sb-layer-name">Oil & Gas Pipelines</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="railways" data-globe-target="qlRailways">
+        <i class="fa-solid fa-train sb-layer-icon" style="color: #90a4ae;"></i>
+        <span class="sb-layer-name">Railways</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="powerPlants" data-globe-target="qlPowerPlants">
+        <i class="fa-solid fa-plug sb-layer-icon" style="color: #ffc107;"></i>
+        <span class="sb-layer-name">Power Plants</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="cameras" data-globe-target="qlCameras">
+        <i class="fa-solid fa-video sb-layer-icon" style="color: #29b6f6;"></i>
+        <span class="sb-layer-name">Webcams</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="financial" data-globe-target="qlFinancial">
+        <i class="fa-solid fa-chart-line sb-layer-icon" style="color: #66bb6a;"></i>
+        <span class="sb-layer-name">Markets</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Cyber ── %>
+  <div class="sb-section" data-section="cyber">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #69f0ae;"></span>
+      <span class="sb-section-title">Cyber</span>
+      <span class="sb-section-count" id="sec-count-cyber"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="traffic" data-globe-target="qlTraffic">
+        <i class="fa-solid fa-globe sb-layer-icon" style="color: #69f0ae;"></i>
+        <span class="sb-layer-name">Internet Traffic</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <%# Traffic arc controls %>
+      <div class="arc-controls" data-globe-target="trafficArcControls" style="display:none;">
+        <div class="arc-controls-row">
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="trafficArcsToggle" data-action="change->globe#toggleTrafficArcs">
+            <span class="arc-mini-track"></span>
+            <span>Arcs</span>
+          </label>
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="trafficBlobsToggle" data-action="change->globe#toggleTrafficBlobs">
+            <span class="arc-mini-track"></span>
+            <span>Blobs</span>
+          </label>
+        </div>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="outages" data-globe-target="qlOutages">
+        <i class="fa-solid fa-wifi sb-layer-icon" style="color: #e040fb;"></i>
+        <span class="sb-layer-name">Internet Outages</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="gpsJamming" data-globe-target="qlGpsJamming">
+        <i class="fa-solid fa-satellite-dish sb-layer-icon" style="color: #f44336;"></i>
+        <span class="sb-layer-name">GPS Jamming</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Satellites ── (sub-categories) %>
+  <div class="sb-section" data-section="satellites">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #ab47bc;"></span>
+      <span class="sb-section-title">Satellite Categories</span>
+      <span class="sb-active-badge" data-globe-target="satBadge" style="display:none;"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-chip-grid" role="group" aria-label="Satellite categories">
+        <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations" style="--chip-color: #ff5252;">ISS</button>
+        <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink" style="--chip-color: #ab47bc;">Starlink</button>
+        <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation" style="--chip-color: #66bb6a;">GPS</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass" style="--chip-color: #5c6bc0;">GLONASS</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo" style="--chip-color: #0288d1;">Galileo</button>
+        <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather" style="--chip-color: #ffa726;">Weather</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource" style="--chip-color: #29b6f6;">Earth Res</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science" style="--chip-color: #ec407a;">Science</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military" style="--chip-color: #ef5350;">Military</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst" style="--chip-color: #b71c1c;">Classified</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo" style="--chip-color: #78909c;">GEO</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium" style="--chip-color: #26c6da;">Iridium</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb" style="--chip-color: #7e57c2;">OneWeb</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet" style="--chip-color: #8d6e63;">Planet</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire" style="--chip-color: #9ccc65;">Spire</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss" style="--chip-color: #42a5f5;">GNSS</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss" style="--chip-color: #78909c;">TDRS</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar" style="--chip-color: #8d6e63;">Radar</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas" style="--chip-color: #26a69a;">SBAS</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="cubesat" style="--chip-color: #ffee58;">CubeSat</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="amateur" style="--chip-color: #ef5350;">Ham Radio</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat" style="--chip-color: #ff8a65;">SAR</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="last-30-days" style="--chip-color: #ff1744;">New Launch</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="beidou" style="--chip-color: #ff6e40;">BeiDou</button>
+        <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="molniya" style="--chip-color: #d50000;">Molniya</button>
+      </div>
+      <div class="sb-mini-divider"></div>
+      <%= globe_toggle target: "satOrbitsToggle", action: "toggleSatOrbits", label: "Orbit Trails" %>
+      <%= globe_toggle target: "satHeatmapToggle", action: "toggleSatHeatmap", label: "Coverage Heatmap" %>
+      <%= globe_toggle target: "buildHeatmapToggle", action: "toggleBuildHeatmap", label: "Build Heatmap" %>
+    </div>
+  </div>
+
+  <%# ── Map & Tools ── %>
+  <div class="sb-section" data-section="map">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #ffd54f;"></span>
+      <span class="sb-section-title">Map & Tools</span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="cities" data-globe-target="qlCities">
+        <i class="fa-solid fa-city sb-layer-icon" style="color: #ffd54f;"></i>
+        <span class="sb-layer-name">Cities</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="airports" data-globe-target="qlAirports">
+        <i class="fa-solid fa-tower-broadcast sb-layer-icon" style="color: #81c784;"></i>
+        <span class="sb-layer-name">Airports</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="borders" data-globe-target="qlBorders">
+        <i class="fa-solid fa-map sb-layer-icon" style="color: #4fc3f7;"></i>
+        <span class="sb-layer-name">Borders</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="terrain" data-globe-target="qlTerrain">
+        <i class="fa-solid fa-mountain sb-layer-icon" style="color: #a1887f;"></i>
+        <span class="sb-layer-name">3D Terrain</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-mini-divider"></div>
+      <div class="sb-slider-row">
+        <span class="sb-slider-label">Terrain Exag.</span>
+        <input type="range" min="1" max="10" step="0.5" value="1"
+               class="sb-slider"
+               data-globe-target="terrainExaggeration"
+               data-action="input->globe#setTerrainExaggeration"
+               aria-label="Terrain exaggeration">
+        <span class="sb-slider-val">1&times;</span>
+      </div>
+      <div class="sb-tool-row">
+        <i class="fa-solid fa-building" aria-hidden="true"></i>
+        <span class="sb-tool-label">3D Buildings</span>
+        <select class="sb-select-sm" data-globe-target="buildingsSelect" data-action="change->globe#toggleBuildings" aria-label="3D building style">
+          <option value="off">Off</option>
+          <option value="osm">OSM Blocks</option>
+          <option value="google">Photorealistic</option>
+        </select>
+      </div>
+      <div class="sb-mini-divider"></div>
+      <div class="sb-tool-row" data-action="click->globe#toggleCountrySelect" id="country-select-btn" data-tip="Click countries on the globe to select" data-tip-pos="right" role="button" tabindex="0">
+        <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i>
+        <span>Select Countries</span>
+      </div>
+      <div class="sb-tool-row" data-action="click->globe#enterDrawMode" data-tip="Draw a circle to filter area" data-tip-pos="right" role="button" tabindex="0">
+        <i class="fa-solid fa-circle-dot" aria-hidden="true"></i>
+        <span>Draw Select</span>
+      </div>
+      <div class="sb-tool-row sb-deselect-row" data-globe-target="deselectAllBtn" data-action="click->globe#clearCountrySelection" style="display:none;" data-tip="Clear all selected countries" data-tip-pos="right" role="button" tabindex="0">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        <span>Deselect All</span>
+      </div>
+    </div>
+  </div>
+</div>

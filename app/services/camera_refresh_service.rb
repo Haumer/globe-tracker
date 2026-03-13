@@ -26,7 +26,7 @@ class CameraRefreshService
       threads << Thread.new { fetch_windy }
     end
 
-    if should_fetch?("youtube") && ENV["YOUTUBE_API_KEY"].present?
+    if should_fetch?("youtube") && ENV["YOUTUBE_API_KEY"].present? && !youtube_quota_exhausted?
       threads << Thread.new { fetch_youtube }
     end
 
@@ -206,7 +206,11 @@ class CameraRefreshService
 
   # ── YouTube ───────────────────────────────────────────────
 
+  YOUTUBE_QUOTA_COOLDOWN = 1.hour
+
   def fetch_youtube
+    return [] if youtube_quota_exhausted?
+
     api_key = ENV["YOUTUBE_API_KEY"]
     radius_km = [(((@north - @south) * 111) / 2).round, 500].min
     radius_km = [radius_km, 10].max
@@ -220,6 +224,12 @@ class CameraRefreshService
       maxResults: 25,
       key: api_key,
     )
+
+    if search[:quota_exceeded]
+      mark_youtube_quota_exhausted!
+      return []
+    end
+
     items = search["items"] || []
     return [] if items.empty?
 
@@ -277,10 +287,30 @@ class CameraRefreshService
     resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
       http.request(Net::HTTP::Get.new(uri))
     end
-    resp.is_a?(Net::HTTPSuccess) ? JSON.parse(resp.body) : {}
+    return JSON.parse(resp.body) if resp.is_a?(Net::HTTPSuccess)
+
+    # Detect quota exhaustion (403 with quotaExceeded reason)
+    if resp.code.to_i == 403
+      body = JSON.parse(resp.body) rescue {}
+      reason = body.dig("error", "errors", 0, "reason")
+      if reason == "quotaExceeded" || reason == "dailyLimitExceeded"
+        Rails.logger.warn("CameraRefreshService: YouTube API quota exhausted — skipping for #{YOUTUBE_QUOTA_COOLDOWN}")
+        return { quota_exceeded: true }
+      end
+    end
+
+    {}
   rescue => e
     Rails.logger.warn("CameraRefreshService youtube_json: #{e.message}")
     {}
+  end
+
+  def youtube_quota_exhausted?
+    Rails.cache.read("youtube_api_quota_exhausted").present?
+  end
+
+  def mark_youtube_quota_exhausted!
+    Rails.cache.write("youtube_api_quota_exhausted", true, expires_in: YOUTUBE_QUOTA_COOLDOWN)
   end
 
   # ── NYC DOT ───────────────────────────────────────────────

@@ -1,5 +1,21 @@
 function C() { return window.Cesium }
 
+// ── Standard entity label config ─────────────────────────────
+// Use these for consistent sizing/positioning across all layers.
+export const LABEL_DEFAULTS = {
+  font: "13px JetBrains Mono, monospace",
+  outlineWidth: 3,
+  style: () => C().LabelStyle.FILL_AND_OUTLINE,
+  outlineColor: () => C().Color.BLACK.withAlpha(0.8),
+  scaleByDistance: () => new (C()).NearFarScalar(5e4, 1, 5e6, 0.35),
+  // Labels fade in only when close — prevents jumbled text at far zoom
+  translucencyByDistance: () => new (C()).NearFarScalar(5e4, 1, 5e5, 0),
+  pixelOffsetBelow: () => new (C()).Cartesian2(0, 14),
+  pixelOffsetAbove: () => new (C()).Cartesian2(0, -14),
+  // Always render on top of 3D tiles / terrain — prevents entities hiding under photorealistic buildings
+  disableDepthTest: Number.POSITIVE_INFINITY,
+}
+
 export function screenToLatLng(viewer, screenPos) {
   const Cesium = C()
   const ray = viewer.camera.getPickRay(screenPos)
@@ -135,6 +151,139 @@ export function createSatelliteIcon(color, size = 36) {
   ctx.stroke()
 
   return canvas.toDataURL()
+}
+
+// ── Power plant icons by fuel category ────────────────────────
+// Nuclear: circle-with-dot, Fossil: square, Renewable: triangle, Other: diamond
+const _ppIconCache = new Map()
+
+function _drawPPIcon(ctx, shape, color, s) {
+  ctx.fillStyle = color
+  ctx.strokeStyle = "rgba(0,0,0,0.5)"
+  ctx.lineWidth = 1
+  const h = s / 2
+
+  if (shape === "circle") {
+    // Nuclear — bullseye
+    ctx.beginPath()
+    ctx.arc(h, h, h - 2, 0, Math.PI * 2)
+    ctx.fill(); ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(h, h, 3, 0, Math.PI * 2)
+    ctx.fillStyle = "rgba(0,0,0,0.4)"
+    ctx.fill()
+  } else if (shape === "square") {
+    // Fossil
+    const pad = 3
+    ctx.fillRect(pad, pad, s - pad * 2, s - pad * 2)
+    ctx.strokeRect(pad, pad, s - pad * 2, s - pad * 2)
+  } else if (shape === "triangle") {
+    // Renewable
+    ctx.beginPath()
+    ctx.moveTo(h, 2)
+    ctx.lineTo(s - 2, s - 2)
+    ctx.lineTo(2, s - 2)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+  } else {
+    // Diamond — other
+    ctx.beginPath()
+    ctx.moveTo(h, 2)
+    ctx.lineTo(s - 2, h)
+    ctx.lineTo(h, s - 2)
+    ctx.lineTo(2, h)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+  }
+}
+
+const PP_SHAPE_MAP = {
+  Nuclear: "circle",
+  Coal: "square", Gas: "square", Oil: "square", Petcoke: "square", Cogeneration: "square",
+  Solar: "triangle", Wind: "triangle", Hydro: "triangle",
+  Biomass: "diamond", Geothermal: "diamond", Waste: "diamond", Storage: "diamond", Other: "diamond",
+}
+
+export function createPowerPlantIcon(fuel, color) {
+  const key = fuel + "|" + color
+  if (_ppIconCache.has(key)) return _ppIconCache.get(key)
+  const s = 20
+  const canvas = document.createElement("canvas")
+  canvas.width = s; canvas.height = s
+  const ctx = canvas.getContext("2d")
+  const shape = PP_SHAPE_MAP[fuel] || "diamond"
+  _drawPPIcon(ctx, shape, color, s)
+  const url = canvas.toDataURL()
+  _ppIconCache.set(key, url)
+  return url
+}
+
+// ── Airport icon — crosshair ─────────────────────────────────
+const _apIconCache = new Map()
+
+export function createAirportIcon(color, isMilitary) {
+  const key = color + (isMilitary ? "-mil" : "")
+  if (_apIconCache.has(key)) return _apIconCache.get(key)
+  const s = 18
+  const canvas = document.createElement("canvas")
+  canvas.width = s; canvas.height = s
+  const ctx = canvas.getContext("2d")
+  const h = s / 2
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1.5
+
+  // Crosshair
+  ctx.beginPath()
+  ctx.moveTo(h, 2); ctx.lineTo(h, s - 2) // vertical
+  ctx.moveTo(2, h); ctx.lineTo(s - 2, h) // horizontal
+  ctx.stroke()
+
+  // Center dot
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(h, h, 2, 0, Math.PI * 2)
+  ctx.fill()
+
+  if (isMilitary) {
+    // Small corner marks for military
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(3, 3); ctx.lineTo(6, 3); ctx.moveTo(3, 3); ctx.lineTo(3, 6)
+    ctx.moveTo(s - 3, 3); ctx.lineTo(s - 6, 3); ctx.moveTo(s - 3, 3); ctx.lineTo(s - 3, 6)
+    ctx.stroke()
+  }
+
+  const url = canvas.toDataURL()
+  _apIconCache.set(key, url)
+  return url
+}
+
+// ── Train icon — filled circle ──────────────────────────────
+const _trainIconCache = new Map()
+
+export function createTrainIcon(color) {
+  if (_trainIconCache.has(color)) return _trainIconCache.get(color)
+  const s = 18
+  const canvas = document.createElement("canvas")
+  canvas.width = s; canvas.height = s
+  const ctx = canvas.getContext("2d")
+  const h = s / 2
+
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(h, h, h - 2, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = "rgba(0,0,0,0.5)"
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(h, h, h - 2, 0, Math.PI * 2)
+  ctx.stroke()
+
+  const url = canvas.toDataURL()
+  _trainIconCache.set(color, url)
+  return url
 }
 
 export function getDataSource(viewer, cache, name) {

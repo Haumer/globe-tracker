@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_13_160000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_13_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -302,6 +302,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_160000) do
     t.index ["url"], name: "index_news_events_on_url", unique: true
   end
 
+  create_table "pipelines", force: :cascade do |t|
+    t.string "pipeline_id"
+    t.string "name"
+    t.string "pipeline_type"
+    t.string "status"
+    t.float "length_km"
+    t.jsonb "coordinates"
+    t.string "color"
+    t.string "country"
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pipeline_id"], name: "index_pipelines_on_pipeline_id", unique: true
+  end
+
   create_table "polling_stats", force: :cascade do |t|
     t.string "source", null: false
     t.string "poll_type", null: false
@@ -353,6 +368,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_160000) do
     t.index ["gppd_idnr"], name: "index_power_plants_on_gppd_idnr", unique: true
     t.index ["latitude", "longitude"], name: "index_power_plants_on_latitude_and_longitude"
     t.index ["primary_fuel"], name: "index_power_plants_on_primary_fuel"
+  end
+
+  create_table "railways", force: :cascade do |t|
+    t.integer "category", default: 0
+    t.integer "electrified", default: 0
+    t.string "continent"
+    t.float "min_lat"
+    t.float "max_lat"
+    t.float "min_lng"
+    t.float "max_lng"
+    t.jsonb "coordinates", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["continent"], name: "index_railways_on_continent"
+    t.index ["min_lat", "max_lat", "min_lng", "max_lng"], name: "idx_railways_bbox"
   end
 
   create_table "satellite_tle_snapshots", force: :cascade do |t|

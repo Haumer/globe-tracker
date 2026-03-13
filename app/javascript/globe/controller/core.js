@@ -20,6 +20,10 @@ export function applyCoreMethods(GlobeController) {
     this.trailsVisible = false
     this.trailHistory = new Map()
     this.trackedFlightId = null
+    this.trackedTrainId = null
+    this._trackingHeights = [5000, 50000, 200000, 800000]
+    this._trackingHeightLabels = ["Street", "Close", "Medium", "Far"]
+    this._trackingHeightIdx = 2 // default Medium
     this.showCivilian = true
     this.showMilitary = true
     this.satelliteData = []
@@ -89,6 +93,17 @@ export function applyCoreMethods(GlobeController) {
     this.cablesVisible = false
     this._cableEntities = []
     this._landingPointEntities = []
+    this.pipelinesVisible = false
+    this._pipelineEntities = []
+    this._pipelineData = []
+    this.railwaysVisible = false
+    this._railwayEntities = []
+    this._railwayData = []
+    this.trainsVisible = false
+    this._trainEntities = []
+    this._trainData = []
+    this._trainPollTimer = null
+    this._rightPanelUserClosed = false
     this.outagesVisible = false
     this._outageData = []
     this._outageEntities = []
@@ -138,6 +153,11 @@ export function applyCoreMethods(GlobeController) {
     this._updateClock()
     // JS tooltips — position fixed so they escape overflow:hidden containers
     this._initTooltips()
+    // Stats bar buttons live outside Stimulus scope (in navbar), wire manually
+    const bellBtn = document.getElementById("stat-bell-btn")
+    if (bellBtn) bellBtn.addEventListener("click", () => this.toggleAlertsFeed())
+    const panelBtn = document.getElementById("stat-panel-toggle")
+    if (panelBtn) panelBtn.addEventListener("click", () => this.toggleRightPanel())
     // Restore saved preferences
     this._restorePrefs()
     this.loadCesium()
@@ -242,6 +262,7 @@ export function applyCoreMethods(GlobeController) {
     this.viewer.camera.moveEnd.addEventListener(() => {
       this.saveCamera()
       this._savePrefs()
+      this._updateGlobeOcclusion()
     })
 
     // Click handler for custom detail panel
@@ -332,6 +353,103 @@ export function applyCoreMethods(GlobeController) {
 
   GlobeController.prototype._requestRender = function() { if (this.viewer) this.viewer.scene.requestRender() }
 
+  // ── Globe occlusion culling ────────────────────────────────
+  // Hide entities on the far side of the globe (not visible to camera).
+  // Uses dot-product of camera position and entity position against R².
+  //
+  // Three zones:
+  //   dot > OCC_R_SQ        → fully visible
+  //   OCC_R_SQ_FADE < dot   → fade zone (alpha ramps down in 4 discrete steps)
+  //   dot ≤ OCC_R_SQ_FADE   → hidden
+  //
+  // R² = 6371000² ≈ 4.059e13.  Buffer = R² × 0.85.
+  // The fade zone sits between the true horizon and the buffer edge.
+  // Entities in this zone are behind the globe (depth-tested for ground
+  // entities) but labels/billboards with disableDepthTestDistance fade
+  // smoothly instead of popping in.
+
+  const OCC_R_SQ        = 4.0589641e13  // 6371000² — true horizon
+  const OCC_R_SQ_FADE   = 3.4501195e13  // R² × 0.85 — outer edge of buffer
+  const OCC_FADE_RANGE  = OCC_R_SQ - OCC_R_SQ_FADE
+  // Pre-built white tint colors at discrete alpha steps (avoids per-entity allocation)
+  let OCC_FADE_COLORS = null
+
+  function getOccFadeColors() {
+    if (OCC_FADE_COLORS) return OCC_FADE_COLORS
+    const C = window.Cesium?.Color
+    if (!C) return null
+    OCC_FADE_COLORS = [
+      C.WHITE.withAlpha(0.15),
+      C.WHITE.withAlpha(0.35),
+      C.WHITE.withAlpha(0.55),
+      C.WHITE.withAlpha(0.80),
+      C.WHITE,  // step 4 = full opacity
+    ]
+    return OCC_FADE_COLORS
+  }
+
+  GlobeController.prototype._isPointVisibleOnGlobe = function(lat, lng) {
+    if (!this.viewer) return true
+    const Cesium = window.Cesium
+    if (!this._occScratch) this._occScratch = new Cesium.Cartesian3()
+    const pointPos = Cesium.Cartesian3.fromDegrees(lng, lat, 0, Cesium.Ellipsoid.WGS84, this._occScratch)
+    return Cesium.Cartesian3.dot(this.viewer.camera.positionWC, pointPos) > OCC_R_SQ_FADE
+  }
+
+  GlobeController.prototype._updateGlobeOcclusion = function() {
+    if (!this.viewer) return
+    const cx = this.viewer.camera.positionWC.x
+    const cy = this.viewer.camera.positionWC.y
+    const cz = this.viewer.camera.positionWC.z
+    const clock = this.viewer.clock.currentTime
+    const fadeColors = getOccFadeColors()
+
+    for (const ds of Object.values(this._ds)) {
+      if (!ds.show) continue
+      const entities = ds.entities.values
+      const len = entities.length
+      if (len === 0) continue
+      for (let i = 0; i < len; i++) {
+        const e = entities[i]
+        let pos = e.position
+        if (!pos) continue
+        if (typeof pos.getValue === "function") pos = pos.getValue(clock)
+        if (!pos) continue
+
+        const dot = cx * pos.x + cy * pos.y + cz * pos.z
+
+        if (dot > OCC_R_SQ) {
+          // Fully visible — restore if we faded or hid it
+          if (e._globeOccluded) {
+            e._globeOccluded = false
+            e.show = true
+          }
+          if (e._fadeStep !== undefined && e._fadeStep < 4) {
+            e._fadeStep = 4
+            if (fadeColors && e.billboard) e.billboard.color = fadeColors[4]
+            if (fadeColors && e.label) e.label.fillColor = fadeColors[4]
+          }
+        } else if (dot > OCC_R_SQ_FADE) {
+          // Fade zone — discrete alpha step based on position
+          if (e._globeOccluded) { e._globeOccluded = false; e.show = true }
+          if (fadeColors) {
+            const t = (dot - OCC_R_SQ_FADE) / OCC_FADE_RANGE // 0..1
+            const step = Math.min(Math.floor(t * 4), 3)       // 0..3
+            if (e._fadeStep !== step) {
+              e._fadeStep = step
+              if (e.billboard) e.billboard.color = fadeColors[step]
+              if (e.label) e.label.fillColor = fadeColors[step]
+            }
+          }
+        } else if (e.show) {
+          // Far side — hide
+          e._globeOccluded = true
+          e.show = false
+        }
+      }
+    }
+  }
+
   GlobeController.prototype.createPlaneIcon = function(color) { return createPlaneIcon(color) }
 
   GlobeController.prototype.saveCamera = function() { saveCamera(this.viewer) }
@@ -351,7 +469,9 @@ export function applyCoreMethods(GlobeController) {
       flights: "qlFlights", ships: "qlShips", earthquakes: "qlEarthquakes",
       naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
       cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
-      traffic: "qlTraffic",
+      traffic: "qlTraffic", cables: "qlCables", powerPlants: "qlPowerPlants",
+      notams: "qlNotams", fireHotspots: "qlFireHotspots", weather: "qlWeather",
+      financial: "qlFinancial",
     }
     for (const [layer, targetName] of Object.entries(dotMap)) {
       const hasTarget = "has" + targetName.charAt(0).toUpperCase() + targetName.slice(1) + "Target"
@@ -382,6 +502,19 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype.getViewportBounds = function() { return getViewportBounds(this.viewer) }
+
+  GlobeController.prototype._followEntity = function(lng, lat) {
+    const cam = this.viewer.camera
+    const h = this._trackingHeights[this._trackingHeightIdx]
+    cam.setView({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, h),
+      orientation: {
+        heading: cam.heading,
+        pitch: cam.pitch,
+        roll: cam.roll,
+      },
+    })
+  }
 
   // Returns filter bounds from circle/countries, or viewport if no filter active
 
@@ -604,6 +737,13 @@ export function applyCoreMethods(GlobeController) {
           data.currentAlt += data.verticalRate * dt
         }
 
+        // Skip GPU position update for flights on the far side of the globe
+        if (!this._isPointVisibleOnGlobe(data.currentLat, data.currentLng)) {
+          if (data.entity.show) { data.entity.show = false; data.entity._globeOccluded = true }
+          continue
+        }
+        if (data.entity._globeOccluded) { data.entity.show = true; data.entity._globeOccluded = false }
+
         data.entity.position = Cesium.Cartesian3.fromDegrees(
           data.currentLng, data.currentLat, data.currentAlt
         )
@@ -671,17 +811,21 @@ export function applyCoreMethods(GlobeController) {
     if (this.trackedFlightId) {
       const tracked = this.flightData.get(this.trackedFlightId)
       if (tracked) {
-        const offset = this.viewer.camera.positionCartographic.height
-        this.viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(
-            tracked.currentLng,
-            tracked.currentLat,
-            Math.max(offset, 50000)
-          ),
-        })
+        this._followEntity(tracked.currentLng, tracked.currentLat)
         needsRender = true
       } else {
         this.trackedFlightId = null
+      }
+    }
+
+    // Follow tracked train
+    if (this.trackedTrainId) {
+      const tt = this._trainData?.find(t => t.id === this.trackedTrainId)
+      if (tt) {
+        this._followEntity(tt.lng, tt.lat)
+        needsRender = true
+      } else {
+        this.trackedTrainId = null
       }
     }
 
@@ -690,6 +834,10 @@ export function applyCoreMethods(GlobeController) {
       if (!this._lastSatUpdate || now - this._lastSatUpdate > 2000) {
         this._lastSatUpdate = now
         this.updateSatellitePositions()
+        // Refresh weather↔satellite beams after positions update
+        if (this.weatherVisible && this._weatherSatBeamEntities?.length > 0) {
+          this._renderWeatherSatBeams()
+        }
         needsRender = true
       }
 
@@ -708,6 +856,13 @@ export function applyCoreMethods(GlobeController) {
         }
         needsRender = true
       }
+    }
+
+    // Periodic globe occlusion update for moving entities (every 500ms)
+    if (!this._lastOcclusionUpdate || now - this._lastOcclusionUpdate > 500) {
+      this._lastOcclusionUpdate = now
+      this._updateGlobeOcclusion()
+      needsRender = true
     }
 
     // Update freshness dots every 10s
@@ -762,6 +917,10 @@ export function applyCoreMethods(GlobeController) {
         const d = this.satelliteData.find(s => s.norad_id === noradId); if (!d) return false
         this.toggleSatSelection(noradId); this.showSatelliteDetail(d); return true
       }},
+      { prefix: "train-", skip: [], handler: (id) => {
+        const d = this._trainData?.find(t => t.id === id); if (!d) return false
+        this.showTrainDetail(d); return true
+      }},
       { prefix: "airport-", skip: [], handler: (id) => { this.showAirportDetail(id); return true }},
       { prefix: "eq-", skip: [], handler: (id) => {
         const d = this._earthquakeData.find(e => e.id === id); if (!d) return false
@@ -797,6 +956,12 @@ export function applyCoreMethods(GlobeController) {
           <a href="https://www.submarinecablemap.com/submarine-cable/${props.cableId?.getValue() || ''}" target="_blank" rel="noopener" class="detail-track-btn">View on TeleGeography →</a>
         `
         this.detailPanelTarget.style.display = ""; return true
+      }},
+      { prefix: "pipeline-", skip: ["pipeline-label-"], handler: (_id) => {
+        const props = picked.id.properties; if (!props) return false
+        const pipeId = props.pipelineId?.getValue()
+        if (pipeId) { this.showPipelineDetail(pipeId); return true }
+        return false
       }},
       { prefix: "cam-", skip: [], handler: (id) => {
         const wId = picked.id.properties?.webcamId?.getValue?.()

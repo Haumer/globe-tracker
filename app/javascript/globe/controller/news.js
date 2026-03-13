@@ -173,6 +173,27 @@ export function applyNewsMethods(GlobeController) {
         </div>`,
       })
       this._newsEntities.push(entity)
+
+      // Threat ring for critical/high threat news
+      if (ev.threat === "critical" || ev.threat === "high") {
+        const threatColor = ev.threat === "critical"
+          ? Cesium.Color.fromCssColorString("#f44336")
+          : Cesium.Color.fromCssColorString("#ff5722")
+        const ring = dataSource.entities.add({
+          id: `news-threat-${i}`,
+          position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+          ellipse: {
+            semiMinorAxis: 30000,
+            semiMajorAxis: 30000,
+            material: threatColor.withAlpha(0.06),
+            outline: true,
+            outlineColor: threatColor.withAlpha(0.25),
+            outlineWidth: 1,
+            height: 0,
+          },
+        })
+        this._newsEntities.push(ring)
+      }
     })
 
     // News attention arcs: source publication → event location
@@ -449,7 +470,7 @@ export function applyNewsMethods(GlobeController) {
 
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
     }
 
     const html = arcs.map((arc, idx) => {
@@ -525,7 +546,7 @@ export function applyNewsMethods(GlobeController) {
 
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
     }
 
     // Filter and sort (newest first)
@@ -580,6 +601,7 @@ export function applyNewsMethods(GlobeController) {
             ${timeAgo ? `<span class="nf-card-dot">&middot;</span><span class="nf-card-time">${timeAgo}</span>` : ""}
           </div>
           <div class="nf-card-footer">
+            ${ev.threat && ev.threat !== "info" ? `<span class="nf-card-tone" style="background:${{critical:"rgba(244,67,54,0.2)",high:"rgba(255,87,34,0.15)",medium:"rgba(255,152,0,0.12)",low:"rgba(102,187,106,0.1)"}[ev.threat]};color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a"}[ev.threat]}">${ev.threat}</span>` : ""}
             <span class="nf-card-tone" style="background:${toneBg};color:${toneColor}">${toneLabel}</span>
             <a href="${this._escapeHtml(ev.url || "#")}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation()" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
             <button class="nf-card-locate" data-action="click->globe#locateNewsArticle" data-news-idx="${ev._idx}" title="Locate on map"><i class="fa-solid fa-location-crosshairs"></i></button>
@@ -589,6 +611,46 @@ export function applyNewsMethods(GlobeController) {
     }).join("")
 
     this.newsArticleListTarget.innerHTML = html
+
+    // Fetch and render trending keywords (once per 2 min)
+    this._fetchTrending()
+  }
+
+  GlobeController.prototype._fetchTrending = async function() {
+    const now = Date.now()
+    if (this._lastTrendingFetch && now - this._lastTrendingFetch < 120000) return
+    this._lastTrendingFetch = now
+
+    try {
+      const resp = await fetch("/api/trending")
+      if (!resp.ok) return
+      const trends = await resp.json()
+      if (!trends || trends.length === 0) return
+
+      // Insert trending bar before article list if not present
+      let bar = this.newsArticleListTarget.parentElement?.querySelector(".nf-trending-bar")
+      if (!bar) {
+        bar = document.createElement("div")
+        bar.className = "nf-trending-bar"
+        bar.style.cssText = "padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;gap:4px;align-items:center;"
+        this.newsArticleListTarget.parentElement?.insertBefore(bar, this.newsArticleListTarget)
+      }
+
+      bar.innerHTML = `<span style="font:600 9px var(--gt-mono);color:#ff9800;letter-spacing:1px;margin-right:4px;">TRENDING</span>` +
+        trends.slice(0, 10).map(t => {
+          const heat = t.velocity > 5 ? "#f44336" : t.velocity > 2 ? "#ff9800" : "#90a4ae"
+          return `<span style="font:400 10px var(--gt-mono);color:${heat};cursor:pointer;padding:1px 5px;background:rgba(255,255,255,0.04);border-radius:3px;"
+                    data-action="click->globe#filterNewsByKeyword" data-keyword="${t.keyword}">${t.keyword} <span style="font-size:8px;opacity:0.6;">×${t.recent}</span></span>`
+        }).join("")
+    } catch { /* ignore */ }
+  }
+
+  GlobeController.prototype.filterNewsByKeyword = function(event) {
+    const keyword = event.currentTarget.dataset.keyword
+    if (this.hasNewsArticleSearchTarget) {
+      this.newsArticleSearchTarget.value = keyword
+      this._renderNewsArticleList()
+    }
   }
 
   GlobeController.prototype.focusNewsArticle = function(event) {
@@ -666,7 +728,7 @@ export function applyNewsMethods(GlobeController) {
 
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
     }
 
     const articleList = arc.articles.map(a => {
@@ -743,11 +805,11 @@ export function applyNewsMethods(GlobeController) {
   GlobeController.prototype.showNewsDetail = function(ev) {
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", other: "#90a4ae",
+      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
     }
     const categoryIcons = {
       conflict: "fa-crosshairs", unrest: "fa-bullhorn", disaster: "fa-hurricane",
-      health: "fa-heart-pulse", economy: "fa-chart-line", diplomacy: "fa-handshake", other: "fa-newspaper",
+      health: "fa-heart-pulse", economy: "fa-chart-line", diplomacy: "fa-handshake", cyber: "fa-shield-halved", other: "fa-newspaper",
     }
     const color = categoryColors[ev.category] || "#90a4ae"
     const icon = categoryIcons[ev.category] || "fa-newspaper"
@@ -800,6 +862,14 @@ export function applyNewsMethods(GlobeController) {
           <span class="detail-label">Published</span>
           <span class="detail-value">${timeStr}</span>
         </div>` : ""}
+        ${ev.threat ? `<div class="detail-field">
+          <span class="detail-label">Threat</span>
+          <span class="detail-value" style="color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a",info:"#90a4ae"}[ev.threat] || "#90a4ae"};">${ev.threat.toUpperCase()}</span>
+        </div>` : ""}
+        ${ev.credibility ? `<div class="detail-field">
+          <span class="detail-label">Source</span>
+          <span class="detail-value">${this._formatCredibility(ev.credibility)}</span>
+        </div>` : ""}
       </div>
       <div style="margin:8px 0;">${themeTags}</div>
       <a href="${this._escapeHtml(ev.url)}" target="_blank" rel="noopener" class="detail-track-btn">Read Article →</a>
@@ -811,6 +881,19 @@ export function applyNewsMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 300000),
       duration: 1.5,
     })
+  }
+
+  GlobeController.prototype._formatCredibility = function(cred) {
+    if (!cred) return ""
+    const parts = cred.split("/")
+    const tier = parts[0] || ""
+    const risk = parts[1] || ""
+    const affiliation = parts[2] || ""
+    const tierLabel = { tier1: "Wire/Gov", tier2: "Major", tier3: "Specialty", tier4: "Aggregator" }[tier] || tier
+    const riskColor = { low: "#66bb6a", medium: "#ff9800", high: "#f44336" }[risk] || "#90a4ae"
+    let html = `<span style="color:${riskColor};">${tierLabel}</span>`
+    if (affiliation) html += ` <span style="color:#90a4ae;font-size:9px;">(${affiliation})</span>`
+    return html
   }
 
   // ── GPS Jamming ─────────────────────────────────────────

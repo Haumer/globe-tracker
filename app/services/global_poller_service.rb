@@ -137,6 +137,14 @@ class GlobalPollerService
         MultiNewsService.refresh_if_stale
       end
 
+      poll_source("rss-news", "news") do
+        RssNewsService.refresh_if_stale
+      end
+
+      poll_source("firms", "fire") do
+        FirmsRefreshService.refresh_if_stale
+      end
+
       poll_source("eonet", "natural_event") do
         NaturalEventRefreshService.refresh_if_stale
       end

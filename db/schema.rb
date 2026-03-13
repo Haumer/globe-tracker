@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_13_010344) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_13_012531) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -242,6 +242,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_010344) do
     t.datetime "updated_at", null: false
     t.string "source"
     t.string "title"
+    t.string "credibility"
+    t.string "threat_level"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
     t.index ["published_at"], name: "index_news_events_on_published_at"

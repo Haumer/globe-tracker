@@ -287,6 +287,8 @@ GEM
       actionpack (>= 7.0)
       railties (>= 7.0)
     rexml (3.4.4)
+    rss (0.3.2)
+      rexml
     rubyzip (3.2.2)
     sassc (2.4.0)
       ffi (~> 1.9)
@@ -371,6 +373,7 @@ DEPENDENCIES
   pg (~> 1.1)
   puma (>= 5.0)
   rails (~> 7.1.6)
+  rss
   sassc-rails
   selenium-webdriver
   simple_form!

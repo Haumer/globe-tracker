@@ -133,6 +133,13 @@ class MultiNewsService
     # Cross-source dedup by normalized title similarity
     new_records = dedup_by_title(new_records)
 
+    # Apply threat classification and credibility
+    new_records.each do |record|
+      threat = RssNewsService.new.send(:classify_threat, record[:title].to_s)
+      record[:threat_level] ||= threat[:threat]
+      record[:credibility] ||= "tier2/low" # API sources are generally tier 2
+    end
+
     if new_records.any?
       NewsEvent.upsert_all(new_records, unique_by: :url)
       record_timeline_events(
@@ -142,6 +149,8 @@ class MultiNewsService
         unique_values: new_records.map { |r| r[:url] },
         time_column: :published_at
       )
+
+      TrendingKeywordTracker.ingest(new_records) if defined?(TrendingKeywordTracker)
     end
 
     Rails.cache.write("multi_news_last_fetch", Time.current)

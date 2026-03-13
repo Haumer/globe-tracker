@@ -25,6 +25,8 @@ module Api
           tone: ev.tone,
           level: ev.level,
           category: ev.category,
+          threat: ev.threat_level,
+          credibility: ev.credibility,
           themes: themes,
           source: ev.source,
           time: ev.published_at&.iso8601,

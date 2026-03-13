@@ -2,32 +2,17 @@ require "csv"
 
 class FirmsRefreshService
   extend HttpClient
+  extend Refreshable
   include TimelineRecorder
 
-  # FIRMS API sources → satellite name mapping
   SOURCES = {
     "VIIRS_SNPP_NRT" => "Suomi NPP",
     "VIIRS_NOAA20_NRT" => "NOAA-20",
     "VIIRS_NOAA21_NRT" => "NOAA-21",
-    "MODIS_NRT" => nil, # satellite comes from data itself (Terra/Aqua)
+    "MODIS_NRT" => nil,
   }.freeze
 
-  REFRESH_INTERVAL = 15.minutes
-
-  class << self
-    def refresh_if_stale(force: false)
-      return 0 if !force && !stale?
-      new.refresh
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      FireHotspot.maximum(:fetched_at)
-    end
-  end
+  refreshes model: FireHotspot, interval: 15.minutes
 
   def refresh
     map_key = ENV["FIRMS_MAP_KEY"]
@@ -44,8 +29,6 @@ class FirmsRefreshService
     return 0 if all_records.empty?
 
     FireHotspot.upsert_all(all_records, unique_by: :external_id)
-
-    # Clean old data (>72h)
     FireHotspot.where("acq_datetime < ?", 72.hours.ago).delete_all
 
     record_timeline_events(
@@ -65,7 +48,6 @@ class FirmsRefreshService
   private
 
   def fetch_source(source, map_key, now)
-    # FIRMS CSV endpoint: world, last 24h
     uri = URI("https://firms.modaps.eosdis.nasa.gov/api/area/csv/#{map_key}/#{source}/world/1")
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
@@ -91,14 +73,7 @@ class FirmsRefreshService
       acq_time = row["acq_time"]
       acq_datetime = parse_acq_time(acq_date, acq_time)
 
-      satellite = default_satellite || row["satellite"]&.strip
-      # Normalize satellite names from MODIS data
-      satellite = case satellite
-                  when /terra/i then "Terra"
-                  when /aqua/i then "Aqua"
-                  else satellite
-                  end
-
+      satellite = default_satellite || normalize_satellite(row["satellite"])
       external_id = "#{satellite}_#{lat}_#{lng}_#{acq_date}_#{acq_time}"
 
       records << {
@@ -126,9 +101,16 @@ class FirmsRefreshService
     []
   end
 
+  def normalize_satellite(name)
+    case name&.strip
+    when /terra/i then "Terra"
+    when /aqua/i then "Aqua"
+    else name&.strip
+    end
+  end
+
   def parse_acq_time(date_str, time_str)
     return nil unless date_str.present?
-    # acq_date: "2024-01-15", acq_time: "0354" (HHMM)
     time_str = time_str.to_s.rjust(4, "0")
     Time.parse("#{date_str} #{time_str[0..1]}:#{time_str[2..3]} UTC")
   rescue

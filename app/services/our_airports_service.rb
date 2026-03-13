@@ -2,24 +2,17 @@ require "net/http"
 require "csv"
 
 class OurAirportsService
-  CSV_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv".freeze
-  REFRESH_INTERVAL = 7.days
+  extend Refreshable
 
+  CSV_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv".freeze
   INCLUDED_TYPES = %w[large_airport medium_airport].freeze
+
+  refreshes model: Airport, interval: 7.days
 
   class << self
     def refresh_if_stale(force: false)
       return 0 if !force && !stale?
-
       fetch_and_upsert
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      Airport.maximum(:fetched_at)
     end
 
     private

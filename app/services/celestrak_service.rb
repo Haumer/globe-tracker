@@ -1,6 +1,9 @@
 class CelestrakService
+  extend Refreshable
+
   BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
-  CACHE_TTL = 6 * 3600 # 6 hours in seconds
+
+  refreshes model: Satellite, interval: 6.hours, column: :updated_at
 
   CATEGORY_GROUPS = {
     "stations" => "stations",
@@ -60,7 +63,7 @@ class CelestrakService
     end
 
     def stale?(category: nil)
-      latest_updated_at(category: category).blank? || latest_updated_at(category: category) < CACHE_TTL.seconds.ago
+      latest_updated_at(category: category).blank? || latest_updated_at(category: category) < 6.hours.ago
     end
 
     private

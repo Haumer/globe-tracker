@@ -2,23 +2,17 @@ require "net/http"
 require "json"
 
 class ConflictEventService
+  extend Refreshable
+
   BASE_URL = "https://ucdpapi.pcr.uu.se/api/gedevents/24.1".freeze
   PAGE_SIZE = 1000
-  CACHE_TTL = 1.day
+
+  refreshes model: ConflictEvent, interval: 1.day, column: :updated_at
 
   class << self
     def refresh_if_stale(force: false, year: Date.current.year - 1)
       return 0 if !force && !stale?
-
       fetch_recent(year: year)
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < CACHE_TTL.ago
-    end
-
-    def latest_fetch_at
-      ConflictEvent.maximum(:updated_at)
     end
 
     def fetch_recent(year: Date.current.year - 1)

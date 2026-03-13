@@ -3,38 +3,15 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      bounds = {
-        lamin: params[:lamin]&.to_f,
-        lamax: params[:lamax]&.to_f,
-        lomin: params[:lomin]&.to_f,
-        lomax: params[:lomax]&.to_f
-      }.compact
+      bounds = parse_bounds
 
-      # Fetch from all sources in parallel
       opensky_thread = Thread.new { ::OpenskyService.fetch_flights(bounds: bounds) }
       adsb_thread = Thread.new { ::AdsbService.fetch_flights(bounds: bounds) }
       mil_thread = Thread.new { ::AdsbService.fetch_military }
 
-      opensky_flights = begin
-        opensky_thread.value
-      rescue StandardError => e
-        Rails.logger.error("OpenSky thread error: #{e.message}")
-        []
-      end
-
-      adsb_flights = begin
-        adsb_thread.value
-      rescue StandardError => e
-        Rails.logger.error("ADSB thread error: #{e.message}")
-        []
-      end
-
-      mil_flights = begin
-        mil_thread.value
-      rescue StandardError => e
-        Rails.logger.error("Military flights thread error: #{e.message}")
-        []
-      end
+      opensky_flights = safe_thread_value(opensky_thread, "OpenSky")
+      adsb_flights = safe_thread_value(adsb_thread, "ADSB")
+      mil_flights = safe_thread_value(mil_thread, "Military flights")
 
       # Merge: index by icao24, ADSB.lol wins on duplicates (has military + more data)
       merged = {}

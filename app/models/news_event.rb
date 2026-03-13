@@ -1,9 +1,9 @@
 class NewsEvent < ApplicationRecord
   include BoundsFilterable
+  include TimeRangeQueries
 
   has_many :timeline_events, as: :eventable, dependent: :destroy
 
+  time_range_column :published_at, recent: 24.hours
   scope :recent, -> { where("fetched_at > ?", 24.hours.ago) }
-  scope :on_date, ->(date) { where(published_at: date.beginning_of_day..date.end_of_day) }
-  scope :in_range, ->(from, to) { where(published_at: from..to) }
 end

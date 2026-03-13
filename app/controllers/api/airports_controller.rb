@@ -7,7 +7,8 @@ module Api
 
       airports = Airport.all
       airports = airports.by_type(params[:type]) if params[:type].present?
-      airports = airports.within_bounds(bounds_params) if bounds_params.present?
+      bounds = parse_bounds
+      airports = airports.within_bounds(bounds) if bounds.present?
       airports = airports.order(airport_type: :asc, name: :asc)
 
       expires_in 1.hour, public: true
@@ -25,20 +26,6 @@ module Api
           military: a.is_military,
         }
       }
-    end
-
-    private
-
-    def bounds_params
-      if params[:lamin].present? && params[:lamax].present? &&
-         params[:lomin].present? && params[:lomax].present?
-        {
-          lamin: params[:lamin].to_f,
-          lamax: params[:lamax].to_f,
-          lomin: params[:lomin].to_f,
-          lomax: params[:lomax].to_f,
-        }
-      end
     end
   end
 end

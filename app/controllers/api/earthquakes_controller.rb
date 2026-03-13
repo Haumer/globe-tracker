@@ -3,17 +3,11 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      unless params[:from].present? && params[:to].present?
+      unless parse_time_range
         enqueue_background_refresh(RefreshEarthquakesJob, key: "earthquakes", debounce: 30.seconds) if EarthquakeRefreshService.stale?
       end
 
-      quakes = if params[:from].present? && params[:to].present?
-                 from = Time.parse(params[:from]) rescue 24.hours.ago
-                 to = Time.parse(params[:to]) rescue Time.current
-                 Earthquake.in_range(from, to)
-               else
-                 Earthquake.recent
-               end.order(event_time: :desc).limit(500)
+      quakes = time_scoped(Earthquake).order(event_time: :desc).limit(500)
       render json: quakes.map { |eq|
         {
           id: eq.external_id,

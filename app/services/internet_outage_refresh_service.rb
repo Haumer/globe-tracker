@@ -1,27 +1,14 @@
 class InternetOutageRefreshService
   extend HttpClient
+  extend Refreshable
 
   IODA_BASE = "https://api.ioda.inetintel.cc.gatech.edu/v2".freeze
-  REFRESH_INTERVAL = 5.minutes
+
+  refreshes model: InternetOutage, interval: 5.minutes
 
   class << self
-    def refresh_if_stale(force: false)
-      return 0 if !force && !stale?
-
-      new.refresh
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      InternetOutage.maximum(:fetched_at)
-    end
-
     def cached_summary
       return [] unless File.exist?(summary_cache_path)
-
       JSON.parse(File.read(summary_cache_path), symbolize_names: true)
     rescue StandardError
       []
@@ -126,14 +113,10 @@ class InternetOutageRefreshService
   end
 
   def outage_level(score)
-    if score >= 100_000
-      "critical"
-    elsif score >= 10_000
-      "severe"
-    elsif score >= 1_000
-      "moderate"
-    else
-      "minor"
+    if score >= 100_000 then "critical"
+    elsif score >= 10_000 then "severe"
+    elsif score >= 1_000 then "moderate"
+    else "minor"
     end
   end
 end

@@ -1,10 +1,10 @@
 class FireHotspot < ApplicationRecord
   include BoundsFilterable
+  include TimeRangeQueries
 
   has_many :timeline_events, as: :eventable, dependent: :destroy
 
-  scope :recent, -> { where("acq_datetime > ?", 48.hours.ago) }
-  scope :in_range, ->(from, to) { where(acq_datetime: from..to) }
+  time_range_column :acq_datetime, recent: 48.hours
 
   SATELLITE_NORAD = {
     "Suomi NPP" => 37849,

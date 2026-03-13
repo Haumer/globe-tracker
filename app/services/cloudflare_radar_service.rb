@@ -2,22 +2,16 @@ require "net/http"
 require "json"
 
 class CloudflareRadarService
+  extend Refreshable
+
   BASE = "https://api.cloudflare.com/client/v4/radar".freeze
-  CACHE_TTL = 3600 # 1 hour
+
+  refreshes model: InternetTrafficSnapshot, interval: 1.hour, column: :recorded_at
 
   class << self
     def refresh_if_stale(force: false)
       return nil if !force && !stale?
-
       fetch_snapshot
-    end
-
-    def stale?
-      latest_recorded_at.blank? || latest_recorded_at < CACHE_TTL.seconds.ago
-    end
-
-    def latest_recorded_at
-      InternetTrafficSnapshot.maximum(:recorded_at)
     end
 
     def fetch_snapshot
@@ -27,9 +21,8 @@ class CloudflareRadarService
         return nil
       end
 
-      # Use DB timestamp as cache check (survives class reloading in dev)
-      last = InternetTrafficSnapshot.maximum(:recorded_at)
-      return nil if last && (Time.current - last) < CACHE_TTL
+      # Refreshable.stale? already checks this, but guard against direct calls
+      return nil unless stale?
 
       traffic = fetch_top_traffic(token)
       attack_origins = fetch_attack_origins(token)

@@ -11,13 +11,7 @@ module Api
       # Cap range to 24 hours
       from = [from, to - 24.hours].max
 
-      bounds = {
-        lamin: params[:lamin]&.to_f,
-        lamax: params[:lamax]&.to_f,
-        lomin: params[:lomin]&.to_f,
-        lomax: params[:lomax]&.to_f
-      }.compact
-
+      bounds = parse_bounds
       interval = (params[:interval] || 30).to_i.clamp(10, 120)
       effective_bounds = bounds.size == 4 ? bounds : {}
 
@@ -112,12 +106,7 @@ module Api
       scope = TimelineEvent.in_range(from, to)
       scope = scope.of_type(types) if types.present?
 
-      bounds = {
-        lamin: params[:lamin]&.to_f,
-        lamax: params[:lamax]&.to_f,
-        lomin: params[:lomin]&.to_f,
-        lomax: params[:lomax]&.to_f
-      }.compact
+      bounds = parse_bounds
       scope = scope.within_bounds(bounds) if bounds.size == 4
 
       timeline_events = scope.order(:recorded_at).limit(2000).includes(:eventable)
@@ -147,7 +136,7 @@ module Api
         base.merge(title: ev.title, categoryId: ev.category_id, categoryTitle: ev.category_title, magnitudeValue: ev.magnitude_value)
       when "news"
         ne = te.eventable
-        themes = ne.themes.is_a?(String) ? (JSON.parse(ne.themes) rescue []) : (ne.themes || [])
+        themes = parse_json_field(ne.themes)
         base.merge(name: ne.name, url: ne.url, tone: ne.tone, level: ne.level, category: ne.category, themes: themes)
       when "gps_jamming"
         gj = te.eventable

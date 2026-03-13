@@ -1,26 +1,11 @@
 class EarthquakeRefreshService
   extend HttpClient
-
+  extend Refreshable
   include TimelineRecorder
 
   FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson".freeze
-  REFRESH_INTERVAL = 5.minutes
 
-  class << self
-    def refresh_if_stale(force: false)
-      return 0 if !force && !stale?
-
-      new.refresh
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      Earthquake.maximum(:fetched_at)
-    end
-  end
+  refreshes model: Earthquake, interval: 5.minutes
 
   def refresh
     data = self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30)

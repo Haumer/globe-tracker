@@ -3,17 +3,13 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      unless params[:from].present? && params[:to].present?
+      unless parse_time_range
         enqueue_background_refresh(RefreshConflictEventsJob, key: "conflict-events", debounce: 15.minutes) if ConflictEventService.stale?
       end
 
-      scope = if params[:from].present? && params[:to].present?
-        ConflictEvent.in_range(params[:from], params[:to])
-      else
-        ConflictEvent.recent
-      end
-
-      scope = scope.within_bounds(bounds_params) if bounds_params
+      scope = time_scoped(ConflictEvent)
+      bounds = parse_bounds
+      scope = scope.within_bounds(bounds) if bounds.present?
 
       events = scope.order(date_start: :desc).limit(2000)
 
@@ -37,15 +33,6 @@ module Api
           headline: e.source_headline,
         }
       }
-    end
-
-    private
-
-    def bounds_params
-      if params[:lamin].present?
-        { lamin: params[:lamin].to_f, lamax: params[:lamax].to_f,
-          lomin: params[:lomin].to_f, lomax: params[:lomax].to_f }
-      end
     end
   end
 end

@@ -245,119 +245,7 @@ export function applyCoreMethods(GlobeController) {
 
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
-        const flightData = this.flightData.get(entityId)
-        if (flightData) {
-          this.toggleFlightSelection(entityId)
-          this.showDetail(entityId, flightData)
-          return
-        }
-        if (typeof entityId === "string" && entityId.startsWith("ship-")) {
-          const mmsi = entityId.replace("ship-", "")
-          const shipData = this.shipData.get(mmsi)
-          if (shipData) {
-            this.toggleShipSelection(mmsi)
-            this.showShipDetail(shipData)
-            return
-          }
-        }
-        if (this.countrySelectMode && typeof entityId === "string" && entityId.startsWith("border-")) {
-          const countryData = this._borderCountryMap?.get(entityId)
-          if (countryData) {
-            this.toggleCountrySelection(countryData.name)
-            this.showBorderDetail()
-            return
-          }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("sat-")) {
-          const noradId = parseInt(entityId.replace("sat-", ""))
-          const satData = this.satelliteData.find(s => s.norad_id === noradId)
-          if (satData) {
-            this.toggleSatSelection(noradId)
-            this.showSatelliteDetail(satData)
-            return
-          }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("airport-")) {
-          const icao = entityId.replace("airport-", "")
-          this.showAirportDetail(icao)
-          return
-        }
-        if (typeof entityId === "string" && entityId.startsWith("eq-")) {
-          const eqId = entityId.replace("eq-", "")
-          const eq = this._earthquakeData.find(e => e.id === eqId)
-          if (eq) { this.showEarthquakeDetail(eq); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("fire-") && !entityId.startsWith("fire-ring-")) {
-          const fireId = entityId.replace("fire-", "")
-          const fire = this._fireHotspotData?.find(f => f.id === fireId)
-          if (fire) { this.showFireHotspotDetail(fire); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("eonet-")) {
-          const eoId = entityId.replace("eonet-", "")
-          const ev = this._naturalEventData.find(e => e.id === eoId)
-          if (ev) { this.showNaturalEventDetail(ev); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("news-arc-")) {
-          const arcIdx = parseInt(entityId.replace(/^news-arc-(?:lbl-|arr-)?/, ""))
-          if (!isNaN(arcIdx)) { this.showNewsArcDetail(arcIdx); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("news-")) {
-          const idx = parseInt(entityId.replace("news-", ""))
-          const ev = this._newsData?.[idx]
-          if (ev) { this.showNewsDetail(ev); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("outage-") && !entityId.startsWith("outage-ring-")) {
-          const code = entityId.replace("outage-", "")
-          this.showOutageDetail(code)
-          return
-        }
-        if (typeof entityId === "string" && entityId.startsWith("cable-")) {
-          const props = picked.id.properties
-          if (props) {
-            const name = props.cableName?.getValue() || "Unknown cable"
-            this.detailContentTarget.innerHTML = `
-              <div class="detail-callsign" style="color:#00bcd4;">
-                <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>Submarine Cable
-              </div>
-              <div class="detail-country">${this._escapeHtml(name)}</div>
-              <a href="https://www.submarinecablemap.com/submarine-cable/${props.cableId?.getValue() || ''}" target="_blank" rel="noopener" class="detail-track-btn">View on TeleGeography →</a>
-            `
-            this.detailPanelTarget.style.display = ""
-            return
-          }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("cam-")) {
-          const camId = entityId.replace("cam-", "")
-          const pickedWebcamId = picked.id.properties?.webcamId?.getValue?.()
-          const cam = this._webcamEntityMap.get(entityId) ||
-            this._webcamData.find(c => String(c.id) === camId || String(c.id) === String(pickedWebcamId))
-          if (cam) { this.showWebcamDetail(cam); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("pp-")) {
-          const ppId = parseInt(entityId.replace("pp-", ""))
-          const pp = this._powerPlantData.find(p => p.id === ppId)
-          if (pp) { this.showPowerPlantDetail(pp); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("conf-") && !entityId.startsWith("conf-ring-")) {
-          const confId = parseInt(entityId.replace("conf-", ""))
-          const c = this._conflictData.find(e => e.id === confId)
-          if (c) { this.showConflictDetail(c); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("traf-") && !entityId.startsWith("traf-atk-") && !entityId.startsWith("traf-arc-")) {
-          const code = entityId.replace("traf-", "")
-          this.showTrafficDetail(code)
-          return
-        }
-        if (typeof entityId === "string" && entityId.startsWith("notam-") && !entityId.startsWith("notam-warn-") && !entityId.startsWith("notam-lbl-")) {
-          const nId = entityId.replace("notam-", "")
-          const n = this._notamData?.find(x => String(x.id) === nId)
-          if (n) { this.showNotamDetail(n); return }
-        }
-        if (typeof entityId === "string" && entityId.startsWith("notam-lbl-")) {
-          const nId = entityId.replace("notam-lbl-", "")
-          const n = this._notamData?.find(x => String(x.id) === nId)
-          if (n) { this.showNotamDetail(n); return }
-        }
+        if (this._handleEntityClick(entityId, picked)) return
       }
 
       // Click on globe surface — select country only in country select mode
@@ -834,6 +722,107 @@ export function applyCoreMethods(GlobeController) {
   GlobeController.prototype._escapeHtml = function(str) {
     if (!str) return ""
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  }
+
+  // Unified click dispatch — returns true if an entity was handled
+  GlobeController.prototype._handleEntityClick = function(entityId, picked) {
+    // Flight (non-prefixed, stored in flightData map)
+    const flightData = this.flightData.get(entityId)
+    if (flightData) {
+      this.toggleFlightSelection(entityId)
+      this.showDetail(entityId, flightData)
+      return true
+    }
+
+    if (typeof entityId !== "string") return false
+
+    // Dispatch table: prefix → handler
+    const handlers = [
+      { prefix: "ship-", skip: [], handler: (id) => {
+        const d = this.shipData.get(id); if (!d) return false
+        this.toggleShipSelection(id); this.showShipDetail(d); return true
+      }},
+      { prefix: "border-", skip: [], handler: (id) => {
+        if (!this.countrySelectMode) return false
+        const d = this._borderCountryMap?.get("border-" + id); if (!d) return false
+        this.toggleCountrySelection(d.name); this.showBorderDetail(); return true
+      }},
+      { prefix: "sat-", skip: [], handler: (id) => {
+        const noradId = parseInt(id)
+        const d = this.satelliteData.find(s => s.norad_id === noradId); if (!d) return false
+        this.toggleSatSelection(noradId); this.showSatelliteDetail(d); return true
+      }},
+      { prefix: "airport-", skip: [], handler: (id) => { this.showAirportDetail(id); return true }},
+      { prefix: "eq-", skip: [], handler: (id) => {
+        const d = this._earthquakeData.find(e => e.id === id); if (!d) return false
+        this.showEarthquakeDetail(d); return true
+      }},
+      { prefix: "fire-", skip: ["fire-ring-"], handler: (id) => {
+        const d = this._fireHotspotData?.find(f => f.id === id); if (!d) return false
+        this.showFireHotspotDetail(d); return true
+      }},
+      { prefix: "eonet-", skip: [], handler: (id) => {
+        const d = this._naturalEventData.find(e => e.id === id); if (!d) return false
+        this.showNaturalEventDetail(d); return true
+      }},
+      { prefix: "news-arc-", skip: [], handler: (_id) => {
+        const idx = parseInt(entityId.replace(/^news-arc-(?:lbl-|arr-)?/, ""))
+        if (isNaN(idx)) return false; this.showNewsArcDetail(idx); return true
+      }},
+      { prefix: "news-", skip: ["news-arc-"], handler: (id) => {
+        const d = this._newsData?.[parseInt(id)]; if (!d) return false
+        this.showNewsDetail(d); return true
+      }},
+      { prefix: "outage-", skip: ["outage-ring-"], handler: (id) => {
+        this.showOutageDetail(id); return true
+      }},
+      { prefix: "cable-", skip: [], handler: (_id) => {
+        const props = picked.id.properties; if (!props) return false
+        const name = props.cableName?.getValue() || "Unknown cable"
+        this.detailContentTarget.innerHTML = `
+          <div class="detail-callsign" style="color:#00bcd4;">
+            <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>Submarine Cable
+          </div>
+          <div class="detail-country">${this._escapeHtml(name)}</div>
+          <a href="https://www.submarinecablemap.com/submarine-cable/${props.cableId?.getValue() || ''}" target="_blank" rel="noopener" class="detail-track-btn">View on TeleGeography →</a>
+        `
+        this.detailPanelTarget.style.display = ""; return true
+      }},
+      { prefix: "cam-", skip: [], handler: (id) => {
+        const wId = picked.id.properties?.webcamId?.getValue?.()
+        const d = this._webcamEntityMap.get("cam-" + id) ||
+          this._webcamData.find(c => String(c.id) === id || String(c.id) === String(wId))
+        if (!d) return false; this.showWebcamDetail(d); return true
+      }},
+      { prefix: "pp-", skip: [], handler: (id) => {
+        const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
+        this.showPowerPlantDetail(d); return true
+      }},
+      { prefix: "conf-", skip: ["conf-ring-"], handler: (id) => {
+        const d = this._conflictData.find(e => e.id === parseInt(id)); if (!d) return false
+        this.showConflictDetail(d); return true
+      }},
+      { prefix: "traf-", skip: ["traf-atk-", "traf-arc-"], handler: (id) => {
+        this.showTrafficDetail(id); return true
+      }},
+      { prefix: "notam-lbl-", skip: [], handler: (id) => {
+        const d = this._notamData?.find(x => String(x.id) === id); if (!d) return false
+        this.showNotamDetail(d); return true
+      }},
+      { prefix: "notam-", skip: ["notam-warn-", "notam-lbl-"], handler: (id) => {
+        const d = this._notamData?.find(x => String(x.id) === id); if (!d) return false
+        this.showNotamDetail(d); return true
+      }},
+    ]
+
+    for (const { prefix, skip, handler } of handlers) {
+      if (!entityId.startsWith(prefix)) continue
+      if (skip.some(s => entityId.startsWith(s))) continue
+      const stripped = entityId.slice(prefix.length)
+      if (handler(stripped)) return true
+    }
+
+    return false
   }
 
   // Extract a URL from a Windy player field, which can be:

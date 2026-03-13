@@ -1,28 +1,15 @@
 class SubmarineCableRefreshService
   extend HttpClient
+  extend Refreshable
 
   CABLE_GEO_URL = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json".freeze
   LANDING_GEO_URL = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json".freeze
-  REFRESH_INTERVAL = 7.days
+
+  refreshes model: SubmarineCable, interval: 7.days
 
   class << self
-    def refresh_if_stale(force: false)
-      return 0 if !force && !stale?
-
-      new.refresh
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      SubmarineCable.maximum(:fetched_at)
-    end
-
     def cached_landing_points
       return [] unless File.exist?(landing_points_cache_path)
-
       JSON.parse(File.read(landing_points_cache_path))
     rescue StandardError
       []

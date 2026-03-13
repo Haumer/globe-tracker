@@ -1,10 +1,10 @@
 require "set"
 
 class NewsRefreshService
+  extend Refreshable
   include TimelineRecorder
 
   FEED_URL = "https://api.gdeltproject.org/api/v1/gkg_geojson".freeze
-  REFRESH_INTERVAL = 15.minutes
   INTERESTING_THEMES = %w[
     ARMEDCONFLICT PROTEST TERROR ECON_BANKRUPTCY ECON_STOCKMARKET
     ENV_EARTHQUAKE ENV_VOLCANO ENV_FLOOD ENV_HURRICANE ENV_WILDFIRE
@@ -15,21 +15,7 @@ class NewsRefreshService
     WB_695_POVERTY CRISIS
   ].freeze
 
-  class << self
-    def refresh_if_stale(force: false)
-      return 0 if !force && !stale?
-
-      new.refresh
-    end
-
-    def stale?
-      latest_fetch_at.blank? || latest_fetch_at < REFRESH_INTERVAL.ago
-    end
-
-    def latest_fetch_at
-      NewsEvent.maximum(:fetched_at)
-    end
-  end
+  refreshes model: NewsEvent, interval: 15.minutes
 
   def refresh
     uri = URI(FEED_URL)
@@ -77,8 +63,8 @@ class NewsRefreshService
         latitude: lat,
         longitude: lng,
         tone: tone.round(1),
-        level: tone_level(tone),
-        category: categorize(matched_themes),
+        level: ThreatClassifier.tone_level(tone),
+        category: ThreatClassifier.categorize_themes(matched_themes),
         themes: matched_themes.first(5),
         published_at: published_at,
         fetched_at: now,
@@ -107,37 +93,5 @@ class NewsRefreshService
   rescue StandardError => e
     Rails.logger.error("NewsRefreshService: #{e.message}")
     0
-  end
-
-  private
-
-  def tone_level(tone)
-    if tone <= -5
-      "critical"
-    elsif tone <= -2
-      "negative"
-    elsif tone <= 2
-      "neutral"
-    else
-      "positive"
-    end
-  end
-
-  def categorize(themes)
-    if themes.any? { |theme| theme.include?("ARMEDCONFLICT") || theme.include?("MILITARY") || theme.include?("TERROR") }
-      "conflict"
-    elsif themes.any? { |theme| theme.include?("PROTEST") || theme.include?("REBELLION") || theme.include?("COUP") }
-      "unrest"
-    elsif themes.any? { |theme| theme.include?("ENV_") || theme.include?("EARTHQUAKE") || theme.include?("VOLCANO") || theme.include?("FLOOD") || theme.include?("WILDFIRE") || theme.include?("HURRICANE") }
-      "disaster"
-    elsif themes.any? { |theme| theme.include?("HEALTH") || theme.include?("PANDEMIC") || theme.include?("EPIDEMIC") || theme.include?("MEDICAL") }
-      "health"
-    elsif themes.any? { |theme| theme.include?("ECON_") || theme.include?("POVERTY") || theme.include?("FAMINE") }
-      "economy"
-    elsif themes.any? { |theme| theme.include?("PEACE") || theme.include?("CEASEFIRE") }
-      "diplomacy"
-    else
-      "other"
-    end
   end
 end

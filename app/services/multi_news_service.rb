@@ -135,7 +135,7 @@ class MultiNewsService
 
     # Apply threat classification and credibility
     new_records.each do |record|
-      threat = RssNewsService.new.send(:classify_threat, record[:title].to_s)
+      threat = ThreatClassifier.classify(record[:title].to_s)
       record[:threat_level] ||= threat[:threat]
       record[:credibility] ||= "tier2/low" # API sources are generally tier 2
     end
@@ -192,7 +192,7 @@ class MultiNewsService
         lat: lat, lng: lng,
         tone: sentiment_to_tone(article["sentiment"]),
         published_at: parse_time(article["publish_date"]),
-        themes: extract_keywords(article["title"], article["text"]),
+        themes: ThreatClassifier.classify("#{article['title']} #{article['text']&.to_s&.first(500)}")[:keywords].first(5),
         source: "worldnews",
       )
     end
@@ -232,7 +232,7 @@ class MultiNewsService
         lat: lat, lng: lng,
         tone: sentiment_to_tone(article["sentiment"]),
         published_at: parse_time(article["publish_date"]),
-        themes: extract_keywords(article["title"], article["text"]),
+        themes: ThreatClassifier.classify("#{article['title']} #{article['text']&.to_s&.first(500)}")[:keywords].first(5),
         source: "worldnews",
       )
     end
@@ -547,8 +547,8 @@ class MultiNewsService
       latitude: lat,
       longitude: lng,
       tone: tone_val.round(1),
-      level: tone_level(tone_val),
-      category: categorize_title(title),
+      level: ThreatClassifier.tone_level(tone_val),
+      category: ThreatClassifier.classify(title)[:category],
       themes: themes.is_a?(Array) ? themes : [],
       published_at: published_at || now,
       fetched_at: now,
@@ -568,40 +568,6 @@ class MultiNewsService
   def sentiment_to_tone(sentiment)
     return 0.0 if sentiment.nil?
     (sentiment.to_f * 10).round(1)
-  end
-
-  def tone_level(tone)
-    if tone <= -5 then "critical"
-    elsif tone <= -2 then "negative"
-    elsif tone <= 2 then "neutral"
-    else "positive"
-    end
-  end
-
-  CONFLICT_WORDS = %w[war attack military bomb strike kill soldier troops missile drone weapon conflict battle terror].freeze
-  UNREST_WORDS = %w[protest rally march riot coup rebellion uprising demonstration].freeze
-  DISASTER_WORDS = %w[earthquake flood hurricane tornado wildfire volcano tsunami cyclone storm].freeze
-  HEALTH_WORDS = %w[pandemic virus outbreak epidemic vaccine hospital health disease infection].freeze
-  ECONOMY_WORDS = %w[economy stock market inflation recession trade tariff gdp unemployment].freeze
-  DIPLOMACY_WORDS = %w[peace ceasefire treaty summit diplomacy negotiate sanction].freeze
-
-  def categorize_title(title)
-    return "other" if title.blank?
-    lower = title.downcase
-    return "conflict" if CONFLICT_WORDS.any? { |w| lower.include?(w) }
-    return "unrest" if UNREST_WORDS.any? { |w| lower.include?(w) }
-    return "disaster" if DISASTER_WORDS.any? { |w| lower.include?(w) }
-    return "health" if HEALTH_WORDS.any? { |w| lower.include?(w) }
-    return "economy" if ECONOMY_WORDS.any? { |w| lower.include?(w) }
-    return "diplomacy" if DIPLOMACY_WORDS.any? { |w| lower.include?(w) }
-    "other"
-  end
-
-  def extract_keywords(title, text)
-    combined = "#{title} #{text&.to_s&.first(500)}"
-    all_words = CONFLICT_WORDS + UNREST_WORDS + DISASTER_WORDS + HEALTH_WORDS + ECONOMY_WORDS + DIPLOMACY_WORDS
-    lower = combined.downcase
-    all_words.select { |w| lower.include?(w) }.first(5)
   end
 
   # Dedup records by normalized title similarity (Jaccard on word sets)

@@ -5,18 +5,12 @@ module Api
     def index
       outages = []
 
-      unless params[:from].present? && params[:to].present?
+      unless parse_time_range
         enqueue_background_refresh(RefreshInternetOutagesJob, key: "internet-outages", debounce: 30.seconds) if InternetOutageRefreshService.stale?
         outages = InternetOutageRefreshService.cached_summary
       end
 
-      recent_events = if params[:from].present? && params[:to].present?
-                        from = Time.parse(params[:from]) rescue 24.hours.ago
-                        to = Time.parse(params[:to]) rescue Time.current
-                        InternetOutage.in_range(from, to)
-                      else
-                        InternetOutage.recent
-                      end.order(started_at: :desc).limit(100)
+      recent_events = time_scoped(InternetOutage).order(started_at: :desc).limit(100)
       render json: {
         summary: outages.sort_by { |o| -o[:score] }.first(50),
         events: recent_events.map { |ev|

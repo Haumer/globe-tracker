@@ -130,8 +130,11 @@ class MultiNewsService
     existing_urls = NewsEvent.where(url: all_records.map { |r| r[:url] }).pluck(:url).to_set
     new_records = all_records.reject { |r| existing_urls.include?(r[:url]) }
 
-    # Cross-source dedup by normalized title similarity
-    new_records = dedup_by_title(new_records)
+    # Cross-source dedup by normalized title similarity (including DB titles from GDELT etc.)
+    existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
+      .pluck(:title).compact
+      .map { |t| normalize_title(t) }
+    new_records = dedup_by_title(new_records, existing_titles: existing_titles)
 
     # Apply threat classification and credibility
     new_records.each do |record|
@@ -571,8 +574,8 @@ class MultiNewsService
   end
 
   # Dedup records by normalized title similarity (Jaccard on word sets)
-  def dedup_by_title(records)
-    seen = []
+  def dedup_by_title(records, existing_titles: [])
+    seen = existing_titles.dup
     records.select do |record|
       title = record[:title]
       if title.blank?

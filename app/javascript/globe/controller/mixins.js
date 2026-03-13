@@ -14,6 +14,9 @@ import { applyAlertsMethods } from "./alerts"
 import { applyConnectionsMethods } from "./connections"
 import { applyMiniTimelineMethods } from "./mini_timeline"
 import { applyFiresMethods } from "./fires"
+import { applyWeatherMethods } from "./weather"
+import { applyInsightsMethods } from "./insights"
+import { applyFinancialMethods } from "./financial"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
@@ -32,4 +35,7 @@ export function applyGlobeControllerMixins(GlobeController) {
   applyConnectionsMethods(GlobeController)
   applyMiniTimelineMethods(GlobeController)
   applyFiresMethods(GlobeController)
+  applyWeatherMethods(GlobeController)
+  applyInsightsMethods(GlobeController)
+  applyFinancialMethods(GlobeController)
 }

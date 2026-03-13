@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_13_012531) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_13_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -51,6 +51,56 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_012531) do
     t.index ["user_id", "seen", "created_at"], name: "index_alerts_on_user_id_and_seen_and_created_at"
     t.index ["user_id"], name: "index_alerts_on_user_id"
     t.index ["watch_id"], name: "index_alerts_on_watch_id"
+  end
+
+  create_table "cameras", force: :cascade do |t|
+    t.string "webcam_id", null: false
+    t.string "source", null: false
+    t.string "title"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.string "status", default: "active"
+    t.string "camera_type"
+    t.boolean "is_live", default: false
+    t.string "player_url"
+    t.string "image_url"
+    t.string "preview_url"
+    t.string "city"
+    t.string "region"
+    t.string "country"
+    t.string "video_id"
+    t.string "channel_title"
+    t.integer "view_count"
+    t.jsonb "metadata", default: {}
+    t.datetime "last_checked_at"
+    t.datetime "fetched_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_cameras_on_expires_at"
+    t.index ["fetched_at"], name: "index_cameras_on_fetched_at"
+    t.index ["latitude", "longitude"], name: "idx_cameras_geo"
+    t.index ["source"], name: "index_cameras_on_source"
+    t.index ["status"], name: "index_cameras_on_status"
+    t.index ["webcam_id", "source"], name: "idx_cameras_dedup", unique: true
+  end
+
+  create_table "commodity_prices", force: :cascade do |t|
+    t.string "symbol", null: false
+    t.string "category", null: false
+    t.string "name", null: false
+    t.decimal "price", precision: 15, scale: 4
+    t.decimal "change_pct", precision: 8, scale: 4
+    t.string "unit"
+    t.float "latitude"
+    t.float "longitude"
+    t.string "region"
+    t.datetime "recorded_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_commodity_prices_on_category"
+    t.index ["recorded_at"], name: "index_commodity_prices_on_recorded_at"
+    t.index ["symbol", "recorded_at"], name: "index_commodity_prices_on_symbol_and_recorded_at", unique: true
   end
 
   create_table "conflict_events", force: :cascade do |t|

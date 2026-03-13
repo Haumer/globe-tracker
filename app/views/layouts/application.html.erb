@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+    <meta name="owm-api-key" content="<%= ENV['OPENWEATHERMAP_API_KEY'] %>">
+    <%= action_cable_meta_tag %>
+    <% if current_user %>
+      <meta name="current-user-id" content="<%= current_user.id %>">
+    <% end %>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

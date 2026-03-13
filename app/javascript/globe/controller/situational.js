@@ -244,6 +244,12 @@ export function applySituationalMethods(GlobeController) {
     const alertBadge = eq.alert ? `<span class="event-alert event-alert-${eq.alert}">${eq.alert.toUpperCase()}</span>` : ""
     const tsunamiBadge = eq.tsunami ? `<span class="event-alert event-alert-tsunami">TSUNAMI</span>` : ""
 
+    const shakeMapBtn = eq.mag >= 4.0
+      ? `<button class="detail-track-btn" style="background:rgba(255,112,67,0.15);border-color:rgba(255,112,67,0.3);color:#ff7043;" data-action="click->globe#toggleShakeMap" data-eq-lat="${eq.lat}" data-eq-lng="${eq.lng}" data-eq-mag="${eq.mag}" data-eq-depth="${eq.depth}" data-eq-id="${eq.id}">
+          <i class="fa-solid fa-bullseye" style="margin-right:4px;"></i>ShakeMap Intensity
+        </button>`
+      : ""
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign">M${eq.mag.toFixed(1)} Earthquake</div>
       <div class="detail-country">${eq.title}</div>
@@ -266,11 +272,13 @@ export function applySituationalMethods(GlobeController) {
           <span class="detail-value">${eq.lat.toFixed(2)}°, ${eq.lng.toFixed(2)}°</span>
         </div>
       </div>
+      ${shakeMapBtn}
       ${typeof eq.url === "string" && eq.url.startsWith("http") ? `<a href="${eq.url}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${eq.lat}" data-lng="${eq.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
       ${this._connectionsPlaceholder()}
+      <div class="shakemap-infra" data-globe-shakemap-infra style="display:none;"></div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("earthquake", eq.lat, eq.lng)
@@ -281,6 +289,218 @@ export function applySituationalMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 500000),
       duration: 1.5,
     })
+  }
+
+  // ── ShakeMap Intensity Visualization ──
+
+  // MMI color scale (Modified Mercalli Intensity)
+  GlobeController.prototype._mmiColors = {
+    2: { color: "#acd8e9", label: "II - Weak" },
+    3: { color: "#acd8e9", label: "III - Weak" },
+    4: { color: "#83d0da", label: "IV - Light" },
+    5: { color: "#7bc87f", label: "V - Moderate" },
+    6: { color: "#f9f518", label: "VI - Strong" },
+    7: { color: "#fab72a", label: "VII - Very Strong" },
+    8: { color: "#f68528", label: "VIII - Severe" },
+    9: { color: "#e9001a", label: "IX - Violent" },
+    10: { color: "#c80000", label: "X - Extreme" },
+  }
+
+  // Wald et al. (1999) IPE: compute distance (km) at which MMI drops to a given level
+  // MMI = 3.66 + 1.08*M - 1.60*log10(R) - 0.0048*R
+  // Solved iteratively for R given MMI and M
+  GlobeController.prototype._mmiRadius = function(mag, depth, targetMmi) {
+    // Use simplified Atkinson & Wald (2007) for shallow crustal events
+    // MMI = c0 + c1*M + c2*ln(R) + c3*R  where R = sqrt(d^2 + h^2)
+    // Coefficients for active tectonic regions:
+    const c0 = 2.085, c1 = 1.428, c2 = -1.402, c3 = 0.0, h = Math.max(depth, 5)
+    // Solve: targetMmi = c0 + c1*M + c2*ln(sqrt(dist^2 + h^2))
+    // c2*ln(sqrt(dist^2+h^2)) = targetMmi - c0 - c1*M
+    // ln(sqrt(dist^2+h^2)) = (targetMmi - c0 - c1*M) / c2
+    // sqrt(dist^2+h^2) = exp((targetMmi - c0 - c1*M) / c2)
+    const rhs = (targetMmi - c0 - c1 * mag) / c2
+    const R = Math.exp(rhs) // hypocentral distance in km
+    const dist = Math.sqrt(Math.max(R * R - h * h, 0))
+    return dist > 0 && dist < 2000 ? dist : 0
+  }
+
+  GlobeController.prototype.toggleShakeMap = function(event) {
+    const btn = event.currentTarget
+    const lat = parseFloat(btn.dataset.eqLat)
+    const lng = parseFloat(btn.dataset.eqLng)
+    const mag = parseFloat(btn.dataset.eqMag)
+    const depth = parseFloat(btn.dataset.eqDepth)
+    const eqId = btn.dataset.eqId
+
+    // Toggle off if same earthquake
+    if (this._shakeMapEqId === eqId && this._shakeMapEntities?.length > 0) {
+      this._clearShakeMap()
+      btn.style.opacity = "1"
+      const infraPanel = this.detailContentTarget.querySelector("[data-globe-shakemap-infra]")
+      if (infraPanel) infraPanel.style.display = "none"
+      return
+    }
+
+    this._clearShakeMap()
+    this._shakeMapEqId = eqId
+    btn.style.opacity = "0.6"
+    this._renderShakeMap(lat, lng, mag, depth)
+    this._fetchShakeMapInfra(lat, lng, mag, depth)
+  }
+
+  GlobeController.prototype._renderShakeMap = function(lat, lng, mag, depth) {
+    const Cesium = window.Cesium
+    const ds = this.getEventsDataSource()
+    this._shakeMapEntities = []
+
+    // Compute rings from highest intensity outward
+    const maxMmi = Math.min(Math.round(1.5 * mag - 1), 10)
+    const rings = []
+
+    for (let mmi = maxMmi; mmi >= 2; mmi--) {
+      const radiusKm = this._mmiRadius(mag, depth, mmi)
+      if (radiusKm <= 0 || radiusKm > 1500) continue
+      const info = this._mmiColors[mmi]
+      if (!info) continue
+      rings.push({ mmi, radiusKm, color: info.color, label: info.label })
+    }
+
+    // Render from outermost to innermost (so inner rings draw on top)
+    rings.reverse().forEach((ring, idx) => {
+      const cesiumColor = Cesium.Color.fromCssColorString(ring.color)
+      const radiusM = ring.radiusKm * 1000
+
+      // Filled ellipse
+      const ellipse = ds.entities.add({
+        id: `shake-fill-${ring.mmi}`,
+        position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+        ellipse: {
+          semiMajorAxis: radiusM,
+          semiMinorAxis: radiusM,
+          material: cesiumColor.withAlpha(0.08 + idx * 0.02),
+          outline: true,
+          outlineColor: cesiumColor.withAlpha(0.5),
+          outlineWidth: ring.mmi >= 7 ? 2 : 1,
+          height: 0,
+        },
+      })
+      this._shakeMapEntities.push(ellipse)
+
+      // Label at edge of ring
+      const labelAngle = Math.PI / 4 // 45° northeast
+      const labelLat = lat + (ring.radiusKm / 111) * Math.cos(labelAngle)
+      const labelLng = lng + (ring.radiusKm / (111 * Math.cos(lat * Math.PI / 180))) * Math.sin(labelAngle)
+
+      const label = ds.entities.add({
+        id: `shake-lbl-${ring.mmi}`,
+        position: Cesium.Cartesian3.fromDegrees(labelLng, labelLat, 0),
+        label: {
+          text: `MMI ${ring.mmi}\n${ring.radiusKm.toFixed(0)} km`,
+          font: "10px JetBrains Mono, monospace",
+          fillColor: cesiumColor,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+          pixelOffset: new Cesium.Cartesian2(4, 0),
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 1.0, 3e6, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1.0, 5e6, 0.0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._shakeMapEntities.push(label)
+    })
+
+    this._requestRender()
+  }
+
+  GlobeController.prototype._fetchShakeMapInfra = async function(lat, lng, mag, depth) {
+    const maxRadiusKm = this._mmiRadius(mag, depth, 4) // MMI IV = felt
+    if (maxRadiusKm <= 0) return
+
+    const dlat = maxRadiusKm / 111
+    const dlng = maxRadiusKm / (111 * Math.cos(lat * Math.PI / 180))
+    const bounds = `north=${(lat + dlat).toFixed(4)}&south=${(lat - dlat).toFixed(4)}&east=${(lng + dlng).toFixed(4)}&west=${(lng - dlng).toFixed(4)}`
+
+    const infraPanel = this.detailContentTarget.querySelector("[data-globe-shakemap-infra]")
+    if (!infraPanel) return
+    infraPanel.style.display = ""
+    infraPanel.innerHTML = '<div style="font:400 10px var(--gt-mono);color:#888;padding:8px 0;">Loading nearby infrastructure...</div>'
+
+    try {
+      const [plantsResp, cablesResp] = await Promise.all([
+        fetch(`/api/power_plants?${bounds}&limit=50`),
+        fetch(`/api/submarine_cables?${bounds}`),
+      ])
+
+      let html = '<div class="shakemap-infra-title"><i class="fa-solid fa-building"></i> INFRASTRUCTURE IN SHAKE ZONE</div>'
+      let hasContent = false
+
+      if (plantsResp.ok) {
+        const plants = await plantsResp.json()
+        const plantList = Array.isArray(plants) ? plants : (plants.power_plants || [])
+        if (plantList.length > 0) {
+          hasContent = true
+          const nuclear = plantList.filter(p => p.primary_fuel === "Nuclear" || p.fuel === "Nuclear")
+          html += `<div class="shakemap-infra-row">`
+          html += `<span class="shakemap-infra-count">${plantList.length}</span> power plant${plantList.length > 1 ? "s" : ""}`
+          if (nuclear.length > 0) html += ` <span class="shakemap-infra-warn">(${nuclear.length} NUCLEAR)</span>`
+          html += `</div>`
+          plantList.slice(0, 5).forEach(p => {
+            const fuel = p.primary_fuel || p.fuel || "Unknown"
+            const cap = p.capacity_mw || p.capacity || 0
+            const isNuclear = fuel === "Nuclear"
+            html += `<div class="shakemap-infra-item${isNuclear ? " shakemap-infra-item--nuclear" : ""}">`
+            html += `<span class="shakemap-infra-fuel">${this._fuelEmoji(fuel)}</span>`
+            html += `<span class="shakemap-infra-name">${this._escapeHtml(p.name || "Unknown")}</span>`
+            html += `<span class="shakemap-infra-cap">${cap > 0 ? cap + " MW" : ""}</span>`
+            html += `</div>`
+          })
+          if (plantList.length > 5) html += `<div class="shakemap-infra-more">+${plantList.length - 5} more</div>`
+        }
+      }
+
+      if (cablesResp.ok) {
+        const cablesData = await cablesResp.json()
+        const cables = Array.isArray(cablesData) ? cablesData : (cablesData.cables || [])
+        if (cables.length > 0) {
+          hasContent = true
+          html += `<div class="shakemap-infra-row" style="margin-top:8px;">`
+          html += `<span class="shakemap-infra-count">${cables.length}</span> submarine cable${cables.length > 1 ? "s" : ""}`
+          html += `</div>`
+          cables.slice(0, 5).forEach(c => {
+            html += `<div class="shakemap-infra-item">`
+            html += `<span class="shakemap-infra-fuel" style="color:#00bcd4;">⚡</span>`
+            html += `<span class="shakemap-infra-name">${this._escapeHtml(c.name || "Unknown cable")}</span>`
+            html += `</div>`
+          })
+          if (cables.length > 5) html += `<div class="shakemap-infra-more">+${cables.length - 5} more</div>`
+        }
+      }
+
+      infraPanel.innerHTML = hasContent ? html : ""
+      if (!hasContent) infraPanel.style.display = "none"
+    } catch (e) {
+      console.warn("ShakeMap infra fetch failed:", e)
+      infraPanel.style.display = "none"
+    }
+  }
+
+  GlobeController.prototype._fuelEmoji = function(fuel) {
+    const map = {
+      Nuclear: "☢️", Coal: "🪨", Gas: "🔥", Oil: "🛢️", Hydro: "💧",
+      Solar: "☀️", Wind: "💨", Biomass: "🌿", Geothermal: "♨️",
+    }
+    return map[fuel] || "⚡"
+  }
+
+  GlobeController.prototype._clearShakeMap = function() {
+    if (!this._shakeMapEntities?.length) return
+    const ds = this._ds["events"]
+    if (ds) this._shakeMapEntities.forEach(e => ds.entities.remove(e))
+    this._shakeMapEntities = []
+    this._shakeMapEqId = null
+    this._requestRender()
   }
 
   // ── NASA EONET Natural Events ──
@@ -590,39 +810,35 @@ export function applySituationalMethods(GlobeController) {
     const viewport = this._getViewportBbox()
     const filterBounds = this.hasActiveFilter() ? this.getFilterBounds() : null
 
-    // Use viewport bbox, optionally clamped to country filter bounds
-    if (viewport && center.height > 300000) {
-      let north = viewport.north, south = viewport.south
-      let east = viewport.east, west = viewport.west
-
-      // Clamp to filter bounds so we don't fetch outside selected countries
-      if (filterBounds) {
-        north = Math.min(north, filterBounds.lamax + 0.15)
-        south = Math.max(south, filterBounds.lamin - 0.15)
-        east = Math.min(east, filterBounds.lomax + 0.15)
-        west = Math.max(west, filterBounds.lomin - 0.15)
-      }
-
-      const latPad = Math.max((north - south) * 0.15, 0.25)
-      const lngPad = Math.max((east - west) * 0.15, 0.25)
-      const wideView = center.height > 1500000
-      return {
-        query: [
-          `north=${Math.min(north + latPad, 85).toFixed(4)}`,
-          `south=${Math.max(south - latPad, -85).toFixed(4)}`,
-          `east=${Math.min(east + lngPad, 180).toFixed(4)}`,
-          `west=${Math.max(west - lngPad, -180).toFixed(4)}`,
-        ].join("&"),
-        realtimeLimit: wideView ? 40 : 30,
-        windyLimit: wideView ? 100 : 80,
-      }
+    let north, south, east, west
+    if (viewport) {
+      north = viewport.north; south = viewport.south
+      east = viewport.east; west = viewport.west
+    } else {
+      const spanDeg = Math.min(Math.max(center.height / 111000, 0.5), 30)
+      north = center.lat + spanDeg; south = center.lat - spanDeg
+      east = center.lng + spanDeg; west = center.lng - spanDeg
     }
 
-    const radiusKm = Math.min(Math.max(Math.round(center.height / 5000), 20), 100)
+    // Clamp to filter bounds so we don't fetch outside selected countries
+    if (filterBounds) {
+      north = Math.min(north, filterBounds.lamax + 0.15)
+      south = Math.max(south, filterBounds.lamin - 0.15)
+      east = Math.min(east, filterBounds.lomax + 0.15)
+      west = Math.max(west, filterBounds.lomin - 0.15)
+    }
+
+    const latPad = Math.max((north - south) * 0.15, 0.25)
+    const lngPad = Math.max((east - west) * 0.15, 0.25)
+
     return {
-      query: `lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}&radius=${radiusKm}`,
-      realtimeLimit: 20,
-      windyLimit: 50,
+      query: [
+        `north=${Math.min(north + latPad, 85).toFixed(4)}`,
+        `south=${Math.max(south - latPad, -85).toFixed(4)}`,
+        `east=${Math.min(east + lngPad, 180).toFixed(4)}`,
+        `west=${Math.max(west - lngPad, -180).toFixed(4)}`,
+      ].join("&"),
+      limit: center.height > 1500000 ? 150 : 100,
     }
   }
 
@@ -632,53 +848,62 @@ export function applySituationalMethods(GlobeController) {
     if (!center) return
     const fetchId = ++this._webcamFetchToken
     const plan = this._buildWebcamFetchPlan(center)
-    const baseUrl = `/api/webcams?${plan.query}`
+    const url = `/api/webcams?${plan.query}&limit=${plan.limit}`
 
     // Replace stale webcams when the viewport changes materially.
     this._webcamData = []
     this.renderWebcams()
 
-    this._toast("Loading live cameras...")
+    this._toast("Loading cameras...")
 
-    // Phase 1: fetch real-time sources first (YouTube + NYC DOT).
     try {
-      const rtResp = await fetch(`${baseUrl}&sources=youtube,nycdot&limit=${plan.realtimeLimit}`)
+      const resp = await fetch(url)
       if (fetchId !== this._webcamFetchToken) return
-      if (rtResp.ok) {
-        const rtData = await rtResp.json()
+      if (resp.ok) {
+        const data = await resp.json()
         if (fetchId !== this._webcamFetchToken) return
-        const rtCams = rtData.webcams || []
-        if (rtCams.length > 0) {
-          this._mergeWebcams(rtCams)
+        const cams = data.webcams || []
+        if (cams.length > 0) {
+          this._mergeWebcams(cams)
           this.renderWebcams()
           this._updateStats()
           if (this._syncRightPanels) this._syncRightPanels()
         }
-      }
-    } catch (e) { console.warn("Real-time webcam fetch failed:", e) }
 
-    // Phase 2: fetch Windy (periodic/timelapse) using a broader limit.
-    this._toast("Loading more cameras...")
-    try {
-      const wResp = await fetch(`${baseUrl}&sources=windy&limit=${plan.windyLimit}`)
-      if (fetchId !== this._webcamFetchToken) return
-      if (wResp.ok) {
-        const wData = await wResp.json()
-        if (fetchId !== this._webcamFetchToken) return
-        const wCams = wData.webcams || []
-        if (wCams.length > 0) {
-          this._mergeWebcams(wCams)
-          this.renderWebcams()
-          this._updateStats()
+        // If the server says cameras are stale, a background job is refreshing.
+        // Re-fetch after a short delay to pick up newly fetched cameras.
+        if (data.stale && fetchId === this._webcamFetchToken) {
+          setTimeout(() => {
+            if (fetchId === this._webcamFetchToken && this.camerasVisible) {
+              this._refetchWebcamsQuiet(url, fetchId)
+            }
+          }, 8000)
         }
       }
-    } catch (e) { console.warn("Windy webcam fetch failed:", e) }
+    } catch (e) { console.warn("Webcam fetch failed:", e) }
 
     if (fetchId === this._webcamFetchToken) {
       this._webcamLastFetchCenter = center
       if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
     }
+  }
+
+  // Silent re-fetch after background job populates fresh cameras
+  GlobeController.prototype._refetchWebcamsQuiet = async function(url, fetchId) {
+    try {
+      const resp = await fetch(url)
+      if (fetchId !== this._webcamFetchToken || !resp.ok) return
+      const data = await resp.json()
+      if (fetchId !== this._webcamFetchToken) return
+      const cams = data.webcams || []
+      if (cams.length > 0) {
+        this._mergeWebcams(cams)
+        this.renderWebcams()
+        this._updateStats()
+        if (this._syncRightPanels) this._syncRightPanels()
+      }
+    } catch (e) { /* silent */ }
   }
 
   GlobeController.prototype._normalizeWebcam = function(w) {
@@ -856,6 +1081,7 @@ export function applySituationalMethods(GlobeController) {
     const hasThreats = !!this._threatsActive
     const hasCameras = this.camerasVisible && this._webcamData?.length > 0
     const hasAlerts = this.signedInValue && this._alertData?.length > 0
+    const hasInsights = this._insightsData?.length > 0
 
     // Show/hide tab buttons
     if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
@@ -863,8 +1089,9 @@ export function applySituationalMethods(GlobeController) {
     if (this.hasRpTabThreatsTarget) this.rpTabThreatsTarget.style.display = hasThreats ? "" : "none"
     if (this.hasRpTabCamerasTarget) this.rpTabCamerasTarget.style.display = hasCameras ? "" : "none"
     if (this.hasRpTabAlertsTarget) this.rpTabAlertsTarget.style.display = hasAlerts ? "" : "none"
+    if (this.hasRpTabInsightsTarget) this.rpTabInsightsTarget.style.display = hasInsights ? "" : "none"
 
-    const anyTabVisible = hasEntities || hasNews || hasThreats || hasCameras || hasAlerts
+    const anyTabVisible = hasEntities || hasNews || hasThreats || hasCameras || hasAlerts || hasInsights
     if (!anyTabVisible) {
       if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
       this._repositionDetailStack(12)
@@ -880,10 +1107,11 @@ export function applySituationalMethods(GlobeController) {
                             (activePaneKey === "news" && !hasNews) ||
                             (activePaneKey === "threats" && !hasThreats) ||
                             (activePaneKey === "cameras" && !hasCameras) ||
-                            (activePaneKey === "alerts" && !hasAlerts)
+                            (activePaneKey === "alerts" && !hasAlerts) ||
+                            (activePaneKey === "insights" && !hasInsights)
 
     if (activeTabHidden || !activePaneKey) {
-      const firstVisible = hasEntities ? "entities" : hasNews ? "news" : hasThreats ? "threats" : hasCameras ? "cameras" : "alerts"
+      const firstVisible = hasEntities ? "entities" : hasNews ? "news" : hasThreats ? "threats" : hasInsights ? "insights" : hasCameras ? "cameras" : "alerts"
       this._activateRightTab(firstVisible)
     }
 

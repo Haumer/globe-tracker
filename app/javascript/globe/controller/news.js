@@ -34,8 +34,6 @@ export function applyNewsMethods(GlobeController) {
       this.newsBlobsVisible = false
       if (this.hasNewsBlobsToggleTarget) this.newsBlobsToggleTarget.checked = false
       this._clearNewsArcEntities()
-    } else if (this._newsData?.length) {
-      this._renderNewsArcs(this._newsData)
     }
   }
 
@@ -49,17 +47,11 @@ export function applyNewsMethods(GlobeController) {
     if (!this.newsBlobsVisible) {
       this._stopNewsArcBlobAnim()
       this._removeNewsBlobEntities()
-    } else if (this._newsData?.length) {
-      this._clearNewsArcEntities()
-      this._renderNewsArcs(this._newsData)
     }
   }
 
   GlobeController.prototype.applyNewsArcFilter = function() {
-    if (!this._newsData?.length) return
-    // Clear only arc entities, keep news point entities
-    this._clearNewsArcEntities()
-    this._renderNewsArcs(this._newsData)
+    // No-op now — arcs show on click, region filters are in the flows tab
   }
 
   GlobeController.prototype.fetchNews = async function() {
@@ -106,37 +98,60 @@ export function applyNewsMethods(GlobeController) {
       other: "fa-newspaper",
     }
 
-    // Build coverage count per location (how many articles target each area)
-    const coverageMap = new Map()
-    events.forEach(ev => {
+    // Cluster events by grid cell to prevent overlapping labels
+    const clusters = new Map()
+    events.forEach((ev, i) => {
       const key = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
-      coverageMap.set(key, (coverageMap.get(key) || 0) + 1)
+      if (!clusters.has(key)) clusters.set(key, [])
+      clusters.get(key).push({ ...ev, _idx: i })
     })
 
-    // Find top 3 most-covered locations
-    const top3Counts = [...coverageMap.values()].sort((a, b) => b - a).slice(0, 3)
-    const top3Set = new Set(top3Counts)
+    // Find top 3 clusters by article count
+    const clusterSizes = [...clusters.values()].map(c => c.length).sort((a, b) => b - a)
+    const top3Threshold = clusterSizes[2] || 0
 
-    events.forEach((ev, i) => {
-      const color = categoryColors[ev.category] || "#90a4ae"
+    clusters.forEach((clusterEvents) => {
+      // Pick the lead story: highest absolute tone (most intense coverage)
+      clusterEvents.sort((a, b) => Math.abs(b.tone) - Math.abs(a.tone))
+      const lead = clusterEvents[0]
+      const count = clusterEvents.length
+      const color = categoryColors[lead.category] || "#90a4ae"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
 
-      // Size based on tone intensity + coverage (how many articles about this location)
-      const locKey = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
-      const coverage = coverageMap.get(locKey) || 1
-      const intensity = Math.min(Math.abs(ev.tone) / 10, 1)
-      const coverageBoost = Math.min(Math.log2(coverage + 1) / 3, 1) // log scale, caps at ~8 articles
+      // Centroid of cluster
+      const avgLat = clusterEvents.reduce((s, e) => s + e.lat, 0) / count
+      const avgLng = clusterEvents.reduce((s, e) => s + e.lng, 0) / count
+
+      const intensity = Math.min(Math.abs(lead.tone) / 10, 1)
+      const coverageBoost = Math.min(Math.log2(count + 1) / 3, 1)
       let pixelSize = 6 + intensity * 6 + coverageBoost * 8
 
-      // Top 3 most-covered destinations get extra large dots
-      if (top3Counts.length >= 3 && coverage >= top3Counts[2]) {
-        const rank = coverage >= top3Counts[0] ? 0 : coverage >= top3Counts[1] ? 1 : 2
+      // Top 3 clusters get extra large dots
+      if (clusterSizes.length >= 3 && count >= top3Threshold) {
+        const rank = count >= clusterSizes[0] ? 0 : count >= clusterSizes[1] ? 1 : 2
         pixelSize = [48, 36, 28][rank]
       }
 
+      // Label: lead headline + story count badge
+      const headline = this._truncateNewsLabel(lead.title || lead.name, pixelSize >= 28 ? 50 : 30)
+      const labelText = count > 1 ? `${headline}  (+${count - 1})` : headline
+
+      // Description: show all stories in the cluster
+      const descHtml = clusterEvents.slice(0, 8).map(ev => {
+        const c = categoryColors[ev.category] || "#90a4ae"
+        return `<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${ev.category}${ev.source ? ' · ' + ev.source : ''}</div>
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${ev.title || ev.name || "Unknown"}</div>
+          ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">' + ev.name + '</div>' : ''}
+          <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${ev.level}</div>
+          <a href="${ev.url}" target="_blank" rel="noopener" style="color: ${c}; font-size: 11px;">Read →</a>
+        </div>`
+      }).join("")
+      const moreNote = count > 8 ? `<div style="font-size: 11px; color: #6b7a8d;">+ ${count - 8} more stories</div>` : ""
+
       const entity = dataSource.entities.add({
-        id: `news-${i}`,
-        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+        id: `news-${lead._idx}`,
+        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 0),
         point: {
           pixelSize,
           color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
@@ -146,7 +161,7 @@ export function applyNewsMethods(GlobeController) {
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
         label: {
-          text: this._truncateNewsLabel(ev.title || ev.name, pixelSize >= 28 ? 50 : 30),
+          text: labelText,
           font: `${pixelSize >= 28 ? 15 : pixelSize >= 20 ? 14 : 13}px DM Sans, sans-serif`,
           fillColor: Cesium.Color.WHITE.withAlpha(pixelSize >= 28 ? 0.95 : 0.85),
           outlineColor: Cesium.Color.BLACK,
@@ -163,25 +178,22 @@ export function applyNewsMethods(GlobeController) {
           disableDepthTestDistance: pixelSize >= 28 ? Number.POSITIVE_INFINITY : 0,
         },
         description: `<div style="font-family: 'DM Sans', sans-serif; max-width: 380px;">
-          <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${ev.category}${ev.source ? ' · ' + ev.source : ''}</div>
-          <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px; line-height: 1.3;">${ev.title || ev.name || "Unknown"}</div>
-          ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 6px;">' + ev.name + '</div>' : ''}
-          <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Tone: ${ev.tone} · ${ev.level}</div>
-          <div style="font-size: 11px; margin-bottom: 8px;">${(ev.themes || []).map(t => '<span style="display:inline-block;background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:3px;margin:2px;font-size:10px;">' + t.replace(/^.*_/, '') + '</span>').join("")}</div>
-          <a href="${ev.url}" target="_blank" rel="noopener" style="color: ${color}; font-size: 11px;">Read article →</a>
-          ${ev.time ? '<div style="font-size: 10px; color: #666; margin-top: 6px;">' + new Date(ev.time).toUTCString() + '</div>' : ''}
+          <div style="font-size: 12px; color: #6b7a8d; margin-bottom: 8px;">${count} stories in this area</div>
+          ${descHtml}${moreNote}
         </div>`,
       })
       this._newsEntities.push(entity)
 
-      // Threat ring for critical/high threat news
-      if (ev.threat === "critical" || ev.threat === "high") {
-        const threatColor = ev.threat === "critical"
+      // Threat ring for the cluster if any story is critical/high
+      const worstThreat = clusterEvents.find(e => e.threat === "critical")?.threat
+        || clusterEvents.find(e => e.threat === "high")?.threat
+      if (worstThreat) {
+        const threatColor = worstThreat === "critical"
           ? Cesium.Color.fromCssColorString("#f44336")
           : Cesium.Color.fromCssColorString("#ff5722")
         const ring = dataSource.entities.add({
-          id: `news-threat-${i}`,
-          position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+          id: `news-threat-${lead._idx}`,
+          position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 0),
           ellipse: {
             semiMinorAxis: 30000,
             semiMajorAxis: 30000,
@@ -196,8 +208,8 @@ export function applyNewsMethods(GlobeController) {
       }
     })
 
-    // News attention arcs: source publication → event location
-    this._renderNewsArcs(events)
+    // Pre-compute arc data for on-demand reveal (Option B) + region flows (Option C)
+    this._precomputeArcs(events)
 
     // Update article list if articles tab is active
     if (this._newsActiveTab === "articles") {
@@ -320,32 +332,15 @@ export function applyNewsMethods(GlobeController) {
     return clean.substring(0, maxLen - 1).trim() + "…"
   }
 
-  GlobeController.prototype._renderNewsArcs = function(events) {
-    if (!this.newsArcsVisible) return
-    const Cesium = window.Cesium
-    const dataSource = this.getNewsDataSource()
-
-    // Read filter values
-    const fromRegion = this.hasNewsArcFromTarget ? this.newsArcFromTarget.value : "all"
-    const toRegion = this.hasNewsArcToTarget ? this.newsArcToTarget.value : "all"
-    const maxArcs = this.hasNewsArcMaxTarget ? parseInt(this.newsArcMaxTarget.value) : 120
-
-    // Group by source→event pair, tracking individual articles
+  // Pre-compute all arc data without rendering — arcs appear on cluster click (Option B)
+  GlobeController.prototype._precomputeArcs = function(events) {
     const arcMap = new Map()
-    this._newsArcData = [] // for click lookups
+    this._newsArcData = []
 
     events.forEach(ev => {
       const src = this._getSourceLocation(ev.url)
       if (!src) return
-
-      // Skip if source and event are very close (same city/country reporting on itself)
-      const dLat = Math.abs(src.lat - ev.lat)
-      const dLng = Math.abs(src.lng - ev.lng)
-      if (dLat < 2 && dLng < 2) return
-
-      // Apply region filters
-      if (!this._pointInRegion(src.lat, src.lng, fromRegion)) return
-      if (!this._pointInRegion(ev.lat, ev.lng, toRegion)) return
+      if (Math.abs(src.lat - ev.lat) < 2 && Math.abs(src.lng - ev.lng) < 2) return
 
       let host
       try { host = new URL(ev.url).hostname.replace(/^www\./, "") } catch { return }
@@ -355,6 +350,7 @@ export function applyNewsMethods(GlobeController) {
         arcMap.set(key, {
           srcLat: src.lat, srcLng: src.lng, srcCity: src.city,
           evtLat: ev.lat, evtLng: ev.lng, evtName: ev.name?.split(",")[0] || "",
+          evtLocKey: `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`,
           count: 0, articles: [],
         })
       }
@@ -365,144 +361,227 @@ export function applyNewsMethods(GlobeController) {
       }
     })
 
-    // Render arcs up to user-selected max
-    const arcs = [...arcMap.values()].sort((a, b) => b.count - a.count).slice(0, maxArcs)
-    this._newsArcData = arcs
+    this._newsArcData = [...arcMap.values()].sort((a, b) => b.count - a.count)
+
+    // Build region-to-region flow matrix for Flows tab (Option C)
+    this._renderRegionFlows()
+  }
+
+  // Render arcs only for a specific cluster (called on click)
+  GlobeController.prototype._showClusterArcs = function(clusterLocKey) {
+    this._clearNewsArcEntities()
+    if (!clusterLocKey || !this._newsArcData?.length) return
+
+    const Cesium = window.Cesium
+    const dataSource = this.getNewsDataSource()
+    const arcs = this._newsArcData.filter(a => a.evtLocKey === clusterLocKey)
+    this._activeClusterArcs = arcs
 
     arcs.forEach((arc, idx) => {
-      const alpha = Math.min(0.2 + arc.count * 0.08, 0.6)
-      const width = Math.min(1 + arc.count * 0.3, 3)
+      const alpha = Math.min(0.25 + arc.count * 0.1, 0.7)
+      const width = Math.min(1.5 + arc.count * 0.4, 4)
       const arcColor = Cesium.Color.fromCssColorString("#ffab40").withAlpha(alpha)
 
-      // SLERP arc with lift
-      const oLat = arc.srcLat * Math.PI / 180, oLng = arc.srcLng * Math.PI / 180
-      const tLat = arc.evtLat * Math.PI / 180, tLng = arc.evtLng * Math.PI / 180
-      const SEGS = 30
-      const positions = []
-      for (let i = 0; i <= SEGS; i++) {
-        const f = i / SEGS
-        const d = Math.acos(Math.min(1, Math.sin(oLat)*Math.sin(tLat) + Math.cos(oLat)*Math.cos(tLat)*Math.cos(tLng-oLng)))
-        if (d < 0.001) break
-        const A = Math.sin((1-f)*d)/Math.sin(d)
-        const B = Math.sin(f*d)/Math.sin(d)
-        const x = A*Math.cos(oLat)*Math.cos(oLng) + B*Math.cos(tLat)*Math.cos(tLng)
-        const y = A*Math.cos(oLat)*Math.sin(oLng) + B*Math.cos(tLat)*Math.sin(tLng)
-        const z = A*Math.sin(oLat) + B*Math.sin(tLat)
-        const lat = Math.atan2(z, Math.sqrt(x*x+y*y)) * 180/Math.PI
-        const lng = Math.atan2(y, x) * 180/Math.PI
-        const lift = Math.sin(f * Math.PI) * (100000 + d * 800000)
-        positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, lift))
-      }
+      const positions = this._slerpArc(arc.srcLat, arc.srcLng, arc.evtLat, arc.evtLng)
       if (positions.length < 2) return
 
       const entity = dataSource.entities.add({
         id: `news-arc-${idx}`,
-        polyline: {
-          positions,
-          width,
-          material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.15, color: arcColor }),
-        },
+        polyline: { positions, width, material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: arcColor }) },
       })
       this._newsArcEntities.push(entity)
 
-      // Animated directional blob traveling source → event
-      if (this.newsBlobsVisible) {
-        const blobColor = Cesium.Color.fromCssColorString("#ffab40")
-        const blobCount = Math.min(3, Math.max(1, Math.ceil(arc.count / 3)))
-        const speed = 0.1 + (arc.count - 1) * 0.1
-        const blobSize = Math.max(5, Math.min(10, 4 + arc.count * 0.5))
-        // Per-arc random offset so arcs don't pulse in sync
-        const arcPhaseOffset = ((idx * 7.31) % 1.0)  // deterministic pseudo-random per arc
-        for (let b = 0; b < blobCount; b++) {
-          const blob = dataSource.entities.add({
-            id: `news-arc-blob-${idx}-${b}`,
-            position: positions[0],
-            point: {
-              pixelSize: blobSize,
-              color: blobColor.withAlpha(0.9),
-              outlineColor: blobColor.withAlpha(0.3),
-              outlineWidth: 2,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
-            },
-          })
-          this._newsArcEntities.push(blob)
-          blob._blobArc = positions
-          blob._blobPhase = arcPhaseOffset + (b / blobCount)
-          blob._blobSpeed = speed
-        }
-      }
+      // Animated blob
+      const blobColor = Cesium.Color.fromCssColorString("#ffab40")
+      const blob = dataSource.entities.add({
+        id: `news-arc-blob-${idx}-0`,
+        position: positions[0],
+        point: {
+          pixelSize: Math.max(5, Math.min(10, 4 + arc.count * 0.5)),
+          color: blobColor.withAlpha(0.9),
+          outlineColor: blobColor.withAlpha(0.3),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
+        },
+      })
+      this._newsArcEntities.push(blob)
+      blob._blobArc = positions
+      blob._blobPhase = (idx * 7.31) % 1.0
+      blob._blobSpeed = 0.15
 
-      // Label at midpoint with arrow showing direction
-      const midPos = positions[Math.floor(SEGS / 2)]
-      const lbl = dataSource.entities.add({
+      // Source label at origin
+      const srcLabel = dataSource.entities.add({
         id: `news-arc-lbl-${idx}`,
-        position: midPos,
+        position: positions[0],
         label: {
-          text: `${arc.srcCity} → ${arc.evtName} (${arc.count})`,
-          font: "10px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.fromCssColorString("#ffab40").withAlpha(0.85),
+          text: `${arc.srcCity} (${arc.count})`,
+          font: "11px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.fromCssColorString("#ffab40").withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -4),
+          pixelOffset: new Cesium.Cartesian2(0, -8),
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 1e7, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.2e7, 0),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
-      this._newsArcEntities.push(lbl)
+      this._newsArcEntities.push(srcLabel)
     })
-
-    // Update news feed panel
-    this._updateNewsFeed(arcs)
   }
 
-  // Blob animation is now handled by the consolidated animate() loop
+  // Compute SLERP arc positions between two points
+  GlobeController.prototype._slerpArc = function(lat1, lng1, lat2, lng2) {
+    const Cesium = window.Cesium
+    const oLat = lat1 * Math.PI / 180, oLng = lng1 * Math.PI / 180
+    const tLat = lat2 * Math.PI / 180, tLng = lng2 * Math.PI / 180
+    const SEGS = 30
+    const positions = []
+    for (let i = 0; i <= SEGS; i++) {
+      const f = i / SEGS
+      const d = Math.acos(Math.min(1, Math.sin(oLat)*Math.sin(tLat) + Math.cos(oLat)*Math.cos(tLat)*Math.cos(tLng-oLng)))
+      if (d < 0.001) break
+      const A = Math.sin((1-f)*d)/Math.sin(d)
+      const B = Math.sin(f*d)/Math.sin(d)
+      const x = A*Math.cos(oLat)*Math.cos(oLng) + B*Math.cos(tLat)*Math.cos(tLng)
+      const y = A*Math.cos(oLat)*Math.sin(oLng) + B*Math.cos(tLat)*Math.sin(tLng)
+      const z = A*Math.sin(oLat) + B*Math.sin(tLat)
+      const lat = Math.atan2(z, Math.sqrt(x*x+y*y)) * 180/Math.PI
+      const lng = Math.atan2(y, x) * 180/Math.PI
+      const lift = Math.sin(f * Math.PI) * (100000 + d * 800000)
+      positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, lift))
+    }
+    return positions
+  }
 
-  GlobeController.prototype._updateNewsFeed = function(arcs) {
+  // Region-to-region flow matrix for the Flows sidebar tab (Option C)
+  GlobeController.prototype._renderRegionFlows = function() {
     if (!this.hasNewsFeedContentTarget) return
-    const count = arcs.length
+    const regions = this.constructor.NEWS_REGIONS
+    const regionNames = {
+      "north-america": "N. America", "south-america": "S. America", "europe": "Europe",
+      "middle-east": "Middle East", "africa": "Africa", "central-asia": "C. Asia",
+      "east-asia": "E. Asia", "southeast-asia": "SE Asia", "oceania": "Oceania",
+    }
+
+    const getRegion = (lat, lng) => {
+      for (const [key, r] of Object.entries(regions)) {
+        if (lat >= r.latMin && lat <= r.latMax && lng >= r.lngMin && lng <= r.lngMax) return key
+      }
+      return null
+    }
+
+    // Aggregate: source region → event region
+    const flows = new Map()
+    let totalArcs = 0
+    for (const arc of (this._newsArcData || [])) {
+      const srcR = getRegion(arc.srcLat, arc.srcLng)
+      const evtR = getRegion(arc.evtLat, arc.evtLng)
+      if (!srcR || !evtR) continue
+      const key = `${srcR}→${evtR}`
+      if (!flows.has(key)) flows.set(key, { from: srcR, to: evtR, count: 0, articles: 0 })
+      const f = flows.get(key)
+      f.count++
+      f.articles += arc.count
+      totalArcs += arc.count
+    }
+
+    const sorted = [...flows.values()].sort((a, b) => b.articles - a.articles)
+    const maxArticles = sorted[0]?.articles || 1
+
     if (this.hasNewsFeedCountTarget) {
-      this.newsFeedCountTarget.textContent = `${count} route${count !== 1 ? "s" : ""}`
+      this.newsFeedCountTarget.textContent = `${sorted.length} flows`
     }
 
-    const categoryColors = {
-      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
+    if (sorted.length === 0) {
+      this.newsFeedContentTarget.innerHTML = '<div style="padding:24px 14px;text-align:center;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">No attention flows detected</div>'
+      return
     }
 
-    const html = arcs.map((arc, idx) => {
-      // Determine dominant category from articles
-      const cats = {}
-      arc.articles.forEach(a => { cats[a.category] = (cats[a.category] || 0) + 1 })
-      const topCat = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]?.[0] || "other"
-      const color = categoryColors[topCat] || "#90a4ae"
-      const avgTone = arc.articles.length
-        ? (arc.articles.reduce((s, a) => s + (a.tone || 0), 0) / arc.articles.length).toFixed(1)
-        : "0"
+    const regionColors = {
+      "north-america": "#42a5f5", "south-america": "#66bb6a", "europe": "#ab47bc",
+      "middle-east": "#f44336", "africa": "#ff9800", "central-asia": "#ffc107",
+      "east-asia": "#26c6da", "southeast-asia": "#8d6e63", "oceania": "#78909c",
+    }
 
-      const articleList = arc.articles.slice(0, 5).map(a =>
-        `<a href="${a.url}" target="_blank" rel="noopener" class="nf-article">${a.domain}</a>`
-      ).join("")
-
-      return `<div class="nf-row" data-action="click->globe#focusNewsArc" data-arc-idx="${idx}">
-        <div class="nf-route">
-          <span class="nf-origin">${arc.srcCity}</span>
-          <span class="nf-arrow">→</span>
-          <span class="nf-dest">${arc.evtName}</span>
-          <span class="nf-badge" style="background:${color}20;color:${color}">${topCat}</span>
+    const html = sorted.map((flow, idx) => {
+      const pct = Math.round((flow.articles / maxArticles) * 100)
+      const fromColor = regionColors[flow.from] || "#90a4ae"
+      const toColor = regionColors[flow.to] || "#90a4ae"
+      return `<div class="nf-flow-row" data-action="click->globe#focusRegionFlow" data-flow-from="${flow.from}" data-flow-to="${flow.to}">
+        <div class="nf-flow-header">
+          <span class="nf-flow-region" style="color:${fromColor}">${regionNames[flow.from]}</span>
+          <span class="nf-flow-arrow">→</span>
+          <span class="nf-flow-region" style="color:${toColor}">${regionNames[flow.to]}</span>
+          <span class="nf-flow-count">${flow.articles}</span>
         </div>
-        <div class="nf-meta">
-          <span class="nf-count">${arc.count} article${arc.count !== 1 ? "s" : ""}</span>
-          <span class="nf-tone" style="color:${parseFloat(avgTone) < -2 ? "#ef5350" : parseFloat(avgTone) > 2 ? "#66bb6a" : "#90a4ae"}">tone ${avgTone}</span>
+        <div class="nf-flow-bar-bg">
+          <div class="nf-flow-bar" style="width:${pct}%;background:linear-gradient(90deg,${fromColor}88,${toColor}88);"></div>
         </div>
-        <div class="nf-sources">${articleList}</div>
       </div>`
     }).join("")
 
     this.newsFeedContentTarget.innerHTML = html
+  }
+
+  // Click a region flow row → show all arcs for that region pair
+  GlobeController.prototype.focusRegionFlow = function(event) {
+    const from = event.currentTarget.dataset.flowFrom
+    const to = event.currentTarget.dataset.flowTo
+    const regions = this.constructor.NEWS_REGIONS
+    const getRegion = (lat, lng) => {
+      for (const [key, r] of Object.entries(regions)) {
+        if (lat >= r.latMin && lat <= r.latMax && lng >= r.lngMin && lng <= r.lngMax) return key
+      }
+      return null
+    }
+
+    this._clearNewsArcEntities()
+    const Cesium = window.Cesium
+    const dataSource = this.getNewsDataSource()
+
+    const arcs = (this._newsArcData || []).filter(a =>
+      getRegion(a.srcLat, a.srcLng) === from && getRegion(a.evtLat, a.evtLng) === to
+    ).slice(0, 60)
+
+    arcs.forEach((arc, idx) => {
+      const alpha = Math.min(0.25 + arc.count * 0.1, 0.7)
+      const width = Math.min(1.5 + arc.count * 0.4, 4)
+      const arcColor = Cesium.Color.fromCssColorString("#ffab40").withAlpha(alpha)
+
+      const positions = this._slerpArc(arc.srcLat, arc.srcLng, arc.evtLat, arc.evtLng)
+      if (positions.length < 2) return
+
+      this._newsArcEntities.push(dataSource.entities.add({
+        id: `news-arc-${idx}`,
+        polyline: { positions, width, material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: arcColor }) },
+      }))
+
+      // Blob
+      const blob = dataSource.entities.add({
+        id: `news-arc-blob-${idx}-0`,
+        position: positions[0],
+        point: {
+          pixelSize: Math.max(5, Math.min(10, 4 + arc.count * 0.5)),
+          color: Cesium.Color.fromCssColorString("#ffab40").withAlpha(0.9),
+          outlineColor: Cesium.Color.fromCssColorString("#ffab40").withAlpha(0.3),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.4),
+        },
+      })
+      this._newsArcEntities.push(blob)
+      blob._blobArc = positions
+      blob._blobPhase = (idx * 7.31) % 1.0
+      blob._blobSpeed = 0.15
+    })
+
+    // Highlight active row
+    const rows = this.newsFeedContentTarget?.querySelectorAll(".nf-flow-row") || []
+    rows.forEach(r => r.classList.toggle("nf-flow-row--active",
+      r.dataset.flowFrom === from && r.dataset.flowTo === to))
   }
 
   GlobeController.prototype.closeNewsFeed = function() {
@@ -527,9 +606,7 @@ export function applyNewsMethods(GlobeController) {
       this._setNewsDotOpacity(0.25)
     } else {
       this._setNewsDotOpacity(1.0)
-      // Update count for flows
-      const count = this._newsArcData?.length || 0
-      if (this.hasNewsFeedCountTarget) this.newsFeedCountTarget.textContent = `${count} flow${count !== 1 ? "s" : ""}`
+      this._renderRegionFlows()
     }
   }
 
@@ -803,6 +880,10 @@ export function applyNewsMethods(GlobeController) {
   }
 
   GlobeController.prototype.showNewsDetail = function(ev) {
+    // Show arcs for this cluster (Option B: on-click arc reveal)
+    const locKey = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+    this._showClusterArcs(locKey)
+
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
       health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",

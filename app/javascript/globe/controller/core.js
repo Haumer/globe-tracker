@@ -65,6 +65,15 @@ export function applyCoreMethods(GlobeController) {
     this.fireHotspotsVisible = false
     this._fireHotspotData = []
     this._fireHotspotEntities = []
+    this.weatherVisible = false
+    this._weatherActiveLayers = {}
+    this._weatherImageryLayers = {}
+    this._weatherAlerts = []
+    this._weatherAlertEntities = []
+    this._weatherOpacity = 0.6
+    this.financialVisible = false
+    this._commodityData = []
+    this._financialEntities = []
     this.camerasVisible = false
     this.gpsJammingVisible = false
     this._gpsJammingEntities = []
@@ -313,6 +322,7 @@ export function applyCoreMethods(GlobeController) {
     // Load workspace list for signed-in users
     this._loadWorkspaceList()
     this._startAlertPolling()
+    this._startInsightPolling()
     this._startMiniTimeline()
 
     // Start animation loop
@@ -813,6 +823,18 @@ export function applyCoreMethods(GlobeController) {
         const d = this._notamData?.find(x => String(x.id) === id); if (!d) return false
         this.showNotamDetail(d); return true
       }},
+      { prefix: "wx-alert-", skip: [], handler: (id) => {
+        const d = this._weatherAlerts?.[parseInt(id)]; if (!d) return false
+        this.showWeatherAlertDetail(d); return true
+      }},
+      { prefix: "fin-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._commodityData?.[idx]; if (!d) return false
+        this.showCommodityDetail(d); return true
+      }},
+      { prefix: "insight-", skip: ["insight-ring-"], handler: (id) => {
+        const idx = parseInt(id); const d = this._insightsData?.[idx]; if (!d) return false
+        this.focusInsight({ currentTarget: { dataset: { insightIdx: String(idx) } } }); return true
+      }},
     ]
 
     for (const { prefix, skip, handler } of handlers) {
@@ -917,6 +939,7 @@ export function applyCoreMethods(GlobeController) {
     if (this._gpsJammingInterval) clearInterval(this._gpsJammingInterval)
     if (this._newsInterval) clearInterval(this._newsInterval)
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame)
+    this._stopInsightPolling()
     if (this._handler) this._handler.destroy()
     if (this.viewer) this.viewer.destroy()
   }

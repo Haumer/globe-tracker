@@ -4,6 +4,24 @@ export function applyAlertsMethods(GlobeController) {
     if (!this.signedInValue) return
     this._pollAlerts()
     this._alertPollInterval = setInterval(() => this._pollAlerts(), 10000)
+
+    // Listen for ActionCable push notifications (instant update)
+    document.addEventListener("globe:new-alert", (e) => {
+      // Immediately refresh from server to get full alert data
+      this._pollAlerts()
+    })
+
+    // Listen for fly-to events from toast clicks
+    document.addEventListener("globe:fly-to", (e) => {
+      const { lat, lng, height } = e.detail
+      if (lat && lng) {
+        const Cesium = window.Cesium
+        this.viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(lng, lat, height || 500000),
+          duration: 1.5,
+        })
+      }
+    })
   }
 
   GlobeController.prototype._stopAlertPolling = function() {

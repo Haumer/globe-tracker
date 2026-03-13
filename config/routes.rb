@@ -41,6 +41,14 @@ Rails.application.routes.draw do
     resources :airports, only: [:index]
     resources :trending, only: [:index]
     resources :fire_hotspots, only: [:index]
+    resources :weather_alerts, only: [:index]
+    resources :insights, only: [:index]
+    resources :commodities, only: [:index]
+    resource :exports, only: [] do
+      get :geojson
+      get :csv
+      get "flight_history/:id", action: :flight_history, as: :flight_history
+    end
     resources :playback, only: [:index] do
       collection do
         get :range

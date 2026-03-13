@@ -8,8 +8,9 @@ module Api
       to = parse_time(params[:to]) || Time.current
       entity_type = params[:type].presence || "flight"
 
-      # Cap range to 24 hours
-      from = [from, to - 24.hours].max
+      # Signed-in users get 7-day range, anonymous get 24 hours
+      max_range = current_user ? 7.days : 24.hours
+      from = [from, to - max_range].max
 
       bounds = parse_bounds
       interval = (params[:interval] || 30).to_i.clamp(10, 120)
@@ -99,7 +100,8 @@ module Api
     def events
       from = parse_time(params[:from]) || 1.hour.ago
       to = parse_time(params[:to]) || Time.current
-      from = [from, to - 24.hours].max
+      max_range = current_user ? 7.days : 24.hours
+      from = [from, to - max_range].max
 
       types = params[:types]&.split(",")&.map(&:strip)
 

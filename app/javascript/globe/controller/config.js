@@ -134,6 +134,14 @@ export const GLOBE_TARGETS = [
   "miniTimelineDots",
   "fireHotspotsToggle",
   "qlFireHotspots",
+  "weatherToggle",
+  "qlWeather",
+  "weatherPanel",
+  "rpTabInsights",
+  "financialToggle",
+  "qlFinancial",
+  "insightFeedContent",
+  "insightFeedCount",
 ]
 
 export const NEWS_REGIONS = {

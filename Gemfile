@@ -53,6 +53,7 @@ gem "simple_form", github: "heartcombo/simple_form"
 gem "sassc-rails"
 gem "websocket-client-simple"
 gem "rss"
+gem "rack-attack"
 
 group :development, :test do
   gem "dotenv-rails"

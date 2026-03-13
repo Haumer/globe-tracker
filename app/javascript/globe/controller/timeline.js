@@ -257,6 +257,22 @@ export function applyTimelineMethods(GlobeController) {
     this._timelineUpdateEvents()
   }
 
+  GlobeController.prototype.timelineExport = function() {
+    if (!this._timelineRangeStart || !this._timelineRangeEnd) return
+    const from = this._timelineRangeStart.toISOString()
+    const to = this._timelineRangeEnd.toISOString()
+
+    const layers = []
+    if (this.flightsVisible) layers.push("flights")
+    if (this.shipsVisible) layers.push("ships")
+    if (this.earthquakesVisible) layers.push("earthquakes")
+    if (this.conflictsVisible) layers.push("conflicts")
+    if (layers.length === 0) layers.push("flights")
+
+    const url = `/api/exports/geojson?layers=${layers.join(",")}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    window.open(url, "_blank")
+  }
+
   GlobeController.prototype.timelineClose = function() {
     this._timelineActive = false
     this._timelinePlaying = false

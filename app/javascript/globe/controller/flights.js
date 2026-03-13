@@ -459,6 +459,9 @@ export function applyFlightMethods(GlobeController) {
         data-watch-conditions='${JSON.stringify({ entity_type: "flight", identifier: callsign || id, match: "callsign_exact" })}'>
         <i class="fa-solid fa-eye"></i> Watch
       </button>` : ""}
+      ${this.signedInValue ? `<button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showFlightHistory" data-flight-icao="${id}">
+        <i class="fa-solid fa-clock-rotate-left" style="margin-right:4px;"></i>Flight History (24h)
+      </button>` : ""}
       ${this._connectionsPlaceholder()}
     `
 
@@ -662,6 +665,83 @@ export function applyFlightMethods(GlobeController) {
     this._flightRouteEntities.push(destEntity)
   }
 
+  GlobeController.prototype.showFlightHistory = async function(event) {
+    const icao = event.currentTarget.dataset.flightIcao
+    if (!icao) return
+    const btn = event.currentTarget
+    btn.disabled = true
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>Loading...'
+
+    try {
+      const resp = await fetch(`/api/exports/flight_history/${encodeURIComponent(icao)}`)
+      if (!resp.ok) throw new Error("Not found")
+      const data = await resp.json()
+
+      if (!data.route || data.route.length < 2) {
+        btn.innerHTML = '<i class="fa-solid fa-clock-rotate-left" style="margin-right:4px;"></i>No history available'
+        btn.disabled = false
+        return
+      }
+
+      // Render the historical trail on the globe
+      this._clearFlightHistory()
+      const Cesium = window.Cesium
+      const ds = this._ds["flights"] || this.getEventsDataSource()
+      this._flightHistoryEntities = []
+
+      const positions = data.route.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt || 0))
+
+      const trail = ds.entities.add({
+        id: `flt-history-${icao}`,
+        polyline: {
+          positions,
+          width: 2,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.2,
+            color: Cesium.Color.fromCssColorString("#ce93d8").withAlpha(0.8),
+          }),
+          clampToGround: false,
+        },
+      })
+      this._flightHistoryEntities.push(trail)
+
+      // Start point marker
+      const first = data.route[0]
+      const startE = ds.entities.add({
+        id: `flt-history-start-${icao}`,
+        position: Cesium.Cartesian3.fromDegrees(first.lng, first.lat, first.alt || 0),
+        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString("#ce93d8"), outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+        label: {
+          text: `${data.callsign || icao} (${new Date(first.t * 1000).toISOString().slice(11, 16)} UTC)`,
+          font: "10px monospace",
+          fillColor: Cesium.Color.fromCssColorString("#ce93d8"),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -12),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0.3),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._flightHistoryEntities.push(startE)
+
+      this._requestRender()
+      btn.innerHTML = `<i class="fa-solid fa-clock-rotate-left" style="margin-right:4px;"></i>${data.point_count} points loaded`
+      btn.disabled = false
+    } catch (e) {
+      console.warn("Flight history failed:", e)
+      btn.innerHTML = '<i class="fa-solid fa-clock-rotate-left" style="margin-right:4px;"></i>History unavailable'
+      btn.disabled = false
+    }
+  }
+
+  GlobeController.prototype._clearFlightHistory = function() {
+    if (!this._flightHistoryEntities?.length) return
+    const ds = this._ds["flights"] || this._ds["events"]
+    if (ds) this._flightHistoryEntities.forEach(e => ds.entities.remove(e))
+    this._flightHistoryEntities = []
+  }
+
   GlobeController.prototype._clearFlightRoute = function() {
     if (!this._flightRouteEntities) return
     const ds = this._ds["flights"]
@@ -722,6 +802,9 @@ export function applyFlightMethods(GlobeController) {
     this.clearSatFootprint()
     this._clearFlightRoute()
     this._clearSatVisEntities()
+    this._clearNewsArcEntities()
+    if (this._clearShakeMap) this._clearShakeMap()
+    if (this._clearFlightHistory) this._clearFlightHistory()
     if (this._webcamRefreshInterval) { clearInterval(this._webcamRefreshInterval); this._webcamRefreshInterval = null }
   }
 

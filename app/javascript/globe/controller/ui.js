@@ -52,6 +52,8 @@ export function applyUiMethods(GlobeController) {
       traffic:     { target: "trafficToggle",      method: "toggleTraffic" },
       notams:      { target: "notamsToggle",        method: "toggleNotams" },
       fireHotspots: { target: "fireHotspotsToggle", method: "toggleFireHotspots" },
+      weather:      { target: "weatherToggle",      method: "toggleWeather" },
+      financial:    { target: "financialToggle",   method: "toggleFinancial" },
     }
 
     if (layer === "satellites") {
@@ -114,6 +116,8 @@ export function applyUiMethods(GlobeController) {
     sync("qlTraffic", this.trafficVisible)
     sync("qlNotams", this.notamsVisible)
     sync("qlFireHotspots", this.fireHotspotsVisible)
+    sync("qlWeather", this.weatherVisible)
+    sync("qlFinancial", this.financialVisible)
 
     const anySat = Object.values(this.satCategoryVisible).some(v => v)
     sync("qlSatellites", anySat)
@@ -278,6 +282,10 @@ export function applyUiMethods(GlobeController) {
       traffic: this.trafficVisible,
       notams: this.notamsVisible,
       fireHotspots: this.fireHotspotsVisible,
+      weather: this.weatherVisible,
+      financial: this.financialVisible,
+      weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
+      weatherOpacity: this._weatherOpacity || 0.6,
       terrain: this.terrainEnabled || false,
       terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
       buildings: this.hasBuildingsSelectTarget ? this.buildingsSelectTarget.value : "off",
@@ -445,6 +453,24 @@ export function applyUiMethods(GlobeController) {
       if (l.fireHotspots && this.hasFireHotspotsToggleTarget) {
         this.fireHotspotsToggleTarget.checked = true
         this.toggleFireHotspots()
+      }
+      if (l.weather && this.hasWeatherToggleTarget) {
+        this._weatherOpacity = l.weatherOpacity || 0.6
+        this.weatherToggleTarget.checked = true
+        this._weatherActiveLayers = {}
+        this.toggleWeather()
+        // Restore specific sublayers
+        if (l.weatherLayers && typeof l.weatherLayers === "object") {
+          // Remove auto-enabled precipitation first
+          this._removeAllWeatherLayers()
+          for (const [key, active] of Object.entries(l.weatherLayers)) {
+            if (active) this.toggleWeatherSublayer(key)
+          }
+        }
+      }
+      if (l.financial && this.hasFinancialToggleTarget) {
+        this.financialToggleTarget.checked = true
+        this.toggleFinancial()
       }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true

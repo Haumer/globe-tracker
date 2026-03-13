@@ -168,6 +168,10 @@ class WatchEvaluator
     alert = @user.alerts.create!(attrs.merge(watch: watch))
     watch.update_column(:last_triggered_at, Time.current)
     @new_alerts << alert
+
+    # Push via ActionCable
+    AlertsChannel.notify(@user, alert)
+    AlertsChannel.update_badge(@user)
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.warn("WatchEvaluator alert creation failed: #{e.message}")
   end

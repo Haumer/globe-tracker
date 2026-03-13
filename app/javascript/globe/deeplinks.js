@@ -8,6 +8,7 @@ const LAYER_KEYS = [
   "flights", "trails", "ships", "borders", "cities", "airports",
   "earthquakes", "naturalEvents", "cameras", "gpsJamming", "news",
   "cables", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
+  "fireHotspots", "weather", "financial",
 ]
 
 // Short aliases to keep URLs compact
@@ -16,6 +17,7 @@ const LAYER_SHORT = {
   airports: "ap", earthquakes: "eq", naturalEvents: "ev", cameras: "cm",
   gpsJamming: "gj", news: "nw", cables: "cb", outages: "ou",
   powerPlants: "pp", conflicts: "cf", traffic: "tf", notams: "nt", terrain: "tn",
+  fireHotspots: "fh", weather: "wx", financial: "fn",
 }
 
 const SHORT_TO_LAYER = Object.fromEntries(
@@ -148,7 +150,8 @@ export function applyDeepLink(controller, state) {
       cameras: "toggleCameras", gpsJamming: "toggleGpsJamming", news: "toggleNews",
       cables: "toggleCables", outages: "toggleOutages", powerPlants: "togglePowerPlants",
       conflicts: "toggleConflicts", traffic: "toggleTraffic", notams: "toggleNotams",
-      terrain: "toggleTerrain",
+      terrain: "toggleTerrain", fireHotspots: "toggleFireHotspots", weather: "toggleWeather",
+      financial: "toggleFinancial",
     }
     const targetMap = {
       flights: "flightsToggle", trails: "trailsToggle", ships: "shipsToggle",
@@ -157,6 +160,7 @@ export function applyDeepLink(controller, state) {
       cameras: "camerasToggle", gpsJamming: "gpsJammingToggle", news: "newsToggle",
       cables: "cablesToggle", outages: "outagesToggle", powerPlants: "powerPlantsToggle",
       conflicts: "conflictsToggle", traffic: "trafficToggle", notams: "notamsToggle",
+      fireHotspots: "fireHotspotsToggle", weather: "weatherToggle", financial: "financialToggle",
       terrain: "terrainToggle",
     }
 

@@ -7,7 +7,7 @@ module Api
         enqueue_background_refresh(RefreshNewsJob, key: "news", debounce: 1.minute) if NewsRefreshService.stale?
       end
 
-      events = time_scoped(NewsEvent).order(Arel.sql("ABS(tone) DESC")).limit(500)
+      events = time_scoped(NewsEvent).order(Arel.sql("ABS(tone) DESC"))
       render json: events.map { |ev|
         {
           lat: ev.latitude,

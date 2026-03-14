@@ -142,6 +142,16 @@ export const GLOBE_TARGETS = [
   "qlFinancial",
   "insightFeedContent",
   "insightFeedCount",
+  "entitiesLoading",
+  "entitiesEmpty",
+  "newsLoading",
+  "newsEmpty",
+  "threatsLoading",
+  "threatsEmpty",
+  "camerasLoading",
+  "camerasEmpty",
+  "insightsLoading",
+  "insightsEmpty",
 ]
 
 export const NEWS_REGIONS = {

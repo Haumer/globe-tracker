@@ -57,6 +57,7 @@ export function applyInsightsMethods(GlobeController) {
       conflict_military: "\u2694",
       fire_infrastructure: "\u{1F525}",
       cable_outage: "\u{1F50C}",
+      convergence: "\u{1F310}",
     }
 
     this._insightsData.forEach((insight, idx) => {
@@ -167,6 +168,7 @@ export function applyInsightsMethods(GlobeController) {
       conflict_military: "CONFLICT + MIL",
       fire_infrastructure: "FIRE + INFRA",
       cable_outage: "OUTAGE + CABLE",
+      convergence: "CONVERGENCE",
     }
 
     const html = insights
@@ -174,12 +176,29 @@ export function applyInsightsMethods(GlobeController) {
       .map((insight, idx) => {
         const sev = insight.severity || "medium"
         const icon = severityIcons[sev] || "fa-circle-info"
-        const typeLabel = typeLabels[insight.type] || insight.type.toUpperCase()
+        const typeLabel = typeLabels[insight.type] || insight.type.replace(/_/g, " ").toUpperCase()
         const hasLocation = insight.lat != null && insight.lng != null
 
         // Build entity detail chips
         let chips = ""
-        if (insight.entities) {
+        if (insight.type === "convergence" && insight.layers) {
+          // Convergence insight — show layer chips
+          const layerChipColors = {
+            earthquake: "eq", fire: "fire", conflict: "conf",
+            military_flight: "flight", jamming: "jam", natural_event: "cable",
+            news: "outage", nuclear_plant: "plant", submarine_cable: "cable",
+          }
+          insight.layers.forEach(layer => {
+            const cls = layerChipColors[layer] || "eq"
+            const label = layer.replace(/_/g, " ")
+            const ents = insight.entities?.[layer]
+            const count = ents?.count || (Array.isArray(ents) ? ents.length : "")
+            chips += `<span class="ins-chip ins-chip--${cls}">${count ? count + " " : ""}${label}</span>`
+          })
+          if (insight.layer_count) {
+            chips = `<span class="ins-chip ins-chip--conf">${insight.layer_count} layers</span>` + chips
+          }
+        } else if (insight.entities) {
           const ents = insight.entities
           if (ents.earthquake) chips += `<span class="ins-chip ins-chip--eq">M${ents.earthquake.magnitude}</span>`
           if (ents.cables?.length) chips += `<span class="ins-chip ins-chip--cable">${ents.cables.length} cable${ents.cables.length > 1 ? "s" : ""}</span>`

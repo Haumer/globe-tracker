@@ -52,3 +52,11 @@ end
 on_booted do
   GlobalPollerService.start unless GlobalPollerService.running?
 end
+
+# Graceful shutdown — stop background threads so Ctrl+C works
+force_shutdown_after 5
+
+at_exit do
+  GlobalPollerService.stop if GlobalPollerService.running?
+  AisStreamService.stop if AisStreamService.running?
+end

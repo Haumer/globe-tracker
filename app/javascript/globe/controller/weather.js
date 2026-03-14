@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource, cachedColor } from "../utils"
 
 export function applyWeatherMethods(GlobeController) {
 
@@ -228,10 +228,10 @@ export function applyWeatherMethods(GlobeController) {
     this._weatherAlertEntities = []
 
     const severityColor = {
-      "Extreme": Cesium.Color.fromCssColorString("#d50000").withAlpha(0.8),
-      "Severe":  Cesium.Color.fromCssColorString("#ff6d00").withAlpha(0.8),
-      "Moderate": Cesium.Color.fromCssColorString("#ffd600").withAlpha(0.7),
-      "Minor":   Cesium.Color.fromCssColorString("#00c853").withAlpha(0.6),
+      "Extreme": cachedColor("#d50000", 0.8),
+      "Severe":  cachedColor("#ff6d00", 0.8),
+      "Moderate": cachedColor("#ffd600", 0.7),
+      "Minor":   cachedColor("#00c853", 0.6),
     }
 
     this._weatherAlerts.forEach((alert, i) => {
@@ -405,7 +405,7 @@ export function applyWeatherMethods(GlobeController) {
           positions: [satPos, groundPos],
           width: 1.5,
           material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.4),
+            color: cachedColor("#ffa726", 0.4),
             dashLength: 16,
           }),
           arcType: Cesium.ArcType.NONE,
@@ -420,7 +420,7 @@ export function applyWeatherMethods(GlobeController) {
         label: {
           text: `${src.name}\n${src.region}`,
           font: "10px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.7),
+          fillColor: cachedColor("#ffa726", 0.7),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 2,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,

@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   get "sources", to: "pages#sources"
 
   get "admin", to: "admin#dashboard", as: :admin
+  get "admin/api_health", to: "admin#api_health", as: :admin_api_health
   post "admin/toggle_poller", to: "admin#toggle_poller", as: :admin_toggle_poller
   post "admin/pause_poller", to: "admin#pause_poller", as: :admin_pause_poller
   post "admin/stop_poller", to: "admin#stop_poller", as: :admin_stop_poller
@@ -60,6 +61,8 @@ Rails.application.routes.draw do
       end
     end
   end
+
+  get "health" => "health#show"
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.

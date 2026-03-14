@@ -79,6 +79,9 @@ class OebbTrainService
       cat_short = prod&.dig("prodCtx", "catOutS")&.strip || ""
       cat_long = prod&.dig("prodCtx", "catOutL")&.strip || cat_short
 
+      # Skip buses — only keep rail services
+      next if cat_short.downcase.in?(%w[bus]) || cat_long.downcase.include?("bus")
+
       {
         id: "#{idx}-#{Digest::MD5.hexdigest(jny["jid"] || "#{name}-#{pos['x']}-#{pos['y']}")[0, 8]}",
         name: name,

@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource, cachedColor } from "../../utils"
 import { COUNTRY_CENTROIDS } from "../../country_centroids"
 
 export function applyTrafficMethods(GlobeController) {
@@ -123,7 +123,7 @@ export function applyTrafficMethods(GlobeController) {
       // Attack indicator ring (red) if country is attack target
       if (t.attack_target > 0.5) {
         const atkIntensity = Math.min(t.attack_target / 20, 1)
-        const atkColor = Cesium.Color.fromCssColorString("#f44336")
+        const atkColor = cachedColor("#f44336")
         const ring = dataSource.entities.add({
           id: `traf-atk-${t.code}`,
           position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 0),
@@ -215,8 +215,8 @@ export function applyTrafficMethods(GlobeController) {
         const blobCount = Math.min(4, Math.max(1, Math.ceil(pct / 5)))
         const speed = 0.3 + Math.min(pct * 0.01, 0.4) // 0.3–0.7 full-path per second
         const blobSize = Math.max(7, Math.min(16, 5 + pct * 0.3))
-        const blobColor = Cesium.Color.fromCssColorString("#ff1744")
-        const glowColor = Cesium.Color.fromCssColorString("#ff5252")
+        const blobColor = cachedColor("#ff1744")
+        const glowColor = cachedColor("#ff5252")
 
         for (let b = 0; b < blobCount; b++) {
           const blob = dataSource.entities.add({
@@ -247,7 +247,7 @@ export function applyTrafficMethods(GlobeController) {
         label: {
           text: `${p.origin} → ${p.target}  ${pct.toFixed(1)}%`,
           font: "11px JetBrains Mono, monospace",
-          fillColor: Cesium.Color.fromCssColorString("#ff8a80"),
+          fillColor: cachedColor("#ff8a80"),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 4,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,

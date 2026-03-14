@@ -273,13 +273,17 @@ export function applyCoreMethods(GlobeController) {
 
       const picked = this.viewer.scene.pick(click.position)
 
-      if (Cesium.defined(picked) && picked.id) {
-        const entityId = picked.id.id || picked.id
-        if (this._handleEntityClick(entityId, picked)) return
-      }
-
-      // Click on globe surface — select country only in country select mode
+      // In country select mode, prioritize country selection over entity clicks
       if (this.countrySelectMode && this.bordersLoaded) {
+        // Allow border entity clicks directly
+        if (Cesium.defined(picked) && picked.id) {
+          const entityId = (picked.id.id || picked.id)
+          if (typeof entityId === "string" && entityId.startsWith("border-")) {
+            const d = this._borderCountryMap?.get(entityId)
+            if (d) { this.toggleCountrySelection(d.name); this.showBorderDetail(); return }
+          }
+        }
+        // Fall back to point-in-polygon lookup on globe surface
         const globePos = this.screenToLatLng(click.position)
         if (globePos) {
           const country = this.findCountryAtPoint(globePos.lat, globePos.lng)
@@ -289,6 +293,12 @@ export function applyCoreMethods(GlobeController) {
             return
           }
         }
+        return // don't handle other entities while in country select mode
+      }
+
+      if (Cesium.defined(picked) && picked.id) {
+        const entityId = picked.id.id || picked.id
+        if (this._handleEntityClick(entityId, picked)) return
       }
 
       this.closeDetail()
@@ -482,6 +492,9 @@ export function applyCoreMethods(GlobeController) {
       const visKey = layer === "naturalEvents" ? "naturalEventsVisible" : layer + "Visible"
       if (!this[visKey]) {
         if (dot) dot.remove()
+        const oldLbl = btn.querySelector(".freshness-age")
+        if (oldLbl) oldLbl.remove()
+        btn.style.opacity = ""
         continue
       }
       if (!dot) {
@@ -490,13 +503,41 @@ export function applyCoreMethods(GlobeController) {
         btn.appendChild(dot)
       }
       const lastUpdate = this._layerFreshness[layer]
+      let ageLabel = ""
+      let ageSec = null
       if (!lastUpdate) {
         dot.dataset.freshness = "stale"
+        ageLabel = "?"
       } else {
-        const age = now - lastUpdate
-        if (age < 30000) dot.dataset.freshness = "fresh"
-        else if (age < 120000) dot.dataset.freshness = "warm"
-        else dot.dataset.freshness = "stale"
+        ageSec = (now - lastUpdate) / 1000
+        if (ageSec < 30) {
+          dot.dataset.freshness = "fresh"
+          ageLabel = ""
+        } else if (ageSec < 120) {
+          dot.dataset.freshness = "warm"
+          ageLabel = Math.floor(ageSec / 60) + "m"
+        } else if (ageSec < 600) {
+          dot.dataset.freshness = "stale"
+          ageLabel = Math.floor(ageSec / 60) + "m"
+        } else {
+          dot.dataset.freshness = "stale"
+          ageLabel = "10m+"
+        }
+        btn.style.opacity = (ageSec >= 600) ? "0.6" : ""
+      }
+      // Age label next to dot
+      let ageLbl = dot.nextElementSibling
+      if (ageLbl && !ageLbl.classList.contains("freshness-age")) ageLbl = null
+      if (ageLabel) {
+        if (!ageLbl) {
+          ageLbl = document.createElement("span")
+          ageLbl.className = "freshness-age"
+          dot.parentNode.insertBefore(ageLbl, dot.nextSibling)
+        }
+        ageLbl.textContent = ageLabel
+        ageLbl.dataset.freshness = dot.dataset.freshness
+      } else if (ageLbl) {
+        ageLbl.remove()
       }
     }
   }
@@ -668,19 +709,70 @@ export function applyCoreMethods(GlobeController) {
 
   // ── Toast ──────────────────────────────────────────────────
 
-  GlobeController.prototype._toast = function(msg) {
+  GlobeController.prototype._toast = function(msg, type) {
     const el = document.getElementById("gt-toast")
     if (!el) return
-    el.textContent = msg
-    el.classList.add("visible")
+    // Clear previous state
     clearTimeout(this._toastTimer)
-    this._toastTimer = setTimeout(() => el.classList.remove("visible"), 2000)
+    el.classList.remove("visible", "gt-toast--success", "gt-toast--error")
+    el.innerHTML = ""
+    // Set type class
+    if (type === "success") el.classList.add("gt-toast--success")
+    if (type === "error") el.classList.add("gt-toast--error")
+    // Build content
+    const span = document.createElement("span")
+    span.textContent = msg
+    el.appendChild(span)
+    // Add close button for error toasts
+    if (type === "error") {
+      const closeBtn = document.createElement("button")
+      closeBtn.className = "gt-toast-close"
+      closeBtn.innerHTML = "&times;"
+      closeBtn.setAttribute("aria-label", "Dismiss")
+      closeBtn.addEventListener("click", () => this._toastHide())
+      el.appendChild(closeBtn)
+      el.style.pointerEvents = "auto"
+    } else {
+      el.style.pointerEvents = "none"
+    }
+    el.classList.add("visible")
+    // Auto-hide for non-error toasts
+    if (type !== "error") {
+      this._toastTimer = setTimeout(() => el.classList.remove("visible"), 2000)
+    }
   }
 
   GlobeController.prototype._toastHide = function() {
     const el = document.getElementById("gt-toast")
-    if (el) el.classList.remove("visible")
+    if (!el) return
+    el.classList.remove("visible", "gt-toast--success", "gt-toast--error")
+    el.style.pointerEvents = "none"
     clearTimeout(this._toastTimer)
+  }
+
+  // ── Loading / Empty states ────────────────────────────────────
+  // panelKey: "entities" | "news" | "threats" | "cameras" | "insights"
+
+  GlobeController.prototype._showLoading = function(panelKey) {
+    const t = panelKey + "Loading"
+    if (this[`has${t[0].toUpperCase()}${t.slice(1)}Target`]) {
+      this[`${t}Target`].style.display = ""
+    }
+    const e = panelKey + "Empty"
+    if (this[`has${e[0].toUpperCase()}${e.slice(1)}Target`]) {
+      this[`${e}Target`].style.display = "none"
+    }
+  }
+
+  GlobeController.prototype._hideLoading = function(panelKey, itemCount) {
+    const t = panelKey + "Loading"
+    if (this[`has${t[0].toUpperCase()}${t.slice(1)}Target`]) {
+      this[`${t}Target`].style.display = "none"
+    }
+    const e = panelKey + "Empty"
+    if (this[`has${e[0].toUpperCase()}${e.slice(1)}Target`]) {
+      this[`${e}Target`].style.display = (itemCount === 0) ? "" : "none"
+    }
   }
 
   GlobeController.prototype._handleBackgroundRefresh = function(resp, key, hasData, retryFn) {
@@ -818,16 +910,8 @@ export function applyCoreMethods(GlobeController) {
       }
     }
 
-    // Follow tracked train
-    if (this.trackedTrainId) {
-      const tt = this._trainData?.find(t => t.id === this.trackedTrainId)
-      if (tt) {
-        this._followEntity(tt.lng, tt.lat)
-        needsRender = true
-      } else {
-        this.trackedTrainId = null
-      }
-    }
+    // Animate train positions (lerp between poll updates)
+    if (this._animateTrains?.(now)) needsRender = true
 
     // Update satellite positions (every ~2 seconds to save CPU)
     if (this.satelliteData.length > 0 && Object.values(this.satCategoryVisible).some(v => v)) {

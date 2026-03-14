@@ -1,4 +1,4 @@
-import { getDataSource, createAirportIcon, LABEL_DEFAULTS } from "../utils"
+import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "../utils"
 
 export function applySituationalMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }
@@ -195,11 +195,11 @@ export function applySituationalMethods(GlobeController) {
       const pulseScale = 2 + t * 4
 
       let color
-      if (mag < 3) color = Cesium.Color.fromCssColorString("#66bb6a")
-      else if (mag < 4) color = Cesium.Color.fromCssColorString("#ffa726")
-      else if (mag < 5) color = Cesium.Color.fromCssColorString("#ff7043")
-      else if (mag < 6) color = Cesium.Color.fromCssColorString("#ef5350")
-      else color = Cesium.Color.fromCssColorString("#d50000")
+      if (mag < 3) color = cachedColor("#66bb6a")
+      else if (mag < 4) color = cachedColor("#ffa726")
+      else if (mag < 5) color = cachedColor("#ff7043")
+      else if (mag < 6) color = cachedColor("#ef5350")
+      else color = cachedColor("#d50000")
 
       // Outer pulse ring
       const ring = dataSource.entities.add({

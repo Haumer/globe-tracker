@@ -1,6 +1,95 @@
 class AdminController < ApplicationController
   before_action :require_admin!
 
+  def api_health
+    window = params[:window].to_i
+    window = 1 if window <= 0 || window > 24
+    since = window.hours.ago
+
+    # Preload all stats for the window to avoid N+1
+    all_stats = PollingStat.where("created_at > ?", since).to_a
+    stats_by_source = all_stats.group_by(&:source)
+
+    # Preload last records per source (most recent 5 for consecutive error check)
+    all_sources = PollingStat.distinct.pluck(:source).sort
+
+    @window = window
+    @sources = all_sources.map do |source|
+      source_stats = stats_by_source[source] || []
+      total = source_stats.size
+      errors = source_stats.count { |s| s.status == "error" }
+      successes = total - errors
+
+      # Sort once for reuse
+      sorted_desc = source_stats.sort_by { |s| -s.created_at.to_i }
+      success_stats = sorted_desc.select { |s| s.status == "success" }
+
+      last_success = PollingStat.where(source: source, status: "success").order(created_at: :desc).first
+      last_error = PollingStat.where(source: source, status: "error").order(created_at: :desc).first
+      last_poll = PollingStat.where(source: source).order(created_at: :desc).first
+
+      avg_duration = success_stats.any? ? (success_stats.sum(&:duration_ms) / success_stats.size.to_f).round : 0
+      sorted_durations = success_stats.map(&:duration_ms).sort
+      p95_duration = sorted_durations.any? ? sorted_durations[(sorted_durations.size * 0.95).floor] || 0 : 0
+      avg_fetched = success_stats.any? ? (success_stats.sum(&:records_fetched) / success_stats.size.to_f).round : 0
+
+      # Determine health status
+      status = if total == 0
+        :unknown
+      elsif last_poll && last_poll.status == "error" && last_error &&
+            (last_success.nil? || last_error.created_at > last_success.created_at)
+        consecutive_errors = PollingStat.where(source: source)
+          .order(created_at: :desc).limit(5).pluck(:status).take_while { |s| s == "error" }.size
+        consecutive_errors >= 3 ? :down : :degraded
+      elsif errors > 0 && total > 0 && (errors.to_f / total) > 0.3
+        :degraded
+      else
+        :healthy
+      end
+
+      # Sparkline data: success/error counts per bucket
+      bucket_minutes = window <= 1 ? 5 : (window <= 6 ? 15 : 30)
+      sparkline = source_stats
+        .group_by { |s| s.created_at.beginning_of_hour + (s.created_at.min / bucket_minutes * bucket_minutes).minutes }
+        .sort_by(&:first)
+        .map { |t, rows| { t: t.strftime("%H:%M"), ok: rows.count { |r| r.status == "success" }, err: rows.count { |r| r.status == "error" } } }
+
+      # Recent errors (last 5)
+      recent_errors = PollingStat.where(source: source, status: "error")
+        .order(created_at: :desc).limit(5)
+        .pluck(:created_at, :error_message, :duration_ms)
+        .map { |t, msg, dur| { time: t, message: msg, duration: dur } }
+
+      {
+        source: source,
+        poll_type: last_poll&.poll_type || "unknown",
+        status: status,
+        total: total,
+        successes: successes,
+        errors: errors,
+        success_rate: total > 0 ? ((successes.to_f / total) * 100).round(1) : 0,
+        avg_duration: avg_duration,
+        p95_duration: p95_duration,
+        avg_fetched: avg_fetched,
+        last_success_at: last_success&.created_at,
+        last_error_at: last_error&.created_at,
+        last_poll_at: last_poll&.created_at,
+        last_error_message: last_error&.error_message,
+        sparkline: sparkline,
+        recent_errors: recent_errors,
+      }
+    end
+
+    # Summary counts
+    @summary = {
+      total: @sources.size,
+      healthy: @sources.count { |s| s[:status] == :healthy },
+      degraded: @sources.count { |s| s[:status] == :degraded },
+      down: @sources.count { |s| s[:status] == :down },
+      unknown: @sources.count { |s| s[:status] == :unknown },
+    }
+  end
+
   def dashboard
     @poller_status = GlobalPollerService.status
 

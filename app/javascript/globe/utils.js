@@ -1,18 +1,34 @@
 function C() { return window.Cesium }
 
+// ── Cached Cesium color instances ────────────────────────────
+// Parse once, reuse everywhere — avoids Color.fromCssColorString in render loops.
+const _colorCache = new Map()
+export function cachedColor(css, alpha) {
+  const key = alpha != null ? `${css}@${alpha}` : css
+  if (!_colorCache.has(key)) {
+    let c = C().Color.fromCssColorString(css)
+    if (alpha != null) c = c.withAlpha(alpha)
+    _colorCache.set(key, c)
+  }
+  return _colorCache.get(key)
+}
+
 // ── Standard entity label config ─────────────────────────────
-// Use these for consistent sizing/positioning across all layers.
+// Lazily cached — each getter returns the SAME instance after first call.
+const _labelCache = {}
+function cached(key, fn) {
+  return () => { if (!_labelCache[key]) _labelCache[key] = fn(); return _labelCache[key] }
+}
+
 export const LABEL_DEFAULTS = {
   font: "13px JetBrains Mono, monospace",
   outlineWidth: 3,
-  style: () => C().LabelStyle.FILL_AND_OUTLINE,
-  outlineColor: () => C().Color.BLACK.withAlpha(0.8),
-  scaleByDistance: () => new (C()).NearFarScalar(5e4, 1, 5e6, 0.35),
-  // Labels fade in only when close — prevents jumbled text at far zoom
-  translucencyByDistance: () => new (C()).NearFarScalar(5e4, 1, 5e5, 0),
-  pixelOffsetBelow: () => new (C()).Cartesian2(0, 14),
-  pixelOffsetAbove: () => new (C()).Cartesian2(0, -14),
-  // Always render on top of 3D tiles / terrain — prevents entities hiding under photorealistic buildings
+  style: cached("style", () => C().LabelStyle.FILL_AND_OUTLINE),
+  outlineColor: cached("outlineColor", () => C().Color.BLACK.withAlpha(0.8)),
+  scaleByDistance: cached("sbd", () => new (C()).NearFarScalar(5e4, 1, 5e6, 0.35)),
+  translucencyByDistance: cached("tbd", () => new (C()).NearFarScalar(5e4, 1, 5e5, 0)),
+  pixelOffsetBelow: cached("poBelow", () => new (C()).Cartesian2(0, 14)),
+  pixelOffsetAbove: cached("poAbove", () => new (C()).Cartesian2(0, -14)),
   disableDepthTest: Number.POSITIVE_INFINITY,
 }
 

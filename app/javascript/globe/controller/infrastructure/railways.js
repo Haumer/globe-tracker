@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource, cachedColor } from "../../utils"
 
 export function applyRailwaysMethods(GlobeController) {
   GlobeController.prototype.getRailwaysDataSource = function() { return getDataSource(this.viewer, this._ds, "railways") }
@@ -8,7 +8,11 @@ export function applyRailwaysMethods(GlobeController) {
     if (this.railwaysVisible) {
       this.fetchRailways()
       if (!this._rwCameraCb) {
-        this._rwCameraCb = () => { if (this.railwaysVisible) this.fetchRailways() }
+        this._rwCameraCb = () => {
+          if (!this.railwaysVisible) return
+          clearTimeout(this._rwDebounce)
+          this._rwDebounce = setTimeout(() => this.fetchRailways(), 300)
+        }
         this.viewer.camera.moveEnd.addEventListener(this._rwCameraCb)
       }
     } else {
@@ -63,8 +67,8 @@ export function applyRailwaysMethods(GlobeController) {
       const isElec = rw.electrified === 1
       const isMajor = rw.category === 1
       const color = isElec
-        ? Cesium.Color.fromCssColorString("#64b5f6").withAlpha(0.8)
-        : Cesium.Color.fromCssColorString("#b0bec5").withAlpha(0.75)
+        ? cachedColor("#64b5f6", 0.8)
+        : cachedColor("#b0bec5", 0.75)
       const width = isMajor ? 2.5 : rw.category === 2 ? 2.0 : 1.5
 
       const entity = dataSource.entities.add({

@@ -1,0 +1,198 @@
+<%= turbo_frame_tag "api-health" do %>
+
+<div style="background: #0a0e17; min-height: 100vh; padding: 24px; font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; color: #c8d2e1;">
+  <div style="max-width: 1400px; margin: 0 auto;">
+
+    <%# ── Header ── %>
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
+      <div>
+        <h1 style="color: #4fc3f7; margin: 0 0 4px; font-size: 24px; font-weight: 700;">API Health Monitor</h1>
+        <p style="color: #6b7a8d; margin: 0; font-size: 12px;">
+          <%= Time.current.strftime("%Y-%m-%d %H:%M:%S UTC") %>
+          &middot; Window: <%= @window %>h
+          &middot; <a href="<%= admin_path %>" style="color: #4fc3f7; text-decoration: none;">Dashboard</a>
+        </p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <% [1, 6, 12, 24].each do |w| %>
+          <a href="<%= admin_api_health_path(window: w) %>"
+             style="padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;
+                    background: <%= w == @window ? '#1e3a5f' : '#141a28' %>;
+                    color: <%= w == @window ? '#4fc3f7' : '#6b7a8d' %>;
+                    border: 1px solid <%= w == @window ? '#2a5a8f' : '#1e2a3a' %>;">
+            <%= w %>h
+          </a>
+        <% end %>
+      </div>
+    </div>
+
+    <%# ── Summary Cards ── %>
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+      <div style="background: #141a28; border-radius: 8px; padding: 14px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; color: #4fc3f7;"><%= @summary[:total] %></div>
+        <div style="color: #6b7a8d; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Total</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 14px; border: 1px solid #1b3a2a; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; color: #66bb6a;"><%= @summary[:healthy] %></div>
+        <div style="color: #6b7a8d; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Healthy</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 14px; border: 1px solid #3a3520; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; color: #ffa726;"><%= @summary[:degraded] %></div>
+        <div style="color: #6b7a8d; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Degraded</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 14px; border: 1px solid #3a1b1b; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; color: #ef5350;"><%= @summary[:down] %></div>
+        <div style="color: #6b7a8d; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Down</div>
+      </div>
+      <div style="background: #141a28; border-radius: 8px; padding: 14px; border: 1px solid #1e2a3a; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; color: #6b7a8d;"><%= @summary[:unknown] %></div>
+        <div style="color: #6b7a8d; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Unknown</div>
+      </div>
+    </div>
+
+    <%# ── Source Cards ── %>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px;">
+      <% @sources.sort_by { |s| { down: 0, degraded: 1, unknown: 2, healthy: 3 }[s[:status]] }.each do |src| %>
+        <%
+          status_color = case src[:status]
+            when :healthy  then "#66bb6a"
+            when :degraded then "#ffa726"
+            when :down     then "#ef5350"
+            else "#6b7a8d"
+          end
+          status_bg = case src[:status]
+            when :healthy  then "#1b3a2a"
+            when :degraded then "#3a3520"
+            when :down     then "#3a1b1b"
+            else "#1e2a3a"
+          end
+          status_label = src[:status].to_s.upcase
+          border_color = case src[:status]
+            when :healthy  then "#1b3a2a"
+            when :degraded then "#3a3520"
+            when :down     then "#3a1b1b"
+            else "#1e2a3a"
+          end
+        %>
+
+        <div style="background: #141a28; border-radius: 8px; border: 1px solid <%= border_color %>; overflow: hidden;">
+          <%# Card Header %>
+          <div style="padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e2a3a;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: <%= status_color %>; box-shadow: 0 0 6px <%= status_color %>;"></div>
+              <div>
+                <div style="font-size: 14px; font-weight: 700; color: #e0e6ed;"><%= src[:source] %></div>
+                <div style="font-size: 11px; color: #6b7a8d;"><%= src[:poll_type] %></div>
+              </div>
+            </div>
+            <span style="padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: <%= status_bg %>; color: <%= status_color %>;">
+              <%= status_label %>
+            </span>
+          </div>
+
+          <%# Metrics Row %>
+          <div style="padding: 12px 16px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; border-bottom: 1px solid #1e2a3a;">
+            <div>
+              <div style="font-size: 10px; color: #6b7a8d; text-transform: uppercase; letter-spacing: 0.5px;">Success</div>
+              <div style="font-size: 16px; font-weight: 700; color: <%= src[:success_rate] >= 90 ? '#66bb6a' : src[:success_rate] >= 70 ? '#ffa726' : '#ef5350' %>;">
+                <%= src[:success_rate] %>%
+              </div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #6b7a8d; text-transform: uppercase; letter-spacing: 0.5px;">Avg Resp</div>
+              <div style="font-size: 16px; font-weight: 700; color: <%= src[:avg_duration] > 5000 ? '#ef5350' : src[:avg_duration] > 2000 ? '#ffa726' : '#e0e6ed' %>;">
+                <%= src[:avg_duration] > 1000 ? "#{(src[:avg_duration] / 1000.0).round(1)}s" : "#{src[:avg_duration]}ms" %>
+              </div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #6b7a8d; text-transform: uppercase; letter-spacing: 0.5px;">P95</div>
+              <div style="font-size: 16px; font-weight: 700; color: #e0e6ed;">
+                <%= src[:p95_duration] > 1000 ? "#{(src[:p95_duration] / 1000.0).round(1)}s" : "#{src[:p95_duration]}ms" %>
+              </div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #6b7a8d; text-transform: uppercase; letter-spacing: 0.5px;">Avg Recs</div>
+              <div style="font-size: 16px; font-weight: 700; color: #e0e6ed;">
+                <%= number_with_delimiter(src[:avg_fetched]) %>
+              </div>
+            </div>
+          </div>
+
+          <%# Sparkline %>
+          <% if src[:sparkline].any? %>
+            <div style="padding: 8px 16px; border-bottom: 1px solid #1e2a3a;">
+              <div style="display: flex; align-items: flex-end; gap: 2px; height: 32px;">
+                <% max_val = src[:sparkline].map { |b| b[:ok] + b[:err] }.max || 1 %>
+                <% src[:sparkline].each do |bucket| %>
+                  <% total_h = [(((bucket[:ok] + bucket[:err]).to_f / max_val) * 28).round, 2].max %>
+                  <% err_h = bucket[:err] > 0 ? [(bucket[:err].to_f / (bucket[:ok] + bucket[:err]) * total_h).round, 2].max : 0 %>
+                  <% ok_h = total_h - err_h %>
+                  <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 1px;" title="<%= bucket[:t] %>: <%= bucket[:ok] %> ok, <%= bucket[:err] %> err">
+                    <% if err_h > 0 %>
+                      <div style="height: <%= err_h %>px; background: #ef5350; border-radius: 1px;"></div>
+                    <% end %>
+                    <div style="height: <%= ok_h %>px; background: <%= bucket[:err] > 0 ? '#ffa726' : '#66bb6a' %>; border-radius: 1px;"></div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <%# Poll Counts & Timing %>
+          <div style="padding: 10px 16px; display: flex; justify-content: space-between; font-size: 11px; color: #6b7a8d;">
+            <span><%= src[:successes] %> ok / <%= src[:errors] %> err / <%= src[:total] %> total</span>
+            <span>
+              <% if src[:last_poll_at] %>
+                <% age_sec = (Time.current - src[:last_poll_at]).round %>
+                <% if age_sec < 60 %>
+                  Last: <span style="color: #66bb6a;"><%= age_sec %>s ago</span>
+                <% elsif age_sec < 3600 %>
+                  Last: <span style="color: <%= age_sec > 300 ? '#ffa726' : '#66bb6a' %>;"><%= (age_sec / 60).round %>m ago</span>
+                <% else %>
+                  Last: <span style="color: #ef5350;"><%= (age_sec / 3600.0).round(1) %>h ago</span>
+                <% end %>
+              <% else %>
+                No polls
+              <% end %>
+            </span>
+          </div>
+
+          <%# Last Error (if any) %>
+          <% if src[:last_error_message].present? %>
+            <div style="padding: 0 16px 12px; cursor: pointer;" onclick="this.querySelector('.err-detail').style.display = this.querySelector('.err-detail').style.display === 'none' ? 'block' : 'none'">
+              <div style="background: #1a1215; border-radius: 4px; padding: 8px 10px; border-left: 3px solid #ef5350;">
+                <div style="font-size: 11px; color: #ef5350; font-weight: 600; margin-bottom: 2px;">
+                  Latest Error
+                  <% if src[:last_error_at] %>
+                    <span style="font-weight: 400; color: #6b7a8d;"> &middot; <%= time_ago_in_words(src[:last_error_at]) %> ago</span>
+                  <% end %>
+                </div>
+                <div style="font-size: 11px; color: #c8d2e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <%= src[:last_error_message]&.truncate(120) %>
+                </div>
+                <div class="err-detail" style="display: none; margin-top: 8px;">
+                  <% src[:recent_errors].each do |err| %>
+                    <div style="font-size: 10px; color: #8892a4; padding: 4px 0; border-top: 1px solid #1e2a3a;">
+                      <span style="color: #6b7a8d;"><%= err[:time].strftime("%H:%M:%S") %></span>
+                      <span style="color: #ef5350; margin-left: 4px;"><%= err[:duration] %>ms</span>
+                      <div style="color: #c8d2e1; margin-top: 2px; word-break: break-all;"><%= err[:message]&.truncate(200) %></div>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+  </div>
+</div>
+<% end %>
+
+<script>
+  setInterval(() => {
+    const frame = document.querySelector("turbo-frame#api-health")
+    if (frame) frame.reload()
+  }, 15000)
+</script>

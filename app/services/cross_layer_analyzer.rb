@@ -8,11 +8,22 @@ class CrossLayerAnalyzer
   def analyze
     insights = []
 
+    # Hardcoded domain-specific rules (precise, high-confidence)
     insights.concat(earthquake_infrastructure_threats)
     insights.concat(jamming_flight_impacts)
     insights.concat(conflict_military_surge)
     insights.concat(fire_infrastructure_threats)
     insights.concat(cable_outage_correlations)
+
+    # General-purpose spatiotemporal convergence detection
+    # Finds multi-layer hotspots that hardcoded rules don't cover
+    convergences = ConvergenceDetector.detect
+    # Deduplicate: skip convergences that overlap with existing insights (same cell)
+    existing_cells = insights.map { |i| cell_key(i[:lat], i[:lng]) }.to_set
+    convergences.each do |c|
+      key = cell_key(c[:lat], c[:lng])
+      insights << c unless existing_cells.include?(key)
+    end
 
     insights.sort_by { |i| -severity_score(i[:severity]) }
   end
@@ -236,6 +247,13 @@ class CrossLayerAnalyzer
         pt[1] >= bounds[:lamin] && pt[1] <= bounds[:lamax] &&
         pt[0] >= bounds[:lomin] && pt[0] <= bounds[:lomax] }
     end
+  end
+
+  def cell_key(lat, lng)
+    return nil unless lat && lng
+    clat = (lat.to_f / 2.0).floor * 2.0
+    clng = (lng.to_f / 2.0).floor * 2.0
+    "#{clat},#{clng}"
   end
 
   def severity_score(severity)

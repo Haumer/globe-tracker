@@ -233,7 +233,7 @@ export function applyMaritimeMethods(GlobeController) {
     if (this.shipsVisible) {
       this.fetchShips()
       if (!this.shipInterval) {
-        this.shipInterval = setInterval(() => this.fetchShips(), 15000)
+        this.shipInterval = setInterval(() => this.fetchShips(), 60000)
         this._shipCameraCb = () => this.fetchShips()
         this.viewer.camera.moveEnd.addEventListener(this._shipCameraCb)
       }

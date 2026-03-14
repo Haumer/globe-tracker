@@ -129,7 +129,16 @@ export function applyUiMethods(GlobeController) {
     this._updateSatBadge()
   }
 
+  // Debounced — avoids DOM thrashing when multiple layers update in quick succession
   GlobeController.prototype._syncQuickBar = function() {
+    if (this._syncQBTimer) return
+    this._syncQBTimer = requestAnimationFrame(() => {
+      this._syncQBTimer = null
+      this._syncQuickBarImpl()
+    })
+  }
+
+  GlobeController.prototype._syncQuickBarImpl = function() {
     const sync = (targetName, active) => {
       const has = "has" + targetName.charAt(0).toUpperCase() + targetName.slice(1) + "Target"
       if (this[has]) {

@@ -131,7 +131,7 @@ export function applyTimelineMethods(GlobeController) {
     }
     if (this.shipsVisible) {
       this.fetchShips()
-      this.shipInterval = setInterval(() => this.fetchShips(), 15000)
+      this.shipInterval = setInterval(() => this.fetchShips(), 60000)
     }
     if (this.gpsJammingVisible) {
       this.fetchGpsJamming()

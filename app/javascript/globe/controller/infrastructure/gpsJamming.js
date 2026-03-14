@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource, cachedColor } from "../../utils"
 
 export function applyGpsJammingMethods(GlobeController) {
   GlobeController.prototype.getGpsJammingDataSource = function() { return getDataSource(this.viewer, this._ds, "gpsJamming") }
@@ -84,7 +84,7 @@ export function applyGpsJammingMethods(GlobeController) {
           label: {
             text: `⚠ ${cell.pct}%`,
             font: "13px DM Sans, sans-serif",
-            fillColor: cell.level === "high" ? Cesium.Color.fromCssColorString("#ff5252") : Cesium.Color.fromCssColorString("#ffd54f"),
+            fillColor: cell.level === "high" ? cachedColor("#ff5252") : cachedColor("#ffd54f"),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,

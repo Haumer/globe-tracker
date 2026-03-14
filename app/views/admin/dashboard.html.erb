@@ -4,8 +4,15 @@
 
   <div style="max-width: 1200px; margin: 0 auto;">
 
-    <h1 style="color: #4fc3f7; margin-bottom: 8px; font-size: 28px;">Globe Tracker Admin</h1>
-    <p style="color: #6b7a8d; margin-bottom: 24px; font-size: 14px;">Last refreshed: <%= Time.current.strftime("%H:%M:%S UTC") %></p>
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
+      <div>
+        <h1 style="color: #4fc3f7; margin: 0 0 4px; font-size: 28px;">Globe Tracker Admin</h1>
+        <p style="color: #6b7a8d; margin: 0; font-size: 14px;">Last refreshed: <%= Time.current.strftime("%H:%M:%S UTC") %></p>
+      </div>
+      <a href="<%= admin_api_health_path %>" style="padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; background: #141a28; color: #4fc3f7; border: 1px solid #1e2a3a;">
+        API Health Monitor &rarr;
+      </a>
+    </div>
 
     <%# ── Poller Status ── %>
     <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">

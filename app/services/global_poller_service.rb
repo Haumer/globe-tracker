@@ -24,7 +24,9 @@ class GlobalPollerService
     def stop
       @running = false
       @paused = false
-      @thread&.join(5)
+      unless @thread&.join(3)
+        @thread&.kill
+      end
       @thread = nil
       Rails.logger.info("GlobalPollerService: stopped")
     end
@@ -76,7 +78,8 @@ class GlobalPollerService
           end
         end
 
-        sleep FLIGHT_POLL_INTERVAL
+        # Sleep in short intervals so the thread exits quickly on shutdown
+        FLIGHT_POLL_INTERVAL.times { break unless @running; sleep 1 }
       end
     end
 

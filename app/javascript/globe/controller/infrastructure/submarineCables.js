@@ -1,4 +1,4 @@
-import { findCountryAtPoint, getDataSource } from "../../utils"
+import { findCountryAtPoint, getDataSource, cachedColor } from "../../utils"
 
 export function applyCablesMethods(GlobeController) {
   GlobeController.prototype.getCablesDataSource = function() { return getDataSource(this.viewer, this._ds, "cables") }
@@ -82,8 +82,8 @@ export function applyCablesMethods(GlobeController) {
           position: Cesium.Cartesian3.fromDegrees(lp.lng, lp.lat, 50),
           point: {
             pixelSize: 4,
-            color: Cesium.Color.fromCssColorString("#00e5ff").withAlpha(0.9),
-            outlineColor: Cesium.Color.fromCssColorString("#00838f").withAlpha(0.5),
+            color: cachedColor("#00e5ff", 0.9),
+            outlineColor: cachedColor("#00838f", 0.5),
             outlineWidth: 1,
             scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 5e6, 0.3),
             heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -92,7 +92,7 @@ export function applyCablesMethods(GlobeController) {
           label: {
             text: lp.name || "",
             font: "10px JetBrains Mono, monospace",
-            fillColor: Cesium.Color.fromCssColorString("#80deea").withAlpha(0.8),
+            fillColor: cachedColor("#80deea", 0.8),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,

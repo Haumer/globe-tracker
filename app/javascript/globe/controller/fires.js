@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource, cachedColor } from "../utils"
 
 export function applyFiresMethods(GlobeController) {
 
@@ -69,10 +69,10 @@ export function applyFiresMethods(GlobeController) {
 
       // Color by brightness/FRP: yellow → orange → red → deep red
       let color
-      if (brightness < 320) color = Cesium.Color.fromCssColorString("#ffd54f")
-      else if (brightness < 350) color = Cesium.Color.fromCssColorString("#ff9800")
-      else if (brightness < 400) color = Cesium.Color.fromCssColorString("#ff5722")
-      else color = Cesium.Color.fromCssColorString("#d50000")
+      if (brightness < 320) color = cachedColor("#ffd54f")
+      else if (brightness < 350) color = cachedColor("#ff9800")
+      else if (brightness < 400) color = cachedColor("#ff5722")
+      else color = cachedColor("#d50000")
 
       const pixelSize = Math.min(4 + Math.sqrt(frp) * 0.8, 16)
 

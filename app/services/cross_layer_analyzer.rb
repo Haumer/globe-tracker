@@ -555,22 +555,22 @@ class CrossLayerAnalyzer
 
     quakes.find_each do |eq|
       bounds = bbox(eq.latitude, eq.longitude, eq.magnitude > 6 ? 250 : 100)
-      pipelines = Pipeline.within_bounds(bounds)
-      next if pipelines.count == 0
+      nearby = pipelines_in_bounds(bounds)
+      next if nearby.empty?
 
-      types = pipelines.distinct.pluck(:pipeline_type).compact
+      types = nearby.map { |p| p.pipeline_type }.compact.uniq
       severity = eq.magnitude >= 6.5 ? "high" : "medium"
 
       insights << {
         type: "earthquake_pipeline",
         severity: severity,
-        title: "M#{eq.magnitude} earthquake near #{pipelines.count} pipeline#{"s" unless pipelines.count == 1}",
+        title: "M#{eq.magnitude} earthquake near #{nearby.size} pipeline#{"s" unless nearby.size == 1}",
         description: "#{types.join(", ")} infrastructure at risk — #{eq.title}",
         lat: eq.latitude,
         lng: eq.longitude,
         entities: {
           earthquake: { id: eq.external_id, magnitude: eq.magnitude, depth: eq.depth },
-          pipelines: pipelines.limit(5).map { |p| { name: p.name, type: p.pipeline_type } },
+          pipelines: nearby.first(5).map { |p| { name: p.name, type: p.pipeline_type } },
         },
         detected_at: Time.current.iso8601,
       }
@@ -593,23 +593,23 @@ class CrossLayerAnalyzer
     insights = []
     fire_clusters.each do |cluster|
       bounds = bbox(cluster.clat, cluster.clng, 50)
-      pipelines = Pipeline.within_bounds(bounds)
-      next if pipelines.count == 0
+      nearby = pipelines_in_bounds(bounds)
+      next if nearby.empty?
 
-      types = pipelines.distinct.pluck(:pipeline_type).compact
+      types = nearby.map { |p| p.pipeline_type }.compact.uniq
       oil_gas = types.any? { |t| t.match?(/oil|gas/i) }
       severity = oil_gas && cluster.fire_count.to_i > 10 ? "high" : "medium"
 
       insights << {
         type: "fire_pipeline",
         severity: severity,
-        title: "#{cluster.fire_count.to_i} fire hotspots near #{types.join("/")} pipeline#{"s" if pipelines.count > 1}",
+        title: "#{cluster.fire_count.to_i} fire hotspots near #{types.join("/")} pipeline#{"s" if nearby.size > 1}",
         description: "Max FRP: #{cluster.max_frp&.round(0)} — #{oil_gas ? "oil/gas explosion risk" : "infrastructure at risk"}",
         lat: cluster.clat,
         lng: cluster.clng,
         entities: {
           fires: { count: cluster.fire_count.to_i, max_frp: cluster.max_frp },
-          pipelines: pipelines.limit(5).map { |p| { name: p.name, type: p.pipeline_type } },
+          pipelines: nearby.first(5).map { |p| { name: p.name, type: p.pipeline_type } },
         },
         detected_at: Time.current.iso8601,
       }
@@ -669,6 +669,17 @@ class CrossLayerAnalyzer
   def cables_in_bounds(bounds)
     SubmarineCable.all.select do |cable|
       coords = cable.coordinates
+      next false unless coords.is_a?(Array)
+      flat = coords.first.is_a?(Array) && coords.first.first.is_a?(Array) ? coords.flatten(1) : coords
+      flat.any? { |pt| pt.is_a?(Array) && pt.size >= 2 &&
+        pt[1] >= bounds[:lamin] && pt[1] <= bounds[:lamax] &&
+        pt[0] >= bounds[:lomin] && pt[0] <= bounds[:lomax] }
+    end
+  end
+
+  def pipelines_in_bounds(bounds)
+    Pipeline.all.select do |pipe|
+      coords = pipe.coordinates
       next false unless coords.is_a?(Array)
       flat = coords.first.is_a?(Array) && coords.first.first.is_a?(Array) ? coords.flatten(1) : coords
       flat.any? { |pt| pt.is_a?(Array) && pt.size >= 2 &&

@@ -34,8 +34,9 @@ class MilitaryClassifier
     ["340000", "340fff", "ES"],
     # Belgium (military sub-block only — 448000-44807f; 449000+ is civil)
     ["448000", "44807f", "BE"],
-    # Turkey (military sub-block)
-    ["4b8000", "4b8fff", "TR"],
+    # Turkey (narrowed — 4b8000-4b8fff is too broad, catches Pegasus/Turkish Airlines)
+    # Turkish military typically uses 4b8000-4b80ff
+    ["4b8000", "4b80ff", "TR"],
     # Greece
     ["468000", "468fff", "GR"],
     # Poland
@@ -69,10 +70,26 @@ class MilitaryClassifier
     /^TAF\d/i,         # Turkish Air Force
   ].freeze
 
+  # Known airline ICAO prefixes that should NEVER be classified as military.
+  # Prevents false positives when hex ranges overlap civil/military allocations.
+  CIVILIAN_PREFIXES = %w[
+    PGT THY SXS ANA TKJ OHY KKK SHT XAK TAK
+    UAE ETD QTR SIA MAS CPA CES CSN CCA AIR
+    BAW DLH AFR KLM SAS AUA BEL FIN LOT CSA
+    TAP IBE SWR AZA
+  ].freeze
+
   def self.military?(icao24:, callsign: nil)
+    return false if civilian_callsign?(callsign)
     return true if military_callsign?(callsign)
     return true if military_hex?(icao24)
     false
+  end
+
+  def self.civilian_callsign?(callsign)
+    return false if callsign.blank?
+    cs = callsign.strip.upcase
+    CIVILIAN_PREFIXES.any? { |p| cs.start_with?(p) }
   end
 
   def self.military_callsign?(callsign)

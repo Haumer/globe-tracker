@@ -75,7 +75,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
 
   # ── jamming_flight_impacts ────────────────────────────────────
 
-  test "GPS jamming zone with flights returns insight" do
+  test "GPS jamming zone with civilian flights returns jamming_flights insight" do
     GpsJammingSnapshot.create!(
       cell_lat: 50.0, cell_lng: 35.0, total: 100, bad: 35,
       percentage: 35.0, level: "severe", recorded_at: 30.minutes.ago
@@ -87,39 +87,33 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
         origin_country: "Ukraine", military: false
       )
     end
-    Flight.create!(
-      icao24: "jam-mil-1", callsign: "MIL1",
-      latitude: 50.3, longitude: 35.2, altitude: 30000,
-      origin_country: "US", military: true
-    )
 
     insights = CrossLayerAnalyzer.analyze
     jam_insights = insights.select { |i| i[:type] == "jamming_flights" }
 
     assert_equal 1, jam_insights.size
     assert_equal "high", jam_insights.first[:severity]  # percentage > 30
-    assert_includes jam_insights.first[:title], "6 flights"
-    assert_equal 1, jam_insights.first[:entities][:flights][:military]
+    assert_includes jam_insights.first[:title], "civilian"
   end
 
-  test "GPS jamming with many military flights returns critical" do
+  test "GPS jamming with 3+ military flights returns electronic_warfare" do
     GpsJammingSnapshot.create!(
       cell_lat: 50.0, cell_lng: 35.0, total: 100, bad: 20,
       percentage: 20.0, level: "moderate", recorded_at: 20.minutes.ago
     )
-    7.times do |i|
+    5.times do |i|
       Flight.create!(
-        icao24: "mil-surge-#{i}", callsign: "MIL#{i}",
+        icao24: "ew-mil-#{i}", callsign: "MIL#{i}",
         latitude: 50.1 + i * 0.01, longitude: 35.1, altitude: 25000,
         origin_country: "US", military: true
       )
     end
 
     insights = CrossLayerAnalyzer.analyze
-    jam_insights = insights.select { |i| i[:type] == "jamming_flights" }
+    ew_insights = insights.select { |i| i[:type] == "electronic_warfare" }
 
-    assert_equal 1, jam_insights.size
-    assert_equal "critical", jam_insights.first[:severity]
+    assert_equal 1, ew_insights.size
+    assert_includes ew_insights.first[:title], "electronic warfare"
   end
 
   test "GPS jamming with no flights produces no insight" do
@@ -135,20 +129,27 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
 
   # ── conflict_military_surge ───────────────────────────────────
 
-  test "conflict zone with military flights returns insight" do
-    4.times do |i|
+  test "conflict zone with multi-national military flights returns insight" do
+    6.times do |i|
       ConflictEvent.create!(
         external_id: 9000 + i, conflict_name: "Test Conflict",
         latitude: 15.0 + i * 0.1, longitude: 45.0 + i * 0.1,
-        date_start: (10 + i).days.ago, country: "Yemen",
+        date_start: (1 + i).days.ago, country: "Yemen",
         type_of_violence: 1
       )
     end
-    4.times do |i|
+    3.times do |i|
       Flight.create!(
-        icao24: "conf-mil-#{i}", callsign: "REAPER#{i}",
+        icao24: "conf-mil-us-#{i}", callsign: "REAPER#{i}",
         latitude: 15.2, longitude: 45.2, altitude: 20000,
-        origin_country: "US", military: true
+        origin_country: "United States", military: true
+      )
+    end
+    3.times do |i|
+      Flight.create!(
+        icao24: "conf-mil-uk-#{i}", callsign: "HAWK#{i}",
+        latitude: 15.3, longitude: 45.3, altitude: 22000,
+        origin_country: "United Kingdom", military: true
       )
     end
 
@@ -157,18 +158,18 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
 
     assert_equal 1, conflict_insights.size
     assert_includes conflict_insights.first[:title], "Test Conflict"
-    assert_equal 4, conflict_insights.first[:entities][:flights][:military]
+    assert_equal 6, conflict_insights.first[:entities][:flights][:military]
   end
 
-  test "conflict zone with fewer than 3 military flights produces no insight" do
-    3.times do |i|
+  test "conflict zone with fewer than 5 military flights produces no insight" do
+    6.times do |i|
       ConflictEvent.create!(
         external_id: 8000 + i, conflict_name: "Small Conflict",
-        latitude: 30.0, longitude: 50.0, date_start: 5.days.ago,
+        latitude: 30.0, longitude: 50.0, date_start: (1 + i).days.ago,
         country: "Iraq", type_of_violence: 2
       )
     end
-    2.times do |i|
+    4.times do |i|
       Flight.create!(
         icao24: "small-mil-#{i}", callsign: "JET#{i}",
         latitude: 30.0, longitude: 50.0, altitude: 30000,
@@ -181,15 +182,15 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_empty conflict_insights
   end
 
-  test "conflict with fewer than 3 events is excluded" do
-    2.times do |i|
+  test "conflict with fewer than 5 events is excluded" do
+    3.times do |i|
       ConflictEvent.create!(
         external_id: 7000 + i, conflict_name: "Minor Skirmish",
         latitude: 20.0, longitude: 40.0, date_start: 3.days.ago,
         country: "Somalia", type_of_violence: 1
       )
     end
-    5.times do |i|
+    6.times do |i|
       Flight.create!(
         icao24: "minor-mil-#{i}", callsign: "HAWK#{i}",
         latitude: 20.0, longitude: 40.0, altitude: 25000,
@@ -282,12 +283,12 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
   test "internet outage with recent earthquake returns cable_outage insight" do
     Earthquake.create!(
       external_id: "eq-outage-1", title: "M5.5 undersea",
-      magnitude: 5.5, latitude: 25.0, longitude: -70.0, depth: 20,
+      magnitude: 5.5, latitude: 36.0, longitude: 140.0, depth: 20,
       event_time: 12.hours.ago, fetched_at: Time.current
     )
     InternetOutage.create!(
-      external_id: "outage-1", entity_type: "country", entity_code: "BS",
-      entity_name: "Bahamas", level: "critical", score: 85.0,
+      external_id: "outage-1", entity_type: "country", entity_code: "JP",
+      entity_name: "Japan", level: "critical", score: 85.0,
       started_at: 6.hours.ago
     )
 
@@ -296,7 +297,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
 
     assert_equal 1, cable_insights.size
     assert_equal "high", cable_insights.first[:severity]
-    assert_includes cable_insights.first[:title], "Bahamas"
+    assert_includes cable_insights.first[:title], "Japan"
   end
 
   test "internet outage without recent earthquake produces no insight" do
@@ -365,5 +366,220 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
 
   test "analyze with no data returns empty array" do
     assert_equal [], CrossLayerAnalyzer.analyze
+  end
+
+  # ── emergency_squawk_correlations ──────────────────────────
+
+  test "hijack squawk returns critical" do
+    Flight.create!(
+      icao24: "squawk-7500", callsign: "HIJACK1",
+      latitude: 40.0, longitude: -74.0, altitude: 30000,
+      origin_country: "US", military: false, squawk: "7500"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    sq_insights = insights.select { |i| i[:type] == "emergency_squawk" }
+
+    assert_equal 1, sq_insights.size
+    assert_equal "critical", sq_insights.first[:severity]
+    assert_includes sq_insights.first[:title], "HIJACK"
+  end
+
+  test "NORDO squawk near jamming returns critical" do
+    Flight.create!(
+      icao24: "squawk-7600", callsign: "NORDO1",
+      latitude: 50.0, longitude: 35.0, altitude: 35000,
+      origin_country: "Germany", military: false, squawk: "7600"
+    )
+    GpsJammingSnapshot.create!(
+      cell_lat: 50.0, cell_lng: 35.0, total: 50, bad: 10,
+      percentage: 20.0, level: "moderate", recorded_at: 30.minutes.ago
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    sq_insights = insights.select { |i| i[:type] == "emergency_squawk" }
+
+    assert sq_insights.any?
+    nordo = sq_insights.find { |i| i[:title].include?("NORDO") }
+    assert_equal "critical", nordo[:severity]
+    assert_includes nordo[:title], "GPS jamming"
+  end
+
+  test "emergency squawk without context returns medium" do
+    Flight.create!(
+      icao24: "squawk-7700", callsign: "EMG1",
+      latitude: -30.0, longitude: 25.0, altitude: 20000,
+      origin_country: "South Africa", military: false, squawk: "7700"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    sq_insights = insights.select { |i| i[:type] == "emergency_squawk" }
+
+    assert_equal 1, sq_insights.size
+    assert_equal "medium", sq_insights.first[:severity]
+  end
+
+  # ── electronic_warfare (merged into jamming_flights) ───────
+
+  test "jamming with 3+ military flights produces electronic_warfare" do
+    GpsJammingSnapshot.create!(
+      cell_lat: 55.0, cell_lng: 25.0, total: 80, bad: 20,
+      percentage: 25.0, level: "moderate", recorded_at: 20.minutes.ago
+    )
+    4.times do |i|
+      Flight.create!(
+        icao24: "ew-test-#{i}", callsign: "EAGLE#{i}",
+        latitude: 55.1, longitude: 25.1, altitude: 30000,
+        origin_country: "US", military: true
+      )
+    end
+
+    insights = CrossLayerAnalyzer.analyze
+    ew = insights.select { |i| i[:type] == "electronic_warfare" }
+
+    assert_equal 1, ew.size
+    assert_includes ew.first[:title], "electronic warfare"
+  end
+
+  test "jamming with 2 military flights produces jamming_flights not EW" do
+    GpsJammingSnapshot.create!(
+      cell_lat: 55.0, cell_lng: 25.0, total: 80, bad: 20,
+      percentage: 25.0, level: "moderate", recorded_at: 20.minutes.ago
+    )
+    2.times do |i|
+      Flight.create!(
+        icao24: "ew-few-#{i}", callsign: "JET#{i}",
+        latitude: 55.1, longitude: 25.1, altitude: 30000,
+        origin_country: "US", military: true
+      )
+    end
+    5.times do |i|
+      Flight.create!(
+        icao24: "ew-civ-#{i}", callsign: "CIV#{i}",
+        latitude: 55.2, longitude: 25.2, altitude: 35000,
+        origin_country: "Germany", military: false
+      )
+    end
+
+    insights = CrossLayerAnalyzer.analyze
+    jam = insights.select { |i| i[:type] == "jamming_flights" }
+    ew = insights.select { |i| i[:type] == "electronic_warfare" }
+
+    assert_equal 1, jam.size
+    assert_empty ew
+  end
+
+  # ── information_blackout ───────────────────────────────────
+
+  test "internet outage during conflict returns information_blackout" do
+    InternetOutage.create!(
+      external_id: "blackout-1", entity_type: "country", entity_code: "SD",
+      entity_name: "Sudan", level: "critical", score: 90.0,
+      started_at: 3.hours.ago
+    )
+    InternetOutage.create!(
+      external_id: "blackout-2", entity_type: "country", entity_code: "SD",
+      entity_name: "Sudan", level: "major", score: 80.0,
+      started_at: 2.hours.ago
+    )
+    InternetOutage.create!(
+      external_id: "blackout-3", entity_type: "country", entity_code: "SD",
+      entity_name: "Sudan", level: "critical", score: 85.0,
+      started_at: 1.hour.ago
+    )
+    3.times do |i|
+      ConflictEvent.create!(
+        external_id: 6000 + i, conflict_name: "Sudan Crisis",
+        latitude: 16.0, longitude: 30.0, date_start: (1 + i).days.ago,
+        country: "Sudan", type_of_violence: 1
+      )
+    end
+
+    insights = CrossLayerAnalyzer.analyze
+    blackout = insights.select { |i| i[:type] == "information_blackout" }
+
+    assert_equal 1, blackout.size
+    assert_equal "critical", blackout.first[:severity]
+    assert_includes blackout.first[:title], "Sudan"
+  end
+
+  # ── weather_disruption ──────────────────────────────────────
+
+  test "severe weather with flights returns weather_disruption" do
+    WeatherAlert.create!(
+      external_id: "wx-1", event: "Tornado Warning", severity: "Extreme",
+      latitude: 35.0, longitude: -97.0, onset: 1.hour.ago,
+      expires: 2.hours.from_now, fetched_at: Time.current
+    )
+    15.times do |i|
+      Flight.create!(
+        icao24: "wx-flt-#{i}", callsign: "WX#{i}",
+        latitude: 35.0 + i * 0.05, longitude: -97.0, altitude: 35000,
+        origin_country: "US", military: false
+      )
+    end
+
+    insights = CrossLayerAnalyzer.analyze
+    wx = insights.select { |i| i[:type] == "weather_disruption" }
+
+    assert_equal 1, wx.size
+    assert_equal "high", wx.first[:severity] # Extreme = high
+    assert_includes wx.first[:title], "Tornado Warning"
+  end
+
+  test "severe weather with fewer than 10 flights produces no insight" do
+    WeatherAlert.create!(
+      external_id: "wx-quiet", event: "Severe Thunderstorm", severity: "Severe",
+      latitude: -40.0, longitude: 170.0, onset: 1.hour.ago,
+      expires: 3.hours.from_now, fetched_at: Time.current
+    )
+    3.times do |i|
+      Flight.create!(
+        icao24: "wx-few-#{i}", callsign: "FEW#{i}",
+        latitude: -40.0, longitude: 170.0, altitude: 30000,
+        origin_country: "NZ", military: false
+      )
+    end
+
+    insights = CrossLayerAnalyzer.analyze
+    wx = insights.select { |i| i[:type] == "weather_disruption" }
+    assert_empty wx
+  end
+
+  # ── ship_cable_proximity ────────────────────────────────────
+
+  test "stopped ship near cable returns insight" do
+    Ship.create!(
+      mmsi: "123456789", name: "Suspicious Vessel",
+      latitude: 10.0, longitude: -60.0, speed: 0.2, heading: 180,
+      flag: "RU"
+    )
+    SubmarineCable.create!(
+      cable_id: "cable-ship-1", name: "Atlantic Cable",
+      coordinates: [[-60.0, 10.0], [-59.5, 10.2]]
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    ship = insights.select { |i| i[:type] == "ship_cable_proximity" }
+
+    assert_equal 1, ship.size
+    assert_includes ship.first[:title], "Suspicious Vessel"
+    assert_includes ship.first[:title], "Atlantic Cable"
+  end
+
+  test "moving ship near cable produces no insight" do
+    Ship.create!(
+      mmsi: "987654321", name: "Normal Cargo",
+      latitude: 10.0, longitude: -60.0, speed: 12.0, heading: 90,
+      flag: "PA"
+    )
+    SubmarineCable.create!(
+      cable_id: "cable-ship-2", name: "Pacific Cable",
+      coordinates: [[-60.0, 10.0], [-59.5, 10.2]]
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    ship = insights.select { |i| i[:type] == "ship_cable_proximity" }
+    assert_empty ship
   end
 end

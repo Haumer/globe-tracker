@@ -43,7 +43,7 @@ class ConvergenceDetector
       color: "#e53935",
       query: -> { ConflictEvent.where("date_start > ? OR date_end > ?", 7.days.ago, 7.days.ago).where.not(latitude: nil) },
       extract: ->(r) { { lat: r.latitude, lng: r.longitude, time: r.date_start,
-                          weight: (r.deaths_total || 0) > 10 ? 3 : 1,
+                          weight: ((r.deaths_a || 0) + (r.deaths_b || 0) + (r.deaths_civilians || 0)) > 10 ? 3 : 1,
                           detail: r.conflict_name || r.side_a,
                           id: r.id } },
     },
@@ -199,7 +199,7 @@ class ConvergenceDetector
     weight_score = layers.sum { |_k, events| events.map { |e| e[:weight] || 1 }.max }
 
     # Temporal tightness bonus: if events from different layers happened within 1 hour
-    timestamps = layers.values.flatten.filter_map { |e| e[:time] }.sort
+    timestamps = layers.values.flatten.filter_map { |e| e[:time]&.to_time rescue nil }.compact.sort
     temporal_bonus = 0
     if timestamps.size >= 2
       span_hours = (timestamps.last - timestamps.first).to_f / 3600

@@ -1061,7 +1061,7 @@ export function applyCoreMethods(GlobeController) {
         const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
         this.showPowerPlantDetail(d); return true
       }},
-      { prefix: "cpulse-", skip: ["cpulse-core-"], handler: (id) => {
+      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-"], handler: (id) => {
         const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},

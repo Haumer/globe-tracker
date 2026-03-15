@@ -118,9 +118,9 @@ export function applyConflictPulseMethods(GlobeController) {
       // Zone radius based on score (100-300km visual radius)
       const radius = 100000 + score * 2000
 
-      // Outer pulse ring
+      // Outer pulse ring (visual only)
       const ring = ds.entities.add({
-        id: `cpulse-${idx}`,
+        id: `cpulse-ring-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
         ellipse: {
           semiMajorAxis: radius,
@@ -129,12 +129,12 @@ export function applyConflictPulseMethods(GlobeController) {
           outline: true,
           outlineColor: color.withAlpha(0.3 + t * 0.3),
           outlineWidth: 2,
-          height: 5100, // slightly above GPS jamming hexes
+          height: 5100,
         },
       })
       this._conflictPulseEntities.push(ring)
 
-      // Inner core (brighter)
+      // Inner core (visual only)
       const core = ds.entities.add({
         id: `cpulse-core-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
@@ -148,27 +148,37 @@ export function applyConflictPulseMethods(GlobeController) {
       })
       this._conflictPulseEntities.push(core)
 
-      // Trend label
-      const trendIcon = zone.escalation_trend === "surging" ? "\u{1F534}" :
-                         zone.escalation_trend === "escalating" ? "\u{1F7E0}" : "\u{1F7E1}"
-      const label = ds.entities.add({
-        id: `cpulse-lbl-${idx}`,
-        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 6000),
+      // Clickable point at center (this is what gets picked)
+      const trendIcon = zone.escalation_trend === "surging" ? "\u26A0" :
+                         zone.escalation_trend === "escalating" ? "\u2B06" : "\u2022"
+      const point = ds.entities.add({
+        id: `cpulse-${idx}`,
+        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
+        billboard: {
+          image: this._makePulseIcon(trendIcon, color.toCssColorString(), score),
+          width: 32,
+          height: 32,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.4),
+        },
         label: {
-          text: `${trendIcon} ${zone.escalation_trend.toUpperCase()} ${score}`,
-          font: "bold 12px monospace",
+          text: `${zone.escalation_trend.toUpperCase()} ${score}`,
+          font: "bold 11px monospace",
           fillColor: color.withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, 20),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.5e7, 0.0),
         },
       })
-      this._conflictPulseEntities.push(label)
+      this._conflictPulseEntities.push(point)
     })
     ds.entities.resumeEvents()
     this._requestRender()
@@ -182,6 +192,39 @@ export function applyConflictPulseMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._conflictPulseEntities = []
+  }
+
+  // ── Icon generation ─────────────────────────────────────────
+
+  GlobeController.prototype._makePulseIcon = function(icon, color, score) {
+    const key = `pulse-${icon}-${color}-${score}`
+    if (this._iconCache?.[key]) return this._iconCache[key]
+    if (!this._iconCache) this._iconCache = {}
+
+    const size = 32
+    const canvas = document.createElement("canvas")
+    canvas.width = size; canvas.height = size
+    const ctx = canvas.getContext("2d")
+
+    // Circle background
+    ctx.beginPath()
+    ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2)
+    ctx.fillStyle = "rgba(0,0,0,0.8)"
+    ctx.fill()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+
+    // Score text
+    ctx.font = "bold 13px monospace"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillStyle = color
+    ctx.fillText(score, size / 2, size / 2)
+
+    const url = canvas.toDataURL()
+    this._iconCache[key] = url
+    return url
   }
 
   // ── Click handler + detail panel ───────────────────────────

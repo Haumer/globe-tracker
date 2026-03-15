@@ -29,7 +29,7 @@ class ConflictPulseService
     articles = NewsEvent.where("published_at > ?", 7.days.ago)
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
-      .select(:id, :title, :latitude, :longitude, :tone, :source, :category,
+      .select(:id, :title, :url, :latitude, :longitude, :tone, :source, :category,
               :threat_level, :credibility, :story_cluster_id, :published_at)
 
     # Grid into 2° cells
@@ -117,10 +117,11 @@ class ConflictPulseService
         "baseline"
       end
 
-      # Top headlines — prefer high-tier sources
-      top_headlines = articles_24h
+      # Top articles — prefer high-tier sources, include URL for clickthrough
+      top_articles = articles_24h
         .sort_by { |a| [-extract_tier_num(a), -a.published_at.to_i] }
-        .map(&:title).uniq.first(5)
+        .uniq(&:title).first(5)
+      top_headlines = top_articles.map(&:title)
 
       {
         cell_key: key,
@@ -137,6 +138,7 @@ class ConflictPulseService
         story_count: story_count,
         tier_breakdown: tier_counts,
         top_headlines: top_headlines,
+        top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, tone: a.tone&.round(1), published_at: a.published_at&.iso8601 } },
         categories: categories,
         cross_layer_signals: signals,
         detected_at: now.iso8601,

@@ -242,26 +242,35 @@ export function applyConflictPulseMethods(GlobeController) {
     const trendColors = { surging: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
     const color = trendColors[zone.escalation_trend] || "#ff9800"
 
-    // Cross-layer signal chips
+    // Cross-layer signal chips (clickable — fly to area with relevant layer)
     let signalHtml = ""
     const s = zone.cross_layer_signals || {}
-    if (s.military_flights) signalHtml += `<span class="detail-chip" style="background:rgba(239,83,80,0.15);color:#ef5350;"><i class="fa-solid fa-jet-fighter"></i> ${s.military_flights} mil flights</span>`
-    if (s.gps_jamming) signalHtml += `<span class="detail-chip" style="background:rgba(255,193,7,0.15);color:#ffc107;"><i class="fa-solid fa-satellite-dish"></i> ${s.gps_jamming}% jamming</span>`
+    if (s.military_flights) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(239,83,80,0.15);color:#ef5350;" data-action="click->globe#pulseSignalClick" data-signal="flights" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-jet-fighter"></i> ${s.military_flights} mil flights</span>`
+    if (s.gps_jamming) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(255,193,7,0.15);color:#ffc107;" data-action="click->globe#pulseSignalClick" data-signal="gpsJamming" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-satellite-dish"></i> ${s.gps_jamming}% jamming</span>`
     if (s.internet_outage) signalHtml += `<span class="detail-chip" style="background:rgba(156,39,176,0.15);color:#ce93d8;"><i class="fa-solid fa-plug"></i> outage: ${s.internet_outage}</span>`
-    if (s.fire_hotspots) signalHtml += `<span class="detail-chip" style="background:rgba(255,87,34,0.15);color:#ff5722;"><i class="fa-solid fa-fire"></i> ${s.fire_hotspots} fires</span>`
-    if (s.known_conflict_zone) signalHtml += `<span class="detail-chip" style="background:rgba(244,67,54,0.15);color:#f44336;"><i class="fa-solid fa-crosshairs"></i> ${s.known_conflict_zone} historical events</span>`
+    if (s.fire_hotspots) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(255,87,34,0.15);color:#ff5722;" data-action="click->globe#pulseSignalClick" data-signal="fires" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-fire"></i> ${s.fire_hotspots} fires</span>`
+    if (s.known_conflict_zone) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(244,67,54,0.15);color:#f44336;" data-action="click->globe#pulseSignalClick" data-signal="conflicts" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-crosshairs"></i> ${s.known_conflict_zone} historical events</span>`
 
     // Tier breakdown
     const tiers = zone.tier_breakdown || {}
     let tierHtml = Object.entries(tiers).sort((a,b) => a[0].localeCompare(b[0]))
       .map(([t, n]) => `<span style="color:#888;">${t}:</span>${n}`).join(" ")
 
-    // Headlines
-    const headlinesHtml = (zone.top_headlines || []).map(h =>
-      `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h)}</div>`
-    ).join("")
+    // Headlines with clickable links
+    const articles = zone.top_articles || []
+    const headlinesHtml = articles.length > 0
+      ? articles.map(a => {
+          const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
+          return `<a href="${this._escapeHtml(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title)}</div>
+            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
+          </a>`
+        }).join("")
+      : (zone.top_headlines || []).map(h =>
+          `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h)}</div>`
+        ).join("")
 
-    // Sparkline-style frequency indicator
+    // Sparkline bars
     const spikeBar = Math.min(zone.spike_ratio / 5.0, 1.0) * 100
     const toneBar = Math.min(Math.abs(zone.avg_tone) / 10.0, 1.0) * 100
 
@@ -327,7 +336,61 @@ export function applyConflictPulseMethods(GlobeController) {
       <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:8px;">
         Sources: ${tierHtml} · Updated ${new Date(zone.detected_at).toLocaleTimeString()}
       </div>
+
+      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
+        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
+      </button>
+
+      ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
+    this._fetchConnections("conflict", zone.lat, zone.lng)
+  }
+
+  // ── Signal chip click — enable layer + fly to area ─────────
+
+  GlobeController.prototype.pulseSignalClick = function(event) {
+    const signal = event.currentTarget.dataset.signal
+    const lat = parseFloat(event.currentTarget.dataset.lat)
+    const lng = parseFloat(event.currentTarget.dataset.lng)
+    if (isNaN(lat) || isNaN(lng)) return
+
+    const Cesium = window.Cesium
+
+    // Enable the relevant layer if not already on
+    const layerToggles = {
+      flights: "flightsToggle",
+      gpsJamming: "gpsJammingToggle",
+      fires: "firesToggle",
+      conflicts: "conflictsToggle",
+    }
+
+    const toggleTarget = layerToggles[signal]
+    if (toggleTarget && this[`has${toggleTarget[0].toUpperCase()}${toggleTarget.slice(1)}Target`]) {
+      const toggle = this[`${toggleTarget}Target`]
+      if (!toggle.checked) {
+        toggle.checked = true
+        toggle.dispatchEvent(new Event("change"))
+      }
+    }
+
+    // Fly to the area
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, 500000),
+      duration: 1.0,
+    })
+  }
+
+  // ── Time ago helper ────────────────────────────────────────
+
+  GlobeController.prototype._timeAgo = function(date) {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return "just now"
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
   }
 }

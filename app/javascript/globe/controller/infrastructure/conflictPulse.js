@@ -100,91 +100,176 @@ export function applyConflictPulseMethods(GlobeController) {
 
   GlobeController.prototype._renderConflictPulse = function() {
     this._clearConflictPulseEntities()
+    if (this._pulseAnimFrame) { cancelAnimationFrame(this._pulseAnimFrame); this._pulseAnimFrame = null }
+
     const Cesium = window.Cesium
     const ds = getDataSource(this.viewer, this._ds, "conflictPulse")
 
     if (!this._conflictPulseData?.length) return
 
+    // Detect meaningful score increases since last render (not just new articles arriving)
+    const prev = this._conflictPulsePrevScores || {}
+    const increased = new Set()
+    this._conflictPulseData.forEach(z => {
+      const prevScore = prev[z.cell_key]
+      // Only pulse if score increased by 5+ points (not just minor fluctuation from new poll)
+      if (prevScore !== undefined && z.pulse_score >= prevScore + 5) increased.add(z.cell_key)
+    })
+    // Update score cache
+    this._conflictPulsePrevScores = {}
+    this._conflictPulseData.forEach(z => { this._conflictPulsePrevScores[z.cell_key] = z.pulse_score })
+
+    // Track pulsing rings for animation
+    this._pulsingRings = []
+
     ds.entities.suspendEvents()
     this._conflictPulseData.forEach((zone, idx) => {
       const score = zone.pulse_score
-      // Color intensity scales with score
-      const t = Math.min((score - 20) / 60, 1) // 0-1 range (20=min, 80=max)
-      const r = Math.round(255 * (0.6 + t * 0.4))
-      const g = Math.round(255 * (0.3 - t * 0.3))
-      const b = Math.round(30 - t * 30)
+      const t = Math.min((score - 20) / 60, 1)
+
+      // Tiered visuals: developing (20-49) = yellow/dim, active (50-69) = orange, high (70+) = red/bright
+      let r, g, b
+      if (score >= 70) {
+        r = 244; g = 67; b = 54    // red
+      } else if (score >= 50) {
+        r = 255; g = 152; b = 0    // orange
+      } else {
+        r = 255; g = 193; b = 7    // yellow
+      }
       const color = Cesium.Color.fromBytes(r, g, b)
 
-      // Zone radius based on score (100-300km visual radius)
-      const radius = 100000 + score * 2000
+      // Radius: developing = smaller, active = larger
+      const radius = score >= 50 ? (100000 + score * 2000) : (60000 + score * 1000)
 
-      // Outer pulse ring (visual only)
+      // Opacity: developing = very subtle, active = visible, surging = bright
+      const baseAlpha = score >= 70 ? 0.15 : (score >= 50 ? 0.10 : 0.04)
+      const outlineAlpha = score >= 70 ? 0.6 : (score >= 50 ? 0.4 : 0.15)
+
+      // Outer ring
       const ring = ds.entities.add({
         id: `cpulse-ring-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
         ellipse: {
           semiMajorAxis: radius,
           semiMinorAxis: radius,
-          material: color.withAlpha(0.08 + t * 0.12),
+          material: color.withAlpha(baseAlpha),
           outline: true,
-          outlineColor: color.withAlpha(0.3 + t * 0.3),
-          outlineWidth: 2,
+          outlineColor: color.withAlpha(outlineAlpha),
+          outlineWidth: score >= 50 ? 2 : 1,
           height: 5100,
         },
       })
       this._conflictPulseEntities.push(ring)
 
-      // Inner core (visual only)
-      const core = ds.entities.add({
-        id: `cpulse-core-${idx}`,
-        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
-        ellipse: {
-          semiMajorAxis: radius * 0.3,
-          semiMinorAxis: radius * 0.3,
-          material: color.withAlpha(0.15 + t * 0.2),
-          outline: false,
-          height: 5100,
-        },
-      })
-      this._conflictPulseEntities.push(core)
+      // Pulsing outer ring for surging zones or zones that just increased
+      if (zone.escalation_trend === "surging" || increased.has(zone.cell_key)) {
+        const pulseRing = ds.entities.add({
+          id: `cpulse-pulse-${idx}`,
+          position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
+          ellipse: {
+            semiMajorAxis: radius,
+            semiMinorAxis: radius,
+            material: Cesium.Color.TRANSPARENT,
+            outline: true,
+            outlineColor: color.withAlpha(0.8),
+            outlineWidth: 3,
+            height: 5200,
+          },
+        })
+        this._conflictPulseEntities.push(pulseRing)
+        // Phase offset based on index — staggers simultaneous pulses so they don't look uniform
+        this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
+      }
 
-      // Clickable point at center (this is what gets picked)
-      const trendIcon = zone.escalation_trend === "surging" ? "\u26A0" :
-                         zone.escalation_trend === "escalating" ? "\u2B06" : "\u2022"
+      // Inner core (only for active zones 50+)
+      if (score >= 50) {
+        const core = ds.entities.add({
+          id: `cpulse-core-${idx}`,
+          position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
+          ellipse: {
+            semiMajorAxis: radius * 0.25,
+            semiMinorAxis: radius * 0.25,
+            material: color.withAlpha(0.2 + t * 0.15),
+            outline: false,
+            height: 5100,
+          },
+        })
+        this._conflictPulseEntities.push(core)
+      }
+
+      // Clickable billboard — always shown, size varies by tier
+      const iconSize = score >= 70 ? 36 : (score >= 50 ? 32 : 24)
       const point = ds.entities.add({
         id: `cpulse-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
         billboard: {
-          image: this._makePulseIcon(trendIcon, color.toCssColorString(), score),
-          width: 32,
-          height: 32,
+          image: this._makePulseIcon("", color.toCssColorString(), score),
+          width: iconSize,
+          height: iconSize,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.4),
         },
         label: {
-          text: `${zone.escalation_trend.toUpperCase()} ${score}`,
-          font: "bold 11px monospace",
-          fillColor: color.withAlpha(0.95),
+          text: score >= 50 ? `${zone.escalation_trend.toUpperCase()} ${score}` : `${score}`,
+          font: score >= 50 ? "bold 11px monospace" : "bold 9px monospace",
+          fillColor: color.withAlpha(score >= 50 ? 0.95 : 0.7),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(0, 20),
+          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 4),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.3),
-          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.5e7, 0.0),
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, score >= 50 ? 0.3 : 0.2),
+          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, score >= 50 ? 1.5e7 : 8e6, 0.0),
         },
       })
       this._conflictPulseEntities.push(point)
     })
     ds.entities.resumeEvents()
+
+    // Start pulse animation if any rings need it
+    if (this._pulsingRings.length > 0) {
+      this._startPulseAnimation()
+    }
+
     this._requestRender()
   }
 
+  // ── Pulse animation loop ───────────────────────────────────
+  // Surging zones and zones with increasing scores get an expanding/fading ring
+
+  GlobeController.prototype._startPulseAnimation = function() {
+    if (this._pulseAnimFrame) return
+    const startTime = performance.now()
+
+    const animate = () => {
+      if (!this._pulsingRings?.length) return
+      const elapsed = (performance.now() - startTime) / 1000
+      const cycle = (elapsed % 3) / 3 // 0-1 over 3 seconds
+
+      this._pulsingRings.forEach(({ entity, baseRadius, color, phaseOffset }) => {
+        if (!entity.ellipse) return
+        const phase = ((elapsed + phaseOffset) % 3) / 3 // staggered 0-1 cycle
+        const expandFactor = 1.0 + phase * 0.5
+        const alpha = 0.8 * (1 - phase)
+        entity.ellipse.semiMajorAxis = baseRadius * expandFactor
+        entity.ellipse.semiMinorAxis = baseRadius * expandFactor
+        entity.ellipse.outlineColor = color.withAlpha(alpha)
+      })
+
+      this._requestRender()
+      this._pulseAnimFrame = requestAnimationFrame(animate)
+    }
+
+    this._pulseAnimFrame = requestAnimationFrame(animate)
+  }
+
   GlobeController.prototype._clearConflictPulseEntities = function() {
+    if (this._pulseAnimFrame) { cancelAnimationFrame(this._pulseAnimFrame); this._pulseAnimFrame = null }
+    this._pulsingRings = []
     const ds = this._ds["conflictPulse"]
     if (ds && this._conflictPulseEntities?.length) {
       ds.entities.suspendEvents()

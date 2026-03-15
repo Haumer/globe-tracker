@@ -21,7 +21,8 @@ export function applyTimelineMethods(GlobeController) {
       this._timelineFrameIndex = 0
 
       const oldest = new Date(range.oldest)
-      const newest = new Date(range.newest)
+      // Use current time as the newest bound — range.newest can be future (NOTAMs, weather)
+      const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))
       // Default to last 1 hour for a manageable playback window
       const oneHourAgo = new Date(newest.getTime() - 60 * 60 * 1000)
       this._timelineRangeStart = oneHourAgo > oldest ? oneHourAgo : oldest

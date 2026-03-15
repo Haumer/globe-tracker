@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_15_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -207,6 +207,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
     t.float "signal_strength"
     t.string "message_type"
     t.index ["icao24"], name: "index_flights_on_icao24", unique: true
+    t.index ["source", "updated_at"], name: "idx_flights_source_updated"
   end
 
   create_table "gps_jamming_snapshots", force: :cascade do |t|
@@ -219,6 +220,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
     t.datetime "recorded_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["cell_lat", "cell_lng", "recorded_at"], name: "idx_gps_jam_cell_time", order: { recorded_at: :desc }
     t.index ["cell_lat", "cell_lng", "recorded_at"], name: "idx_jamming_cell_time"
     t.index ["recorded_at"], name: "index_gps_jamming_snapshots_on_recorded_at"
   end
@@ -297,6 +299,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
     t.string "story_cluster_id"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
+    t.index ["published_at", "story_cluster_id"], name: "idx_news_published_cluster"
     t.index ["published_at"], name: "index_news_events_on_published_at"
     t.index ["source"], name: "index_news_events_on_source"
     t.index ["story_cluster_id"], name: "index_news_events_on_story_cluster_id"
@@ -458,6 +461,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["mmsi"], name: "index_ships_on_mmsi", unique: true
+    t.index ["updated_at"], name: "idx_ships_updated_at"
   end
 
   create_table "submarine_cables", force: :cascade do |t|

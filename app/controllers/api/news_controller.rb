@@ -14,6 +14,7 @@ module Api
       events = time_scoped(NewsEvent)
                  .select("news_events.*, (#{priority_sql}) AS priority")
                  .order(Arel.sql("(#{priority_sql}) DESC NULLS LAST"))
+                 .limit(2000)
 
       if params[:clustered] == "true"
         render json: clustered_response(events)

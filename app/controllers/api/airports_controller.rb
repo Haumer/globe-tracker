@@ -9,7 +9,7 @@ module Api
       airports = airports.by_type(params[:type]) if params[:type].present?
       bounds = parse_bounds
       airports = airports.within_bounds(bounds) if bounds.present?
-      airports = airports.order(airport_type: :asc, name: :asc)
+      airports = airports.order(airport_type: :asc, name: :asc).limit(5000)
 
       expires_in 1.hour, public: true
       render json: airports.map { |a|

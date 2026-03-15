@@ -1,9 +1,10 @@
 module SnapshotRecorder
-  # Minimum thresholds to record a new snapshot
-  LAT_LNG_THRESHOLD = 0.001  # ~111 meters
-  ALT_THRESHOLD     = 50     # meters
-  HEADING_THRESHOLD = 2      # degrees
-  SPEED_THRESHOLD   = 5      # m/s
+  # Minimum thresholds to record a new snapshot.
+  # Tuned for 7-day retention within 10GB DB budget (~4M rows/day target).
+  LAT_LNG_THRESHOLD = 0.005  # ~556 meters — still smooth for playback
+  ALT_THRESHOLD     = 150    # meters — ignore minor altitude wobble
+  HEADING_THRESHOLD = 8      # degrees — straight-line segments are interpolatable
+  SPEED_THRESHOLD   = 15     # m/s — ignore minor speed fluctuations
 
   # Call after upserting flights to record position snapshots
   def record_flight_snapshots(records)
@@ -28,7 +29,7 @@ module SnapshotRecorder
         speed: r[:speed],
         vertical_rate: r[:vertical_rate],
         on_ground: r[:on_ground],
-        extra: { source: r[:source], registration: r[:registration], aircraft_type: r[:aircraft_type], origin_country: r[:origin_country], squawk: r[:squawk], emergency: r[:emergency], category: r[:category], mach: r[:mach], military: r[:military] }.compact.to_json,
+        extra: { mil: r[:military] ? 1 : nil, sq: r[:squawk], src: r[:source] }.compact.to_json,
         recorded_at: now,
       }
     end
@@ -88,7 +89,7 @@ module SnapshotRecorder
     end
   end
 
-  MAX_SNAPSHOT_AGE = 60 # Record if last snapshot is older than 60s; moving entities still record on position change
+  MAX_SNAPSHOT_AGE = 300 # Record if last snapshot is older than 5 min; moving entities still record on position change
 
   def snapshot_unchanged?(last, record)
     return false unless last # no previous record — always insert

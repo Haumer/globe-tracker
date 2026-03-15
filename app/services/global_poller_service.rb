@@ -56,6 +56,7 @@ class GlobalPollerService
       @poll_count = 0
 
       @last_full_poll = 0
+      @last_purge = 0
 
       while @running
         unless @paused
@@ -71,6 +72,13 @@ class GlobalPollerService
             end
 
             @last_poll_at = Time.current
+
+            # Hourly purge: keep DB within 10GB budget
+            purge_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_purge
+            if purge_elapsed >= 3600
+              purge_stale_data
+              @last_purge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            end
           rescue => e
             Rails.logger.error("GlobalPollerService: #{e.message}")
           ensure
@@ -145,6 +153,26 @@ class GlobalPollerService
 
     def poll_secondary
       SECONDARY_SOURCES.each { |s| poll_source(s[:name], s[:type], &s[:fetcher]) }
+    end
+
+    RETENTION = 7.days
+
+    def purge_stale_data
+      cutoff = RETENTION.ago
+      deleted = 0
+      deleted += PositionSnapshot.where("recorded_at < ?", cutoff).in_batches(of: 50_000).delete_all
+      deleted += PollingStat.where("created_at < ?", cutoff).delete_all
+      deleted += GpsJammingSnapshot.where("recorded_at < ?", cutoff).delete_all
+      deleted += InternetTrafficSnapshot.where("created_at < ?", cutoff).delete_all
+      deleted += SatelliteTleSnapshot.where("recorded_at < ?", 14.days.ago).delete_all
+      deleted += Flight.where("updated_at < ?", 6.hours.ago).delete_all
+      deleted += Ship.where("updated_at < ?", 24.hours.ago).delete_all
+      deleted += Camera.where("expires_at < ?", Time.current).delete_all
+      deleted += WeatherAlert.where("expires < ?", cutoff).delete_all
+      deleted += Notam.where("effective_end < ?", cutoff).where.not(effective_end: nil).delete_all
+      Rails.logger.info("GlobalPollerService: purged #{deleted} stale rows")
+    rescue => e
+      Rails.logger.error("GlobalPollerService purge error: #{e.message}")
     end
 
     def poll_source(source, poll_type)

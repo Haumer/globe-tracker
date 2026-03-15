@@ -1,52 +1,13 @@
-module Api
-  class GpsJammingController < ApplicationController
-    include TimelineRecorder
-    skip_before_action :authenticate_user!
+class GpsJammingRefreshService
+  NACP_THRESHOLD = 4
+  HEX_SIZE = 0.25
+  STALE_AFTER = 5.minutes
 
-    NACP_THRESHOLD = 4
-    HEX_SIZE = 0.25 # degrees — radius of each hexagon
-    STALE_AFTER = 5.minutes
-
-    def index
-      # Timeline mode: return historical snapshots
-      if params[:from].present? && params[:to].present?
-        from = Time.parse(params[:from]) rescue 1.hour.ago
-        to = Time.parse(params[:to]) rescue Time.current
-        latest = GpsJammingSnapshot.in_range(from, to).maximum(:recorded_at)
-        if latest
-          snaps = GpsJammingSnapshot.where(recorded_at: latest)
-          return render(json: snaps.map { |s|
-            { lat: s.cell_lat, lng: s.cell_lng, total: s.total, bad: s.bad, pct: s.percentage, level: s.level }
-          })
-        else
-          return render(json: [])
-        end
-      end
-
-      # Snapshots are now computed by GlobalPollerService in the background
-
-      # Render latest reading per cell from the last hour — stale cells expire naturally
-      cutoff = 1.hour.ago
-      snaps = GpsJammingSnapshot
-                .where("recorded_at > ?", cutoff)
-                .where("percentage > 0 AND total >= 5")
-                .select(
-                  "DISTINCT ON (cell_lat, cell_lng) cell_lat, cell_lng, total, bad, percentage, level, recorded_at"
-                )
-                .order("cell_lat, cell_lng, recorded_at DESC")
-
-      now = Time.current
-      render json: snaps.map { |s|
-        age_minutes = ((now - s.recorded_at) / 60.0)
-        # Degrade confidence: fade percentage linearly over 1 hour
-        fade = [1.0 - (age_minutes / 60.0), 0.0].max
-        pct = (s.percentage.to_f * fade).round(1)
-        level = if pct > 10 then "high"
-                elsif pct > 2 then "medium"
-                else "low"
-                end
-        { lat: s.cell_lat, lng: s.cell_lng, total: s.total, bad: s.bad, pct: pct, level: level }
-      }
+  class << self
+    def refresh_if_stale
+      latest_at = GpsJammingSnapshot.maximum(:recorded_at)
+      return 0 if latest_at.present? && latest_at >= STALE_AFTER.ago
+      compute_snapshot
     end
 
     private
@@ -92,7 +53,7 @@ module Api
         { lat: c[:lat], lng: c[:lng], total: c[:total], bad: c[:bad], pct: pct, level: level }
       end
 
-      return unless result.any?
+      return 0 unless result.any?
 
       snapshots = result.map do |c|
         {
@@ -115,6 +76,11 @@ module Api
         }
       end
       TimelineEvent.insert_all(tl_rows) if tl_rows.any?
+
+      result.size
+    rescue => e
+      Rails.logger.error("GpsJammingRefreshService: #{e.message}")
+      0
     end
   end
 end

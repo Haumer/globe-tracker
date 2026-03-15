@@ -8,6 +8,8 @@ class OpenskyService
   TOKEN_URL = PROXY_URL ? "#{PROXY_URL}/auth/token" : "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
   CACHE_TTL = 15
 
+  ROUTE_CACHE_MAX = 500
+
   @last_fetch_at = nil
   @route_cache = {}
   @access_token = nil
@@ -49,6 +51,8 @@ class OpenskyService
       operator_iata: data["operatorIata"],
       flight_number: data["flightNumber"]
     }
+    # LRU eviction: drop oldest entries when cache exceeds limit
+    @route_cache.shift while @route_cache.size >= ROUTE_CACHE_MAX
     @route_cache[callsign] = result
     result
   end

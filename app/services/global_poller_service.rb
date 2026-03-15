@@ -147,6 +147,7 @@ class GlobalPollerService
       } },
       { name: "celestrak",        type: "satellite",        fetcher: -> { CelestrakService.refresh_if_stale } },
       { name: "submarine-cables", type: "submarine_cable",  fetcher: -> { SubmarineCableRefreshService.refresh_if_stale } },
+      { name: "gps-jamming",     type: "gps_jamming",      fetcher: -> { GpsJammingRefreshService.refresh_if_stale } },
       { name: "nws",              type: "weather_alert",   fetcher: -> { WeatherAlertRefreshService.refresh_if_stale } },
       { name: "notams",           type: "notam",           fetcher: -> { NotamRefreshService.refresh_if_stale } },
     ].freeze

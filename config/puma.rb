@@ -53,8 +53,13 @@ on_booted do
   GlobalPollerService.start unless GlobalPollerService.running?
 end
 
-# Graceful shutdown — stop background threads so Ctrl+C works
+# Graceful shutdown — stop background threads before Puma tears down
 force_shutdown_after 5
+
+on_stopped do
+  GlobalPollerService.stop if GlobalPollerService.running?
+  AisStreamService.stop if AisStreamService.running?
+end
 
 at_exit do
   GlobalPollerService.stop if GlobalPollerService.running?

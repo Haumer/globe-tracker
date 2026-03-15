@@ -90,6 +90,8 @@ export function applyFiresMethods(GlobeController) {
             outlineColor: color.withAlpha(0.2),
             outlineWidth: 1,
             height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._fireHotspotEntities.push(ring)
@@ -97,7 +99,7 @@ export function applyFiresMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `fire-${f.id}`,
-        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 50),
+        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 10),
         point: {
           pixelSize,
           color: color.withAlpha(0.9),

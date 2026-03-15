@@ -43,7 +43,7 @@ export function applySituationalMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `airport-${icao}`,
-        position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 50),
+        position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 10),
         billboard: {
           image: isMil ? milIcon : civilIcon,
           scale: 1,
@@ -63,6 +63,7 @@ export function applySituationalMethods(GlobeController) {
           pixelOffset: LABEL_DEFAULTS.pixelOffsetBelow(),
           scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
           translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._airportEntities.push(entity)
@@ -213,6 +214,8 @@ export function applySituationalMethods(GlobeController) {
           outlineColor: color.withAlpha(0.25),
           outlineWidth: 1,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
       this._earthquakeEntities.push(ring)
@@ -220,7 +223,7 @@ export function applySituationalMethods(GlobeController) {
       // Center point
       const entity = dataSource.entities.add({
         id: `eq-${eq.id}`,
-        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 50),
+        position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 10),
         point: {
           pixelSize,
           color: color.withAlpha(0.85),
@@ -401,6 +404,8 @@ export function applySituationalMethods(GlobeController) {
           outlineColor: cesiumColor.withAlpha(0.5),
           outlineWidth: ring.mmi >= 7 ? 2 : 1,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
       this._shakeMapEntities.push(ellipse)
@@ -412,7 +417,7 @@ export function applySituationalMethods(GlobeController) {
 
       const label = ds.entities.add({
         id: `shake-lbl-${ring.mmi}`,
-        position: Cesium.Cartesian3.fromDegrees(labelLng, labelLat, 0),
+        position: Cesium.Cartesian3.fromDegrees(labelLng, labelLat, 10),
         label: {
           text: `MMI ${ring.mmi}\n${ring.radiusKm.toFixed(0)} km`,
           font: "10px JetBrains Mono, monospace",
@@ -424,6 +429,7 @@ export function applySituationalMethods(GlobeController) {
           pixelOffset: new Cesium.Cartesian2(4, 0),
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.0, 3e6, 0.3),
           translucencyByDistance: new Cesium.NearFarScalar(5e4, 1.0, 5e6, 0.0),
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
@@ -606,6 +612,8 @@ export function applySituationalMethods(GlobeController) {
           outlineColor: color.withAlpha(0.2),
           outlineWidth: 1,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
       this._naturalEventEntities.push(ring)
@@ -613,7 +621,7 @@ export function applySituationalMethods(GlobeController) {
       // Center point
       const entity = dataSource.entities.add({
         id: `eonet-${ev.id}`,
-        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 50),
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
           pixelSize: 8,
           color: color.withAlpha(0.9),

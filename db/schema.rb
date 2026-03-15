@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_13_180000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_15_100001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -294,12 +294,37 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_180000) do
     t.string "title"
     t.string "credibility"
     t.string "threat_level"
+    t.string "story_cluster_id"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
     t.index ["published_at"], name: "index_news_events_on_published_at"
     t.index ["source"], name: "index_news_events_on_source"
+    t.index ["story_cluster_id"], name: "index_news_events_on_story_cluster_id"
     t.index ["title"], name: "index_news_events_on_title"
     t.index ["url"], name: "index_news_events_on_url", unique: true
+  end
+
+  create_table "notams", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.string "source"
+    t.float "latitude"
+    t.float "longitude"
+    t.float "radius_nm"
+    t.integer "radius_m"
+    t.integer "alt_low_ft"
+    t.integer "alt_high_ft"
+    t.string "reason"
+    t.string "text"
+    t.string "country"
+    t.datetime "effective_start"
+    t.datetime "effective_end"
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["effective_start"], name: "index_notams_on_effective_start"
+    t.index ["external_id"], name: "index_notams_on_external_id", unique: true
+    t.index ["fetched_at"], name: "index_notams_on_fetched_at"
+    t.index ["latitude", "longitude"], name: "index_notams_on_latitude_and_longitude"
   end
 
   create_table "pipelines", force: :cascade do |t|
@@ -488,6 +513,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_13_180000) do
     t.datetime "updated_at", null: false
     t.index ["user_id", "active"], name: "index_watches_on_user_id_and_active"
     t.index ["user_id"], name: "index_watches_on_user_id"
+  end
+
+  create_table "weather_alerts", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.string "event"
+    t.string "severity"
+    t.string "urgency"
+    t.string "certainty"
+    t.string "headline"
+    t.text "description"
+    t.string "areas"
+    t.string "sender"
+    t.datetime "onset"
+    t.datetime "expires"
+    t.float "latitude"
+    t.float "longitude"
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["external_id"], name: "index_weather_alerts_on_external_id", unique: true
+    t.index ["fetched_at"], name: "index_weather_alerts_on_fetched_at"
+    t.index ["latitude", "longitude"], name: "index_weather_alerts_on_latitude_and_longitude"
+    t.index ["onset"], name: "index_weather_alerts_on_onset"
   end
 
   create_table "workspaces", force: :cascade do |t|

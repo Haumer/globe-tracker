@@ -58,19 +58,32 @@
     </div>
     <div class="nf-tab-pane nf-tab-articles" data-globe-target="newsArticlesPane">
       <div class="nf-filter-row">
-        <select class="nf-cat-filter" data-globe-target="newsArticleCatFilter" data-action="change->globe#filterNewsArticles" aria-label="Filter by category">
-          <option value="all">All</option>
-          <option value="conflict">Conflict</option>
-          <option value="unrest">Unrest</option>
-          <option value="disaster">Disaster</option>
-          <option value="health">Health</option>
-          <option value="economy">Economy</option>
-          <option value="diplomacy">Diplomacy</option>
-          <option value="cyber">Cyber</option>
-          <option value="other">Other</option>
-        </select>
         <input type="text" class="nf-search" placeholder="Search headlines..." data-globe-target="newsArticleSearch" data-action="input->globe#filterNewsArticles" aria-label="Search news headlines">
+        <select class="nf-sort-select" data-globe-target="newsSortSelect" data-action="change->globe#filterNewsArticles" aria-label="Sort articles">
+          <option value="newest">Newest</option>
+          <option value="priority">Priority</option>
+          <option value="intensity">Intensity</option>
+        </select>
+        <label class="nf-hide-read-label">
+          <input type="checkbox" data-globe-target="newsHideReadToggle" data-action="change->globe#filterNewsArticles">
+          <span>Hide read</span>
+        </label>
+        <label class="nf-hide-read-label">
+          <input type="checkbox" data-globe-target="newsClusterToggle" data-action="change->globe#toggleNewsClustering">
+          <span>Group</span>
+        </label>
       </div>
+      <div class="nf-cat-chips" data-globe-target="newsCatChips">
+        <button class="nf-cat-chip" data-category="conflict" data-action="click->globe#toggleNewsCatChip" style="border-color:#f44336;color:#f44336;">Conflict</button>
+        <button class="nf-cat-chip" data-category="unrest" data-action="click->globe#toggleNewsCatChip" style="border-color:#ff9800;color:#ff9800;">Unrest</button>
+        <button class="nf-cat-chip" data-category="disaster" data-action="click->globe#toggleNewsCatChip" style="border-color:#ff5722;color:#ff5722;">Disaster</button>
+        <button class="nf-cat-chip" data-category="health" data-action="click->globe#toggleNewsCatChip" style="border-color:#4caf50;color:#4caf50;">Health</button>
+        <button class="nf-cat-chip" data-category="economy" data-action="click->globe#toggleNewsCatChip" style="border-color:#2196f3;color:#2196f3;">Economy</button>
+        <button class="nf-cat-chip" data-category="diplomacy" data-action="click->globe#toggleNewsCatChip" style="border-color:#9c27b0;color:#9c27b0;">Diplomacy</button>
+        <button class="nf-cat-chip" data-category="cyber" data-action="click->globe#toggleNewsCatChip" style="border-color:#00bcd4;color:#00bcd4;">Cyber</button>
+        <button class="nf-cat-chip" data-category="other" data-action="click->globe#toggleNewsCatChip" style="border-color:#90a4ae;color:#90a4ae;">Other</button>
+      </div>
+      <div class="nf-trending-bar" data-globe-target="newsTrendingBar"></div>
       <span class="rp-loading" data-globe-target="newsLoading" style="display:none;">Loading...</span>
       <p class="rp-empty" data-globe-target="newsEmpty" style="display:none;">No news articles yet. Enable the News layer to fetch headlines.</p>
       <div class="nf-article-list" data-globe-target="newsArticleList"></div>

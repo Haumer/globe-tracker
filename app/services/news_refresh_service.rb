@@ -3,6 +3,7 @@ require "set"
 class NewsRefreshService
   extend Refreshable
   include TimelineRecorder
+  include NewsDedupable
 
   FEED_URL = "https://api.gdeltproject.org/api/v1/gkg_geojson".freeze
   INTERESTING_THEMES = %w[
@@ -56,10 +57,17 @@ class NewsRefreshService
         nil
       end
 
+      # GDELT GeoJSON "name" is the location, not the article title.
+      # Extract a meaningful title from the URL path as fallback.
+      location_name = props["name"]
+      title = extract_title_from_url(url) || location_name
+      # Skip records where we only have a bare location name (no real headline)
+      next if title == location_name && title.present? && title.split(",").first.strip.split.size < 4
+
       records << {
         url: url,
-        name: props["name"],
-        title: props["name"],
+        name: location_name,
+        title: title,
         latitude: lat,
         longitude: lng,
         tone: tone.round(1),
@@ -80,6 +88,7 @@ class NewsRefreshService
 
     return 0 if records.empty?
 
+    assign_clusters(records)
     NewsEvent.upsert_all(records, unique_by: :url)
     record_timeline_events(
       event_type: "news",
@@ -93,5 +102,23 @@ class NewsRefreshService
   rescue StandardError => e
     Rails.logger.error("NewsRefreshService: #{e.message}")
     0
+  end
+
+  private
+
+  # Extract a readable title from a URL slug (e.g., /2024/03/earthquake-hits-turkey → "Earthquake Hits Turkey")
+  def extract_title_from_url(url)
+    path = begin; URI(url).path; rescue; return nil; end
+    slug = path.split("/").last
+    return nil if slug.blank? || slug.match?(/\A\d+\z/) || slug.length < 10
+
+    words = slug.gsub(/\.\w+\z/, "")           # strip file extension
+                .gsub(/[-_]/, " ")               # dashes/underscores → spaces
+                .gsub(/\b[a-f0-9]{8,}\b/, "")   # strip hex IDs
+                .gsub(/\b\d{5,}\b/, "")          # strip long numeric IDs
+                .strip
+    return nil if words.split.size < 3
+
+    words.split.map(&:capitalize).join(" ")
   end
 end

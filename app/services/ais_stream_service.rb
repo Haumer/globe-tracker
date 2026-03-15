@@ -20,7 +20,9 @@ class AisStreamService
 
     def stop
       @running = false
-      @thread&.kill
+      unless @thread&.join(5)
+        @thread&.kill
+      end
       @thread = nil
       Rails.logger.info("AIS Stream: stopped")
     end
@@ -76,8 +78,10 @@ class AisStreamService
           parser = WebSocket::Frame::Incoming::Client.new(version: handshake.version)
           last_flush = Time.now.to_f
 
-          # Blocking read loop — readpartial blocks until data arrives
+          # Read loop with timeout so thread can exit cleanly on shutdown
           while @running
+            ready = IO.select([ssl], nil, nil, 2)
+            next unless ready
             chunk = ssl.readpartial(65536)
             parser << chunk
 

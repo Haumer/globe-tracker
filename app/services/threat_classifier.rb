@@ -10,43 +10,119 @@ class ThreatClassifier
   DIPLOMACY_WORDS = %w[peace ceasefire treaty summit negotiate agreement diplomatic].freeze
   CYBER_WORDS = %w[cyberattack hack breach ransomware malware ddos].freeze
 
-  # Category → { words:, threat:, tone: }
-  CATEGORIES = [
-    { name: "conflict",  words: MILITARY_ESCALATION + CONFLICT_WORDS, threat: "high",     tone: -4.0 },
-    { name: "conflict",  words: TERROR_WORDS,                         threat: "critical",  tone: -7.0 },
-    { name: "disaster",  words: DISASTER_WORDS,                       threat: "high",      tone: -3.0 },
-    { name: "unrest",    words: PROTEST_WORDS,                        threat: "medium",    tone: -2.0 },
-    { name: "cyber",     words: CYBER_WORDS,                          threat: "high",      tone: -4.0 },
-    { name: "health",    words: HEALTH_WORDS,                         threat: "medium",    tone: -2.0 },
-    { name: "economy",   words: ECONOMY_WORDS,                        threat: "medium",    tone: -2.0 },
-    { name: "diplomacy", words: DIPLOMACY_WORDS,                      threat: "low",       tone:  1.0 },
+  SOFTENER_WORDS = %w[
+    peace proposal talks agreement summit ceasefire deal treaty negotiate
+    negotiation diplomatic diplomacy resolution accord reconciliation
+    cooperation aid humanitarian relief support
   ].freeze
 
+  HISTORICAL_PATTERNS = [
+    /\bin \d{4}\b/,           # "in 2003"
+    /\bduring ww/i,           # "during WWII", "during WWI"
+    /\bhistorical(ly)?\b/i,
+    /\banniversary of\b/i,
+    /\byears ago\b/i,
+    /\bcommemorat/i,          # "commemorate", "commemoration"
+    /\bformer\b/i,
+    /\bonce was\b/i,
+  ].freeze
+
+  QUESTION_PREFIXES = /\A(could|should|will|is|are|what if|does|do|has|have|can|would|might)\b/i
+  OPINION_MARKERS = /\b(opinion:|editorial:|analysis:|commentary:|op-ed:|perspective:)\b/i
+
+  POSITIVE_OUTCOME_WORDS = %w[
+    rescued saved survived recovered ceasefire\ agreed deal\ reached
+    peace restored liberated reunited stabilized resolved
+  ].freeze
+
+  # Category definitions with base scores
+  # Severity order (for tie-breaking): conflict > terror > disaster > cyber > unrest > health > economy > diplomacy
+  CATEGORIES = [
+    { name: "conflict",  words: MILITARY_ESCALATION + CONFLICT_WORDS, base_threat: "high",     base_tone: -4.0, severity_rank: 0 },
+    { name: "terror",    words: TERROR_WORDS,                         base_threat: "critical", base_tone: -7.0, severity_rank: 1 },
+    { name: "disaster",  words: DISASTER_WORDS,                       base_threat: "high",     base_tone: -3.0, severity_rank: 2 },
+    { name: "cyber",     words: CYBER_WORDS,                          base_threat: "high",     base_tone: -4.0, severity_rank: 3 },
+    { name: "unrest",    words: PROTEST_WORDS,                        base_threat: "medium",   base_tone: -2.0, severity_rank: 4 },
+    { name: "health",    words: HEALTH_WORDS,                         base_threat: "medium",   base_tone: -2.0, severity_rank: 5 },
+    { name: "economy",   words: ECONOMY_WORDS,                       base_threat: "medium",   base_tone: -2.0, severity_rank: 6 },
+    { name: "diplomacy", words: DIPLOMACY_WORDS,                     base_threat: "low",      base_tone:  1.0, severity_rank: 7 },
+  ].freeze
+
+  THREAT_LEVELS = %w[info low medium high critical].freeze
+
   class << self
-    # Classify a headline → { category:, threat:, tone:, level:, keywords: }
+    # Classify a headline -> { category:, threat:, tone:, level:, keywords: }
     def classify(title)
       lower = title.to_s.downcase
 
-      CATEGORIES.each do |cat|
+      has_softener = SOFTENER_WORDS.any? { |w| lower.include?(w) }
+      has_historical = HISTORICAL_PATTERNS.any? { |p| lower.match?(p) }
+      has_question = lower.match?(QUESTION_PREFIXES) || lower.match?(OPINION_MARKERS)
+      has_positive = POSITIVE_OUTCOME_WORDS.any? { |w| lower.include?(w) }
+      has_critical_target = CRITICAL_TARGETS.any? { |t| lower.include?(t) }
+      has_military_escalation = MILITARY_ESCALATION.any? { |w| lower.include?(w) }
+
+      # Score every category
+      scored = CATEGORIES.map do |cat|
         matched = cat[:words].select { |w| lower.include?(w) }
-        next if matched.empty?
+        next nil if matched.empty?
 
-        threat = cat[:threat]
-        tone = cat[:tone]
+        score = matched.size # +1 per keyword match
 
-        # Escalate conflict → critical when critical targets + military action
-        if cat[:name] == "conflict" && cat[:threat] == "high" &&
-           CRITICAL_TARGETS.any? { |t| lower.include?(t) } &&
-           MILITARY_ESCALATION.any? { |w| lower.include?(w) }
-          threat = "critical"
-          tone = -8.0
+        # Critical target escalation for conflict
+        if cat[:name] == "conflict" && has_critical_target
+          score += 2
         end
 
-        return { category: cat[:name], threat: threat, tone: tone.round(1),
-                 level: tone_level(tone), keywords: matched }
+        # Context-aware deductions
+        score -= 2 if has_softener
+        score -= 3 if has_historical
+
+        { cat: cat, score: score, matched: matched }
+      end.compact
+
+      return default_result if scored.empty?
+
+      # Pick highest score; break ties by severity rank (lower rank = higher severity)
+      best = scored.max_by { |s| [ s[:score], -s[:cat][:severity_rank] ] }
+
+      cat = best[:cat]
+      matched = best[:matched]
+      threat = cat[:base_threat]
+      tone = cat[:base_tone]
+
+      # Critical-target military escalation for conflict
+      if cat[:name] == "conflict" && has_critical_target && has_military_escalation && !has_softener && !has_historical
+        threat = "critical"
+        tone = -8.0
       end
 
-      { category: "other", threat: "info", tone: 0.0, level: "neutral", keywords: [] }
+      # Historical reference: downgrade to info
+      if has_historical
+        threat = "info"
+        tone = [ tone + 3.0, 0.0 ].min
+      end
+
+      # Question/opinion: downgrade one level
+      if has_question
+        threat = downgrade_threat(threat)
+        tone = [ tone + 1.5, 0.0 ].min
+      end
+
+      # Softener near conflict/terror: downgrade severity
+      if has_softener && %w[conflict terror].include?(cat[:name])
+        threat = downgrade_threat(threat)
+        tone = [ tone + 2.0, 0.0 ].min
+      end
+
+      # Positive outcome: shift tone upward
+      if has_positive
+        tone = [ tone + 2.0, 1.0 ].min
+        threat = downgrade_threat(threat) if tone > -2.0
+      end
+
+      { category: cat[:name], threat: threat, tone: tone.round(1),
+        level: tone_level(tone), keywords: matched }
     end
 
     def tone_level(tone)
@@ -66,6 +142,17 @@ class ThreatClassifier
       return "economy"  if themes.any? { |t| t.include?("ECON_") || t.include?("POVERTY") || t.include?("FAMINE") }
       return "diplomacy" if themes.any? { |t| t.include?("PEACE") || t.include?("CEASEFIRE") }
       "other"
+    end
+
+    private
+
+    def default_result
+      { category: "other", threat: "info", tone: 0.0, level: "neutral", keywords: [] }
+    end
+
+    def downgrade_threat(threat)
+      idx = THREAT_LEVELS.index(threat) || 0
+      THREAT_LEVELS[[ idx - 1, 0 ].max]
     end
   end
 end

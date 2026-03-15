@@ -20,10 +20,13 @@ class TrendingKeywordTracker
 
       records.each do |record|
         title = record[:title].to_s
+        category = record[:category].to_s
         words = extract_words(title)
         words.each do |word|
-          counts[word] ||= { timestamps: [], total: 0 }
+          counts[word] ||= { timestamps: [], total: 0, categories: [] }
+          counts[word][:categories] ||= []
           counts[word][:timestamps] << now
+          counts[word][:categories] << category if category.present?
           counts[word][:total] += 1
         end
       end
@@ -31,7 +34,9 @@ class TrendingKeywordTracker
       # Prune old timestamps
       cutoff = (Time.current - WINDOW).to_i
       counts.each do |word, data|
-        data[:timestamps] = data[:timestamps].select { |t| t > cutoff }
+        keep_indices = data[:timestamps].each_index.select { |i| data[:timestamps][i] > cutoff }
+        data[:timestamps] = keep_indices.map { |i| data[:timestamps][i] }
+        data[:categories] = (data[:categories] || []).last(data[:timestamps].size)
         data[:total] = data[:timestamps].size
       end
       counts.reject! { |_, data| data[:total] == 0 }
@@ -55,7 +60,11 @@ class TrendingKeywordTracker
         baseline_rate = total.to_f / (WINDOW / 1.hour)
         velocity = recent / [baseline_rate, 0.5].max
 
-        { keyword: word, recent: recent, total: total, velocity: velocity.round(2) }
+        # Dominant category: most frequent category for this keyword
+        categories = data[:categories] || []
+        dominant_category = categories.tally.max_by { |_, v| v }&.first || "other"
+
+        { keyword: word, recent: recent, total: total, velocity: velocity.round(2), category: dominant_category }
       end
 
       trends.sort_by { |t| -t[:velocity] }.first(limit)

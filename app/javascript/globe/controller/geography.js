@@ -116,7 +116,7 @@ export function applyGeographyMethods(GlobeController) {
           : Cesium.Color.fromCssColorString("#e0e0e0")
 
         const entity = dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 50),
+          position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 10),
           point: {
             pixelSize,
             color: color.withAlpha(0.9),
@@ -325,10 +325,8 @@ export function applyGeographyMethods(GlobeController) {
 
       this._countryFeatures = geojson.features
       const dataSource = this.getBordersDataSource()
-      const wallHeight = 10000
 
-      const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.15)
-      const defaultOutline = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
+      const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
 
       geojson.features.forEach((feature, fi) => {
         const geom = feature.geometry
@@ -351,19 +349,16 @@ export function applyGeographyMethods(GlobeController) {
           const positions = ring.map(coord =>
             Cesium.Cartesian3.fromDegrees(coord[0], coord[1])
           )
-          const heights = new Array(positions.length).fill(wallHeight)
 
           const entityId = `border-${fi}-${ri}`
           const entity = dataSource.entities.add({
             id: entityId,
-            wall: {
+            polyline: {
               positions: positions,
-              maximumHeights: heights,
-              minimumHeights: new Array(positions.length).fill(0),
+              width: 1.5,
               material: defaultColor,
-              outline: true,
-              outlineColor: defaultOutline,
-              outlineWidth: 1,
+              clampToGround: true,
+              classificationType: Cesium.ClassificationType.BOTH,
             },
           })
 
@@ -456,16 +451,13 @@ export function applyGeographyMethods(GlobeController) {
 
   GlobeController.prototype.updateBorderColors = function() {
     const Cesium = window.Cesium
-    const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.15)
-    const defaultOutline = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
-    const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.35)
-    const selectedOutline = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8)
+    const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
+    const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8)
 
     for (const [countryName, entities] of this._countryEntities) {
       const isSelected = this.selectedCountries.has(countryName)
       entities.forEach(entity => {
-        entity.wall.material = isSelected ? selectedColor : defaultColor
-        entity.wall.outlineColor = isSelected ? selectedOutline : defaultOutline
+        entity.polyline.material = isSelected ? selectedColor : defaultColor
       })
     }
   }
@@ -557,6 +549,8 @@ export function applyGeographyMethods(GlobeController) {
           outlineColor: Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.6),
           outlineWidth: 2,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
     }

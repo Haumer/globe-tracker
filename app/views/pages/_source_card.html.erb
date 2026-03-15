@@ -1,0 +1,37 @@
+<article class="src-card" style="--accent: <%= accent %>;">
+  <div class="src-card-head">
+<% if icon.present? %>
+    <div class="src-card-icon"><i class="<%= icon %>"></i></div>
+    <div class="src-card-meta">
+      <h3><%= title %></h3>
+      <span class="src-card-url"><%= url_label %></span>
+    </div>
+<% else %>
+    <div>
+      <h3><%= title %></h3>
+      <span class="src-card-url"><%= url_label %></span>
+    </div>
+<% end %>
+    <span class="src-card-status<%= " src-card-status--#{status_class}" if local_assigns[:status_class] %>"><%= status %></span>
+  </div>
+  <p class="src-card-desc">
+    <%= description %>
+  </p>
+  <div class="src-card-tags">
+<% tags.each do |tag| %>
+<% if tag.is_a?(Array) %>
+    <span class="src-tag src-tag--<%= tag[1] %>"><%= tag[0] %></span>
+<% else %>
+    <span class="src-tag"><%= tag %></span>
+<% end %>
+<% end %>
+  </div>
+  <div class="src-card-foot">
+    <span class="src-card-cat"><%= category %></span>
+<% if local_assigns[:link] %>
+    <a href="<%= link %>" target="_blank" rel="noopener" class="src-card-link">
+      <i class="fa-solid fa-arrow-up-right-from-square"></i>
+    </a>
+<% end %>
+  </div>
+</article>

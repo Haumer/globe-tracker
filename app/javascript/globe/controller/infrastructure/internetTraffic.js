@@ -135,6 +135,8 @@ export function applyTrafficMethods(GlobeController) {
             outlineColor: atkColor.withAlpha(0.2 + atkIntensity * 0.2),
             outlineWidth: 1,
             height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._trafficEntities.push(ring)

@@ -4,6 +4,8 @@ require "net/http"
 class RssNewsService
   extend Refreshable
   include TimelineRecorder
+  include NewsDedupable
+  include NewsGeocodable
 
   refreshes model: NewsEvent, interval: 20.minutes
 
@@ -379,9 +381,10 @@ class RssNewsService
     # Cross-service dedup: check titles already in DB from GDELT/MultiNews
     existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
       .pluck(:title).compact
-      .map { |t| t.downcase.gsub(/[^a-z0-9\s]/, "").split.reject { |w| w.length < 3 }.to_set }
+      .map { |t| normalize_title(t) }
 
     new_records = dedup_by_title(candidates, existing_titles: existing_titles)
+    assign_clusters(new_records)
 
     if new_records.any?
       NewsEvent.upsert_all(new_records, unique_by: :url)
@@ -460,20 +463,10 @@ class RssNewsService
     []
   end
 
-  # ── Geocoding (reuse MultiNewsService patterns) ─────────────
-
-  GEO_MAP = MultiNewsService::TITLE_GEO_MAP
-  GEO_PATTERNS = GEO_MAP.keys.sort_by { |k| -k.length }.freeze
-  COUNTRY_COORDS = MultiNewsService::COUNTRY_COORDS
+  # Geocoding provided by NewsGeocodable concern
 
   def geocode_title(title)
-    lower = title.to_s.downcase
-    GEO_PATTERNS.each do |pattern|
-      code = GEO_MAP[pattern]
-      coords = COUNTRY_COORDS[code] if code
-      return coords if coords && lower.include?(pattern)
-    end
-    nil
+    geocode_from_title(title)
   end
 
   def parse_pub_date(item)
@@ -493,20 +486,5 @@ class RssNewsService
     match ? URI.decode_www_form_component(match[1]) : url
   end
 
-  def dedup_by_title(records, existing_titles: [])
-    seen = existing_titles.dup
-    records.select do |record|
-      title = record[:title]
-      next true if title.blank?
-      words = title.downcase.gsub(/[^a-z0-9\s]/, "").split.reject { |w| w.length < 3 }.to_set
-      duplicate = seen.any? { |s| jaccard(s, words) > 0.6 }
-      seen << words unless duplicate
-      !duplicate
-    end
-  end
-
-  def jaccard(a, b)
-    return 0.0 if a.empty? || b.empty?
-    (a & b).size.to_f / (a | b).size.to_f
-  end
+  # dedup_by_title, normalize_title, jaccard provided by NewsDedupable concern
 end

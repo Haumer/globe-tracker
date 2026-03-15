@@ -241,13 +241,15 @@ export function applyWeatherMethods(GlobeController) {
       const color = severityColor[alert.severity] || severityColor["Minor"]
       const entity = ds.entities.add({
         id: `wx-alert-${i}`,
-        position: Cesium.Cartesian3.fromDegrees(alert.lng, alert.lat, 500),
+        position: Cesium.Cartesian3.fromDegrees(alert.lng, alert.lat, 10),
         point: {
           pixelSize: alert.severity === "Extreme" ? 10 : 7,
           color,
           outlineColor: color.withAlpha(0.3),
           outlineWidth: 6,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.5, 1e7, 0.4),
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
           text: alert.event,
@@ -259,6 +261,7 @@ export function applyWeatherMethods(GlobeController) {
           pixelOffset: new Cesium.Cartesian2(0, -14),
           scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 5e6, 0),
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3e6),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         properties: {
           type: "weather_alert",

@@ -53,10 +53,18 @@ export function applyInsightsMethods(GlobeController) {
 
     const typeIcons = {
       earthquake_infrastructure: "\u26A0",
+      earthquake_pipeline: "\u26A0",
       jamming_flights: "\u{1F4E1}",
+      electronic_warfare: "\u{1F4E1}",
       conflict_military: "\u2694",
       fire_infrastructure: "\u{1F525}",
+      fire_pipeline: "\u{1F525}",
       cable_outage: "\u{1F50C}",
+      emergency_squawk: "\u{1F6A8}",
+      ship_cable_proximity: "\u2693",
+      information_blackout: "\u{1F50C}",
+      airspace_clearing: "\u{2708}",
+      weather_disruption: "\u26C8",
       convergence: "\u{1F310}",
     }
 
@@ -77,6 +85,8 @@ export function applyInsightsMethods(GlobeController) {
           outlineColor: color.withAlpha(0.6),
           outlineWidth: 2,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
       this._insightEntities.push(ring)
@@ -164,10 +174,18 @@ export function applyInsightsMethods(GlobeController) {
     }
     const typeLabels = {
       earthquake_infrastructure: "QUAKE + INFRA",
+      earthquake_pipeline: "QUAKE + PIPELINE",
       jamming_flights: "JAMMING + AIR",
+      electronic_warfare: "ELECTRONIC WARFARE",
       conflict_military: "CONFLICT + MIL",
       fire_infrastructure: "FIRE + INFRA",
+      fire_pipeline: "FIRE + PIPELINE",
       cable_outage: "OUTAGE + CABLE",
+      emergency_squawk: "EMERGENCY SQUAWK",
+      ship_cable_proximity: "SHIP + CABLE",
+      information_blackout: "INFO BLACKOUT",
+      airspace_clearing: "AIRSPACE + MIL",
+      weather_disruption: "WEATHER + AIR",
       convergence: "CONVERGENCE",
     }
 
@@ -185,8 +203,8 @@ export function applyInsightsMethods(GlobeController) {
           // Convergence insight — show layer chips
           const layerChipColors = {
             earthquake: "eq", fire: "fire", conflict: "conf",
-            military_flight: "flight", jamming: "jam", natural_event: "cable",
-            news: "outage", nuclear_plant: "plant", submarine_cable: "cable",
+            military_flight: "flight", jamming: "jam", natural_event: "event",
+            news: "news", nuclear_plant: "plant", submarine_cable: "cable",
           }
           insight.layers.forEach(layer => {
             const cls = layerChipColors[layer] || "eq"
@@ -207,7 +225,17 @@ export function applyInsightsMethods(GlobeController) {
           if (ents.jamming) chips += `<span class="ins-chip ins-chip--jam">${ents.jamming.percentage?.toFixed(0)}% jam</span>`
           if (ents.fires) chips += `<span class="ins-chip ins-chip--fire">${ents.fires.count} fires</span>`
           if (ents.outages?.length) chips += `<span class="ins-chip ins-chip--outage">${ents.outages.length} outage${ents.outages.length > 1 ? "s" : ""}</span>`
-          if (ents.conflict) chips += `<span class="ins-chip ins-chip--conf">${ents.conflict.events} events</span>`
+          if (ents.conflict) chips += `<span class="ins-chip ins-chip--conf">${ents.conflict.count || ents.conflict.events} events</span>`
+          if (ents.flight) chips += `<span class="ins-chip ins-chip--flight">${ents.flight.squawk || "EMG"} ${ents.flight.callsign || ents.flight.icao24}</span>`
+          if (ents.ship) chips += `<span class="ins-chip ins-chip--cable">${ents.ship.name || ents.ship.mmsi}</span>`
+          if (ents.cable && !ents.cables) chips += `<span class="ins-chip ins-chip--cable">${ents.cable.name} (${ents.cable.distance_km}km)</span>`
+          if (ents.nordo) chips += `<span class="ins-chip ins-chip--jam">${ents.nordo.count} NORDO</span>`
+          if (ents.notams?.length) chips += `<span class="ins-chip ins-chip--flight">${ents.notams.length} NOTAMs</span>`
+          if (ents.pipelines?.length) chips += `<span class="ins-chip ins-chip--cable">${ents.pipelines.length} pipeline${ents.pipelines.length > 1 ? "s" : ""}</span>`
+          if (ents.satellite) chips += `<span class="ins-chip ins-chip--plant">${ents.satellite.name}</span>`
+          if (ents.hotspot) chips += `<span class="ins-chip ins-chip--conf">${ents.hotspot.label}</span>`
+          if (ents.weather) chips += `<span class="ins-chip ins-chip--outage">${ents.weather.event}</span>`
+          if (ents.conflicts?.length) chips += `<span class="ins-chip ins-chip--conf">${ents.conflicts.length} conflicts</span>`
         }
 
         return `<div class="insight-card insight-card--${sev}" data-insight-idx="${idx}">

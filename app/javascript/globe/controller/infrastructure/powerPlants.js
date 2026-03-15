@@ -116,6 +116,8 @@ export function applyPowerPlantsMethods(GlobeController) {
             outlineColor: Cesium.Color.RED.withAlpha(0.35),
             outlineWidth: 1,
             height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._powerPlantEntities.push(atkRing)

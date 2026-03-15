@@ -50,10 +50,11 @@ export function applyGpsJammingMethods(GlobeController) {
       high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.9)")
     }
 
-    const hexRadius = 0.5 // degrees — matches backend HEX_SIZE for flush tiling
+    const hexRadius = 0.25 // degrees — matches backend HEX_SIZE for flush tiling
 
     dataSource.entities.suspendEvents()
     cells.forEach(cell => {
+      if (cell.level === "low") return // skip noise — only show medium/high
       const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
       const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
 
@@ -65,13 +66,13 @@ export function applyGpsJammingMethods(GlobeController) {
           outline: true,
           outlineColor: outlines[cell.level] || outlines.medium,
           outlineWidth: 2,
-          height: 0,
+          height: 5000,
         },
         description: `<div style="font-family: 'DM Sans', sans-serif;">
           <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">GPS Interference</div>
           <div style="font-size: 13px; color: ${cell.level === 'high' ? '#f44336' : '#ffc107'}; font-weight: 600; margin-bottom: 4px;">${cell.level.toUpperCase()} — ${cell.pct}%</div>
           <div style="font-size: 12px; color: #aaa;">${cell.bad} of ${cell.total} aircraft with degraded accuracy</div>
-          <div style="font-size: 11px; color: #666; margin-top: 6px;">NACp ≤ 6 indicates GPS jamming or spoofing</div>
+          <div style="font-size: 11px; color: #666; margin-top: 6px;">NACp ≤ 4 indicates GPS jamming or spoofing</div>
         </div>`,
       })
       this._gpsJammingEntities.push(hexEntity)
@@ -80,7 +81,7 @@ export function applyGpsJammingMethods(GlobeController) {
       if (cell.level !== "low") {
         const labelEntity = dataSource.entities.add({
           id: `jam-lbl-${cell.lat}-${cell.lng}`,
-          position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 200),
+          position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 5500),
           label: {
             text: `⚠ ${cell.pct}%`,
             font: "13px DM Sans, sans-serif",
@@ -90,6 +91,7 @@ export function applyGpsJammingMethods(GlobeController) {
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 8e6, 0.4),
           },

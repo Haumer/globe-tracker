@@ -75,6 +75,10 @@ module Api
         GpsJammingSnapshot.maximum(:recorded_at),
         InternetOutage.minimum(:started_at),
         InternetOutage.maximum(:started_at),
+        WeatherAlert.minimum(:onset),
+        WeatherAlert.maximum(:onset),
+        Notam.minimum(:effective_start),
+        Notam.maximum(:effective_start),
       ].compact.each { |t| time_points << t }
 
       global_oldest = time_points.min
@@ -92,6 +96,8 @@ module Api
           news: NewsEvent.count,
           gps_jamming: GpsJammingSnapshot.count,
           outages: InternetOutage.count,
+          weather_alerts: WeatherAlert.count,
+          notams: Notam.count,
         },
       }
     end
@@ -146,6 +152,15 @@ module Api
       when "internet_outage"
         io = te.eventable
         base.merge(code: io.entity_code, name: io.entity_name, score: io.score, level: io.level)
+      when "weather_alert"
+        wa = te.eventable
+        base.merge(event: wa.event, severity: wa.severity, headline: wa.headline,
+                   areas: wa.areas, onset: wa.onset&.iso8601, expires: wa.expires&.iso8601)
+      when "notam"
+        n = te.eventable
+        base.merge(reason: n.reason, text: n.text, radius_nm: n.radius_nm,
+                   alt_low_ft: n.alt_low_ft, alt_high_ft: n.alt_high_ft,
+                   effective_start: n.effective_start&.iso8601, effective_end: n.effective_end&.iso8601)
       else
         base
       end

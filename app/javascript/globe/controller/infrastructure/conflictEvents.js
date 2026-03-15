@@ -66,6 +66,8 @@ export function applyConflictsMethods(GlobeController) {
             outlineColor: cesiumColor.withAlpha(0.2),
             outlineWidth: 1,
             height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._conflictEntities.push(ring)
@@ -73,7 +75,7 @@ export function applyConflictsMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `conf-${c.id}`,
-        position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 50),
+        position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 10),
         point: {
           pixelSize,
           color: cesiumColor.withAlpha(0.85),
@@ -95,6 +97,7 @@ export function applyConflictsMethods(GlobeController) {
           pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
           scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
           translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._conflictEntities.push(entity)

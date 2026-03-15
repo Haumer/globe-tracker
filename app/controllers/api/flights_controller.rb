@@ -5,21 +5,11 @@ module Api
     def index
       bounds = parse_bounds
 
-      opensky_thread = Thread.new { ::OpenskyService.fetch_flights(bounds: bounds) }
-      adsb_thread = Thread.new { ::AdsbService.fetch_flights(bounds: bounds) }
-      mil_thread = Thread.new { ::AdsbService.fetch_military }
+      # Read from DB — the GlobalPollerService keeps flights fresh in the background
+      flights = Flight.where("updated_at > ?", 2.minutes.ago)
+      flights = flights.within_bounds(bounds) if bounds.present?
 
-      opensky_flights = safe_thread_value(opensky_thread, "OpenSky")
-      adsb_flights = safe_thread_value(adsb_thread, "ADSB")
-      mil_flights = safe_thread_value(mil_thread, "Military flights")
-
-      # Merge: index by icao24, ADSB.lol wins on duplicates (has military + more data)
-      merged = {}
-      opensky_flights&.each { |f| merged[f.icao24] = f }
-      adsb_flights&.each { |f| merged[f.icao24] = f }
-      mil_flights&.each { |f| merged[f.icao24] = f }
-
-      render json: merged.values.map { |f|
+      render json: flights.map { |f|
         {
           icao24: f.icao24,
           callsign: f.callsign,

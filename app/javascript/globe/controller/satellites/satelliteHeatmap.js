@@ -108,6 +108,7 @@ export function applySatHeatmapMethods(GlobeController) {
             outlineColor: Cesium.Color.fromCssColorString("#0d47a1").withAlpha(0.15),
             outlineWidth: 1,
             height: 0,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._buildHeatmapGrid.set(cell.key, { lat: cell.lat, lng: cell.lng, hits: 0, entity })
@@ -351,6 +352,7 @@ export function applySatHeatmapMethods(GlobeController) {
                 outlineColor: sweepColor.withAlpha(0.12 + falloff * 0.25),
                 outlineWidth: 1,
                 height: 0,
+                classificationType: Cesium.ClassificationType.BOTH,
               },
             })
             this._sweepEntities.push(entity)
@@ -463,6 +465,7 @@ export function applySatHeatmapMethods(GlobeController) {
             outlineColor: baseColor.withAlpha(0.35 + falloff * 0.5),
             outlineWidth: 1.5,
             height: 0,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._satFootprintEntities.push(entity)
@@ -738,6 +741,8 @@ export function applySatHeatmapMethods(GlobeController) {
         outlineColor: Cesium.Color.fromCssColorString("#ce93d8").withAlpha(0.4),
         outlineWidth: 1,
         height: 0,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        classificationType: Cesium.ClassificationType.BOTH,
       },
     })
     this._satVisEntities.push(groundMarker)
@@ -814,13 +819,49 @@ export function applySatHeatmapMethods(GlobeController) {
     const footprintKm = Math.sqrt(2 * 6371 * satAltKm)
     const footprintM = footprintKm * 1000
 
-    // Collect ground events within footprint
+    // ── Category → relevant event types mapping ──
+    // Each satellite category only sees ground events it can plausibly detect or relate to
+    const SAT_EVENT_MAP = {
+      // Weather satellites → weather, fires, natural disasters
+      weather:    ["fire", "natural", "weather", "earthquake"],
+      // Navigation satellites → GPS jamming, flights
+      "gps-ops":  ["jamming", "fire", "earthquake"],
+      glonass:    ["jamming", "fire", "earthquake"],
+      galileo:    ["jamming", "fire", "earthquake"],
+      beidou:     ["jamming", "fire", "earthquake"],
+      gnss:       ["jamming", "fire", "earthquake"],
+      sbas:       ["jamming"],
+      // Earth observation → fires, natural events, earthquakes
+      resource:   ["fire", "natural", "earthquake"],
+      planet:     ["fire", "natural", "earthquake", "conflict"],
+      radar:      ["fire", "natural", "earthquake", "conflict"],
+      science:    ["fire", "natural", "earthquake"],
+      // Military/ISR → conflicts, jamming, military activity
+      military:   ["conflict", "jamming", "fire", "earthquake", "news"],
+      analyst:    ["conflict", "jamming", "fire", "news"],
+      // Comms satellites → internet outages, conflicts (comms disruption)
+      starlink:   ["conflict", "natural", "earthquake", "news"],
+      iridium:    ["conflict", "natural", "news"],
+      oneweb:     ["conflict", "natural", "news"],
+      intelsat:   ["conflict", "natural", "news"],
+      ses:        ["conflict", "natural", "news"],
+      globalstar: ["conflict", "natural", "news"],
+      // Search & rescue
+      sarsat:     ["earthquake", "natural", "fire"],
+      // Space station
+      stations:   ["natural", "fire", "earthquake"],
+    }
+    // Default: show everything (for categories not mapped)
+    const defaultEvents = ["earthquake", "natural", "conflict", "fire", "news", "jamming", "weather"]
+    const relevantTypes = SAT_EVENT_MAP[satData.category] || defaultEvents
+
+    // Collect ground events within footprint (filtered by satellite purpose)
     const events = []
-    const catIcons = { earthquake: "house-crack", natural: "bolt", conflict: "crosshairs", fire: "fire", news: "newspaper" }
-    const catColors = { earthquake: "#ff7043", natural: "#66bb6a", conflict: "#f44336", fire: "#ff5722", news: "#ff9800" }
+    const catIcons = { earthquake: "house-crack", natural: "bolt", conflict: "crosshairs", fire: "fire", news: "newspaper", jamming: "satellite-dish", weather: "cloud-bolt" }
+    const catColors = { earthquake: "#ff7043", natural: "#66bb6a", conflict: "#f44336", fire: "#ff5722", news: "#ff9800", jamming: "#ffc107", weather: "#42a5f5" }
 
     // Earthquakes
-    if (this._earthquakeData?.length) {
+    if (relevantTypes.includes("earthquake") && this._earthquakeData?.length) {
       this._earthquakeData.forEach(eq => {
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: eq.lat, lng: eq.lng })
         if (dist <= footprintM) {
@@ -830,7 +871,7 @@ export function applySatHeatmapMethods(GlobeController) {
     }
 
     // Natural events
-    if (this._naturalEventData?.length) {
+    if (relevantTypes.includes("natural") && this._naturalEventData?.length) {
       this._naturalEventData.forEach(ev => {
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: ev.lat, lng: ev.lng })
         if (dist <= footprintM) {
@@ -840,7 +881,7 @@ export function applySatHeatmapMethods(GlobeController) {
     }
 
     // Conflicts
-    if (this._conflictData?.length) {
+    if (relevantTypes.includes("conflict") && this._conflictData?.length) {
       this._conflictData.forEach(c => {
         if (!c.lat || !c.lng) return
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: c.lat, lng: c.lng })
@@ -851,7 +892,7 @@ export function applySatHeatmapMethods(GlobeController) {
     }
 
     // Fire hotspots
-    if (this._fireHotspotData?.length) {
+    if (relevantTypes.includes("fire") && this._fireHotspotData?.length) {
       this._fireHotspotData.forEach(f => {
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: f.lat, lng: f.lng })
         if (dist <= footprintM) {
@@ -860,8 +901,30 @@ export function applySatHeatmapMethods(GlobeController) {
       })
     }
 
-    // News
-    if (this._newsData?.length) {
+    // GPS Jamming zones
+    if (relevantTypes.includes("jamming") && this._gpsJammingData?.length) {
+      this._gpsJammingData.forEach(j => {
+        if (j.level === "low") return
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: j.lat, lng: j.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "jamming", label: `GPS jamming ${j.pct}% (${j.level})`, lat: j.lat, lng: j.lng, dist })
+        }
+      })
+    }
+
+    // Weather alerts
+    if (relevantTypes.includes("weather") && this._weatherAlerts?.length) {
+      this._weatherAlerts.forEach(w => {
+        if (!w.lat || !w.lng) return
+        const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: w.lat, lng: w.lng })
+        if (dist <= footprintM) {
+          events.push({ type: "weather", label: `${w.severity}: ${w.event}`, lat: w.lat, lng: w.lng, dist })
+        }
+      })
+    }
+
+    // News (only for ISR/military/comms satellites)
+    if (relevantTypes.includes("news") && this._newsData?.length) {
       this._newsData.forEach(n => {
         if (!n.lat || !n.lng) return
         const dist = haversineDistance({ lat: satLat, lng: satLng }, { lat: n.lat, lng: n.lng })
@@ -891,6 +954,8 @@ export function applySatHeatmapMethods(GlobeController) {
         outlineColor: satColor.withAlpha(0.2),
         outlineWidth: 1,
         height: 0,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        classificationType: Cesium.ClassificationType.BOTH,
       },
     })
     this._satVisEntities.push(fpCircle)
@@ -923,14 +988,23 @@ export function applySatHeatmapMethods(GlobeController) {
             <span style="flex-shrink:0;color:${color};">${distKm} km</span>
           </div>`
         }).join("")
-      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No active events in footprint. Enable event layers (EQ, EVT, WAR, FIRE, NEWS).</div>`
+      : `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">No relevant events in footprint for this ${satData.category} satellite. Enable matching event layers.</div>`
+
+    const purposeLabels = {
+      weather: "Weather Detection", "gps-ops": "Navigation Monitoring", glonass: "Navigation Monitoring",
+      galileo: "Navigation Monitoring", beidou: "Navigation Monitoring", gnss: "Navigation Monitoring",
+      military: "ISR Coverage", analyst: "Intelligence Collection", resource: "Earth Observation",
+      planet: "Earth Observation", radar: "SAR Imaging", sarsat: "Search & Rescue",
+      starlink: "Comms Coverage", iridium: "Comms Coverage", stations: "Observation",
+    }
+    const purposeLabel = purposeLabels[satData.category] || "Ground Events"
 
     const container = document.createElement("div")
     container.id = "ground-events-results"
     container.innerHTML = `
       <div style="margin-top:10px;padding:6px 8px;background:rgba(171,71,188,0.08);border:1px solid rgba(171,71,188,0.25);border-radius:4px;">
         <div style="font:600 9px var(--gt-mono);color:#ce93d8;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">
-          <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>${top.length} EVENTS IN FOOTPRINT
+          <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>${top.length} ${purposeLabel.toUpperCase()}
           <span style="font-weight:400;text-transform:none;margin-left:4px;">(${Math.round(footprintKm)} km radius)</span>
         </div>
         ${listHtml}

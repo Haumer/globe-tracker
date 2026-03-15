@@ -2,20 +2,24 @@ class NaturalEventRefreshService
   extend HttpClient
   extend Refreshable
   include TimelineRecorder
+  include RefreshableDataService
 
   FEED_URL = "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=100".freeze
 
   refreshes model: NaturalEvent, interval: 5.minutes
 
-  def refresh
-    data = self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30,
-                                cache_key: "http:natural_events_feed", cache_ttl: 15.minutes)
-    return 0 unless data
+  private
 
+  def fetch_data
+    self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30,
+                        cache_key: "http:natural_events_feed", cache_ttl: 15.minutes)
+  end
+
+  def parse_records(data)
     events = data["events"] || []
     now = Time.current
 
-    records = events.filter_map do |event|
+    events.filter_map do |event|
       geo = event["geometry"]&.first
       category = event["categories"]&.first || {}
       next if geo.nil? || geo["coordinates"].nil?
@@ -42,21 +46,13 @@ class NaturalEventRefreshService
         updated_at: now,
       }
     end
+  end
 
-    return 0 if records.empty?
-
+  def upsert_records(records)
     NaturalEvent.upsert_all(records, unique_by: :external_id)
-    record_timeline_events(
-      event_type: "natural_event",
-      model_class: NaturalEvent,
-      unique_key: :external_id,
-      unique_values: records.map { |record| record[:external_id] },
-      time_column: :event_date
-    )
+  end
 
-    records.size
-  rescue StandardError => e
-    Rails.logger.error("NaturalEventRefreshService: #{e.message}")
-    0
+  def timeline_config
+    { event_type: "natural_event", model_class: NaturalEvent, time_column: :event_date }
   end
 end

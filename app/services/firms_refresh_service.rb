@@ -4,6 +4,7 @@ class FirmsRefreshService
   extend HttpClient
   extend Refreshable
   include TimelineRecorder
+  include RefreshableDataService
 
   SOURCES = {
     "VIIRS_SNPP_NRT" => "Suomi NPP",
@@ -14,10 +15,18 @@ class FirmsRefreshService
 
   refreshes model: FireHotspot, interval: 15.minutes
 
-  def refresh
-    map_key = ENV["FIRMS_MAP_KEY"]
-    return 0 unless map_key.present?
+  private
 
+  def fetch_data
+    map_key = ENV["FIRMS_MAP_KEY"]
+    return nil unless map_key.present?
+
+    # Return the map_key as the "data" — parse_records handles fetching per-source
+    map_key
+  end
+
+  def parse_records(data)
+    map_key = data
     now = Time.current
     all_records = []
 
@@ -26,26 +35,20 @@ class FirmsRefreshService
       all_records.concat(records)
     end
 
-    return 0 if all_records.empty?
-
-    FireHotspot.upsert_all(all_records, unique_by: :external_id)
-    FireHotspot.where("acq_datetime < ?", 72.hours.ago).delete_all
-
-    record_timeline_events(
-      event_type: "fire",
-      model_class: FireHotspot,
-      unique_key: :external_id,
-      unique_values: all_records.map { |r| r[:external_id] },
-      time_column: :acq_datetime
-    )
-
-    all_records.size
-  rescue StandardError => e
-    Rails.logger.error("FirmsRefreshService: #{e.message}")
-    0
+    all_records
   end
 
-  private
+  def upsert_records(records)
+    FireHotspot.upsert_all(records, unique_by: :external_id)
+  end
+
+  def after_upsert(records)
+    FireHotspot.where("acq_datetime < ?", 72.hours.ago).delete_all
+  end
+
+  def timeline_config
+    { event_type: "fire", model_class: FireHotspot, time_column: :acq_datetime }
+  end
 
   def fetch_source(source, map_key, now)
     uri = URI("https://firms.modaps.eosdis.nasa.gov/api/area/csv/#{map_key}/#{source}/world/1")

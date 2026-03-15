@@ -10,17 +10,25 @@ module Api
         lomax: params[:lomax]&.to_f || 180,
       }
 
+      # Static no-fly zones
       zones = GLOBAL_NO_FLY_ZONES.select { |z| in_bounds?(z, bounds) }
 
-      # Layer on OpenAIP restricted/danger/prohibited airspace
-      openaip_zones = OpenAipService.fetch_airspaces(bounds: bounds)
-      zones.concat(openaip_zones)
-
-      # Layer on FAA NOTAMs if key available
-      token = ENV["FAA_NOTAM_API_KEY"].presence
-      if token
-        faa_notams = fetch_notams(token, bounds)
-        zones.concat(faa_notams)
+      # Dynamic NOTAMs from DB (populated by NotamRefreshService)
+      Notam.active.within_bounds(bounds).each do |n|
+        zones << {
+          id: n.external_id,
+          lat: n.latitude,
+          lng: n.longitude,
+          radius_nm: n.radius_nm,
+          radius_m: n.radius_m,
+          alt_low_ft: n.alt_low_ft,
+          alt_high_ft: n.alt_high_ft,
+          reason: n.reason,
+          text: n.text,
+          country: n.country,
+          effective_start: n.effective_start&.iso8601,
+          effective_end: n.effective_end&.iso8601,
+        }
       end
 
       expires_in 15.minutes, public: true
@@ -28,114 +36,6 @@ module Api
     end
 
     private
-
-    def fetch_notams(token, bounds)
-      cache_key = "notams:#{bounds.values.map { |v| v.round(1) }.join(',')}"
-
-      cached = Rails.cache.read(cache_key)
-      return cached if cached
-
-      uri = URI("https://external-api.faa.gov/notamapi/v1/notams")
-      uri.query = URI.encode_www_form(
-        responseFormat: "geoJson",
-        notamType: "NOTAM",
-        classification: "FDC",
-        locationLongitude: ((bounds[:lomin] + bounds[:lomax]) / 2).round(2),
-        locationLatitude: ((bounds[:lamin] + bounds[:lamax]) / 2).round(2),
-        locationRadius: [500, ((bounds[:lamax] - bounds[:lamin]) * 60).round].min,
-        featureType: "TFR",
-        effectiveStartDate: Time.current.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        effectiveEndDate: (Time.current + 24.hours).strftime("%Y-%m-%dT%H:%M:%SZ"),
-      )
-
-      req = Net::HTTP::Get.new(uri)
-      req["client_id"] = token
-
-      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
-        http.request(req)
-      end
-
-      return [] unless resp.is_a?(Net::HTTPSuccess)
-
-      data = JSON.parse(resp.body)
-      items = data["items"] || data["notams"] || []
-
-      result = items.filter_map do |item|
-        parse_notam(item)
-      end
-
-      Rails.cache.write(cache_key, result, expires_in: 15.minutes) rescue nil
-      result
-    rescue => e
-      Rails.logger.error("NotamsController: #{e.message}")
-      []
-    end
-
-    def parse_notam(item)
-      props = item["properties"] || item
-      text = props["text"] || props["notamText"] || ""
-
-      lat = props.dig("coordinates", "latitude") || props["lat"]
-      lng = props.dig("coordinates", "longitude") || props["lng"]
-
-      # Try GeoJSON geometry
-      if item["geometry"]
-        coords = item.dig("geometry", "coordinates")
-        if coords
-          if item["geometry"]["type"] == "Point"
-            lng, lat = coords
-          elsif item["geometry"]["type"] == "Polygon" && coords[0]
-            ring = coords[0]
-            lat = ring.sum { |c| c[1] } / ring.size.to_f
-            lng = ring.sum { |c| c[0] } / ring.size.to_f
-          end
-        end
-      end
-
-      return nil unless lat && lng
-
-      # Extract radius from text (nautical miles)
-      radius_nm = 3 # default
-      if text =~ /(\d+(?:\.\d+)?)\s*(?:NM|NAUTICAL MILE)\s*RADIUS/i
-        radius_nm = $1.to_f
-      end
-
-      # Extract altitude from text
-      alt_low = 0
-      alt_high = 18000 # default FL180
-      if text =~ /SFC\s*(?:TO|UP TO)\s*(?:FL)?(\d+)/i
-        alt_high = $1.to_i
-        alt_high *= 100 if alt_high < 1000
-      end
-      if text =~ /(\d+)\s*FT\s*(?:TO|UP TO|THRU)\s*(?:FL)?(\d+)/i
-        alt_low = $1.to_i
-        alt_high = $2.to_i
-        alt_high *= 100 if alt_high < 1000
-      end
-
-      # Determine reason/type
-      reason = "TFR"
-      reason = "VIP Movement" if text =~ /VIP|POTUS|PRESIDENT/i
-      reason = "Wildfire" if text =~ /WILDFIRE|FIRE/i
-      reason = "Space Operations" if text =~ /SPACE|LAUNCH|ROCKET/i
-      reason = "Sporting Event" if text =~ /STADIUM|SPORTING|SUPER BOWL|NASCAR/i
-      reason = "Security" if text =~ /SECURITY|NATIONAL DEFENSE/i
-      reason = "Hazard" if text =~ /HAZARD|UAS|DRONE/i
-
-      {
-        id: props["id"] || props["notamNumber"] || SecureRandom.hex(4),
-        lat: lat.to_f,
-        lng: lng.to_f,
-        radius_nm: radius_nm,
-        radius_m: (radius_nm * 1852).round,
-        alt_low_ft: alt_low,
-        alt_high_ft: alt_high,
-        reason: reason,
-        text: text.truncate(200),
-        effective_start: props["effectiveStart"] || props["startDate"],
-        effective_end: props["effectiveEnd"] || props["endDate"],
-      }
-    end
 
     def in_bounds?(zone, bounds)
       zone[:lat] >= bounds[:lamin] && zone[:lat] <= bounds[:lamax] &&

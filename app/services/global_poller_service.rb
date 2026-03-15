@@ -7,7 +7,7 @@ class GlobalPollerService
       return if @running
       @running = true
       @thread = Thread.new { poll_loop }
-      @thread.abort_on_exception = true
+      @thread.name = "global-poller"
       Rails.logger.info("GlobalPollerService: started")
     end
 
@@ -119,63 +119,32 @@ class GlobalPollerService
       end
     end
 
-    def poll_secondary
-      # Ships - AIS (WebSocket stream, just ensure it's running)
-      poll_source("ais", "ship") do
-        unless AisStreamService.running?
-          AisStreamService.start
-        end
+    SECONDARY_SOURCES = [
+      { name: "ais", type: "ship", fetcher: -> {
+        AisStreamService.start unless AisStreamService.running?
         Ship.where("updated_at > ?", 2.minutes.ago)
-      end
-
-      poll_source("usgs", "earthquake") do
-        EarthquakeRefreshService.refresh_if_stale
-      end
-
-      poll_source("gdelt", "news") do
-        NewsRefreshService.refresh_if_stale
-      end
-
-      poll_source("multi-news", "news") do
-        MultiNewsService.refresh_if_stale
-      end
-
-      poll_source("rss-news", "news") do
-        RssNewsService.refresh_if_stale
-      end
-
-      poll_source("firms", "fire") do
-        FirmsRefreshService.refresh_if_stale
-      end
-
-      poll_source("eonet", "natural_event") do
-        NaturalEventRefreshService.refresh_if_stale
-      end
-
-      poll_source("ucdp", "conflict_event") do
-        ConflictEventService.refresh_if_stale
-      end
-
-      poll_source("acled", "conflict_event") do
-        AcledService.refresh_if_stale
-      end
-
-      poll_source("cloudflare", "internet_outage") do
-        InternetOutageRefreshService.refresh_if_stale
-      end
-
-      poll_source("cloudflare-traffic", "internet_traffic") do
+      } },
+      { name: "usgs",             type: "earthquake",       fetcher: -> { EarthquakeRefreshService.refresh_if_stale } },
+      { name: "gdelt",            type: "news",             fetcher: -> { NewsRefreshService.refresh_if_stale } },
+      { name: "multi-news",       type: "news",             fetcher: -> { MultiNewsService.refresh_if_stale } },
+      { name: "rss-news",         type: "news",             fetcher: -> { RssNewsService.refresh_if_stale } },
+      { name: "firms",            type: "fire",             fetcher: -> { FirmsRefreshService.refresh_if_stale } },
+      { name: "eonet",            type: "natural_event",    fetcher: -> { NaturalEventRefreshService.refresh_if_stale } },
+      { name: "ucdp",             type: "conflict_event",   fetcher: -> { ConflictEventService.refresh_if_stale } },
+      { name: "acled",            type: "conflict_event",   fetcher: -> { AcledService.refresh_if_stale } },
+      { name: "cloudflare",       type: "internet_outage",  fetcher: -> { InternetOutageRefreshService.refresh_if_stale } },
+      { name: "cloudflare-traffic", type: "internet_traffic", fetcher: -> {
         result = CloudflareRadarService.refresh_if_stale
         result.is_a?(Hash) ? (result[:traffic]&.size || 0) : 0
-      end
+      } },
+      { name: "celestrak",        type: "satellite",        fetcher: -> { CelestrakService.refresh_if_stale } },
+      { name: "submarine-cables", type: "submarine_cable",  fetcher: -> { SubmarineCableRefreshService.refresh_if_stale } },
+      { name: "nws",              type: "weather_alert",   fetcher: -> { WeatherAlertRefreshService.refresh_if_stale } },
+      { name: "notams",           type: "notam",           fetcher: -> { NotamRefreshService.refresh_if_stale } },
+    ].freeze
 
-      poll_source("celestrak", "satellite") do
-        CelestrakService.refresh_if_stale
-      end
-
-      poll_source("submarine-cables", "submarine_cable") do
-        SubmarineCableRefreshService.refresh_if_stale
-      end
+    def poll_secondary
+      SECONDARY_SOURCES.each { |s| poll_source(s[:name], s[:type], &s[:fetcher]) }
     end
 
     def poll_source(source, poll_type)

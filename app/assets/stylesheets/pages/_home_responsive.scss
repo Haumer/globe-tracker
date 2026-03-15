@@ -1,0 +1,153 @@
+// ─── Mobile Responsive ──────────────────────────────────────────
+@media (max-width: 768px) {
+
+  // 1. Stats bar — compact
+  #stats-bar {
+    height: 28px;
+    padding: 0 2px;
+    .stat-cell { padding: 0 6px; gap: 4px; }
+    .stat-label { font-size: 7px; }
+    .stat-value { font-size: 10px; min-width: 20px; }
+    .stat-sep { height: 12px; }
+  }
+
+  // 2. Sidebar as bottom sheet
+  #sidebar {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 14px 14px 0 0;
+    border-right: none;
+    border-top: 1px solid var(--gt-border);
+    transform: translateY(100%);
+    &.mobile-peek {
+      transform: translateY(calc(100% - 160px));
+    }
+    &.mobile-expanded {
+      transform: translateY(0);
+    }
+    .sb-search { padding: 10px 12px 6px 12px; }
+    .sb-search-icon { left: 22px; }
+  }
+
+  // 3. Sidebar toggle — reposition for mobile (above bottom strip)
+  #sidebar-toggle {
+    top: auto;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    z-index: 70;
+  }
+
+  // 4. Right panel as bottom sheet
+  #right-panel {
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-height: 55vh !important;
+    border-radius: 14px 14px 0 0;
+    z-index: 200 !important;
+    > .detail-close {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+  }
+
+  // 5. Detail stack as full-width bottom sheet
+  #detail-stack {
+    right: 0 !important;
+    left: 0;
+    bottom: 36px !important;
+    padding: 0 8px 8px;
+  }
+  #detail-panel {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+  }
+  #selection-tray {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  // 6. Bottom strip — compact on mobile
+  #bottom-strip {
+    height: 36px;
+    padding: 0 6px;
+    .bs-controls {
+      // Hide zoom and some view buttons on mobile
+      .cb-btn:nth-child(1),
+      .cb-btn:nth-child(2),
+      .cb-sep:nth-child(3),
+      .cb-btn:nth-child(4),
+      .cb-btn:nth-child(5) { display: none; }
+    }
+    .bs-center { display: none; }
+    .cb-btn { width: 36px; height: 36px; font-size: 13px; }
+  }
+
+  // 7. Timeline bar — remove min-width, hide time labels, bigger thumb
+  #timeline-bar {
+    min-width: 0;
+    width: calc(100vw - 16px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    bottom: 36px;
+    padding: 6px 8px;
+    gap: 6px;
+    .tl-time { display: none; }
+    .tl-scrubber {
+      &::-webkit-slider-thumb { width: 20px; height: 20px; }
+      &::-moz-range-thumb { width: 20px; height: 20px; }
+    }
+    .tl-btn { width: 44px; height: 44px; }
+  }
+
+  // 8. Sheet handle for sidebar bottom sheet
+  .sb-sheet-handle {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px;
+    cursor: grab;
+    &::after {
+      content: '';
+      width: 32px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  #onboarding-overlay {
+    flex-direction: column;
+    gap: 12px;
+
+    .onboarding-card {
+      width: 80%;
+      max-width: 260px;
+      padding: 16px 12px;
+    }
+  }
+}
+
+// ─── Very small screens ─────────────────────────────────────────
+@media (max-width: 480px) {
+  #stats-bar .stat-cell:last-child { display: none; }
+}

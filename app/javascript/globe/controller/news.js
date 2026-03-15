@@ -54,12 +54,18 @@ export function applyNewsMethods(GlobeController) {
     // No-op now — arcs show on click, region filters are in the flows tab
   }
 
+  GlobeController.prototype.toggleNewsClustering = function() {
+    this.fetchNews()
+  }
+
   GlobeController.prototype.fetchNews = async function() {
     if (this._timelineActive) return
     this._toast("Loading news...")
     try {
-      const resp = await fetch("/api/news")
-      if (!resp.ok) return
+      const clustered = this.hasNewsClusterToggleTarget && this.newsClusterToggleTarget.checked
+      const url = clustered ? "/api/news?clustered=true" : "/api/news"
+      const resp = await fetch(url)
+      if (!resp.ok) { console.error("News API error:", resp.status); this._toastHide(); return }
       const events = await resp.json()
       this._handleBackgroundRefresh(resp, "news", events.length > 0, () => {
         if (this.newsVisible && !this._timelineActive) this.fetchNews()
@@ -71,6 +77,7 @@ export function applyNewsMethods(GlobeController) {
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch news:", e)
+      this._toastHide()
     }
   }
 
@@ -111,8 +118,8 @@ export function applyNewsMethods(GlobeController) {
     const top3Threshold = clusterSizes[2] || 0
 
     clusters.forEach((clusterEvents) => {
-      // Pick the lead story: highest absolute tone (most intense coverage)
-      clusterEvents.sort((a, b) => Math.abs(b.tone) - Math.abs(a.tone))
+      // Pick the lead story: highest priority (tone intensity weighted by recency)
+      clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone)) - (a.priority || Math.abs(a.tone)))
       const lead = clusterEvents[0]
       const count = clusterEvents.length
       const color = categoryColors[lead.category] || "#90a4ae"
@@ -122,7 +129,7 @@ export function applyNewsMethods(GlobeController) {
       const avgLat = clusterEvents.reduce((s, e) => s + e.lat, 0) / count
       const avgLng = clusterEvents.reduce((s, e) => s + e.lng, 0) / count
 
-      const intensity = Math.min(Math.abs(lead.tone) / 10, 1)
+      const intensity = Math.min((lead.priority != null ? lead.priority : Math.abs(lead.tone)) / 10, 1)
       const coverageBoost = Math.min(Math.log2(count + 1) / 3, 1)
       let pixelSize = 6 + intensity * 6 + coverageBoost * 8
 
@@ -151,7 +158,7 @@ export function applyNewsMethods(GlobeController) {
 
       const entity = dataSource.entities.add({
         id: `news-${lead._idx}`,
-        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 50),
+        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 10),
         point: {
           pixelSize,
           color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
@@ -203,6 +210,8 @@ export function applyNewsMethods(GlobeController) {
             outlineColor: threatColor.withAlpha(0.25),
             outlineWidth: 1,
             height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
           },
         })
         this._newsEntities.push(ring)
@@ -615,29 +624,67 @@ export function applyNewsMethods(GlobeController) {
     this._renderNewsArticleList()
   }
 
+  GlobeController.prototype.toggleNewsCatChip = function(event) {
+    event.currentTarget.classList.toggle("active")
+    this._renderNewsArticleList()
+  }
+
+  GlobeController.prototype._getReadNewsSet = function() {
+    try {
+      const raw = localStorage.getItem("gt_read_news")
+      return raw ? new Set(JSON.parse(raw)) : new Set()
+    } catch { return new Set() }
+  }
+
+  GlobeController.prototype._markNewsRead = function(url) {
+    if (!url) return
+    const readSet = this._getReadNewsSet()
+    readSet.add(url)
+    const arr = [...readSet]
+    if (arr.length > 500) arr.splice(0, arr.length - 500)
+    try { localStorage.setItem("gt_read_news", JSON.stringify(arr)) } catch {}
+  }
+
   GlobeController.prototype._renderNewsArticleList = function() {
     if (!this.hasNewsArticleListTarget) return
     const events = this._newsData || []
 
-    const catFilter = this.hasNewsArticleCatFilterTarget ? this.newsArticleCatFilterTarget.value : "all"
+    // Category chip filter: collect active chips
+    const activeChips = []
+    if (this.hasNewsCatChipsTarget) {
+      this.newsCatChipsTarget.querySelectorAll(".nf-cat-chip.active").forEach(btn => {
+        activeChips.push(btn.dataset.category)
+      })
+    }
+
     const search = this.hasNewsArticleSearchTarget ? this.newsArticleSearchTarget.value.toLowerCase().trim() : ""
+    const sortBy = this.hasNewsSortSelectTarget ? this.newsSortSelectTarget.value : "newest"
+    const hideRead = this.hasNewsHideReadToggleTarget ? this.newsHideReadToggleTarget.checked : false
+    const readSet = this._getReadNewsSet()
 
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
+      health: "#4caf50", economy: "#2196f3", diplomacy: "#9c27b0", cyber: "#00bcd4", other: "#90a4ae",
     }
 
-    // Filter and sort (newest first)
+    // Filter and sort
     const filtered = events
       .map((ev, i) => ({ ...ev, _idx: i }))
       .filter(ev => {
-        if (catFilter !== "all" && ev.category !== catFilter) return false
+        if (activeChips.length > 0 && !activeChips.includes(ev.category)) return false
         if (search && !(ev.title || "").toLowerCase().includes(search) &&
             !(ev.name || "").toLowerCase().includes(search) &&
             !(ev.source || "").toLowerCase().includes(search)) return false
+        if (hideRead && readSet.has(ev.url)) return false
         return true
       })
       .sort((a, b) => {
+        if (sortBy === "priority") {
+          return (b.priority || 0) - (a.priority || 0)
+        } else if (sortBy === "intensity") {
+          return Math.abs(b.tone || 0) - Math.abs(a.tone || 0)
+        }
+        // Default: newest
         if (a.time && b.time) return b.time.localeCompare(a.time)
         if (a.time) return -1
         if (b.time) return 1
@@ -669,11 +716,16 @@ export function applyNewsMethods(GlobeController) {
       else { toneBg = "rgba(144,164,174,0.1)"; toneColor = "#90a4ae"; toneLabel = "neutral" }
 
       const title = this._escapeHtml(ev.title || ev.name || "Untitled")
+      const isRead = readSet.has(ev.url)
+      const readClass = isRead ? " nf-card--read" : ""
+      const clusterBadge = ev.source_count && ev.source_count > 1
+        ? `<span class="nf-card-cluster">${ev.source_count} sources</span>`
+        : ""
 
-      return `<div class="nf-card" data-action="click->globe#focusNewsArticle" data-news-idx="${ev._idx}">
+      return `<div class="nf-card${readClass}" data-action="click->globe#focusNewsArticle" data-news-idx="${ev._idx}" data-news-url="${this._escapeHtml(ev.url || "")}"
         <div class="nf-card-bar" style="background:${color};"></div>
         <div class="nf-card-body">
-          <div class="nf-card-headline">${title}</div>
+          <div class="nf-card-headline">${title}${clusterBadge}</div>
           <div class="nf-card-meta">
             <span class="nf-card-source">${this._escapeHtml(domain)}</span>
             ${timeAgo ? `<span class="nf-card-dot">&middot;</span><span class="nf-card-time">${timeAgo}</span>` : ""}
@@ -681,7 +733,7 @@ export function applyNewsMethods(GlobeController) {
           <div class="nf-card-footer">
             ${ev.threat && ev.threat !== "info" ? `<span class="nf-card-tone" style="background:${{critical:"rgba(244,67,54,0.2)",high:"rgba(255,87,34,0.15)",medium:"rgba(255,152,0,0.12)",low:"rgba(102,187,106,0.1)"}[ev.threat]};color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a"}[ev.threat]}">${ev.threat}</span>` : ""}
             <span class="nf-card-tone" style="background:${toneBg};color:${toneColor}">${toneLabel}</span>
-            <a href="${this._escapeHtml(ev.url || "#")}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation()" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            <a href="${this._escapeHtml(ev.url || "#")}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation();this.closest('.nf-card').classList.add('nf-card--read')" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
             <button class="nf-card-locate" data-action="click->globe#locateNewsArticle" data-news-idx="${ev._idx}" title="Locate on map"><i class="fa-solid fa-location-crosshairs"></i></button>
           </div>
         </div>
@@ -695,32 +747,27 @@ export function applyNewsMethods(GlobeController) {
   }
 
   GlobeController.prototype._fetchTrending = async function() {
+    if (!this.hasNewsTrendingBarTarget) return
+    const bar = this.newsTrendingBarTarget
+
     const now = Date.now()
     if (this._lastTrendingFetch && now - this._lastTrendingFetch < 120000) return
     this._lastTrendingFetch = now
 
+    bar.innerHTML = '<span class="nf-trending-label">TRENDING</span><span class="nf-trend-chip nf-trend-chip--mild">Loading trends...</span>'
+
     try {
       const resp = await fetch("/api/trending")
-      if (!resp.ok) return
+      if (!resp.ok) { bar.innerHTML = ""; return }
       const trends = await resp.json()
-      if (!trends || trends.length === 0) return
+      if (!trends || trends.length === 0) { bar.innerHTML = ""; return }
 
-      // Insert trending bar before article list if not present
-      let bar = this.newsArticleListTarget.parentElement?.querySelector(".nf-trending-bar")
-      if (!bar) {
-        bar = document.createElement("div")
-        bar.className = "nf-trending-bar"
-        bar.style.cssText = "padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;gap:4px;align-items:center;"
-        this.newsArticleListTarget.parentElement?.insertBefore(bar, this.newsArticleListTarget)
-      }
-
-      bar.innerHTML = `<span style="font:600 9px var(--gt-mono);color:#ff9800;letter-spacing:1px;margin-right:4px;">TRENDING</span>` +
+      bar.innerHTML = '<span class="nf-trending-label">TRENDING</span>' +
         trends.slice(0, 10).map(t => {
-          const heat = t.velocity > 5 ? "#f44336" : t.velocity > 2 ? "#ff9800" : "#90a4ae"
-          return `<span style="font:400 10px var(--gt-mono);color:${heat};cursor:pointer;padding:1px 5px;background:rgba(255,255,255,0.04);border-radius:3px;"
-                    data-action="click->globe#filterNewsByKeyword" data-keyword="${t.keyword}">${t.keyword} <span style="font-size:8px;opacity:0.6;">×${t.recent}</span></span>`
+          const heat = t.velocity > 5 ? "nf-trend-chip--hot" : t.velocity > 2 ? "nf-trend-chip--warm" : "nf-trend-chip--mild"
+          return `<span class="nf-trend-chip ${heat}" data-action="click->globe#filterNewsByKeyword" data-keyword="${t.keyword}">${t.keyword} <span class="nf-trend-count">&times;${t.recent}</span></span>`
         }).join("")
-    } catch { /* ignore */ }
+    } catch { bar.innerHTML = "" }
   }
 
   GlobeController.prototype.filterNewsByKeyword = function(event) {
@@ -735,6 +782,10 @@ export function applyNewsMethods(GlobeController) {
     const idx = parseInt(event.currentTarget.dataset.newsIdx)
     const ev = this._newsData?.[idx]
     if (!ev) return
+    // Mark as read
+    this._markNewsRead(ev.url)
+    const card = event.currentTarget
+    if (card) card.classList.add("nf-card--read")
     const Cesium = window.Cesium
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 2000000),

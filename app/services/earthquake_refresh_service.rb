@@ -2,20 +2,24 @@ class EarthquakeRefreshService
   extend HttpClient
   extend Refreshable
   include TimelineRecorder
+  include RefreshableDataService
 
   FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson".freeze
 
   refreshes model: Earthquake, interval: 5.minutes
 
-  def refresh
-    data = self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30,
-                                cache_key: "http:earthquake_feed", cache_ttl: 15.minutes)
-    return 0 unless data
+  private
 
+  def fetch_data
+    self.class.http_get(URI(FEED_URL), open_timeout: 10, read_timeout: 30,
+                        cache_key: "http:earthquake_feed", cache_ttl: 15.minutes)
+  end
+
+  def parse_records(data)
     features = data["features"] || []
     now = Time.current
 
-    records = features.filter_map do |feature|
+    features.filter_map do |feature|
       props = feature["properties"] || {}
       coords = feature.dig("geometry", "coordinates")
       next if coords.nil? || coords.length < 3
@@ -37,21 +41,13 @@ class EarthquakeRefreshService
         updated_at: now,
       }
     end
+  end
 
-    return 0 if records.empty?
-
+  def upsert_records(records)
     Earthquake.upsert_all(records, unique_by: :external_id)
-    record_timeline_events(
-      event_type: "earthquake",
-      model_class: Earthquake,
-      unique_key: :external_id,
-      unique_values: records.map { |record| record[:external_id] },
-      time_column: :event_time
-    )
+  end
 
-    records.size
-  rescue StandardError => e
-    Rails.logger.error("EarthquakeRefreshService: #{e.message}")
-    0
+  def timeline_config
+    { event_type: "earthquake", model_class: Earthquake, time_column: :event_time }
   end
 end

@@ -93,13 +93,13 @@ export function applyMaritimeMethods(GlobeController) {
         existing.currentLat = ship.latitude
         existing.currentLng = ship.longitude
 
-        existing.entity.position = Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude, 0)
+        existing.entity.position = Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude, 10)
         existing.entity.billboard.rotation = -Cesium.Math.toRadians(heading)
         existing.entity.label.text = name
       } else {
         const entity = dataSource.entities.add({
           id: `ship-${mmsi}`,
-          position: Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude, 0),
+          position: Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude, 10),
           billboard: {
             image: this._shipIcon,
             scale: 0.8,
@@ -108,6 +108,8 @@ export function applyMaritimeMethods(GlobeController) {
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             scaleByDistance: new Cesium.NearFarScalar(1e4, 1.2, 5e6, 0.3),
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
           label: {
             text: name,
@@ -121,6 +123,7 @@ export function applyMaritimeMethods(GlobeController) {
             pixelOffset: new Cesium.Cartesian2(0, -16),
             scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0),
             translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 5e6, 0),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         })
 

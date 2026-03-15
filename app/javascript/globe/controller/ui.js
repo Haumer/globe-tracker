@@ -1,3 +1,37 @@
+// ── Layer Registry ────────────────────────────────────────────
+// Single source of truth for every toggleable layer.
+// "satellites" is handled specially (sub-categories) and excluded here.
+const LAYER_REGISTRY = [
+  { key: "flights",      toggleTarget: "flightsToggle",      method: "toggleFlights",      visibleProp: "flightsVisible",       qlTarget: "qlFlights",      section: "tracking",       pill: { label: "FLT",   color: "#4fc3f7" } },
+  { key: "ships",         toggleTarget: "shipsToggle",        method: "toggleShips",        visibleProp: "shipsVisible",         qlTarget: "qlShips",        section: "tracking",       pill: { label: "AIS",   color: "#26c6da" } },
+  { key: "trains",        toggleTarget: "trainsToggle",       method: "toggleTrains",       visibleProp: "trainsVisible",        qlTarget: "qlTrains",       section: "tracking",       pill: { label: "TRAIN", color: "#e53935" } },
+  { key: "notams",        toggleTarget: "notamsToggle",       method: "toggleNotams",       visibleProp: "notamsVisible",        qlTarget: "qlNotams",       section: "tracking",       pill: { label: "NOTAM", color: "#ffab40" } },
+  { key: "earthquakes",   toggleTarget: "earthquakesToggle",  method: "toggleEarthquakes",  visibleProp: "earthquakesVisible",   qlTarget: "qlEarthquakes",  section: "events",         pill: { label: "EQ",    color: "#ff5252" } },
+  { key: "events",        toggleTarget: "naturalEventsToggle",method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents",       section: "events",         pill: { label: "EVT",   color: "#ff9800" } },
+  { key: "fireHotspots",  toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible",  qlTarget: "qlFireHotspots", section: "events",         pill: { label: "FIRE",  color: "#ff6d00" } },
+  { key: "weather",       toggleTarget: "weatherToggle",      method: "toggleWeather",      visibleProp: "weatherVisible",       qlTarget: "qlWeather",      section: "events",         pill: { label: "WX",    color: "#64b5f6" } },
+  { key: "conflicts",     toggleTarget: "conflictsToggle",    method: "toggleConflicts",    visibleProp: "conflictsVisible",     qlTarget: "qlConflicts",    section: "events",         pill: { label: "WAR",   color: "#ef5350" } },
+  { key: "news",          toggleTarget: "newsToggle",         method: "toggleNews",         visibleProp: "newsVisible",          qlTarget: "qlNews",         section: "events",         pill: { label: "NEWS",  color: "#7c4dff" } },
+  { key: "cables",        toggleTarget: "cablesToggle",       method: "toggleCables",       visibleProp: "cablesVisible",        qlTarget: "qlCables",       section: "infrastructure", pill: { label: "CBL",   color: "#00bcd4" } },
+  { key: "pipelines",     toggleTarget: "pipelinesToggle",    method: "togglePipelines",    visibleProp: "pipelinesVisible",     qlTarget: "qlPipelines",    section: "infrastructure", pill: { label: "PIPE",  color: "#ff6d00" } },
+  { key: "railways",      toggleTarget: "railwaysToggle",     method: "toggleRailways",     visibleProp: "railwaysVisible",      qlTarget: "qlRailways",     section: "infrastructure", pill: { label: "RAIL",  color: "#90a4ae" } },
+  { key: "powerPlants",   toggleTarget: "powerPlantsToggle",  method: "togglePowerPlants",  visibleProp: "powerPlantsVisible",   qlTarget: "qlPowerPlants",  section: "infrastructure", pill: { label: "PWR",   color: "#ffc107" } },
+  { key: "cameras",       toggleTarget: "camerasToggle",      method: "toggleCameras",      visibleProp: "camerasVisible",       qlTarget: "qlCameras",      section: "infrastructure", pill: { label: "CAM",   color: "#29b6f6" } },
+  { key: "financial",     toggleTarget: "financialToggle",    method: "toggleFinancial",    visibleProp: "financialVisible",     qlTarget: "qlFinancial",    section: "infrastructure", pill: { label: "MKT",   color: "#66bb6a" } },
+  { key: "traffic",       toggleTarget: "trafficToggle",      method: "toggleTraffic",      visibleProp: "trafficVisible",       qlTarget: "qlTraffic",      section: "cyber",          pill: { label: "NET",   color: "#69f0ae" } },
+  { key: "outages",       toggleTarget: "outagesToggle",      method: "toggleOutages",      visibleProp: "outagesVisible",       qlTarget: "qlOutages",      section: "cyber",          pill: { label: "OUT",   color: "#e040fb" } },
+  { key: "gpsJamming",    toggleTarget: "gpsJammingToggle",   method: "toggleGpsJamming",   visibleProp: "gpsJammingVisible",    qlTarget: "qlGpsJamming",   section: "cyber",          pill: { label: "GPS",   color: "#ff1744" } },
+  { key: "cities",        toggleTarget: "citiesToggle",       method: "toggleCities",       visibleProp: "citiesVisible",        qlTarget: "qlCities",       section: "map",            pill: { label: "CITY",  color: "#ffd54f" } },
+  { key: "airports",      toggleTarget: "airportsToggle",     method: "toggleAirports",     visibleProp: "airportsVisible",      qlTarget: "qlAirports",     section: "map",            pill: { label: "APT",   color: "#81d4fa" } },
+  { key: "borders",       toggleTarget: "bordersToggle",      method: "toggleBorders",      visibleProp: "bordersVisible",       qlTarget: "qlBorders",      section: "map",            pill: { label: "BDR",   color: "#ffd54f" } },
+  { key: "terrain",       toggleTarget: "terrainToggle",      method: "toggleTerrain",      visibleProp: "terrainEnabled",       qlTarget: "qlTerrain",      section: "map",            pill: null },
+]
+
+// Pre-build the quickToggle lookup (key → { toggleTarget, method })
+const _quickToggleMap = Object.fromEntries(
+  LAYER_REGISTRY.map(l => [l.key, { target: l.toggleTarget, method: l.method }])
+)
+
 export function applyUiMethods(GlobeController) {
   GlobeController.prototype._isMobile = function() {
     return window.matchMedia("(max-width: 768px)").matches
@@ -37,32 +71,6 @@ export function applyUiMethods(GlobeController) {
 
   GlobeController.prototype.quickToggle = function(event) {
     const layer = event.currentTarget.dataset.layer
-    const map = {
-      flights:     { target: "flightsToggle",       method: "toggleFlights" },
-      satellites:  null, // handled by opening the section
-      ships:       { target: "shipsToggle",          method: "toggleShips" },
-      cities:      { target: "citiesToggle",         method: "toggleCities" },
-      airports:    { target: "airportsToggle",       method: "toggleAirports" },
-      borders:     { target: "bordersToggle",        method: "toggleBorders" },
-      terrain:     { target: "terrainToggle",        method: "toggleTerrain" },
-      earthquakes: { target: "earthquakesToggle",    method: "toggleEarthquakes" },
-      events:      { target: "naturalEventsToggle",  method: "toggleNaturalEvents" },
-      cameras:     { target: "camerasToggle",        method: "toggleCameras" },
-      gpsJamming:  { target: "gpsJammingToggle",    method: "toggleGpsJamming" },
-      news:        { target: "newsToggle",          method: "toggleNews" },
-      cables:      { target: "cablesToggle",        method: "toggleCables" },
-      pipelines:   { target: "pipelinesToggle",    method: "togglePipelines" },
-      railways:    { target: "railwaysToggle",     method: "toggleRailways" },
-      outages:     { target: "outagesToggle",       method: "toggleOutages" },
-      powerPlants: { target: "powerPlantsToggle",  method: "togglePowerPlants" },
-      conflicts:   { target: "conflictsToggle",    method: "toggleConflicts" },
-      traffic:     { target: "trafficToggle",      method: "toggleTraffic" },
-      notams:      { target: "notamsToggle",        method: "toggleNotams" },
-      fireHotspots: { target: "fireHotspotsToggle", method: "toggleFireHotspots" },
-      weather:      { target: "weatherToggle",      method: "toggleWeather" },
-      trains:       { target: "trainsToggle",       method: "toggleTrains" },
-      financial:    { target: "financialToggle",   method: "toggleFinancial" },
-    }
 
     if (layer === "satellites") {
       const anySat = Object.values(this.satCategoryVisible).some(v => v)
@@ -93,7 +101,7 @@ export function applyUiMethods(GlobeController) {
       return
     }
 
-    const cfg = map[layer]
+    const cfg = _quickToggleMap[layer]
     if (!cfg) return
 
     const targetName = cfg.target + "Target"
@@ -147,29 +155,9 @@ export function applyUiMethods(GlobeController) {
       }
     }
 
-    sync("qlFlights", this.flightsVisible)
-    sync("qlShips", this.shipsVisible)
-    sync("qlCities", this.citiesVisible)
-    sync("qlAirports", this.airportsVisible)
-    sync("qlBorders", this.bordersVisible)
-    sync("qlTerrain", this.terrainEnabled)
-    sync("qlEarthquakes", this.earthquakesVisible)
-    sync("qlEvents", this.naturalEventsVisible)
-    sync("qlCameras", this.camerasVisible)
-    sync("qlGpsJamming", this.gpsJammingVisible)
-    sync("qlNews", this.newsVisible)
-    sync("qlCables", this.cablesVisible)
-    sync("qlPipelines", this.pipelinesVisible)
-    sync("qlRailways", this.railwaysVisible)
-    sync("qlTrains", this.trainsVisible)
-    sync("qlOutages", this.outagesVisible)
-    sync("qlPowerPlants", this.powerPlantsVisible)
-    sync("qlConflicts", this.conflictsVisible)
-    sync("qlTraffic", this.trafficVisible)
-    sync("qlNotams", this.notamsVisible)
-    sync("qlFireHotspots", this.fireHotspotsVisible)
-    sync("qlWeather", this.weatherVisible)
-    sync("qlFinancial", this.financialVisible)
+    for (const l of LAYER_REGISTRY) {
+      sync(l.qlTarget, this[l.visibleProp])
+    }
 
     const anySat = Object.values(this.satCategoryVisible).some(v => v)
     sync("qlSatellites", anySat)
@@ -189,14 +177,18 @@ export function applyUiMethods(GlobeController) {
   }
 
   GlobeController.prototype._updateSectionCounts = function() {
-    const sections = {
-      tracking: [this.flightsVisible, this.shipsVisible, Object.values(this.satCategoryVisible).some(v => v), this.notamsVisible, this.trainsVisible],
-      events: [this.earthquakesVisible, this.naturalEventsVisible, this.fireHotspotsVisible, this.weatherVisible, this.conflictsVisible, this.newsVisible],
-      infrastructure: [this.cablesVisible, this.pipelinesVisible, this.railwaysVisible, this.powerPlantsVisible, this.camerasVisible, this.financialVisible],
-      cyber: [this.trafficVisible, this.outagesVisible, this.gpsJammingVisible],
+    const counts = {}
+    for (const l of LAYER_REGISTRY) {
+      if (!l.section || l.section === "map") continue
+      if (!counts[l.section]) counts[l.section] = 0
+      if (this[l.visibleProp]) counts[l.section]++
     }
-    for (const [key, flags] of Object.entries(sections)) {
-      const count = flags.filter(Boolean).length
+    // Satellites belong to tracking but are not in the registry
+    if (Object.values(this.satCategoryVisible).some(v => v)) {
+      counts.tracking = (counts.tracking || 0) + 1
+    }
+    for (const key of ["tracking", "events", "infrastructure", "cyber"]) {
+      const count = counts[key] || 0
       const el = document.getElementById("sec-count-" + key)
       if (el) el.textContent = count > 0 ? count + " on" : ""
     }
@@ -205,16 +197,8 @@ export function applyUiMethods(GlobeController) {
   GlobeController.prototype._updateSidebarBadge = function() {
     const badge = document.getElementById("sidebar-layer-badge")
     if (!badge) return
-    const count = [
-      this.flightsVisible, this.shipsVisible, this.citiesVisible,
-      this.airportsVisible, this.bordersVisible, this.terrainEnabled,
-      this.earthquakesVisible, this.naturalEventsVisible, this.camerasVisible,
-      this.gpsJammingVisible, this.newsVisible, this.cablesVisible,
-      this.pipelinesVisible, this.railwaysVisible, this.trainsVisible, this.outagesVisible, this.powerPlantsVisible,
-      this.conflictsVisible, this.trafficVisible, this.notamsVisible,
-      this.fireHotspotsVisible, this.weatherVisible, this.financialVisible,
-      Object.values(this.satCategoryVisible).some(v => v)
-    ].filter(Boolean).length
+    let count = LAYER_REGISTRY.filter(l => this[l.visibleProp]).length
+    if (Object.values(this.satCategoryVisible).some(v => v)) count++
     badge.textContent = count
     badge.style.display = count > 0 ? "" : "none"
   }
@@ -222,31 +206,17 @@ export function applyUiMethods(GlobeController) {
   GlobeController.prototype._renderActiveLayerPills = function() {
     if (!this.hasActiveLayerPillsTarget) return
 
-    const layers = [
-      { key: "flights",      active: this.flightsVisible,       color: "#4fc3f7", label: "FLT" },
-      { key: "ships",        active: this.shipsVisible,         color: "#26c6da", label: "AIS" },
-      { key: "satellites",   active: Object.values(this.satCategoryVisible).some(v => v), color: "#ab47bc", label: "SAT" },
-      { key: "earthquakes",  active: this.earthquakesVisible,   color: "#ff5252", label: "EQ" },
-      { key: "events",       active: this.naturalEventsVisible, color: "#ff9800", label: "EVT" },
-      { key: "fires",        active: this.fireHotspotsVisible,  color: "#ff6d00", label: "FIRE" },
-      { key: "weather",      active: this.weatherVisible,       color: "#64b5f6", label: "WX" },
-      { key: "conflicts",    active: this.conflictsVisible,     color: "#ef5350", label: "WAR" },
-      { key: "cables",       active: this.cablesVisible,        color: "#00bcd4", label: "CBL" },
-      { key: "pipelines",    active: this.pipelinesVisible,     color: "#ff6d00", label: "PIPE" },
-      { key: "railways",     active: this.railwaysVisible,      color: "#90a4ae", label: "RAIL" },
-      { key: "trains",      active: this.trainsVisible,        color: "#e53935", label: "TRAIN" },
-      { key: "outages",      active: this.outagesVisible,       color: "#e040fb", label: "OUT" },
-      { key: "powerPlants",  active: this.powerPlantsVisible,   color: "#ffc107", label: "PWR" },
-      { key: "gpsJamming",   active: this.gpsJammingVisible,    color: "#ff1744", label: "GPS" },
-      { key: "traffic",      active: this.trafficVisible,       color: "#69f0ae", label: "NET" },
-      { key: "notams",       active: this.notamsVisible,        color: "#ffab40", label: "NOTAM" },
-      { key: "cameras",      active: this.camerasVisible,       color: "#29b6f6", label: "CAM" },
-      { key: "news",         active: this.newsVisible,          color: "#7c4dff", label: "NEWS" },
-      { key: "financial",    active: this.financialVisible,     color: "#66bb6a", label: "MKT" },
-      { key: "cities",       active: this.citiesVisible,        color: "#ffd54f", label: "CITY" },
-      { key: "airports",     active: this.airportsVisible,      color: "#81d4fa", label: "APT" },
-      { key: "borders",      active: this.bordersVisible,       color: "#ffd54f", label: "BDR" },
-    ]
+    const layers = LAYER_REGISTRY
+      .filter(l => l.pill)
+      .map(l => ({ key: l.key, active: this[l.visibleProp], color: l.pill.color, label: l.pill.label }))
+
+    // Satellites are special (sub-categories)
+    layers.splice(2, 0, {
+      key: "satellites",
+      active: Object.values(this.satCategoryVisible).some(v => v),
+      color: "#ab47bc",
+      label: "SAT",
+    })
 
     const active = layers.filter(l => l.active)
     if (active.length === 0) {

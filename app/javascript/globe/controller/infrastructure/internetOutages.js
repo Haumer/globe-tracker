@@ -72,6 +72,8 @@ export function applyOutagesMethods(GlobeController) {
           outlineColor: cesiumColor.withAlpha(0.2),
           outlineWidth: 1,
           height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         },
       })
       this._outageEntities.push(ring)
@@ -79,7 +81,7 @@ export function applyOutagesMethods(GlobeController) {
       // Center marker
       const entity = dataSource.entities.add({
         id: `outage-${s.code}`,
-        position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 50),
+        position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 10),
         point: {
           pixelSize,
           color: cesiumColor.withAlpha(0.85),
@@ -99,6 +101,7 @@ export function applyOutagesMethods(GlobeController) {
           pixelOffset: new Cesium.Cartesian2(0, -18),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0.4),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1e7, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
       this._outageEntities.push(entity)

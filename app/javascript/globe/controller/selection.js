@@ -611,12 +611,109 @@ export function applySelectionMethods(GlobeController) {
     this.searchClearTarget.style.display = "none"
   }
 
+  // ── Search source definitions ───────────────────────────────
+  // Each entry defines how to search a specific entity type.
+  // Flights, satellites, and airports have custom logic and are handled separately.
+  const SEARCH_SOURCES = [
+    {
+      key: "earthquake",
+      icon: "fa-house-crack",
+      color: "#ff7043",
+      getData: (ctrl) => ctrl._earthquakeData || [],
+      fields: (item) => [item.title, `m${item.mag}`],
+      toResult: (item) => ({
+        name: `M${item.mag.toFixed(1)}`,
+        detail: item.title,
+        lat: item.lat, lng: item.lng, alt: 500000,
+        data: item,
+      }),
+    },
+    {
+      key: "event",
+      getData: (ctrl) => ctrl._naturalEventData || [],
+      fields: (item) => [item.title, item.categoryTitle],
+      toResult: (item, ctrl) => {
+        const catInfo = ctrl.eonetCategoryIcons[item.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
+        return {
+          icon: `fa-${catInfo.icon}`,
+          color: catInfo.color,
+          name: item.title.length > 30 ? item.title.substring(0, 28) + "…" : item.title,
+          detail: item.categoryTitle,
+          lat: item.lat, lng: item.lng, alt: 500000,
+        }
+      },
+    },
+    {
+      key: "webcam",
+      icon: "fa-video",
+      color: "#29b6f6",
+      getData: (ctrl) => ctrl._webcamData || [],
+      fields: (item) => [item.title, item.city],
+      toResult: (item) => ({
+        name: item.title.length > 30 ? item.title.substring(0, 28) + "…" : item.title,
+        detail: [item.city, item.country].filter(Boolean).join(", "),
+        lat: item.lat, lng: item.lng, alt: 50000,
+      }),
+    },
+    {
+      key: "city",
+      getData: (ctrl) => ctrl._citiesData || [],
+      fields: (item) => [item.name, item.country],
+      toResult: (item) => ({
+        icon: item.capital ? "fa-landmark" : "fa-city",
+        color: item.capital ? "#ffd54f" : "#e0e0e0",
+        name: item.name,
+        detail: `${item.country} · ${(item.population / 1e6).toFixed(1)}M`,
+        lat: item.lat, lng: item.lng, alt: 200000,
+      }),
+    },
+    {
+      key: "power_plant",
+      icon: "fa-plug",
+      getData: (ctrl) => ctrl._powerPlantAll || [],
+      fields: (item) => [item.name, item.fuel, item.country],
+      toResult: (item) => ({
+        color: item.fuel === "Nuclear" ? "#fdd835" : "#ff9800",
+        name: item.name,
+        detail: `${item.fuel || "?"} · ${item.capacity ? item.capacity.toLocaleString() + " MW" : "?"}`,
+        lat: item.lat, lng: item.lng, alt: 200000,
+        data: item,
+      }),
+    },
+    {
+      key: "conflict",
+      icon: "fa-crosshairs",
+      color: "#f44336",
+      getData: (ctrl) => ctrl._conflictData || [],
+      fields: (item) => [item.name, item.conflict],
+      toResult: (item) => ({
+        name: item.name || item.conflict,
+        detail: item.conflict || "",
+        lat: item.lat, lng: item.lng, alt: 300000,
+        data: item,
+      }),
+    },
+    {
+      key: "fire_hotspot",
+      icon: "fa-fire",
+      color: "#ff5722",
+      getData: (ctrl) => ctrl._fireHotspotData || [],
+      fields: (item) => [item.satellite, "fire", "hotspot"],
+      toResult: (item) => ({
+        name: `Fire ${item.lat.toFixed(2)}°, ${item.lng.toFixed(2)}°`,
+        detail: `${item.satellite || "?"} · ${item.frp ? item.frp.toFixed(0) + " MW" : "?"}`,
+        lat: item.lat, lng: item.lng, alt: 300000,
+        data: item,
+      }),
+    },
+  ]
+
   GlobeController.prototype._runSearch = async function(query) {
     const q = query.toLowerCase()
     const results = []
     const MAX = 12
 
-    // Search flights (by callsign, ICAO, or airline name)
+    // ── Flights (custom: iterates Map, checks airline name, dynamic icon/color) ──
     for (const [id, f] of this.flightData) {
       if (results.length >= MAX) break
       const cs = (f.callsign || "").toLowerCase()
@@ -639,7 +736,7 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
-    // Search ships
+    // ── Ships (custom: iterates Map, uses mmsi as key) ──
     for (const [mmsi, s] of this.shipData) {
       if (results.length >= MAX) break
       const name = (s.name || "").toLowerCase()
@@ -658,7 +755,7 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
-    // Search satellites — local loaded data first
+    // ── Satellites (custom: local + server search, dedup by norad_id) ──
     const localSatIds = new Set()
     for (const s of this.satelliteData) {
       if (results.length >= MAX) break
@@ -670,7 +767,6 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
-    // If few local satellite matches and query is 2+ chars, search server for all satellites
     if (q.length >= 2 && results.filter(r => r.type === "satellite").length < 4) {
       try {
         const resp = await fetch(`/api/satellites/search?q=${encodeURIComponent(query)}`)
@@ -685,46 +781,7 @@ export function applySelectionMethods(GlobeController) {
       } catch { /* ignore */ }
     }
 
-    // Search earthquakes
-    for (const eq of this._earthquakeData) {
-      if (results.length >= MAX) break
-      const title = (eq.title || "").toLowerCase()
-      if (title.includes(q) || `m${eq.mag}`.includes(q)) {
-        results.push({
-          type: "earthquake",
-          icon: "fa-house-crack",
-          color: "#ff7043",
-          name: `M${eq.mag.toFixed(1)}`,
-          detail: eq.title,
-          lat: eq.lat,
-          lng: eq.lng,
-          alt: 500000,
-          data: eq,
-        })
-      }
-    }
-
-    // Search natural events
-    for (const ev of this._naturalEventData) {
-      if (results.length >= MAX) break
-      const title = (ev.title || "").toLowerCase()
-      const cat = (ev.categoryTitle || "").toLowerCase()
-      if (title.includes(q) || cat.includes(q)) {
-        const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
-        results.push({
-          type: "event",
-          icon: `fa-${catInfo.icon}`,
-          color: catInfo.color,
-          name: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
-          detail: ev.categoryTitle,
-          lat: ev.lat,
-          lng: ev.lng,
-          alt: 500000,
-        })
-      }
-    }
-
-    // Search airports
+    // ── Airports (custom: conditional on airportsVisible, iterates Object entries) ──
     if (this.airportsVisible) {
       for (const [icao, ap] of Object.entries(this._airportDb)) {
         if (results.length >= MAX) break
@@ -743,103 +800,21 @@ export function applySelectionMethods(GlobeController) {
       }
     }
 
-    // Search webcams
-    for (const w of this._webcamData) {
+    // ── Generic array-based sources ──
+    for (const source of SEARCH_SOURCES) {
       if (results.length >= MAX) break
-      const title = (w.title || "").toLowerCase()
-      const city = (w.city || "").toLowerCase()
-      if (title.includes(q) || city.includes(q)) {
-        results.push({
-          type: "webcam",
-          icon: "fa-video",
-          color: "#29b6f6",
-          name: w.title.length > 30 ? w.title.substring(0, 28) + "…" : w.title,
-          detail: [w.city, w.country].filter(Boolean).join(", "),
-          lat: w.lat,
-          lng: w.lng,
-          alt: 50000,
-        })
-      }
-    }
-
-    // Search cities
-    for (const c of this._citiesData) {
-      if (results.length >= MAX) break
-      if (c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q)) {
-        results.push({
-          type: "city",
-          icon: c.capital ? "fa-landmark" : "fa-city",
-          color: c.capital ? "#ffd54f" : "#e0e0e0",
-          name: c.name,
-          detail: `${c.country} · ${(c.population / 1e6).toFixed(1)}M`,
-          lat: c.lat,
-          lng: c.lng,
-          alt: 200000,
-        })
-      }
-    }
-
-    // Search power plants
-    if (this._powerPlantAll) {
-      for (const p of this._powerPlantAll) {
+      const data = source.getData(this)
+      for (const item of data) {
         if (results.length >= MAX) break
-        const name = (p.name || "").toLowerCase()
-        const fuel = (p.fuel || "").toLowerCase()
-        const country = (p.country || "").toLowerCase()
-        if (name.includes(q) || fuel.includes(q) || country.includes(q)) {
+        const fieldValues = source.fields(item)
+        const matches = fieldValues.some(f => (f || "").toLowerCase().includes(q))
+        if (matches) {
+          const result = source.toResult(item, this)
           results.push({
-            type: "power_plant",
-            icon: "fa-plug",
-            color: p.fuel === "Nuclear" ? "#fdd835" : "#ff9800",
-            name: p.name,
-            detail: `${p.fuel || "?"} · ${p.capacity ? p.capacity.toLocaleString() + " MW" : "?"}`,
-            lat: p.lat,
-            lng: p.lng,
-            alt: 200000,
-            data: p,
-          })
-        }
-      }
-    }
-
-    // Search conflicts
-    if (this._conflictData) {
-      for (const c of this._conflictData) {
-        if (results.length >= MAX) break
-        const name = (c.name || "").toLowerCase()
-        const conflict = (c.conflict || "").toLowerCase()
-        if (name.includes(q) || conflict.includes(q)) {
-          results.push({
-            type: "conflict",
-            icon: "fa-crosshairs",
-            color: "#f44336",
-            name: c.name || c.conflict,
-            detail: c.conflict || "",
-            lat: c.lat,
-            lng: c.lng,
-            alt: 300000,
-            data: c,
-          })
-        }
-      }
-    }
-
-    // Search fire hotspots
-    if (this._fireHotspotData) {
-      for (const f of this._fireHotspotData) {
-        if (results.length >= MAX) break
-        const sat = (f.satellite || "").toLowerCase()
-        if (sat.includes(q) || "fire".includes(q) || "hotspot".includes(q)) {
-          results.push({
-            type: "fire_hotspot",
-            icon: "fa-fire",
-            color: "#ff5722",
-            name: `Fire ${f.lat.toFixed(2)}°, ${f.lng.toFixed(2)}°`,
-            detail: `${f.satellite || "?"} · ${f.frp ? f.frp.toFixed(0) + " MW" : "?"}`,
-            lat: f.lat,
-            lng: f.lng,
-            alt: 300000,
-            data: f,
+            type: source.key,
+            icon: result.icon || source.icon,
+            color: result.color || source.color,
+            ...result,
           })
         }
       }

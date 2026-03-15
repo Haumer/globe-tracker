@@ -9,6 +9,7 @@ class NewsEnrichmentService
   class << self
     def enrich_recent(limit: 200)
       # Find articles that haven't been AI-enriched yet
+      # Skip articles that failed enrichment in the last hour (avoid hammering a down API)
       articles = NewsEvent.where(ai_enriched: [nil, false])
         .where("published_at > ?", 48.hours.ago)
         .order(published_at: :desc)
@@ -16,10 +17,23 @@ class NewsEnrichmentService
 
       return 0 if articles.empty?
 
+      # Check if any AI provider is available
+      openai_ok = ENV["OPENAI_API_KEY"].present?
+      claude_ok = ENV["ANTHROPIC_API_KEY"].present?
+
+      unless openai_ok || claude_ok
+        Rails.logger.info("NewsEnrichmentService: no AI API keys configured, skipping")
+        return 0
+      end
+
       total = 0
       articles.each_slice(BATCH_SIZE) do |batch|
-        geocode_batch(batch)
-        cluster_batch(batch)
+        # Try OpenAI first, fall back to Claude
+        if openai_ok
+          combined_enrich(batch, :openai)
+        elsif claude_ok
+          combined_enrich(batch, :claude)
+        end
         total += batch.size
       end
 
@@ -32,7 +46,87 @@ class NewsEnrichmentService
 
     private
 
-    # ── OpenAI: geocode + classify ─────────────────────────────
+    # ── Combined: geocode + classify + cluster in one call ─────
+
+    def combined_enrich(articles, provider)
+      headlines = articles.map.with_index do |a, i|
+        "#{i + 1}. #{a.title&.truncate(120)}"
+      end.join("\n")
+
+      prompt = <<~PROMPT
+        For each headline, determine:
+        1. The PHYSICAL LOCATION where the event occurred (not the news source location)
+        2. The category
+        3. A cluster key to group duplicate/related stories
+
+        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict", "cluster": "baghdad-embassy-attack"}, ...]
+
+        Categories: conflict, terror, disaster, political, economic, health, science, sports, other
+        Cluster key: 3-5 word lowercase hyphenated slug. Same event = same cluster key.
+        For city: use the most specific known city name. If no city, use the capital of the country.
+        For country: use the standard English country name (e.g., "Israel" not "Palestinian Territories", "Pakistan" not "unspecified").
+        Never return "unspecified" — always make your best guess based on the headline context.
+
+        Only return the JSON array, no other text.
+
+        #{headlines}
+      PROMPT
+
+      data = if provider == :openai
+        openai_chat(ENV["OPENAI_API_KEY"], prompt)
+      else
+        claude_message(ENV["ANTHROPIC_API_KEY"], prompt)
+      end
+
+      return unless data
+
+      results = parse_json_array(data)
+      return unless results
+
+      now = Time.current
+      results.each do |r|
+        idx = (r["i"] || r["index"]).to_i - 1
+        article = articles[idx]
+        next unless article
+
+        updates = { ai_enriched: true }
+
+        # Location
+        city = r["city"]&.strip
+        country = r["country"]&.strip
+        lat, lng = resolve_ai_location(city, country)
+        if lat && lng
+          updates[:latitude] = lat
+          updates[:longitude] = lng
+        end
+
+        # Category — always update if valid (even without location fix)
+        cat = r["cat"]&.strip&.downcase
+        if cat.present? && %w[conflict terror disaster political economic health science sports other].include?(cat)
+          updates[:category] = cat
+        end
+
+        # Cluster — always update if present
+        cluster_key = r["cluster"]&.strip&.downcase&.gsub(/[^a-z0-9\-]/, "-")
+        if cluster_key.present? && cluster_key != "unspecified"
+          updates[:story_cluster_id] = Digest::MD5.hexdigest(cluster_key)[0..7]
+        end
+
+        article.update_columns(updates)
+      end
+
+      # Mark remaining articles as enriched (even if AI didn't return data for them)
+      articles.each { |a| a.update_columns(ai_enriched: true) unless a.reload.ai_enriched? }
+    rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNREFUSED => e
+      # Network error — leave articles unenriched so they get retried next cycle
+      Rails.logger.warn("NewsEnrichmentService network error (will retry): #{e.message}")
+    rescue => e
+      # Other error — mark as enriched to prevent infinite retry on bad data
+      Rails.logger.warn("NewsEnrichmentService combined_enrich error: #{e.message}")
+      articles.each { |a| a.update_columns(ai_enriched: true) rescue nil }
+    end
+
+    # ── OpenAI: geocode + classify (fallback) ──────────────────
 
     def geocode_batch(articles)
       api_key = ENV["OPENAI_API_KEY"]
@@ -210,19 +304,38 @@ class NewsEnrichmentService
       nil
     end
 
+    # Extra locations the AI might return that aren't in our standard lookups
+    EXTRA_LOCATIONS = {
+      "west bank" => [31.95, 35.30], "occupied west bank" => [31.95, 35.30],
+      "palestinian territories" => [31.50, 34.47], "palestine" => [31.50, 34.47],
+      "kurdistan" => [36.19, 44.01], "iraqi kurdistan" => [36.19, 44.01],
+      "crimea" => [44.95, 34.10], "donbas" => [48.00, 37.80],
+      "sahel" => [14.0, 0.0], "horn of africa" => [8.0, 45.0],
+      "strait of hormuz" => [26.5, 56.3], "red sea" => [20.0, 38.0],
+      "south china sea" => [12.0, 114.0], "black sea" => [43.5, 34.0],
+      "persian gulf" => [26.0, 52.0], "mediterranean" => [35.0, 18.0],
+    }.freeze
+
     def resolve_ai_location(city, country)
+      return nil if city&.downcase == "unspecified" && country&.downcase == "unspecified"
+
       # Try city first (reuse existing geocoding data)
-      if city.present?
+      if city.present? && city.downcase != "unspecified"
         coords = NewsGeocodable::CITY_COORDS[city.downcase]
+        return coords if coords
+        coords = EXTRA_LOCATIONS[city.downcase]
         return coords if coords
       end
 
       # Try country
-      if country.present?
+      if country.present? && country.downcase != "unspecified"
         code = NewsGeocodable::COUNTRY_NAME_MAP[country.downcase]
         code ||= country.downcase if country.length == 2
         coords = NewsGeocodable::COUNTRY_COORDS[code]
         return [coords[0] + rand(-0.2..0.2), coords[1] + rand(-0.2..0.2)] if coords
+        # Try extra locations
+        coords = EXTRA_LOCATIONS[country.downcase]
+        return coords if coords
       end
 
       nil

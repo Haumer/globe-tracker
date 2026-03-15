@@ -337,6 +337,10 @@ export function applyConflictPulseMethods(GlobeController) {
         Sources: ${tierHtml} · Updated ${new Date(zone.detected_at).toLocaleTimeString()}
       </div>
 
+      <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${this._escapeHtml(JSON.stringify(s))}">
+        <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal All Connected Layers
+      </button>
+
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
@@ -345,6 +349,74 @@ export function applyConflictPulseMethods(GlobeController) {
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
+  }
+
+  // ── Reveal all connected layers ─────────────────────────────
+
+  GlobeController.prototype.revealPulseConnections = function(event) {
+    const lat = parseFloat(event.currentTarget.dataset.lat)
+    const lng = parseFloat(event.currentTarget.dataset.lng)
+    let signals = {}
+    try { signals = JSON.parse(event.currentTarget.dataset.signals) } catch {}
+
+    const Cesium = window.Cesium
+
+    // Map of signal types to layer toggles
+    const layerMap = {
+      military_flights: { toggle: "flightsToggle", method: "toggleFlights" },
+      gps_jamming: { toggle: "gpsJammingToggle", method: "toggleGpsJamming" },
+      fire_hotspots: { toggle: "firesToggle", method: "toggleFires" },
+      known_conflict_zone: { toggle: "conflictsToggle", method: "toggleConflicts" },
+      internet_outage: { toggle: "internetOutagesToggle", method: "toggleInternetOutages" },
+    }
+
+    // Always enable these core layers for context
+    const alwaysEnable = ["flightsToggle", "conflictsToggle"]
+
+    // Enable layers that have signals
+    const enabled = []
+    for (const [signal, config] of Object.entries(layerMap)) {
+      if (signals[signal] || alwaysEnable.includes(config.toggle)) {
+        this._enableLayer(config.toggle)
+        enabled.push(signal.replace(/_/g, " "))
+      }
+    }
+
+    // Also enable news layer for full picture
+    this._enableLayer("newsToggle")
+
+    // Enable infrastructure layers for context
+    this._enableLayer("cablesToggle")
+    this._enableLayer("powerPlantsToggle")
+
+    // Fly to area at closer zoom
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800000),
+      duration: 1.5,
+    })
+
+    // Visual feedback
+    event.currentTarget.innerHTML = `<i class="fa-solid fa-check" style="margin-right:4px;"></i>Layers activated`
+    event.currentTarget.style.background = "rgba(76,175,80,0.2)"
+    event.currentTarget.style.borderColor = "rgba(76,175,80,0.4)"
+    event.currentTarget.style.color = "#4caf50"
+    event.currentTarget.disabled = true
+
+    this._toast(`Revealed: ${enabled.join(", ")}`, "success")
+  }
+
+  // ── Helper: enable a layer toggle if it exists and is off ──
+
+  GlobeController.prototype._enableLayer = function(toggleName) {
+    const targetName = `${toggleName}Target`
+    const hasTarget = `has${toggleName[0].toUpperCase()}${toggleName.slice(1)}Target`
+    if (this[hasTarget]) {
+      const toggle = this[targetName]
+      if (toggle && !toggle.checked) {
+        toggle.checked = true
+        toggle.dispatchEvent(new Event("change"))
+      }
+    }
   }
 
   // ── Signal chip click — enable layer + fly to area ─────────

@@ -466,7 +466,7 @@ class RssNewsService
   # Geocoding provided by NewsGeocodable concern
 
   def geocode_title(title)
-    geocode_from_title(title)
+    geocode_city_from_title(title) || geocode_from_title(title)
   end
 
   def parse_pub_date(item)

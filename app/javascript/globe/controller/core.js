@@ -114,6 +114,9 @@ export function applyCoreMethods(GlobeController) {
     this.conflictsVisible = false
     this._conflictData = []
     this._conflictEntities = []
+    this._conflictPulseData = []
+    this._conflictPulseEntities = []
+    this._conflictPulsePrev = {}
     this.trafficVisible = false
     this.trafficArcsVisible = true
     this.trafficBlobsVisible = true
@@ -354,6 +357,7 @@ export function applyCoreMethods(GlobeController) {
     this._loadWorkspaceList()
     this._startAlertPolling()
     this._startInsightPolling()
+    this._startConflictPulse()
     this._startMiniTimeline()
 
     // Start animation loop
@@ -1056,6 +1060,10 @@ export function applyCoreMethods(GlobeController) {
       { prefix: "pp-", skip: [], handler: (id) => {
         const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
         this.showPowerPlantDetail(d); return true
+      }},
+      { prefix: "cpulse-", skip: ["cpulse-core-"], handler: (id) => {
+        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        this.showConflictPulseDetail(d); return true
       }},
       { prefix: "conf-", skip: ["conf-ring-"], handler: (id) => {
         const d = this._conflictData.find(e => e.id === parseInt(id)); if (!d) return false

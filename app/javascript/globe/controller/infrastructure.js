@@ -8,6 +8,7 @@ import { applyTrafficMethods } from "./infrastructure/internetTraffic"
 import { applyPipelinesMethods } from "./infrastructure/pipelines"
 import { applyRailwaysMethods } from "./infrastructure/railways"
 import { applyTrainsMethods } from "./infrastructure/trains"
+import { applyConflictPulseMethods } from "./infrastructure/conflictPulse"
 
 export function applyInfrastructureMethods(GlobeController) {
   applyGpsJammingMethods(GlobeController)
@@ -20,4 +21,5 @@ export function applyInfrastructureMethods(GlobeController) {
   applyPipelinesMethods(GlobeController)
   applyRailwaysMethods(GlobeController)
   applyTrainsMethods(GlobeController)
+  applyConflictPulseMethods(GlobeController)
 }

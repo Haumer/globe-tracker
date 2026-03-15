@@ -19,6 +19,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         longitude: 35.0 + rand * 0.5,
         tone: -5.0 - rand,
         category: "conflict",
+        credibility: "tier2/low",
         source: ["reuters", "bbc", "aljazeera", "cnn", "guardian"][i % 5],
         published_at: (i * 2).hours.ago,
         fetched_at: Time.current,
@@ -36,14 +37,14 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     assert zone[:source_count] > 1
   end
 
-  test "filters out cells with fewer than MIN_ARTICLES" do
+  test "filters out cells with fewer than MIN_ARTICLES or single source" do
     2.times do |i|
       NewsEvent.create!(
         url: "https://example.com/sparse-#{i}",
         title: "Minor incident #{i}",
         latitude: -30.0,
         longitude: 25.0,
-        tone: -2.0,
+        tone: -4.0,
         category: "conflict",
         source: "reuters",
         published_at: i.hours.ago,
@@ -51,12 +52,12 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
       )
     end
 
-    result = ConflictPulseService.analyze
+    result = ConflictPulseService.new.compute
     assert_empty result
   end
 
   test "spike ratio increases score when frequency surges" do
-    # Baseline: 1 article per day for 5 days
+    # Baseline: 1 article per day for 5 days (multi-source)
     5.times do |i|
       NewsEvent.create!(
         url: "https://example.com/base-#{i}",
@@ -65,13 +66,14 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         longitude: 45.0,
         tone: -3.0,
         category: "conflict",
-        source: "reuters",
+        credibility: "tier2/low",
+        source: ["reuters", "bbc"][i % 2],
         published_at: (2 + i).days.ago,
         fetched_at: Time.current,
       )
     end
 
-    # Surge: 8 articles today
+    # Surge: 8 articles today from multiple sources
     8.times do |i|
       NewsEvent.create!(
         url: "https://example.com/surge-#{i}",
@@ -80,6 +82,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         longitude: 45.0 + rand * 0.3,
         tone: -6.0 - rand,
         category: "conflict",
+        credibility: "tier1/low",
         source: ["reuters", "bbc", "aljazeera", "france24"][i % 4],
         published_at: (i * 2).hours.ago,
         fetched_at: Time.current,
@@ -102,6 +105,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         longitude: 35.0,
         tone: -4.0,
         category: "conflict",
+        credibility: "tier2/low",
         source: ["reuters", "bbc", "cnn"][i % 3],
         published_at: (i * 3).hours.ago,
         fetched_at: Time.current,
@@ -135,7 +139,9 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         title: "Cached conflict #{i}",
         latitude: 10.0, longitude: 10.0,
         tone: -4.0, category: "conflict",
-        source: "reuters", published_at: i.hours.ago,
+        credibility: "tier1/low",
+        source: ["reuters", "bbc", "cnn"][i % 3],
+        published_at: i.hours.ago,
         fetched_at: Time.current,
       )
     end

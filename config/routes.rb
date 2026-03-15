@@ -40,6 +40,7 @@ Rails.application.routes.draw do
     resources :internet_outages, only: [:index]
     resources :power_plants, only: [:index]
     resources :conflict_events, only: [:index]
+    get "conflict_pulse", to: "conflict_pulse#index"
     resources :internet_traffic, only: [:index]
     resources :notams, only: [:index]
     resources :airports, only: [:index]

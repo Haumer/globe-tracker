@@ -65,6 +65,7 @@ export function applyInsightsMethods(GlobeController) {
       information_blackout: "\u{1F50C}",
       airspace_clearing: "\u{2708}",
       weather_disruption: "\u26C8",
+      conflict_pulse: "\u{1F4A5}",
       convergence: "\u{1F310}",
     }
 
@@ -186,6 +187,7 @@ export function applyInsightsMethods(GlobeController) {
       information_blackout: "INFO BLACKOUT",
       airspace_clearing: "AIRSPACE + MIL",
       weather_disruption: "WEATHER + AIR",
+      conflict_pulse: "DEVELOPING",
       convergence: "CONVERGENCE",
     }
 
@@ -236,6 +238,13 @@ export function applyInsightsMethods(GlobeController) {
           if (ents.hotspot) chips += `<span class="ins-chip ins-chip--conf">${ents.hotspot.label}</span>`
           if (ents.weather) chips += `<span class="ins-chip ins-chip--outage">${ents.weather.event}</span>`
           if (ents.conflicts?.length) chips += `<span class="ins-chip ins-chip--conf">${ents.conflicts.length} conflicts</span>`
+          if (ents.pulse) chips += `<span class="ins-chip ins-chip--conf">${ents.pulse.score} pulse · ${ents.pulse.trend}</span>`
+          if (ents.news?.count_24h) chips += `<span class="ins-chip ins-chip--fire">${ents.news.count_24h} reports · ${ents.news.sources} sources</span>`
+          if (ents.headlines?.length) chips += ents.headlines.map(h => `<span class="ins-chip ins-chip--eq" style="white-space:normal;text-align:left;font-size:8px;line-height:1.2;">${h.slice(0,60)}</span>`).join("")
+          if (ents.cross_layer?.military_flights) chips += `<span class="ins-chip ins-chip--flight">${ents.cross_layer.military_flights} mil flights</span>`
+          if (ents.cross_layer?.gps_jamming) chips += `<span class="ins-chip ins-chip--jam">${ents.cross_layer.gps_jamming}% jamming</span>`
+          if (ents.cross_layer?.internet_outage) chips += `<span class="ins-chip ins-chip--outage">outage: ${ents.cross_layer.internet_outage}</span>`
+          if (ents.cross_layer?.fire_hotspots) chips += `<span class="ins-chip ins-chip--fire">${ents.cross_layer.fire_hotspots} fires</span>`
         }
 
         return `<div class="insight-card insight-card--${sev}" data-insight-idx="${idx}">

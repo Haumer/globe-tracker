@@ -48,6 +48,7 @@ class CrossLayerAnalyzer
     insights.concat(notam_military_correlations)
     insights.concat(earthquake_pipeline_threats)
     insights.concat(weather_flight_disruption)
+    insights.concat(conflict_pulse_hotspots)
 
     # General-purpose spatiotemporal convergence detection
     # Finds multi-layer hotspots that hardcoded rules don't cover
@@ -656,6 +657,47 @@ class CrossLayerAnalyzer
     end
 
     insights
+  end
+
+  # ── Conflict pulse (news-driven developing situations) ───────
+
+  def conflict_pulse_hotspots
+    zones = ConflictPulseService.analyze
+    zones.select { |z| z[:pulse_score] >= 50 }.map do |zone|
+      severity = if zone[:pulse_score] >= 80 then "critical"
+                 elsif zone[:pulse_score] >= 60 then "high"
+                 else "medium"
+                 end
+
+      signals = zone[:cross_layer_signals]
+      signal_parts = []
+      signal_parts << "#{signals[:military_flights]} mil flights" if signals[:military_flights]
+      signal_parts << "GPS jamming #{signals[:gps_jamming]}%" if signals[:gps_jamming]
+      signal_parts << "internet outage" if signals[:internet_outage]
+      signal_parts << "#{signals[:fire_hotspots]} fires" if signals[:fire_hotspots]
+
+      desc = "#{zone[:count_24h]} reports from #{zone[:source_count]} sources (#{zone[:escalation_trend]})"
+      desc += " + #{signal_parts.join(", ")}" if signal_parts.any?
+
+      {
+        type: "conflict_pulse",
+        severity: severity,
+        title: "Developing: #{zone[:top_headlines]&.first&.truncate(80) || "conflict activity detected"}",
+        description: desc,
+        lat: zone[:lat],
+        lng: zone[:lng],
+        entities: {
+          pulse: { score: zone[:pulse_score], trend: zone[:escalation_trend], spike: zone[:spike_ratio] },
+          news: { count_24h: zone[:count_24h], sources: zone[:source_count], stories: zone[:story_count] },
+          cross_layer: signals.presence,
+          headlines: zone[:top_headlines]&.first(3),
+        }.compact,
+        detected_at: zone[:detected_at],
+      }
+    end
+  rescue => e
+    Rails.logger.error("CrossLayerAnalyzer conflict_pulse_hotspots: #{e.message}")
+    []
   end
 
   # ── Helpers ───────────────────────────────────────────────────

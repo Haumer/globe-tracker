@@ -991,6 +991,19 @@ export function applyCoreMethods(GlobeController) {
 
     // Dispatch table: prefix → handler
     const handlers = [
+      { prefix: "tl-flight-", skip: [], handler: (id) => {
+        // Timeline playback flight — show detail from snapshot data
+        const snap = this._timelineLastKnown?.get(`flight-${id}`)
+        if (!snap) return false
+        this._showTimelineFlightDetail(id, snap)
+        return true
+      }},
+      { prefix: "tl-ship-", skip: [], handler: (id) => {
+        const snap = this._timelineLastKnown?.get(`ship-${id}`)
+        if (!snap) return false
+        this._showTimelineShipDetail(id, snap)
+        return true
+      }},
       { prefix: "ship-", skip: [], handler: (id) => {
         const d = this.shipData.get(id); if (!d) return false
         this.toggleShipSelection(id); this.showShipDetail(d); return true

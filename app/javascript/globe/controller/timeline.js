@@ -267,11 +267,9 @@ export function applyTimelineMethods(GlobeController) {
   }
 
   GlobeController.prototype.timelineGoLive = function() {
-    this._timelineCursor = new Date(this._timelineRangeEnd.getTime())
-    this._syncScrubberToCursor()
-    this._updateTimelineCursorDisplay()
-    this._renderNearestFrame()
-    this._timelineUpdateEvents()
+    // Exit playback and return to live data
+    this.timelineClose()
+    this._toast("Back to live", "success")
   }
 
   GlobeController.prototype.timelineExport = function() {

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_15_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_15_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -297,6 +297,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_15_120000) do
     t.string "credibility"
     t.string "threat_level"
     t.string "story_cluster_id"
+    t.boolean "ai_enriched", default: false
+    t.index ["ai_enriched"], name: "index_news_events_on_ai_enriched"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
     t.index ["published_at", "story_cluster_id"], name: "idx_news_published_cluster"

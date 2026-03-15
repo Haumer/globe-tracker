@@ -154,6 +154,9 @@ class GlobalPollerService
 
     def poll_secondary
       SECONDARY_SOURCES.each { |s| poll_source(s[:name], s[:type], &s[:fetcher]) }
+
+      # AI enrichment: geocode + cluster new articles after news refresh
+      poll_source("ai-enrichment", "news") { NewsEnrichmentService.enrich_recent(limit: 100) }
     end
 
     RETENTION = 7.days

@@ -1,3 +1,5 @@
+require "csv"
+
 module Api
   class ExportsController < ApplicationController
     before_action :authenticate_user!

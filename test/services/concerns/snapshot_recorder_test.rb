@@ -10,7 +10,7 @@ class SnapshotRecorderTest < ActiveSupport::TestCase
   test "thresholds are defined" do
     assert_equal 0.005, SnapshotRecorder::LAT_LNG_THRESHOLD
     assert_equal 150, SnapshotRecorder::ALT_THRESHOLD
-    assert_equal 8, SnapshotRecorder::HEADING_THRESHOLD
+    assert_equal 3, SnapshotRecorder::HEADING_THRESHOLD
     assert_equal 15, SnapshotRecorder::SPEED_THRESHOLD
   end
 

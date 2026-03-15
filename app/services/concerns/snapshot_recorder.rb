@@ -3,7 +3,7 @@ module SnapshotRecorder
   # Tuned for 7-day retention within 10GB DB budget (~4M rows/day target).
   LAT_LNG_THRESHOLD = 0.005  # ~556 meters — still smooth for playback
   ALT_THRESHOLD     = 150    # meters — ignore minor altitude wobble
-  HEADING_THRESHOLD = 8      # degrees — straight-line segments are interpolatable
+  HEADING_THRESHOLD = 3      # degrees — capture course corrections for accurate playback
   SPEED_THRESHOLD   = 15     # m/s — ignore minor speed fluctuations
 
   # Call after upserting flights to record position snapshots

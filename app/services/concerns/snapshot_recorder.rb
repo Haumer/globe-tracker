@@ -1,10 +1,10 @@
 module SnapshotRecorder
   # Minimum thresholds to record a new snapshot.
-  # Tuned for 7-day retention within 10GB DB budget (~4M rows/day target).
-  LAT_LNG_THRESHOLD = 0.005  # ~556 meters — still smooth for playback
-  ALT_THRESHOLD     = 150    # meters — ignore minor altitude wobble
-  HEADING_THRESHOLD = 3      # degrees — capture course corrections for accurate playback
-  SPEED_THRESHOLD   = 15     # m/s — ignore minor speed fluctuations
+  # Balance: frequent enough for smooth playback, sparse enough for 10GB/7d budget.
+  LAT_LNG_THRESHOLD = 0.002  # ~222 meters — smooth playback at cruise speed
+  ALT_THRESHOLD     = 100    # meters
+  HEADING_THRESHOLD = 3      # degrees — capture course corrections
+  SPEED_THRESHOLD   = 10     # m/s
 
   # Call after upserting flights to record position snapshots
   def record_flight_snapshots(records)
@@ -89,7 +89,7 @@ module SnapshotRecorder
     end
   end
 
-  MAX_SNAPSHOT_AGE = 300 # Record if last snapshot is older than 5 min; moving entities still record on position change
+  MAX_SNAPSHOT_AGE = 60 # Record at least every 60s so playback has consistent frames
 
   def snapshot_unchanged?(last, record)
     return false unless last # no previous record — always insert

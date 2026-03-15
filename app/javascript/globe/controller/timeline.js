@@ -298,6 +298,7 @@ export function applyTimelineMethods(GlobeController) {
     this.timelineBarTarget.style.display = "none"
 
     // Clear timeline entities (positions + events)
+    this._timelineLastKnown = null
     const ds = this._ds["timeline"]
     if (ds) ds.entities.removeAll()
     const evDs = this._ds["timelineEvents"]
@@ -452,17 +453,30 @@ export function applyTimelineMethods(GlobeController) {
     }
   }
 
-  // Render a playback frame, interpolating positions between current and next frame
+  // Render a playback frame with dead reckoning between snapshots.
+  // Maintains a _timelineLastKnown map so entities persist between frames
+  // instead of disappearing when they don't have a snapshot in the exact frame.
 
   GlobeController.prototype._renderTimelineFrame = function(index) {
     const Cesium = window.Cesium
     const key = this._timelineKeys[index]
     if (!key) return
 
-    const entities = this._timelineFrames[key]
-    if (!entities) return
+    const frameEntities = this._timelineFrames[key] || []
+    const cursorMs = this._timelineCursor ? this._timelineCursor.getTime() : new Date(key).getTime()
 
-    // Build lookup for next frame (for interpolation)
+    // Initialize last-known state map on first frame
+    if (!this._timelineLastKnown) this._timelineLastKnown = new Map()
+
+    // Update last-known positions from this frame
+    frameEntities.forEach(e => {
+      this._timelineLastKnown.set(`${e.type}-${e.id}`, {
+        ...e,
+        seenAt: cursorMs,
+      })
+    })
+
+    // Also check next frame for interpolation targets
     const nextKey = this._timelineKeys[index + 1]
     const nextEntities = nextKey ? this._timelineFrames[nextKey] : null
     const nextMap = new Map()
@@ -470,33 +484,52 @@ export function applyTimelineMethods(GlobeController) {
       nextEntities.forEach(e => nextMap.set(`${e.type}-${e.id}`, e))
     }
 
-    // Compute interpolation factor (0-1) between current and next frame
-    let t = 0
-    if (nextKey && this._timelineCursor) {
-      const curMs = new Date(key).getTime()
-      const nextMs = new Date(nextKey).getTime()
-      const cursorMs = this._timelineCursor.getTime()
-      if (nextMs > curMs) t = Math.max(0, Math.min(1, (cursorMs - curMs) / (nextMs - curMs)))
-    }
-
     const dataSource = getDataSource(this.viewer, this._ds, "timeline")
-    const existingIds = new Set()
+    const activeIds = new Set()
     const hasFilter = this.hasActiveFilter()
+    const MAX_STALE_MS = 120000 // keep entities visible for 2 min after last snapshot
 
-    entities.forEach(e => {
-      // Interpolate with next frame if available
-      const next = nextMap.get(`${e.type}-${e.id}`)
-      const lat = next ? e.lat + (next.lat - e.lat) * t : e.lat
-      const lng = next ? e.lng + (next.lng - e.lng) * t : e.lng
-      const alt = next ? (e.alt || 0) + ((next.alt || 0) - (e.alt || 0)) * t : (e.alt || 0)
-      const hdg = next ? this._lerpAngle(e.hdg || 0, next.hdg || 0, t) : (e.hdg || 0)
+    // Render all known entities (not just this frame's)
+    this._timelineLastKnown.forEach((e, entityKey) => {
+      const ageSinceSnapshot = cursorMs - e.seenAt
+      // Remove if too stale
+      if (ageSinceSnapshot > MAX_STALE_MS) {
+        this._timelineLastKnown.delete(entityKey)
+        return
+      }
 
-      // Apply precise country/circle filter
+      // Dead reckon position forward from last known snapshot
+      let lat = e.lat
+      let lng = e.lng
+      let alt = e.alt || 0
+      let hdg = e.hdg || 0
+
+      // Check if we have a future snapshot for interpolation
+      const next = nextMap.get(entityKey)
+      if (next && nextKey) {
+        const nextMs = new Date(nextKey).getTime()
+        const spanMs = nextMs - e.seenAt
+        if (spanMs > 0) {
+          const t = Math.max(0, Math.min(1, (cursorMs - e.seenAt) / spanMs))
+          lat = e.lat + (next.lat - e.lat) * t
+          lng = e.lng + (next.lng - e.lng) * t
+          alt = (e.alt || 0) + ((next.alt || 0) - (e.alt || 0)) * t
+          hdg = this._lerpAngle(e.hdg || 0, next.hdg || 0, t)
+        }
+      } else if (ageSinceSnapshot > 0 && e.spd > 0) {
+        // Dead reckon: project position forward based on heading + speed
+        const dt = ageSinceSnapshot / 1000 // seconds
+        const dLat = (e.spd * Math.cos((e.hdg || 0) * Math.PI / 180) * dt) / 111320
+        const dLng = (e.spd * Math.sin((e.hdg || 0) * Math.PI / 180) * dt) / (111320 * Math.cos(e.lat * Math.PI / 180))
+        lat += dLat
+        lng += dLng
+      }
+
       if (hasFilter && !this.pointPassesFilter(lat, lng)) return
 
       const isFlight = e.type === "flight"
       const id = `tl-${e.type}-${e.id}`
-      existingIds.add(id)
+      activeIds.add(id)
 
       let entity = dataSource.entities.getById(id)
       const position = Cesium.Cartesian3.fromDegrees(lng, lat, alt + 100)
@@ -534,11 +567,11 @@ export function applyTimelineMethods(GlobeController) {
       }
     })
 
-    // Remove entities not in this frame
+    // Remove entities that are no longer active
     const toRemove = []
     for (let i = 0; i < dataSource.entities.values.length; i++) {
       const ent = dataSource.entities.values[i]
-      if (!existingIds.has(ent.id)) toRemove.push(ent)
+      if (!activeIds.has(ent.id)) toRemove.push(ent)
     }
     toRemove.forEach(ent => dataSource.entities.remove(ent))
 

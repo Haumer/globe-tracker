@@ -28,19 +28,35 @@ export function applyTimelineMethods(GlobeController) {
       this._timelineRangeEnd = newest
       this._timelineCursor = new Date(this._timelineRangeStart.getTime())
 
+      // Auto-enable flights if nothing is toggled
+      if (!this.flightsVisible && !this.shipsVisible) {
+        if (this.hasFlightsToggleTarget) {
+          this.flightsToggleTarget.checked = true
+          this.flightsVisible = true
+        }
+      }
+
       // Pause all live refresh intervals
       this._timelinePauseLive()
 
       this.timelineBarTarget.style.display = ""
-      this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(oldest)
-      this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(newest)
+      this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(this._timelineRangeStart)
+      this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(this._timelineRangeEnd)
       this._updateTimelineCursorDisplay()
+
+      this._toast("Loading time travel data...")
 
       // Load position snapshot frames for the full range
       await this._timelineLoadFrames()
 
       // Load event data for current cursor position
       this._timelineUpdateEvents()
+
+      if (this._timelineKeys.length > 0) {
+        this._toast(`Time travel: ${this._timelineKeys.length} frames loaded — press play`, "success")
+      } else {
+        this._toast("No playback data found for this time range", "error")
+      }
     } catch (e) {
       console.error("Timeline open error:", e)
     }

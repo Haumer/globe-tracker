@@ -16,7 +16,7 @@ class Rack::Attack
 
   # Stricter limit on heavy endpoints (exports, playback, area reports)
   throttle("api/heavy/ip", limit: 10, period: 60) do |req|
-    req.ip if req.path.start_with?("/api/exports/", "/api/playback", "/api/area_report")
+    req.ip if req.path.start_with?("/api/exports/", "/api/playback", "/api/area_report", "/api/connections")
   end
 
   # Auth endpoints: 5 attempts per 20 seconds per IP

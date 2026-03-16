@@ -770,9 +770,9 @@ export function applyGeographyMethods(GlobeController) {
     if (r.flights) {
       const f = r.flights
       html += this._reportSection("fa-plane", "#4fc3f7", "Aviation", [
-        `${f.total} flights (${f.military} military, ${f.civilian} civilian)`,
-        f.emergency > 0 ? `<span style="color:#f44336;">${f.emergency} emergency</span>` : null,
-        f.top_countries ? `Top: ${Object.entries(f.top_countries).map(([c, n]) => `${c} (${n})`).join(", ")}` : null,
+        `${this._escapeHtml(f.total)} flights (${this._escapeHtml(f.military)} military, ${this._escapeHtml(f.civilian)} civilian)`,
+        f.emergency > 0 ? `<span style="color:#f44336;">${this._escapeHtml(f.emergency)} emergency</span>` : null,
+        f.top_countries ? `Top: ${Object.entries(f.top_countries).map(([c, n]) => `${this._escapeHtml(c)} (${this._escapeHtml(n)})`).join(", ")}` : null,
       ])
     }
 
@@ -780,9 +780,9 @@ export function applyGeographyMethods(GlobeController) {
     if (r.earthquakes) {
       const e = r.earthquakes
       html += this._reportSection("fa-house-crack", "#ff7043", "Seismic (7d)", [
-        `${e.total} earthquakes, avg M${e.avg_magnitude}`,
-        `Strongest: M${e.max_magnitude} ${e.max_title}`,
-        e.tsunami_warnings > 0 ? `<span style="color:#f44336;">${e.tsunami_warnings} tsunami warnings</span>` : null,
+        `${this._escapeHtml(e.total)} earthquakes, avg M${this._escapeHtml(e.avg_magnitude)}`,
+        `Strongest: M${this._escapeHtml(e.max_magnitude)} ${this._escapeHtml(e.max_title)}`,
+        e.tsunami_warnings > 0 ? `<span style="color:#f44336;">${this._escapeHtml(e.tsunami_warnings)} tsunami warnings</span>` : null,
       ])
     }
 
@@ -790,9 +790,9 @@ export function applyGeographyMethods(GlobeController) {
     if (r.fires) {
       const f = r.fires
       html += this._reportSection("fa-fire", "#ff5722", `Active Fires (48h)`, [
-        `${f.total} hotspots${f.high_confidence > 0 ? ` (${f.high_confidence} high confidence)` : ""}`,
-        f.max_frp ? `Max fire power: ${f.max_frp} MW` : null,
-        f.satellites?.length > 0 ? `Detected by: ${f.satellites.join(", ")}` : null,
+        `${this._escapeHtml(f.total)} hotspots${f.high_confidence > 0 ? ` (${this._escapeHtml(f.high_confidence)} high confidence)` : ""}`,
+        f.max_frp ? `Max fire power: ${this._escapeHtml(f.max_frp)} MW` : null,
+        f.satellites?.length > 0 ? `Detected by: ${f.satellites.map(s => this._escapeHtml(s)).join(", ")}` : null,
       ])
     }
 
@@ -800,8 +800,8 @@ export function applyGeographyMethods(GlobeController) {
     if (r.conflicts) {
       const c = r.conflicts
       html += this._reportSection("fa-crosshairs", "#f44336", "Conflicts", [
-        `${c.total} events, ${c.casualties} casualties`,
-        c.conflicts.join(", "),
+        `${this._escapeHtml(c.total)} events, ${this._escapeHtml(c.casualties)} casualties`,
+        c.conflicts.map(x => this._escapeHtml(x)).join(", "),
       ])
     }
 
@@ -809,8 +809,8 @@ export function applyGeographyMethods(GlobeController) {
     if (r.jamming) {
       const j = r.jamming
       html += this._reportSection("fa-satellite-dish", "#ff9800", "GPS Jamming", [
-        j.high_cells > 0 ? `${j.high_cells} high-intensity cells` : null,
-        j.medium_cells > 0 ? `${j.medium_cells} medium-intensity cells` : null,
+        j.high_cells > 0 ? `${this._escapeHtml(j.high_cells)} high-intensity cells` : null,
+        j.medium_cells > 0 ? `${this._escapeHtml(j.medium_cells)} medium-intensity cells` : null,
       ])
     }
 
@@ -818,15 +818,15 @@ export function applyGeographyMethods(GlobeController) {
     if (r.infrastructure) {
       const i = r.infrastructure
       const infraItems = [
-        `${i.power_plants} power plants (${i.total_capacity_mw.toLocaleString()} MW)`,
-        i.nuclear > 0 ? `<span style="color:#fdd835;">${i.nuclear} nuclear</span>` : null,
-        i.submarine_cables > 0 ? `${i.submarine_cables} submarine cables` : null,
-        i.fuel_mix ? Object.entries(i.fuel_mix).map(([f, n]) => `${f}: ${n}`).join(", ") : null,
+        `${this._escapeHtml(i.power_plants)} power plants (${this._escapeHtml(i.total_capacity_mw?.toLocaleString())} MW)`,
+        i.nuclear > 0 ? `<span style="color:#fdd835;">${this._escapeHtml(i.nuclear)} nuclear</span>` : null,
+        i.submarine_cables > 0 ? `${this._escapeHtml(i.submarine_cables)} submarine cables` : null,
+        i.fuel_mix ? Object.entries(i.fuel_mix).map(([f, n]) => `${this._escapeHtml(f)}: ${this._escapeHtml(n)}`).join(", ") : null,
       ]
       if (i.country_shares && i.country_shares.length > 0) {
         infraItems.push(`<span style="color:#fdd835;font-weight:600;">National capacity share:</span>`)
         i.country_shares.forEach(s => {
-          infraItems.push(`${s.country}: ${s.area_mw.toLocaleString()} / ${s.national_mw.toLocaleString()} MW (${s.pct}%)`)
+          infraItems.push(`${this._escapeHtml(s.country)}: ${this._escapeHtml(s.area_mw?.toLocaleString())} / ${this._escapeHtml(s.national_mw?.toLocaleString())} MW (${this._escapeHtml(s.pct)}%)`)
         })
       }
       html += this._reportSection("fa-bolt", "#fdd835", "Infrastructure", infraItems)
@@ -834,7 +834,7 @@ export function applyGeographyMethods(GlobeController) {
 
     // Anomalies
     if (r.anomalies && r.anomalies.length > 0) {
-      const items = r.anomalies.map(a => `<span style="color:${a.color};">${a.title}</span>`)
+      const items = r.anomalies.map(a => `<span style="color:${this._escapeHtml(a.color)};">${this._escapeHtml(a.title)}</span>`)
       html += this._reportSection("fa-triangle-exclamation", "#f44336", "Active Anomalies", items)
     }
 
@@ -854,7 +854,7 @@ export function applyGeographyMethods(GlobeController) {
     return `<div style="margin-bottom:8px;padding:5px 7px;background:rgba(255,255,255,0.03);border-left:3px solid ${color};border-radius:0 4px 4px 0;">
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
         <i class="fa-solid ${icon}" style="color:${color};font-size:10px;"></i>
-        <span style="font:600 10px monospace;color:${color};">${title}</span>
+        <span style="font:600 10px monospace;color:${color};">${this._escapeHtml(title)}</span>
       </div>
       ${filtered.map(item => `<div style="font:400 10px monospace;color:#aaa;padding:1px 0;">${item}</div>`).join("")}
     </div>`

@@ -445,49 +445,52 @@ export function applyConflictPulseMethods(GlobeController) {
     try { signals = JSON.parse(event.currentTarget.dataset.signals) } catch {}
 
     const Cesium = window.Cesium
+    const btn = event.currentTarget
 
-    // Map of signal types to layer toggles
-    const layerMap = {
-      military_flights: { toggle: "flightsToggle", method: "toggleFlights" },
-      gps_jamming: { toggle: "gpsJammingToggle", method: "toggleGpsJamming" },
-      fire_hotspots: { toggle: "firesToggle", method: "toggleFires" },
-      known_conflict_zone: { toggle: "conflictsToggle", method: "toggleConflicts" },
-      internet_outage: { toggle: "internetOutagesToggle", method: "toggleInternetOutages" },
-    }
+    // Step 1: Fly to area FIRST — this sets the viewport bounds
+    // Layers enabled after arrival will only fetch data for the visible area
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>Flying to area...`
+    btn.disabled = true
 
-    // Always enable these core layers for context
-    const alwaysEnable = ["flightsToggle", "conflictsToggle"]
-
-    // Enable layers that have signals
-    const enabled = []
-    for (const [signal, config] of Object.entries(layerMap)) {
-      if (signals[signal] || alwaysEnable.includes(config.toggle)) {
-        this._enableLayer(config.toggle)
-        enabled.push(signal.replace(/_/g, " "))
-      }
-    }
-
-    // Also enable news layer for full picture
-    this._enableLayer("newsToggle")
-
-    // Enable infrastructure layers for context
-    this._enableLayer("cablesToggle")
-    this._enableLayer("powerPlantsToggle")
-
-    // Fly to area at closer zoom
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800000),
       duration: 1.5,
+      complete: () => {
+        // Step 2: Now enable layers — viewport-aware fetching means only nearby data loads
+        const layerMap = {
+          military_flights: "flightsToggle",
+          gps_jamming: "gpsJammingToggle",
+          fire_hotspots: "firesToggle",
+          known_conflict_zone: "conflictsToggle",
+          internet_outage: "internetOutagesToggle",
+        }
+
+        const enabled = []
+
+        // Always enable flights + conflicts for context
+        this._enableLayer("flightsToggle"); enabled.push("flights")
+        this._enableLayer("conflictsToggle"); enabled.push("conflicts")
+
+        // Enable layers that have detected signals
+        for (const [signal, toggle] of Object.entries(layerMap)) {
+          if (signals[signal]) {
+            this._enableLayer(toggle)
+            enabled.push(signal.replace(/_/g, " "))
+          }
+        }
+
+        // Lightweight static layers (no API calls — already cached)
+        this._enableLayer("cablesToggle")
+        this._enableLayer("chokepointsToggle")
+
+        btn.innerHTML = `<i class="fa-solid fa-check" style="margin-right:4px;"></i>Layers activated`
+        btn.style.background = "rgba(76,175,80,0.2)"
+        btn.style.borderColor = "rgba(76,175,80,0.4)"
+        btn.style.color = "#4caf50"
+
+        this._toast(`Revealed: ${enabled.join(", ")}`, "success")
+      },
     })
-
-    // Visual feedback
-    event.currentTarget.innerHTML = `<i class="fa-solid fa-check" style="margin-right:4px;"></i>Layers activated`
-    event.currentTarget.style.background = "rgba(76,175,80,0.2)"
-    event.currentTarget.style.borderColor = "rgba(76,175,80,0.4)"
-    event.currentTarget.style.color = "#4caf50"
-    event.currentTarget.disabled = true
-
-    this._toast(`Revealed: ${enabled.join(", ")}`, "success")
   }
 
   // ── Helper: enable a layer toggle if it exists and is off ──
@@ -514,27 +517,20 @@ export function applyConflictPulseMethods(GlobeController) {
 
     const Cesium = window.Cesium
 
-    // Enable the relevant layer if not already on
-    const layerToggles = {
-      flights: "flightsToggle",
-      gpsJamming: "gpsJammingToggle",
-      fires: "firesToggle",
-      conflicts: "conflictsToggle",
-    }
-
-    const toggleTarget = layerToggles[signal]
-    if (toggleTarget && this[`has${toggleTarget[0].toUpperCase()}${toggleTarget.slice(1)}Target`]) {
-      const toggle = this[`${toggleTarget}Target`]
-      if (!toggle.checked) {
-        toggle.checked = true
-        toggle.dispatchEvent(new Event("change"))
-      }
-    }
-
-    // Fly to the area
+    // Fly first, then enable layer — viewport-aware fetch only loads nearby data
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, 500000),
       duration: 1.0,
+      complete: () => {
+        const layerToggles = {
+          flights: "flightsToggle",
+          gpsJamming: "gpsJammingToggle",
+          fires: "firesToggle",
+          conflicts: "conflictsToggle",
+        }
+        const toggle = layerToggles[signal]
+        if (toggle) this._enableLayer(toggle)
+      },
     })
   }
 

@@ -54,7 +54,7 @@ on_booted do
 end
 
 # Graceful shutdown — stop background threads before Puma tears down
-force_shutdown_after ENV.fetch("RAILS_ENV", "development") == "development" ? 30 : 5
+force_shutdown_after 5
 
 on_stopped do
   GlobalPollerService.stop if GlobalPollerService.running?

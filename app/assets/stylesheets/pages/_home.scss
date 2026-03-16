@@ -54,7 +54,7 @@
   color: rgba(79, 195, 247, 0.9);
   font: 500 10px var(--gt-mono);
   letter-spacing: 0.5px;
-  white-space: nowrap;
+  max-width: 600px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s, transform 0.2s;

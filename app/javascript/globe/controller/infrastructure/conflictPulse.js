@@ -289,8 +289,8 @@ export function applyConflictPulseMethods(GlobeController) {
       // Trend indicator for the icon
       const trendArrow = { surging: "▲", escalating: "↗", elevated: "→", active: "●", baseline: "↓" }[zone.escalation_trend] || ""
 
-      // Clickable billboard — always shown, size varies by tier
-      const iconSize = score >= 70 ? 38 : (score >= 50 ? 34 : 28)
+      // Clickable billboard — larger, bolder, always readable
+      const iconSize = score >= 70 ? 48 : (score >= 50 ? 44 : 36)
       const point = ds.entities.add({
         id: `cpulse-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
@@ -301,23 +301,21 @@ export function applyConflictPulseMethods(GlobeController) {
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.4),
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.2, 8e6, 0.5),
         },
         label: {
-          text: zone.situation_name
-            ? `${zone.situation_name.toUpperCase()} · ${score}`
-            : `${(zone.escalation_trend || "").toUpperCase()} ${score}`,
-          font: "bold 12px 'JetBrains Mono', monospace",
-          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          text: zone.situation_name || (zone.escalation_trend || "").toUpperCase(),
+          font: "bold 13px 'JetBrains Mono', monospace",
+          fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 4,
+          outlineWidth: 5,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 6),
+          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 8),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.35),
-          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.2e7, 0.0),
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.0, 8e6, 0.4),
+          translucencyByDistance: new Cesium.NearFarScalar(3e5, 1.0, 1e7, 0.0),
         },
       })
       this._conflictPulseEntities.push(point)
@@ -400,32 +398,35 @@ export function applyConflictPulseMethods(GlobeController) {
     if (this._iconCache?.[key]) return this._iconCache[key]
     if (!this._iconCache) this._iconCache = {}
 
-    const size = 40
+    const size = 52
     const canvas = document.createElement("canvas")
     canvas.width = size; canvas.height = size
     const ctx = canvas.getContext("2d")
+    const cx = size / 2
+    const r = size / 2 - 2
 
-    // Circle background with subtle gradient
+    // Filled circle with colored tint
     ctx.beginPath()
-    ctx.arc(size / 2, size / 2, size / 2 - 1.5, 0, Math.PI * 2)
-    ctx.fillStyle = "rgba(0,0,0,0.85)"
+    ctx.arc(cx, cx, r, 0, Math.PI * 2)
+    ctx.fillStyle = "rgba(0,0,0,0.9)"
     ctx.fill()
+    // Colored border
     ctx.strokeStyle = color
-    ctx.lineWidth = 2.5
+    ctx.lineWidth = 3
     ctx.stroke()
 
-    // Score text
-    ctx.font = "bold 14px 'JetBrains Mono', monospace"
+    // Score text — large and white
+    ctx.font = "bold 18px 'JetBrains Mono', monospace"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
     ctx.fillStyle = "#fff"
-    ctx.fillText(score, size / 2, trendArrow ? size / 2 - 3 : size / 2)
+    ctx.fillText(score, cx, trendArrow ? cx - 4 : cx)
 
     // Trend arrow below score
     if (trendArrow) {
-      ctx.font = "bold 10px sans-serif"
+      ctx.font = "bold 11px sans-serif"
       ctx.fillStyle = color
-      ctx.fillText(trendArrow, size / 2, size / 2 + 10)
+      ctx.fillText(trendArrow, cx, cx + 12)
     }
 
     const url = canvas.toDataURL()
@@ -842,7 +843,12 @@ export function applyConflictPulseMethods(GlobeController) {
   GlobeController.prototype.flyToConflictZone = function(event) {
     const key = event.currentTarget.dataset.zoneKey
     const zone = this._conflictPulseData?.find(z => z.cell_key === key)
-    if (zone) this._flyToConflictPulse(zone)
+    if (!zone) return
+    this._flyToConflictPulse(zone)
+    // Also highlight the theater
+    if (zone.theater) {
+      this.highlightTheater({ currentTarget: { dataset: { theater: zone.theater } } })
+    }
   }
 
   // ── Highlight theater: brighten connected hexes + arcs, dim others ──
@@ -850,12 +856,30 @@ export function applyConflictPulseMethods(GlobeController) {
   GlobeController.prototype.highlightTheater = function(event) {
     const theater = event.currentTarget.dataset.theater
     if (!theater || this._highlightedTheater === theater) {
-      // Toggle off — reset all to normal
+      // Toggle off — reset all to normal and turn hex layer back off if we turned it on
       this._highlightedTheater = null
+      if (this._hexLayerAutoEnabled) {
+        this._hexTheaterVisible = false
+        this._strikeArcsVisible = false
+        if (this.hasHexTheaterToggleTarget) this.hexTheaterToggleTarget.checked = false
+        if (this.hasStrikeArcsToggleTarget) this.strikeArcsToggleTarget.checked = false
+        this._hexLayerAutoEnabled = false
+      }
       this._renderConflictPulse()
       return
     }
     this._highlightedTheater = theater
+
+    // Auto-enable hex theater + strike arcs if they're off
+    if (!this._hexTheaterVisible) {
+      this._hexTheaterVisible = true
+      this._strikeArcsVisible = true
+      if (this.hasHexTheaterToggleTarget) this.hexTheaterToggleTarget.checked = true
+      if (this.hasStrikeArcsToggleTarget) this.strikeArcsToggleTarget.checked = true
+      this._hexLayerAutoEnabled = true
+      // Re-render with hexes/arcs visible before applying highlight
+      this._renderConflictPulse()
+    }
 
     const Cesium = window.Cesium
     const ds = this._ds["conflictPulse"]

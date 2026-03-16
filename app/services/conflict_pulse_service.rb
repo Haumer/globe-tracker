@@ -25,7 +25,7 @@ class ConflictPulseService
     "Moscow / Western Russia" => { lat: 54..57, lng: 36..40 },
     "Iraq Theater" => { lat: 32..35, lng: 43..46 },
     "Gaza Strip" => { lat: 30..32, lng: 34..35 },
-    "Strait of Hormuz" => { lat: 25..28, lng: 55..58 },
+    "Strait of Hormuz" => { lat: 26..28, lng: 56..58 },
     "Red Sea / Bab el-Mandeb" => { lat: 12..16, lng: 42..46 },
     "Gulf States" => { lat: 23..26, lng: 46..56 },
     "Sudan / Khartoum" => { lat: 14..17, lng: 31..34 },

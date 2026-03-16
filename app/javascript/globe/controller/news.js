@@ -733,7 +733,7 @@ export function applyNewsMethods(GlobeController) {
           <div class="nf-card-footer">
             ${ev.threat && ev.threat !== "info" ? `<span class="nf-card-tone" style="background:${{critical:"rgba(244,67,54,0.2)",high:"rgba(255,87,34,0.15)",medium:"rgba(255,152,0,0.12)",low:"rgba(102,187,106,0.1)"}[ev.threat]};color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a"}[ev.threat]}">${ev.threat}</span>` : ""}
             <span class="nf-card-tone" style="background:${toneBg};color:${toneColor}">${toneLabel}</span>
-            <a href="${this._escapeHtml(ev.url || "#")}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation();this.closest('.nf-card').classList.add('nf-card--read')" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" class="nf-card-link" onclick="event.stopPropagation();this.closest('.nf-card').classList.add('nf-card--read')" title="Open article"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
             <button class="nf-card-locate" data-action="click->globe#locateNewsArticle" data-news-idx="${ev._idx}" title="Locate on map"><i class="fa-solid fa-location-crosshairs"></i></button>
           </div>
         </div>

@@ -207,8 +207,15 @@ export function applyCoreMethods(GlobeController) {
     Cesium.Ion.defaultAccessToken = this.cesiumTokenValue
 
     this.terrainEnabled = false
+    // Use dark ArcGIS tiles instead of default Bing-via-Ion to avoid Ion quota burn
+    const baseLayer = Cesium.ImageryLayer.fromProviderAsync(
+      Cesium.ArcGisMapServerImageryProvider.fromUrl(
+        "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer"
+      )
+    )
     this.viewer = new Cesium.Viewer("cesium-viewer", {
       baseLayerPicker: false,
+      baseLayer: baseLayer,
       geocoder: false,
       homeButton: false,
       navigationHelpButton: false,
@@ -977,7 +984,15 @@ export function applyCoreMethods(GlobeController) {
 
   GlobeController.prototype._escapeHtml = function(str) {
     if (!str) return ""
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  }
+
+  // Sanitize a URL for use in href/src — only allow http(s) schemes
+  GlobeController.prototype._safeUrl = function(url) {
+    if (!url) return "#"
+    const s = String(url).trim()
+    if (/^https?:\/\//i.test(s)) return this._escapeHtml(s)
+    return "#"
   }
 
   // Unified click dispatch — returns true if an entity was handled

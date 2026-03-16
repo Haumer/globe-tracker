@@ -1,6 +1,11 @@
 class Rack::Attack
-  # Use Rails.cache as the backing store
-  Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
+  # Use Rails.cache as the backing store (Redis in production)
+  # In dev with NullStore, throttling is effectively disabled — that's fine
+  Rack::Attack.cache.store = if Rails.cache.is_a?(ActiveSupport::Cache::NullStore)
+    ActiveSupport::Cache::MemoryStore.new
+  else
+    Rails.cache
+  end
 
   # ── Throttles ──────────────────────────────────────────────────
 
@@ -9,9 +14,9 @@ class Rack::Attack
     req.ip if req.path.start_with?("/api/")
   end
 
-  # Stricter limit on heavy endpoints (exports, playback)
+  # Stricter limit on heavy endpoints (exports, playback, area reports)
   throttle("api/heavy/ip", limit: 10, period: 60) do |req|
-    req.ip if req.path.start_with?("/api/exports/", "/api/playback")
+    req.ip if req.path.start_with?("/api/exports/", "/api/playback", "/api/area_report")
   end
 
   # Auth endpoints: 5 attempts per 20 seconds per IP

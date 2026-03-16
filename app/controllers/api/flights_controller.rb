@@ -16,6 +16,8 @@ module Api
       flights = Flight.where("updated_at > ?", 2.minutes.ago).select(*LIST_COLUMNS)
       flights = flights.within_bounds(bounds) if bounds.present?
 
+      expires_in 5.seconds, public: true
+
       render json: flights.map { |f|
         {
           icao24: f.icao24,

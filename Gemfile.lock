@@ -113,7 +113,7 @@ GEM
       xpath (~> 3.2)
     cgi (0.5.1)
     concurrent-ruby (1.3.6)
-    connection_pool (3.0.2)
+    connection_pool (2.5.5)
     crack (1.0.1)
       bigdecimal
       rexml
@@ -286,6 +286,10 @@ GEM
       erb
       psych (>= 4.0.0)
       tsort
+    redis (5.4.1)
+      redis-client (>= 0.22.0)
+    redis-client (0.27.0)
+      connection_pool
     regexp_parser (2.11.3)
     reline (0.6.3)
       io-console (~> 0.5)
@@ -311,6 +315,12 @@ GEM
       rexml (~> 3.2, >= 3.2.5)
       rubyzip (>= 1.2.2, < 4.0)
       websocket (~> 1.0)
+    sidekiq (7.3.9)
+      base64
+      connection_pool (>= 2.3.0)
+      logger
+      rack (>= 2.2.4)
+      redis-client (>= 0.22.2)
     sprockets (4.2.2)
       concurrent-ruby (~> 1.0)
       logger
@@ -373,6 +383,7 @@ DEPENDENCIES
   bootsnap
   bootstrap (~> 5.3)
   capybara
+  connection_pool (~> 2.4)
   debug
   devise
   dotenv-rails
@@ -384,10 +395,12 @@ DEPENDENCIES
   puma (>= 5.0)
   rack-attack
   rails (~> 7.1.6)
+  redis (>= 4.0.1)
   rss
   rubyzip
   sassc-rails
   selenium-webdriver
+  sidekiq (~> 7.0)
   simple_form!
   sprockets-rails
   stimulus-rails

@@ -3,7 +3,12 @@ module Api
     before_action :authenticate_user!
 
     def index
-      WatchEvaluator.evaluate(current_user)
+      # Only re-evaluate watches every 60s to reduce DB load
+      cache_key = "watch_eval:#{current_user.id}"
+      unless Rails.cache.read(cache_key)
+        WatchEvaluator.evaluate(current_user)
+        Rails.cache.write(cache_key, true, expires_in: 60.seconds)
+      end
       alerts = current_user.alerts.unseen.recent
       unseen_count = alerts.count
 

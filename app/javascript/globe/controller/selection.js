@@ -139,8 +139,8 @@ export function applySelectionMethods(GlobeController) {
           <div class="entity-row${isMil ? " entity-military" : ""}${selClass}" data-action="click->globe#flyToFlight" data-id="${f.id || f.hex}">
             <span class="entity-select-dot ${isSelected ? "active" : ""}"></span>
             <span class="entity-icon" style="color: ${statusColor}"><i class="fa-solid ${statusIcon}"></i></span>
-            <span class="entity-name">${f.callsign || f.id || "—"}${milBadge}</span>
-            <span class="entity-detail">${airlineLabel}</span>
+            <span class="entity-name">${this._escapeHtml(f.callsign || f.id || "—")}${milBadge}</span>
+            <span class="entity-detail">${this._escapeHtml(airlineLabel)}</span>
             <span class="entity-detail">${altLabel}</span>
           </div>`
         }).join("")
@@ -152,9 +152,9 @@ export function applySelectionMethods(GlobeController) {
         html = data.ships.map(s => `
           <div class="entity-row" data-action="click->globe#flyToShip" data-mmsi="${s.mmsi}">
             <span class="entity-icon"><i class="fa-solid fa-ship"></i></span>
-            <span class="entity-name">${s.name || s.mmsi}</span>
+            <span class="entity-name">${this._escapeHtml(s.name || String(s.mmsi))}</span>
             <span class="entity-detail">${s.speed != null ? s.speed.toFixed(1) + " kts" : ""}</span>
-            <span class="entity-detail">${s.flag || ""}</span>
+            <span class="entity-detail">${this._escapeHtml(s.flag || "")}</span>
           </div>
         `).join("")
       }
@@ -165,8 +165,8 @@ export function applySelectionMethods(GlobeController) {
         html = data.sats.map(s => `
           <div class="entity-row" data-action="click->globe#flyToSat" data-norad="${s.norad_id}">
             <span class="entity-icon" style="color: ${this.satCategoryColors[s.category] || "#ab47bc"}"><i class="fa-solid fa-satellite"></i></span>
-            <span class="entity-name">${s.name}</span>
-            <span class="entity-detail">${s.category}</span>
+            <span class="entity-name">${this._escapeHtml(s.name)}</span>
+            <span class="entity-detail">${this._escapeHtml(s.category)}</span>
           </div>
         `).join("")
       }

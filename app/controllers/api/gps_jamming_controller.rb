@@ -35,6 +35,8 @@ module Api
                 )
                 .order("cell_lat, cell_lng, recorded_at DESC")
 
+      expires_in 30.seconds, public: true
+
       now = Time.current
       render json: snaps.map { |s|
         age_minutes = ((now - s.recorded_at) / 60.0)

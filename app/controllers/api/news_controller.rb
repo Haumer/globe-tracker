@@ -16,6 +16,8 @@ module Api
                  .order(Arel.sql("(#{priority_sql}) DESC NULLS LAST"))
                  .limit(10_000)
 
+      expires_in 2.minutes, public: true
+
       if params[:clustered] == "true"
         render json: clustered_response(events)
       else

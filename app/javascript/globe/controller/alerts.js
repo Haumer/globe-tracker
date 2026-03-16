@@ -3,7 +3,7 @@ export function applyAlertsMethods(GlobeController) {
   GlobeController.prototype._startAlertPolling = function() {
     if (!this.signedInValue) return
     this._pollAlerts()
-    this._alertPollInterval = setInterval(() => this._pollAlerts(), 10000)
+    this._alertPollInterval = setInterval(() => this._pollAlerts(), 60000)
 
     // Listen for ActionCable push notifications (instant update)
     document.addEventListener("globe:new-alert", (e) => {

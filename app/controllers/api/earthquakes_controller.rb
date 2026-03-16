@@ -7,6 +7,8 @@ module Api
         enqueue_background_refresh(RefreshEarthquakesJob, key: "earthquakes", debounce: 30.seconds) if EarthquakeRefreshService.stale?
       end
 
+      expires_in 1.minute, public: true
+
       quakes = time_scoped(Earthquake).order(event_time: :desc).limit(500)
       render json: quakes.map { |eq|
         {

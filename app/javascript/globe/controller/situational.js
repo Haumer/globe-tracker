@@ -1242,19 +1242,22 @@ export function applySituationalMethods(GlobeController) {
         : '<span style="background:#666;color:#ccc;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">TIMELAPSE</span>'
 
     // For DOT cameras, add cache-busting timestamp for auto-refresh
-    const thumbUrl = cam.thumbnail ? `${cam.thumbnail}${cam.source === "nycdot" ? "?t=" + Date.now() : ""}` : null
+    const rawThumbUrl = cam.thumbnail ? `${cam.thumbnail}${cam.source === "nycdot" ? "?t=" + Date.now() : ""}` : null
+    const thumbUrl = rawThumbUrl && /^https?:\/\//i.test(rawThumbUrl) ? rawThumbUrl : null
 
-    const watchUrl = cam.source === "youtube" && cam.videoId
-      ? `https://www.youtube.com/watch?v=${cam.videoId}`
+    const rawWatchUrl = cam.source === "youtube" && cam.videoId
+      ? `https://www.youtube.com/watch?v=${encodeURIComponent(cam.videoId)}`
       : cam.source === "nycdot"
         ? `https://webcams.nyctmc.org/map`
-        : (typeof cam.playerLink === "string" && cam.playerLink.startsWith("http") ? cam.playerLink : `https://www.windy.com/webcams/${cam.id}`)
+        : (typeof cam.playerLink === "string" && /^https:\/\//i.test(cam.playerLink) ? cam.playerLink : `https://www.windy.com/webcams/${encodeURIComponent(cam.id)}`)
+    const watchUrl = this._safeUrl(rawWatchUrl)
 
     let thumbHtml
     if (cam.source === "youtube" && cam.videoId) {
-      const ytThumb = cam.thumbnail || `https://img.youtube.com/vi/${cam.videoId}/hqdefault.jpg`
+      const safeVideoId = encodeURIComponent(cam.videoId)
+      const ytThumb = (cam.thumbnail && /^https?:\/\//i.test(cam.thumbnail)) ? cam.thumbnail : `https://img.youtube.com/vi/${safeVideoId}/hqdefault.jpg`
       thumbHtml = `<div class="webcam-thumb" style="position:relative;">
-        <iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        <iframe id="webcam-detail-iframe" src="https://www.youtube.com/embed/${safeVideoId}?autoplay=1&mute=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}" style="width:100%;aspect-ratio:16/9;border:none;border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
         <div id="webcam-yt-fallback" style="display:none;position:relative;">
           <img src="${ytThumb}" alt="${this._escapeHtml(cam.title)}" style="width:100%;border-radius:4px;">
           <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#ff6b6b;font:500 11px var(--gt-mono);padding:6px 12px;border-radius:4px;">Stream unavailable</span>

@@ -127,10 +127,12 @@ export function applyConflictPulseMethods(GlobeController) {
     ds.entities.suspendEvents()
 
     // ── Layer 1: Hex theater (background — shows geographic extent) ──
+    console.log("[ConflictPulse] hexCellData:", this._hexCellData?.length, "items, _hexVertices:", typeof this._hexVertices)
     if (this._hexCellData?.length) {
       const hexRadius = 1.0 // degrees, matches 2° CELL_SIZE
+      let hexRendered = 0
       this._hexCellData.forEach((cell, idx) => {
-        if (cell.intensity < 0.05) return
+        if (cell.intensity < 0.01) return
         const t = cell.intensity
         // Color: yellow (low) → orange (mid) → red (high)
         const r = Math.round(255 * Math.min(0.6 + t * 0.4, 1))
@@ -138,22 +140,30 @@ export function applyConflictPulseMethods(GlobeController) {
         const b = 0
         const hexColor = Cesium.Color.fromBytes(r, g, b)
 
-        const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
-        const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
+        try {
+          const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
+          const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
 
-        const hex = ds.entities.add({
-          id: `cpulse-hex-${idx}`,
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(positions),
-            material: hexColor.withAlpha(0.03 + t * 0.12),
-            outline: true,
-            outlineColor: hexColor.withAlpha(0.1 + t * 0.3),
-            outlineWidth: 1,
-            height: 4800,
-          },
-        })
-        this._conflictPulseEntities.push(hex)
+          const hex = ds.entities.add({
+            id: `cpulse-hex-${idx}`,
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(positions),
+              material: hexColor.withAlpha(0.08 + t * 0.25),
+              outline: true,
+              outlineColor: hexColor.withAlpha(0.2 + t * 0.5),
+              outlineWidth: 1,
+              height: 4800,
+            },
+          })
+          this._conflictPulseEntities.push(hex)
+          hexRendered++
+        } catch (e) {
+          console.error("[ConflictPulse] hex render error:", e, cell)
+        }
       })
+      console.log("[ConflictPulse] hex cells rendered:", hexRendered)
+    } else {
+      console.warn("[ConflictPulse] No hex cell data available")
     }
 
     // ── Layer 2: Strike arcs (directional attack flows) ──

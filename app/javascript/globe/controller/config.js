@@ -147,6 +147,8 @@ export const GLOBE_TARGETS = [
   "qlFinancial",
   "chokepointsToggle",
   "qlChokepoints",
+  "strikeArcsToggle",
+  "hexTheaterToggle",
   "insightFeedContent",
   "insightFeedCount",
   "entitiesLoading",

@@ -8,6 +8,8 @@ export function applyConflictPulseMethods(GlobeController) {
     this._conflictPulseData = []
     this._conflictPulseEntities = []
     this._conflictPulsePrev = {}  // track previous state for surge detection
+    this._strikeArcsVisible = true
+    this._hexTheaterVisible = true
     this._fetchConflictPulse()
     this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000) // 10 min
   }
@@ -127,7 +129,7 @@ export function applyConflictPulseMethods(GlobeController) {
     ds.entities.suspendEvents()
 
     // ── Layer 1: Hex theater (background — shows geographic extent) ──
-    if (this._hexCellData?.length) {
+    if (this._hexCellData?.length && this._hexTheaterVisible !== false) {
       this._hexCellData.forEach((cell, idx) => {
         const t = cell.intensity
         if (t < 0.01) return
@@ -162,7 +164,7 @@ export function applyConflictPulseMethods(GlobeController) {
     }
 
     // ── Layer 2: Strike arcs (directional attack flows) ──
-    if (this._strikeArcData?.length) {
+    if (this._strikeArcData?.length && this._strikeArcsVisible !== false) {
       this._strikeArcData.forEach((arc, idx) => {
         if (arc.count < 2) return
         const t = Math.min(arc.count / 20, 1)
@@ -715,6 +717,18 @@ export function applyConflictPulseMethods(GlobeController) {
       if (inside) return cell
     }
     return null
+  }
+
+  // ── Strike Arc / Hex Theater toggles ─────────────────────
+
+  GlobeController.prototype.toggleStrikeArcs = function() {
+    this._strikeArcsVisible = this.hasStrikeArcsToggleTarget && this.strikeArcsToggleTarget.checked
+    this._renderConflictPulse()
+  }
+
+  GlobeController.prototype.toggleHexTheater = function() {
+    this._hexTheaterVisible = this.hasHexTheaterToggleTarget && this.hexTheaterToggleTarget.checked
+    this._renderConflictPulse()
   }
 
   GlobeController.prototype._timeAgo = function(date) {

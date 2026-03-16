@@ -112,6 +112,21 @@
         <span class="sb-layer-name">Armed Conflicts</span>
         <span class="sb-layer-dot"></span>
       </div>
+      <%# Conflict pulse sub-toggles %>
+      <div class="arc-controls" style="padding:4px 0 4px 28px;">
+        <div class="arc-controls-row">
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="strikeArcsToggle" data-action="change->globe#toggleStrikeArcs">
+            <span class="arc-mini-track"></span>
+            <span>Strike Arcs</span>
+          </label>
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="hexTheaterToggle" data-action="change->globe#toggleHexTheater">
+            <span class="arc-mini-track"></span>
+            <span>Hex Theater</span>
+          </label>
+        </div>
+      </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="news" data-globe-target="qlNews">
         <i class="fa-solid fa-newspaper sb-layer-icon" style="color: #ff9800;"></i>
         <span class="sb-layer-name">News</span>

@@ -165,16 +165,63 @@ class ConnectionFinder
     end
   end
 
+  # ── Satellite connections ──────────────────────────────────
+
+  # Military/intelligence categories that should see conflict events
+  MILITARY_SAT_CATEGORIES = %w[analyst military intelligence surveillance reconnaissance].freeze
+
+  def connect_satellite
+    category = (@meta[:category] || "").downcase
+
+    # Military/intel satellites: check GPS jamming + conflict events
+    if MILITARY_SAT_CATEGORIES.any? { |c| category.include?(c) }
+      check_gps_jamming("Satellite over GPS jamming zone")
+
+      bounds = bounding_box(PROXIMITY_KM * 2)
+      conflicts = ConflictEvent.where(latitude: bounds[:lamin]..bounds[:lamax],
+                                       longitude: bounds[:lomin]..bounds[:lomax])
+                                .where("date_end IS NULL OR date_end >= ?", 90.days.ago)
+                                .select("DISTINCT ON (conflict_name) *")
+                                .limit(5)
+      if conflicts.any?
+        @verified << {
+          type: "conflict",
+          icon: "fa-crosshairs",
+          color: "#f44336",
+          title: "#{conflicts.size} conflict zone#{"s" unless conflicts.size == 1} in footprint",
+          items: conflicts.map { |c| { name: c.conflict_name, lat: c.latitude, lng: c.longitude } },
+        }
+      end
+    end
+
+    # All satellites: check nearby infrastructure
+    bounds = bounding_box(PROXIMITY_KM)
+    plants = PowerPlant.within_bounds(bounds).where(primary_fuel: "Nuclear").limit(3)
+    if plants.any?
+      @verified << {
+        type: "power_plant",
+        icon: "fa-bolt",
+        color: "#fdd835",
+        title: "#{plants.size} nuclear facility#{"ies" unless plants.size == 1} in footprint",
+        items: plants.map { |p| { name: p.name, lat: p.latitude, lng: p.longitude } },
+      }
+    end
+  end
+
   # ── Nearby (proximity-based, secondary) ─────────────────────
 
   def add_nearby_items
     bounds = bounding_box(PROXIMITY_KM)
     covered = @verified.map { |v| v[:type] }.to_set
 
-    unless covered.include?("conflict") || @type == "conflict"
+    # Skip conflicts for satellites (handled by connect_satellite with category filtering)
+    # and skip if already covered by a verified connection
+    skip_conflicts = covered.include?("conflict") || @type == "conflict" || @type == "satellite"
+    unless skip_conflicts
       conflicts = ConflictEvent.where(latitude: bounds[:lamin]..bounds[:lamax],
                                        longitude: bounds[:lomin]..bounds[:lomax])
                                 .where("date_end IS NULL OR date_end >= ?", 90.days.ago)
+                                .select("DISTINCT ON (conflict_name) *")
                                 .limit(3)
       if conflicts.any?
         @nearby << {

@@ -22,7 +22,10 @@ export function applyGpsJammingMethods(GlobeController) {
     try {
       const resp = await fetch("/api/gps_jamming")
       if (!resp.ok) return
+      // Check if layer was toggled off while fetch was in flight
+      if (!this.gpsJammingVisible) return
       const cells = await resp.json()
+      if (!this.gpsJammingVisible) return
       this._gpsJammingData = cells
       this._renderGpsJamming(cells)
       this._markFresh("gpsJamming")

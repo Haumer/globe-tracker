@@ -3,8 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      enqueue_background_refresh(RefreshPipelinesJob, key: "pipelines", debounce: 1.hour) if PipelineRefreshService.stale?
-
       pipelines = Pipeline.all
       render json: {
         pipelines: pipelines.map { |p|

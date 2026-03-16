@@ -47,7 +47,10 @@ module Api
       flight = Flight.find_by("callsign = ? OR icao24 = ?", callsign, callsign)
       detail = flight ? flight.attributes.compact : {}
 
-      route = ::OpenskyService.fetch_route(callsign)
+      # Route lookup cached in Redis — external API call only on cache miss
+      route = Rails.cache.fetch("flight_route:#{callsign}", expires_in: 30.minutes) do
+        ::OpenskyService.fetch_route(callsign)
+      end
       detail[:route] = route unless route[:error]
 
       render json: detail

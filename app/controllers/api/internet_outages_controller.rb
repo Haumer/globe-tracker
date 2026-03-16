@@ -3,12 +3,7 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      outages = []
-
-      unless parse_time_range
-        enqueue_background_refresh(RefreshInternetOutagesJob, key: "internet-outages", debounce: 30.seconds) if InternetOutageRefreshService.stale?
-        outages = InternetOutageRefreshService.cached_summary
-      end
+      outages = parse_time_range ? [] : InternetOutageRefreshService.cached_summary
 
       recent_events = time_scoped(InternetOutage).order(started_at: :desc).limit(100)
       render json: {

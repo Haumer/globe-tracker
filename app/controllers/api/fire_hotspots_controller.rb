@@ -3,8 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      enqueue_background_refresh(RefreshFireHotspotsJob, key: "fire-hotspots", debounce: 10.minutes) if FirmsRefreshService.stale?
-
       hotspots = FireHotspot.recent.order(acq_datetime: :desc).limit(5000)
 
       render json: hotspots.map { |h|

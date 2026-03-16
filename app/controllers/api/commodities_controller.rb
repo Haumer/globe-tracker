@@ -3,8 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      enqueue_background_refresh(RefreshCommodityPricesJob, key: "commodities", debounce: 30.minutes) if CommodityPriceService.stale?
-
       # Get latest price for each symbol
       prices = CommodityPrice.select("DISTINCT ON (symbol) *").order(:symbol, recorded_at: :desc)
 

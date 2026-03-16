@@ -3,10 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      unless parse_time_range
-        enqueue_background_refresh(RefreshNaturalEventsJob, key: "natural-events", debounce: 30.seconds) if NaturalEventRefreshService.stale?
-      end
-
       events = time_scoped(NaturalEvent).order(event_date: :desc).limit(200)
       render json: events.map { |ev|
         {

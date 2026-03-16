@@ -3,10 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      unless parse_time_range
-        enqueue_background_refresh(RefreshNewsJob, key: "news", debounce: 1.minute) if NewsRefreshService.stale?
-      end
-
       priority_sql = <<~SQL.squish
         ABS(tone) * EXP(-0.1 * LEAST(EXTRACT(EPOCH FROM (NOW() - COALESCE(published_at, fetched_at))) / 3600.0, 200))
       SQL

@@ -1,6 +1,6 @@
 class GlobalPollerService
   FLIGHT_POLL_INTERVAL = 10 # seconds
-  FULL_POLL_INTERVAL   = 30 # seconds (for non-flight sources)
+  FULL_POLL_INTERVAL   = 60 # seconds — enqueue Sidekiq jobs for secondary sources
 
   class << self
     def start
@@ -64,7 +64,6 @@ class GlobalPollerService
             poll_flights
             @poll_count += 1
 
-            # Run full poll (non-flight sources) every FULL_POLL_INTERVAL
             elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_full_poll
             if elapsed >= FULL_POLL_INTERVAL
               poll_secondary
@@ -73,16 +72,14 @@ class GlobalPollerService
 
             @last_poll_at = Time.current
 
-            # Hourly purge: keep DB within 10GB budget
+            # Hourly purge
             purge_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_purge
             if purge_elapsed >= 3600
-              purge_stale_data
+              enqueue_once(PurgeStaleDataJob)
               @last_purge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             end
           rescue => e
             Rails.logger.error("GlobalPollerService: #{e.message}")
-          ensure
-            ActiveRecord::Base.connection_pool.release_connection
           end
         end
 
@@ -106,106 +103,48 @@ class GlobalPollerService
     ].freeze
 
     def poll_flights
-      # Flights - OpenSky (global, no bounds)
-      poll_source("opensky", "flight") do
-        OpenskyService.fetch_flights(bounds: {})
-      end
+      enqueue_once(PollOpenskyJob)
+      enqueue_once(PollAdsbMilitaryJob)
 
-      # Flights - ADSB (regional polls for global coverage)
+      # Rotate through ADSB regions — one per cycle
       region = ADSB_REGIONS[@poll_count.to_i % ADSB_REGIONS.size]
-      poll_source("adsb-#{region[:name]}", "flight") do
-        bounds = {
-          lamin: region[:lat] - 20, lamax: region[:lat] + 20,
-          lomin: region[:lon] - 25, lomax: region[:lon] + 25,
-        }
-        AdsbService.fetch_flights(bounds: bounds)
-      end
-
-      # Military flights from ADSB (global endpoint)
-      poll_source("adsb-mil", "flight") do
-        AdsbService.fetch_military
-      end
+      PollAdsbRegionJob.perform_later(region[:name], region[:lat], region[:lon])
     end
-
-    SECONDARY_SOURCES = [
-      { name: "ais", type: "ship", fetcher: -> {
-        AisStreamService.start unless AisStreamService.running?
-        Ship.where("updated_at > ?", 2.minutes.ago)
-      } },
-      { name: "usgs",             type: "earthquake",       fetcher: -> { EarthquakeRefreshService.refresh_if_stale } },
-      { name: "gdelt",            type: "news",             fetcher: -> { NewsRefreshService.refresh_if_stale } },
-      { name: "multi-news",       type: "news",             fetcher: -> { MultiNewsService.refresh_if_stale } },
-      { name: "rss-news",         type: "news",             fetcher: -> { RssNewsService.refresh_if_stale } },
-      { name: "firms",            type: "fire",             fetcher: -> { FirmsRefreshService.refresh_if_stale } },
-      { name: "eonet",            type: "natural_event",    fetcher: -> { NaturalEventRefreshService.refresh_if_stale } },
-      { name: "ucdp",             type: "conflict_event",   fetcher: -> { ConflictEventService.refresh_if_stale } },
-      { name: "acled",            type: "conflict_event",   fetcher: -> { AcledService.refresh_if_stale } },
-      { name: "cloudflare",       type: "internet_outage",  fetcher: -> { InternetOutageRefreshService.refresh_if_stale } },
-      { name: "cloudflare-traffic", type: "internet_traffic", fetcher: -> {
-        result = CloudflareRadarService.refresh_if_stale
-        result.is_a?(Hash) ? (result[:traffic]&.size || 0) : 0
-      } },
-      { name: "celestrak",        type: "satellite",        fetcher: -> { CelestrakService.refresh_if_stale } },
-      { name: "submarine-cables", type: "submarine_cable",  fetcher: -> { SubmarineCableRefreshService.refresh_if_stale } },
-      { name: "gps-jamming",     type: "gps_jamming",      fetcher: -> { GpsJammingRefreshService.refresh_if_stale } },
-      { name: "nws",              type: "weather_alert",   fetcher: -> { WeatherAlertRefreshService.refresh_if_stale } },
-      { name: "commodities",      type: "commodity",       fetcher: -> { CommodityPriceService.refresh_if_stale } },
-      { name: "notams",           type: "notam",           fetcher: -> { NotamRefreshService.refresh_if_stale } },
-    ].freeze
 
     def poll_secondary
-      SECONDARY_SOURCES.each { |s| poll_source(s[:name], s[:type], &s[:fetcher]) }
+      # AIS stream is a persistent WebSocket — just ensure it's running
+      AisStreamService.start unless AisStreamService.running?
 
-      # AI enrichment: geocode + cluster new articles after news refresh
-      poll_source("ai-enrichment", "news") { NewsEnrichmentService.enrich_recent(limit: 100) }
+      # Enqueue all secondary refreshes as Sidekiq jobs.
+      # Each job calls refresh_if_stale internally, so it no-ops if data is fresh.
+      [
+        RefreshEarthquakesJob,
+        RefreshNewsJob,
+        RefreshMultiNewsJob,
+        RefreshRssNewsJob,
+        RefreshFireHotspotsJob,
+        RefreshNaturalEventsJob,
+        RefreshConflictEventsJob,
+        RefreshAcledJob,
+        RefreshInternetOutagesJob,
+        RefreshInternetTrafficJob,
+        RefreshSatellitesJob,
+        RefreshSubmarineCablesJob,
+        RefreshGpsJammingJob,
+        RefreshWeatherAlertsJob,
+        RefreshNotamsJob,
+        RefreshCommodityPricesJob,
+        EnrichNewsJob,
+      ].each { |job| enqueue_once(job) }
     end
 
-    RETENTION = 7.days
-
-    def purge_stale_data
-      cutoff = RETENTION.ago
-      deleted = 0
-      deleted += PositionSnapshot.where("recorded_at < ?", cutoff).in_batches(of: 50_000).delete_all
-      deleted += PollingStat.where("created_at < ?", cutoff).delete_all
-      deleted += GpsJammingSnapshot.where("recorded_at < ?", cutoff).delete_all
-      deleted += InternetTrafficSnapshot.where("created_at < ?", cutoff).delete_all
-      deleted += SatelliteTleSnapshot.where("recorded_at < ?", 14.days.ago).delete_all
-      deleted += Flight.where("updated_at < ?", 6.hours.ago).delete_all
-      deleted += Ship.where("updated_at < ?", 24.hours.ago).delete_all
-      deleted += Camera.where("expires_at < ?", Time.current).delete_all
-      deleted += WeatherAlert.where("expires < ?", cutoff).delete_all
-      deleted += Notam.where("effective_end < ?", cutoff).where.not(effective_end: nil).delete_all
-      Rails.logger.info("GlobalPollerService: purged #{deleted} stale rows")
+    def enqueue_once(job_class)
+      key = "poller:enqueued:#{job_class.name}"
+      if Rails.cache.write(key, "1", expires_in: 60.seconds, unless_exist: true)
+        job_class.perform_later
+      end
     rescue => e
-      Rails.logger.error("GlobalPollerService purge error: #{e.message}")
-    end
-
-    def poll_source(source, poll_type)
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = yield
-      duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time) * 1000).round
-
-      count = result.respond_to?(:count) ? result.count : 0
-
-      PollingStat.create!(
-        source: source,
-        poll_type: poll_type,
-        records_fetched: count,
-        records_stored: count,
-        duration_ms: duration,
-        status: "success"
-      )
-    rescue => e
-      duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time) * 1000).round rescue 0
-      PollingStat.create!(
-        source: source,
-        poll_type: poll_type,
-        records_fetched: 0,
-        records_stored: 0,
-        duration_ms: duration,
-        status: "error",
-        error_message: e.message.truncate(500)
-      )
+      job_class.perform_later
     end
   end
 end

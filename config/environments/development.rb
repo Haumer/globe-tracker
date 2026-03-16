@@ -24,7 +24,7 @@ Rails.application.configure do
     config.action_controller.perform_caching = true
     config.action_controller.enable_fragment_cache_logging = true
 
-    config.cache_store = :memory_store
+    config.cache_store = :redis_cache_store, { url: "redis://localhost:6379/1" }
     config.public_file_server.headers = {
       "Cache-Control" => "public, max-age=#{2.days.to_i}"
     }
@@ -59,7 +59,7 @@ Rails.application.configure do
 
   # Highlight code that enqueued background job in logs.
   config.active_job.verbose_enqueue_logs = true
-  config.active_job.queue_adapter = :async
+  config.active_job.queue_adapter = :sidekiq
 
   # Suppress logger output for asset requests.
   config.assets.quiet = true

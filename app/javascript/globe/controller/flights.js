@@ -381,9 +381,9 @@ export function applyFlightMethods(GlobeController) {
     const squawkDisplay = data.squawk ? (squawkLabels[data.squawk] ? `${data.squawk} (${squawkLabels[data.squawk]})` : data.squawk) : null
 
     this.detailContentTarget.innerHTML = `
-      ${isEmergency ? `<div class="detail-emergency-banner">${squawkLabels[data.squawk] || (data.emergency || "EMERGENCY").toUpperCase()}</div>` : ""}
-      <div class="detail-callsign">${callsign || id}</div>
-      <div class="detail-country">${data.originCountry || "Unknown"}</div>
+      ${isEmergency ? `<div class="detail-emergency-banner">${squawkLabels[data.squawk] || this._escapeHtml((data.emergency || "EMERGENCY").toUpperCase())}</div>` : ""}
+      <div class="detail-callsign">${this._escapeHtml(callsign || id)}</div>
+      <div class="detail-country">${this._escapeHtml(data.originCountry || "Unknown")}</div>
       <div class="detail-route" id="detail-route">Loading route...</div>
       <div class="detail-grid">
         <div class="detail-field">
@@ -412,7 +412,7 @@ export function applyFlightMethods(GlobeController) {
         </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">ICAO24</span>
-          <span class="detail-value" style="font-size:12px; opacity:0.7;">${id}</span>
+          <span class="detail-value" style="font-size:12px; opacity:0.7;">${this._escapeHtml(id)}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Status</span>
@@ -420,15 +420,15 @@ export function applyFlightMethods(GlobeController) {
         </div>
         ${data.registration ? `<div class="detail-field">
           <span class="detail-label">Reg</span>
-          <span class="detail-value">${data.registration}</span>
+          <span class="detail-value">${this._escapeHtml(data.registration)}</span>
         </div>` : ""}
         ${data.aircraftType ? `<div class="detail-field">
           <span class="detail-label">Type</span>
-          <span class="detail-value">${data.aircraftType}</span>
+          <span class="detail-value">${this._escapeHtml(data.aircraftType)}</span>
         </div>` : ""}
         ${data.category ? `<div class="detail-field">
           <span class="detail-label">Category</span>
-          <span class="detail-value">${data.category}</span>
+          <span class="detail-value">${this._escapeHtml(data.category)}</span>
         </div>` : ""}
         ${data.windDirection != null && data.windSpeed != null ? `<div class="detail-field">
           <span class="detail-label">Wind</span>
@@ -448,9 +448,9 @@ export function applyFlightMethods(GlobeController) {
         </div>
       </div>
       <div class="detail-links">
-        <a href="https://www.flightradar24.com/${callsign}" target="_blank" rel="noopener">FR24</a>
-        <a href="https://www.flightaware.com/live/flight/${callsign}" target="_blank" rel="noopener">FlightAware</a>
-        <a href="https://globe.adsbexchange.com/?icao=${id}" target="_blank" rel="noopener">ADS-B</a>
+        <a href="https://www.flightradar24.com/${encodeURIComponent(callsign)}" target="_blank" rel="noopener">FR24</a>
+        <a href="https://www.flightaware.com/live/flight/${encodeURIComponent(callsign)}" target="_blank" rel="noopener">FlightAware</a>
+        <a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(id)}" target="_blank" rel="noopener">ADS-B</a>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
         <button class="detail-track-btn ${isTracking ? "tracking" : ""}" data-flight-id="${id}" style="flex:1;">
@@ -460,7 +460,7 @@ export function applyFlightMethods(GlobeController) {
       </div>
       ${this.signedInValue ? `<button class="detail-watch-btn" data-action="click->globe#createWatch"
         data-watch-type="entity"
-        data-watch-name="Watch ${callsign || id}"
+        data-watch-name="Watch ${this._escapeHtml(callsign || id)}"
         data-watch-conditions='${JSON.stringify({ entity_type: "flight", identifier: callsign || id, match: "callsign_exact" })}'>
         <i class="fa-solid fa-eye"></i> Watch
       </button>` : ""}

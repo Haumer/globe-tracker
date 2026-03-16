@@ -3,8 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      enqueue_background_refresh(RefreshAirportsJob, key: "airports", debounce: 1.hour) if OurAirportsService.stale?
-
       airports = Airport.all
       airports = airports.by_type(params[:type]) if params[:type].present?
       bounds = parse_bounds

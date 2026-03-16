@@ -664,17 +664,17 @@ export function applySituationalMethods(GlobeController) {
     const ago = date ? this._timeAgo(date) : "—"
     const magStr = ev.magnitudeValue ? `${ev.magnitudeValue} ${ev.magnitudeUnit || ""}` : "—"
     const sourceLinks = (ev.sources || [])
-      .filter(s => typeof s.url === "string" && s.url.startsWith("http"))
-      .map(s => `<a href="${s.url}" target="_blank" rel="noopener" class="event-source-link">${s.id}</a>`)
+      .filter(s => typeof s.url === "string" && /^https?:\/\//i.test(s.url))
+      .map(s => `<a href="${this._safeUrl(s.url)}" target="_blank" rel="noopener" class="event-source-link">${this._escapeHtml(s.id)}</a>`)
       .join(" ")
 
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-${catInfo.icon}" style="color: ${catInfo.color};"></i> ${ev.categoryTitle}</div>
-      <div class="detail-country">${ev.title}</div>
+      <div class="detail-callsign"><i class="fa-solid fa-${catInfo.icon}" style="color: ${catInfo.color};"></i> ${this._escapeHtml(ev.categoryTitle)}</div>
+      <div class="detail-country">${this._escapeHtml(ev.title)}</div>
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">Category</span>
-          <span class="detail-value">${ev.categoryTitle}</span>
+          <span class="detail-value">${this._escapeHtml(ev.categoryTitle)}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Magnitude</span>

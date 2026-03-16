@@ -37,6 +37,20 @@ class ConflictPulseService
     "Korean Peninsula" => { lat: 37..40, lng: 125..128 },
   }.freeze
 
+  # Theaters — group related situations into broader conflicts
+  THEATERS = {
+    "Middle East / Iran War" => [
+      "Israel-Palestine", "Iran Theater", "Iran Region", "Lebanon-Israel Border",
+      "Iraq Theater", "Strait of Hormuz", "Red Sea / Bab el-Mandeb",
+      "Gulf States", "Gaza Strip",
+    ],
+    "Russia-Ukraine War" => [
+      "Eastern Ukraine Front", "Kyiv Region", "Moscow / Western Russia",
+    ],
+    "Myanmar Civil War" => ["Myanmar"],
+    "Afghanistan-Pakistan" => ["Pakistan-Afghanistan"],
+  }.freeze
+
   class << self
     def analyze
       Rails.cache.fetch(CACHE_KEY, expires_in: 10.minutes) { new.compute_full }
@@ -50,18 +64,27 @@ class ConflictPulseService
   def compute_full
     zones = compute
 
-    # Assign situation names to zones
-    zones.each { |z| z[:situation_name] = resolve_situation_name(z) }
+    # Assign situation names and theater groupings to zones
+    zones.each do |z|
+      z[:situation_name] = resolve_situation_name(z)
+      z[:theater] = THEATERS.find { |_, situs| situs.include?(z[:situation_name]) }&.first
+    end
 
     # Extract strike arcs from all conflict headlines (last 7 days)
     all_headlines = NewsEvent.where("published_at > ?", 7.days.ago)
       .where(category: CONFLICT_CATEGORIES)
       .where.not(title: [nil, ""])
       .pluck(:title)
-    strike_arcs = StrikeArcExtractor.extract(all_headlines)
+    raw_arcs = StrikeArcExtractor.extract(all_headlines)
+
+    # Snap arc endpoints to nearest situation zone so arcs visually connect the bubbles
+    strike_arcs = snap_arcs_to_zones(raw_arcs, zones)
 
     # Build hex cells for theater visualization (lower threshold than zones)
     hex_cells = build_hex_cells
+
+    # Tag each hex cell with its nearest zone
+    link_hexes_to_zones(hex_cells, zones)
 
     { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }
   rescue => e
@@ -86,6 +109,8 @@ class ConflictPulseService
       next if a.title&.match?(noise_patterns)
       # Check if headline mentions a conflict region far from the article's stored location
       event_loc = detect_event_location(a.title)
+      # Also check: article geocoded to a media capital but headline mentions a conflict zone
+      event_loc ||= reaction_city_rebucket(a)
       if event_loc
         event_cell = cell_key(event_loc[0], event_loc[1])
         stored_cell = cell_key(a.latitude, a.longitude)
@@ -226,10 +251,12 @@ class ConflictPulseService
   # the article is ABOUT this place regardless of where the reporter is.
   EVENT_LOCATIONS = {
     # Preposition patterns: "war in Iran", "strikes on Gaza", "attack in Baghdad"
-    "iran" => [35.7, 51.4], "tehran" => [35.7, 51.4],
-    "israel" => [31.8, 35.2], "tel aviv" => [32.1, 34.8],
+    "iran" => [35.7, 51.4], "tehran" => [35.7, 51.4], "teheran" => [35.7, 51.4],
+    "israel" => [31.8, 35.2], "israil" => [31.8, 35.2], "israël" => [31.8, 35.2],
+    "tel aviv" => [32.1, 34.8],
     "gaza" => [31.5, 34.5], "west bank" => [31.9, 35.3],
     "ukraine" => [50.4, 30.5], "kyiv" => [50.4, 30.5], "kiev" => [50.4, 30.5],
+    "oykrania" => [50.4, 30.5], "ucrania" => [50.4, 30.5], "oukrania" => [50.4, 30.5],
     "kharkiv" => [50.0, 36.2], "donbas" => [48.0, 37.8],
     "russia" => [55.8, 37.6], "moscow" => [55.8, 37.6],
     "iraq" => [33.3, 44.4], "baghdad" => [33.3, 44.4],
@@ -271,6 +298,25 @@ class ConflictPulseService
       return EVENT_LOCATIONS[loc] if lower.include?(loc)
     end
 
+    nil
+  end
+
+  # If an article is geocoded far from any known conflict zone but its headline
+  # mentions one, re-bucket it to that zone. This catches "EU discusses Iran war"
+  # in Brussels, "Berlin debates Hormuz" etc. without hardcoding media capitals.
+  def reaction_city_rebucket(article)
+    return nil if article.title.blank?
+
+    # Is the article already near a conflict zone? If so, no re-bucketing needed.
+    EVENT_LOCATIONS.each_value do |coords|
+      return nil if (article.latitude - coords[0]).abs < 5 && (article.longitude - coords[1]).abs < 5
+    end
+
+    # Article is far from all conflict zones — check if headline mentions one
+    lower = article.title.downcase
+    EVENT_LOCATIONS.each do |keyword, coords|
+      return coords if lower.include?(keyword)
+    end
     nil
   end
 
@@ -338,32 +384,127 @@ class ConflictPulseService
     {}
   end
 
-  # Build hex cells for theater visualization — lower threshold than zones
+  # Build hex cells for theater visualization using a global flat-top hex grid.
+  # Vertex positions use cos(vertex_lat) so shared vertices between adjacent
+  # cells produce EXACT same coordinates — guaranteeing flush tiling.
+  HEX_RADIUS = 1.5                        # center-to-vertex in degrees latitude
+  HEX_ROW_H  = HEX_RADIUS * Math.sqrt(3) # row spacing in degrees latitude
+  # Reference cos for grid snapping (column spacing) — use median conflict latitude
+  COS_REF    = Math.cos(35.0 * Math::PI / 180)
+  HEX_COL_W  = HEX_RADIUS * 1.5 / COS_REF
+
   def build_hex_cells
     articles = NewsEvent.where("published_at > ?", 7.days.ago)
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :latitude, :longitude, :published_at, :tone)
 
-    cells = Hash.new(0)
+    cells = {}
     articles.find_each do |a|
       next if a.tone && a.tone.abs < MIN_TONE
-      key = cell_key(a.latitude, a.longitude)
-      cells[key] += 1
+
+      # Snap to global hex grid
+      col = (a.longitude / HEX_COL_W).round
+      vert_offset = col.odd? ? HEX_ROW_H / 2.0 : 0.0
+      row = ((a.latitude - vert_offset) / HEX_ROW_H).round
+
+      center_lat = row * HEX_ROW_H + vert_offset
+      center_lng = col * HEX_COL_W
+
+      key = "#{row},#{col}"
+      cells[key] ||= { lat: center_lat, lng: center_lng, count: 0 }
+      cells[key][:count] += 1
     end
 
     return [] if cells.empty?
-    max_count = cells.values.max.to_f
+    max_log = Math.log(cells.values.map { |c| c[:count] }.max + 1)
 
-    cells.filter_map do |key, count|
-      next if count < 2
-      lat, lng = key.split(",").map(&:to_f)
+    cells.filter_map do |_key, cell|
+      next if cell[:count] < 2
       {
-        lat: lat + CELL_SIZE / 2.0,
-        lng: lng + CELL_SIZE / 2.0,
-        count: count,
-        intensity: (count / max_count).round(2),
+        lat: cell[:lat],
+        lng: cell[:lng],
+        count: cell[:count],
+        intensity: (Math.log(cell[:count] + 1) / max_log).round(2),
+        vertices: hex_vertices(cell[:lat], cell[:lng]),
       }
+    end
+  end
+
+  # Compute 6 vertices of a flat-top hex. Each vertex uses cos(vertex_lat)
+  # for its longitude offset — so two adjacent cells sharing a vertex
+  # compute the EXACT same position (because the shared vertex has the
+  # same latitude from either cell). This guarantees flush tiling.
+  def hex_vertices(center_lat, center_lng)
+    6.times.map do |i|
+      angle = (Math::PI / 3) * i
+      vlat = center_lat + HEX_RADIUS * Math.sin(angle)
+      cos_vlat = Math.cos(vlat * Math::PI / 180).abs
+      cos_vlat = [cos_vlat, 0.05].max
+      vlng = center_lng + HEX_RADIUS * Math.cos(angle) / cos_vlat
+      [vlat.round(4), vlng.round(4)]
+    end
+  end
+
+  # Snap arc endpoints to nearest zone centroid so arcs connect the situation bubbles.
+  # If no zone is within 15° (~1600km), keep the original ACTORS coordinate but
+  # drop the arc entirely if neither endpoint has a nearby zone.
+  def snap_arcs_to_zones(arcs, zones)
+    return arcs if zones.empty?
+
+    max_dist = 15.0 # degrees — generous match radius
+
+    find_nearest = ->(lat, lng) {
+      best = nil
+      best_d = max_dist
+      zones.each do |z|
+        d = Math.sqrt((z[:lat] - lat)**2 + (z[:lng] - lng)**2)
+        if d < best_d
+          best_d = d
+          best = z
+        end
+      end
+      best
+    }
+
+    arcs.filter_map do |arc|
+      from_zone = find_nearest.call(arc[:from_lat], arc[:from_lng])
+      to_zone = find_nearest.call(arc[:to_lat], arc[:to_lng])
+
+      # Drop arcs where neither endpoint is near a zone
+      next if from_zone.nil? && to_zone.nil?
+      # Drop arcs that would collapse to same zone
+      next if from_zone && to_zone && from_zone[:cell_key] == to_zone[:cell_key]
+
+      arc.merge(
+        from_lat: from_zone ? from_zone[:lat] : arc[:from_lat],
+        from_lng: from_zone ? from_zone[:lng] : arc[:from_lng],
+        from_zone_key: from_zone&.dig(:cell_key),
+        to_lat: to_zone ? to_zone[:lat] : arc[:to_lat],
+        to_lng: to_zone ? to_zone[:lng] : arc[:to_lng],
+        to_zone_key: to_zone&.dig(:cell_key),
+      )
+    end
+  end
+
+  # Tag each hex cell with its nearest zone's cell_key and situation_name
+  def link_hexes_to_zones(hex_cells, zones)
+    return if zones.empty?
+    hex_cells.each do |cell|
+      best = nil
+      best_d = Float::INFINITY
+      zones.each do |z|
+        d = (z[:lat] - cell[:lat])**2 + (z[:lng] - cell[:lng])**2
+        if d < best_d
+          best_d = d
+          best = z
+        end
+      end
+      if best && best_d < 400 # within ~20° — generous to catch theater hexes
+        cell[:zone_key] = best[:cell_key]
+        cell[:situation] = best[:situation_name]
+        cell[:theater] = best[:theater]
+      end
     end
   end
 

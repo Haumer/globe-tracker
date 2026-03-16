@@ -968,7 +968,7 @@ export function applyNewsMethods(GlobeController) {
         ${nearby.slice(0, 10).map(n => {
           const nColor = categoryColors[n.category] || "#90a4ae"
           const nName = n.name ? n.name.split(",")[0] : "Story"
-          return `<a href="${this._escapeHtml(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.8);text-decoration:none;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.8);text-decoration:none;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04);">
             <span style="color:${nColor};margin-right:4px;">●</span>
             ${this._escapeHtml(nName)}
             <span style="color:rgba(200,210,225,0.4);font-size:10px;margin-left:4px;">${n.category}</span>
@@ -1005,7 +1005,7 @@ export function applyNewsMethods(GlobeController) {
         </div>` : ""}
       </div>
       <div style="margin:8px 0;">${themeTags}</div>
-      <a href="${this._escapeHtml(ev.url)}" target="_blank" rel="noopener" class="detail-track-btn">Read Article →</a>
+      <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" class="detail-track-btn">Read Article →</a>
       ${nearbyHtml}
     `
     this.detailPanelTarget.style.display = ""

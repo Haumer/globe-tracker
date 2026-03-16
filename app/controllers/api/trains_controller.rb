@@ -3,7 +3,7 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      trains = Rails.cache.fetch("hafas_trains:#{params[:bbox]}", expires_in: 10.seconds) do
+      trains = Rails.cache.fetch("hafas_trains:#{params[:bbox]}", expires_in: 60.seconds) do
         HafasTrainService.fetch(bbox: params[:bbox])
       end
       render json: trains

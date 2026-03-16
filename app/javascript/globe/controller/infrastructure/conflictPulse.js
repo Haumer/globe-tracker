@@ -127,43 +127,38 @@ export function applyConflictPulseMethods(GlobeController) {
     ds.entities.suspendEvents()
 
     // ── Layer 1: Hex theater (background — shows geographic extent) ──
-    console.log("[ConflictPulse] hexCellData:", this._hexCellData?.length, "items, _hexVertices:", typeof this._hexVertices)
     if (this._hexCellData?.length) {
-      const hexRadius = 1.0 // degrees, matches 2° CELL_SIZE
-      let hexRendered = 0
       this._hexCellData.forEach((cell, idx) => {
-        if (cell.intensity < 0.01) return
         const t = cell.intensity
-        // Color: yellow (low) → orange (mid) → red (high)
-        const r = Math.round(255 * Math.min(0.6 + t * 0.4, 1))
-        const g = Math.round(255 * Math.max(0.3 - t * 0.25, 0))
-        const b = 0
+        if (t < 0.01) return
+        if (!cell.vertices || cell.vertices.length !== 6) return
+        // Color: orange (low) → red-orange (mid) → bright red (high)
+        const r = 255
+        const g = Math.round(180 * (1 - t * 0.8))
+        const b = Math.round(50 * (1 - t))
         const hexColor = Cesium.Color.fromBytes(r, g, b)
 
-        try {
-          const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
-          const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
+        // Use pre-computed vertices from backend
+        const positions = cell.vertices.map(v => Cesium.Cartesian3.fromDegrees(v[1], v[0]))
 
-          const hex = ds.entities.add({
-            id: `cpulse-hex-${idx}`,
-            polygon: {
-              hierarchy: new Cesium.PolygonHierarchy(positions),
-              material: hexColor.withAlpha(0.08 + t * 0.25),
-              outline: true,
-              outlineColor: hexColor.withAlpha(0.2 + t * 0.5),
-              outlineWidth: 1,
-              height: 4800,
-            },
-          })
-          this._conflictPulseEntities.push(hex)
-          hexRendered++
-        } catch (e) {
-          console.error("[ConflictPulse] hex render error:", e, cell)
-        }
+        const hex = ds.entities.add({
+          id: `cpulse-hex-${idx}`,
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(positions),
+            material: hexColor.withAlpha(0.18 + t * 0.35),
+            outline: true,
+            outlineColor: hexColor.withAlpha(0.5 + t * 0.4),
+            outlineWidth: 2,
+          },
+          properties: {
+            zone_key: cell.zone_key || "",
+            situation: cell.situation || "",
+            theater: cell.theater || "",
+            count: cell.count,
+          },
+        })
+        this._conflictPulseEntities.push(hex)
       })
-      console.log("[ConflictPulse] hex cells rendered:", hexRendered)
-    } else {
-      console.warn("[ConflictPulse] No hex cell data available")
     }
 
     // ── Layer 2: Strike arcs (directional attack flows) ──
@@ -460,7 +455,7 @@ export function applyConflictPulseMethods(GlobeController) {
     const headlinesHtml = articles.length > 0
       ? articles.map(a => {
           const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
-          return `<a href="${this._escapeHtml(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
             <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title)}</div>
             <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
           </a>`
@@ -535,6 +530,10 @@ export function applyConflictPulseMethods(GlobeController) {
       <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:8px;">
         Sources: ${tierHtml} · Updated ${new Date(zone.detected_at).toLocaleTimeString()}
       </div>
+
+      ${zone.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(zone.theater)}">
+        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(zone.theater)}
+      </button>` : ""}
 
       <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${this._escapeHtml(JSON.stringify(s))}">
         <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal All Connected Layers
@@ -696,5 +695,104 @@ export function applyConflictPulseMethods(GlobeController) {
     if (hours < 24) return `${hours}h ago`
     const days = Math.floor(hours / 24)
     return `${days}d ago`
+  }
+
+  // ── Hex cell click → show linked situation ──────────────────
+
+  GlobeController.prototype._showHexDetail = function(cell) {
+    const situation = cell.situation || "Unlinked area"
+    const theater = cell.theater || ""
+    const zone = cell.zone_key
+      ? this._conflictPulseData?.find(z => z.cell_key === cell.zone_key)
+      : null
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>Conflict Theater Hex</div>
+      <div class="detail-country">${this._escapeHtml(situation)}</div>
+      ${theater ? `<div style="font:500 10px var(--gt-mono);color:#ffa726;letter-spacing:0.5px;margin:4px 0 8px;">${this._escapeHtml(theater)}</div>` : ""}
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Articles</span>
+          <span class="detail-value">${cell.count}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Intensity</span>
+          <span class="detail-value">${(cell.intensity * 100).toFixed(0)}%</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Coordinates</span>
+          <span class="detail-value">${cell.lat.toFixed(1)}°, ${cell.lng.toFixed(1)}°</span>
+        </div>
+        ${zone ? `<div class="detail-field">
+          <span class="detail-label">Pulse Score</span>
+          <span class="detail-value">${zone.pulse_score}</span>
+        </div>` : ""}
+      </div>
+      ${zone ? `<button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;"
+        data-action="click->globe#flyToConflictZone" data-zone-key="${this._escapeHtml(zone.cell_key)}">
+        <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>Go to ${this._escapeHtml(situation)}
+      </button>` : ""}
+      ${theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;"
+        data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(theater)}">
+        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(theater)}
+      </button>` : ""}
+    `
+    this.detailPanelTarget.style.display = ""
+  }
+
+  // ── Fly to a zone by cell_key ────────────────────────────────
+
+  GlobeController.prototype.flyToConflictZone = function(event) {
+    const key = event.currentTarget.dataset.zoneKey
+    const zone = this._conflictPulseData?.find(z => z.cell_key === key)
+    if (zone) this._flyToConflictPulse(zone)
+  }
+
+  // ── Highlight theater: brighten connected hexes + arcs, dim others ──
+
+  GlobeController.prototype.highlightTheater = function(event) {
+    const theater = event.currentTarget.dataset.theater
+    if (!theater || this._highlightedTheater === theater) {
+      // Toggle off — reset all to normal
+      this._highlightedTheater = null
+      this._renderConflictPulse()
+      return
+    }
+    this._highlightedTheater = theater
+
+    const Cesium = window.Cesium
+    const ds = this._ds["conflictPulse"]
+    if (!ds) return
+
+    // Dim/brighten hex cells by theater
+    this._conflictPulseEntities.forEach(entity => {
+      if (!entity.polygon) return
+      const props = entity.properties
+      const entityTheater = props?.theater?.getValue()
+      const isMatch = entityTheater === theater
+
+      entity.polygon.material = Cesium.Color.fromCssColorString(isMatch ? "#ff6d00" : "#444").withAlpha(isMatch ? 0.6 : 0.03)
+      entity.polygon.outlineColor = Cesium.Color.fromCssColorString(isMatch ? "#ff6d00" : "#333").withAlpha(isMatch ? 0.9 : 0.05)
+    })
+
+    // Also dim/brighten situation nodes (points/labels/rings)
+    this._conflictPulseEntities.forEach(entity => {
+      if (!entity.point && !entity.label && !entity.ellipse) return
+      // Zone entities use IDs like cpulse-0, cpulse-lbl-0, cpulse-ring-0
+      const idMatch = entity.id?.match(/cpulse-(?:lbl-|ring-|core-)?(\d+)/)
+      if (!idMatch) return
+      const idx = parseInt(idMatch[1])
+      const zone = this._conflictPulseData?.[idx]
+      if (!zone) return
+      const isMatch = zone.theater === theater
+      if (entity.point) {
+        entity.point.color = entity.point.color?.getValue?.(Cesium.JulianDate.now())?.withAlpha(isMatch ? 1.0 : 0.15)
+      }
+      if (entity.label) {
+        entity.label.fillColor = Cesium.Color.WHITE.withAlpha(isMatch ? 1.0 : 0.1)
+      }
+    })
+
+    this._requestRender()
   }
 }

@@ -3,8 +3,6 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      enqueue_background_refresh(RefreshInternetTrafficJob, key: "internet-traffic", debounce: 5.minutes) if CloudflareRadarService.stale?
-
       snapshots = InternetTrafficSnapshot.latest_batch
 
       traffic = snapshots.map do |s|

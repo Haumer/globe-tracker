@@ -1096,7 +1096,11 @@ export function applyCoreMethods(GlobeController) {
         const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
         this.showChokepointDetail(d); return true
       }},
-      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-"], handler: (id) => {
+      { prefix: "cpulse-hex-", handler: (id) => {
+        const idx = parseInt(id); const cell = this._hexCellData?.[idx]; if (!cell) return false
+        this._showHexDetail(cell); return true
+      }},
+      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-", "cpulse-hex-"], handler: (id) => {
         const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},

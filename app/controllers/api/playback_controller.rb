@@ -59,6 +59,8 @@ module Api
 
     # GET /api/playback/range — returns available data time range across all types
     def range
+      expires_in 5.minutes, public: true
+
       oldest = PositionSnapshot.minimum(:recorded_at)
       newest = PositionSnapshot.maximum(:recorded_at)
 

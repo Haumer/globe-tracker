@@ -16,9 +16,6 @@ module Api
 
     def index
       category = params[:category].presence
-      if CelestrakService.stale?(category: category)
-        enqueue_background_refresh(RefreshSatellitesJob, category, key: "satellites:#{category || 'all'}", debounce: 5.minutes)
-      end
 
       satellites = Satellite.all
       satellites = satellites.where(category: category) if category.present?

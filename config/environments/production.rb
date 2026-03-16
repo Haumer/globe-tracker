@@ -77,9 +77,14 @@ Rails.application.configure do
       Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
     },
   }
-  # Heroku Redis uses self-signed certs with rediss:// URLs
+  # Heroku Redis uses self-signed certs with rediss:// URLs.
+  # Use CA cert if available, otherwise accept Heroku's self-signed cert (still TLS-encrypted).
   if ENV["REDIS_URL"]&.start_with?("rediss://")
-    redis_cache_opts[:ssl_params] = { verify_mode: OpenSSL::SSL::VERIFY_NONE }
+    redis_cache_opts[:ssl_params] = if ENV["REDIS_CA_CERT"]
+      { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: ENV["REDIS_CA_CERT"] }
+    else
+      { verify_mode: OpenSSL::SSL::VERIFY_NONE }
+    end
   end
   config.cache_store = :redis_cache_store, redis_cache_opts
 
@@ -102,10 +107,9 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  config.hosts = [
+    ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"),
+    /.*\.herokuapp\.com/,
+  ]
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

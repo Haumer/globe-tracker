@@ -1,483 +1,95 @@
 <%
-  # ═══════════════ SOURCE DATA ═══════════════
-  #
-  # Tags: plain string = <span class="src-tag">X</span>
-  #       [text, modifier] = <span class="src-tag src-tag--modifier">X</span>
-  #
-  # status_class: omit for plain "src-card-status", otherwise adds "src-card-status--X"
+  sources = [
+    { icon: "fa-solid fa-plane",            title: "ADS-B Exchange",        status: "LIVE",     status_class: "live",     size: "wide",  link: "https://api.adsb.lol" },
+    { icon: "fa-solid fa-tower-broadcast",  title: "OpenSky Network",       status: "API",      link: "https://opensky-network.org" },
+    { icon: "fa-solid fa-ship",             title: "AIS Stream",            status: "LIVE",     status_class: "live",     link: "https://aisstream.io" },
+    { icon: "fa-solid fa-satellite",        title: "CelesTrak",             status: "API",      link: "https://celestrak.org" },
+    { icon: "fa-solid fa-house-crack",      title: "USGS Earthquakes",      status: "LIVE",     status_class: "live",     link: "https://earthquake.usgs.gov" },
+    { icon: "fa-solid fa-fire",             title: "NASA FIRMS",            status: "API",      link: "https://firms.modaps.eosdis.nasa.gov" },
+    { icon: "fa-solid fa-newspaper",        title: "GDELT Project",         status: "LIVE",     status_class: "live",     size: "wide",  link: "https://gdeltproject.org" },
+    { icon: "fa-solid fa-rss",              title: "Direct RSS Feeds",      status: "RSS",      subtitle: "16 tier-1/2/3 outlets" },
+    { icon: "fa-solid fa-rss",              title: "Multi-source News",     status: "API",      subtitle: "6 aggregated APIs" },
+    { icon: "fa-solid fa-satellite-dish",   title: "GPS Interference",      status: "COMPUTED", status_class: "computed" },
+    { icon: "fa-solid fa-crosshairs",       title: "UCDP Conflicts",        status: "API",      link: "https://ucdp.uu.se" },
+    { icon: "fa-solid fa-cloud",            title: "Cloudflare Radar",      status: "LIVE",     status_class: "live",     link: "https://radar.cloudflare.com" },
+    { icon: "fa-solid fa-network-wired",    title: "TeleGeography",         status: "FREE",     status_class: "free",     link: "https://submarinecablemap.com" },
+    { icon: "fa-solid fa-wifi",             title: "IODA Outages",          status: "FREE",     status_class: "free",     link: "https://ioda.inetintel.cc.gatech.edu" },
+    { icon: "fa-solid fa-bolt",             title: "NASA EONET",            status: "API",      link: "https://eonet.gsfc.nasa.gov" },
+    { icon: "fa-solid fa-video",            title: "Windy Webcams",         status: "API",      link: "https://api.windy.com/webcams" },
+    { icon: "fa-brands fa-youtube",         title: "YouTube Live",          status: "LIVE",     status_class: "live",     link: "https://developers.google.com/youtube/v3" },
+    { icon: "fa-solid fa-traffic-light",    title: "NYC Traffic Cams",      status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-globe",            title: "Cesium Ion",            status: "ENGINE",   link: "https://cesium.com" },
+    { icon: "fa-solid fa-building",         title: "Google 3D Tiles",       status: "ENGINE" },
+    { icon: "fa-solid fa-map",              title: "Natural Earth",         status: "FREE",     status_class: "free",     link: "https://naturalearthdata.com" },
+    { icon: "fa-solid fa-user-astronaut",   title: "UCS Satellites",        status: "OSS",      status_class: "oss",      link: "https://ucsusa.org" },
+    { icon: "fa-solid fa-user-secret",      title: "Classified Sat Intel",  status: "COMPUTED", status_class: "computed" },
+    { icon: "fa-solid fa-plane-lock",       title: "OpenAIP Airspace",      status: "API",      link: "https://openaip.net" },
+    { icon: "fa-solid fa-plane-departure",  title: "OurAirports",           status: "OSS",      status_class: "oss",      link: "https://ourairports.com" },
+    { icon: "fa-solid fa-jet-fighter",      title: "Military Classifier",   status: "COMPUTED", status_class: "computed" },
+    { icon: "fa-solid fa-oil-well",         title: "Global Energy Monitor", status: "FREE",     status_class: "free",     link: "https://globalenergymonitor.org" },
+    { icon: "fa-solid fa-bolt",             title: "Power Plant Database",  status: "OSS",      status_class: "oss" },
+    { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API",      link: "https://alphavantage.co" },
+    { icon: "fa-solid fa-coins",            title: "European Central Bank", status: "FREE",     status_class: "free",     link: "https://ecb.europa.eu" },
+  ]
 
-  sources = {
-    "Aviation" => {
-      accent: "#4fc3f7",
-      comment: "AVIATION",
-      items: [
-        {
-          icon: "fa-solid fa-plane",
-          title: "ADS-B Exchange",
-          url_label: "adsb.lol",
-          status: "LIVE", status_class: "live",
-          description: "Real-time aircraft positions via ADS-B radio signals. Community-driven,\n        unfiltered flight data including military aircraft. The largest open-source\n        flight tracking network.",
-          tags: [["Real-time", "rt"], "REST API", ["Free", "free"], "JSON"],
-          category: "Aviation",
-          link: "https://api.adsb.lol"
-        },
-        {
-          icon: "fa-solid fa-tower-broadcast",
-          title: "OpenSky Network",
-          url_label: "opensky-network.org",
-          status: "API",
-          description: "Academic flight tracking network operated by research institutions.\n        Provides enriched flight routes, positions, and aircraft metadata\n        with historical data access.",
-          tags: [["Real-time", "rt"], "REST API", ["OAuth", "auth"], "JSON"],
-          category: "Aviation",
-          link: "https://opensky-network.org"
-        },
-        {
-          icon: "fa-solid fa-plane-lock",
-          title: "OpenAIP",
-          url_label: "openaip.net",
-          status: "API",
-          description: "Global aeronautical data including restricted airspace zones, military\n        operating areas, danger zones, and warning areas. Rendered as colored\n        polygons over the globe.",
-          tags: ["REST API", ["API Key", "auth"], "GeoJSON", "Airspace"],
-          category: "Aviation",
-          link: "https://www.openaip.net"
-        },
-        {
-          icon: "fa-solid fa-plane-departure",
-          title: "OurAirports",
-          url_label: "ourairports.com",
-          status: "OSS", status_class: "oss",
-          description: "Open database of airports worldwide. Locations, types, elevations,\n        and runway data for large, medium, and military airfields.\n        Community-maintained on GitHub.",
-          tags: ["CSV", ["Free", "free"], "GitHub", "55K+ Airports"],
-          category: "Aviation",
-          link: "https://ourairports.com"
-        },
-        {
-          icon: "fa-solid fa-jet-fighter",
-          title: "Military Classifier",
-          url_label: "Built-in rules engine",
-          status: "COMPUTED", status_class: "computed",
-          description: "Identifies military aircraft using ICAO hex ranges and callsign prefix\n        patterns for NATO, USAF, RAF, and other armed forces. Applied in real-time\n        to all incoming flight data.",
-          tags: [["Real-time", "rt"], "ICAO Ranges", "Callsign Rules", "Derived"],
-          category: "Aviation / Security"
-        }
-      ]
-    },
-
-    "Maritime" => {
-      accent: "#26c6da",
-      comment: "MARITIME",
-      items: [
-        {
-          icon: "fa-solid fa-ship",
-          title: "AIS Stream",
-          url_label: "aisstream.io",
-          status: "LIVE", status_class: "live",
-          description: "Real-time maritime vessel tracking via AIS (Automatic Identification System).\n        Global WebSocket stream delivering ship positions, headings, types,\n        destinations, and flags.",
-          tags: [["Real-time", "rt"], ["WebSocket", "ws"], ["API Key", "auth"], "Global"],
-          category: "Maritime",
-          link: "https://aisstream.io"
-        }
-      ]
-    },
-
-    "Space" => {
-      accent: "#ab47bc",
-      comment: "SPACE",
-      items: [
-        {
-          icon: "fa-solid fa-satellite",
-          title: "CelesTrak",
-          url_label: "celestrak.org",
-          status: "API",
-          description: "NORAD satellite orbital elements in Two-Line Element format.\n        Tracks 10,000+ objects including ISS, Starlink, GPS, military and\n        scientific satellites. SGP4-propagated positions.",
-          tags: ["TLE Format", "SGP4", ["Free", "free"], "10K+ Objects"],
-          category: "Space",
-          link: "https://celestrak.org"
-        },
-        {
-          icon: "fa-solid fa-user-astronaut",
-          title: "UCS Satellite Database",
-          url_label: "ucsusa.org",
-          status: "OSS", status_class: "oss",
-          description: "Union of Concerned Scientists satellite database. Enriches orbital data with\n        operator, purpose, users (military/civil/commercial), launch details,\n        contractor, and expected lifetime.",
-          tags: ["TSV Database", ["Free", "free"], "Enrichment", "2,500+ Sats"],
-          category: "Space",
-          link: "https://www.ucsusa.org/resources/satellite-database"
-        },
-        {
-          icon: "fa-solid fa-user-secret",
-          title: "Classified Satellite Analysis",
-          url_label: "Orbital mechanics engine",
-          status: "COMPUTED", status_class: "computed",
-          description: "Identifies classified reconnaissance satellites using orbital mechanics analysis.\n        Matches orbital parameters to known programs: KH-11 Keyhole, Lacrosse/Onyx,\n        Mentor/Orion, Bars-M, Yaogan, and more.",
-          tags: ["Orbital Analysis", "Pattern Matching", "Derived", "SIGINT/IMINT"],
-          category: "Space / Security"
-        }
-      ]
-    },
-
-    "Earth Science" => {
-      comment: "EARTH SCIENCE",
-      items: [
-        {
-          accent: "#ff7043",
-          icon: "fa-solid fa-house-crack",
-          title: "USGS Earthquakes",
-          url_label: "earthquake.usgs.gov",
-          status: "LIVE", status_class: "live",
-          description: "Real-time seismic event feed from the U.S. Geological Survey.\n        Magnitude 2.5+ earthquakes worldwide, updated every minute.\n        Standardized GeoJSON format with depth and magnitude data.",
-          tags: [["Real-time", "rt"], "GeoJSON", ["Free", "free"], "M2.5+"],
-          category: "Earth Science",
-          link: "https://earthquake.usgs.gov/earthquakes/feed/"
-        },
-        {
-          accent: "#ff7043",
-          icon: "fa-solid fa-bolt",
-          title: "NASA EONET",
-          url_label: "eonet.gsfc.nasa.gov",
-          status: "API",
-          description: "Earth Observatory Natural Event Tracker by NASA.\n        Monitors active wildfires, tropical storms, volcanic eruptions,\n        icebergs, and other natural phenomena globally.",
-          tags: ["REST API", "JSON", ["Free", "free"], "Events"],
-          category: "Earth Science",
-          link: "https://eonet.gsfc.nasa.gov/docs/v3"
-        },
-        {
-          accent: "#ff5722",
-          icon: "fa-solid fa-fire",
-          title: "NASA FIRMS",
-          url_label: "firms.modaps.eosdis.nasa.gov",
-          status: "API",
-          description: "Fire Information for Resource Management System.\n        Near real-time active fire and thermal hotspot data from MODIS and VIIRS\n        instruments aboard Terra, Aqua, Suomi NPP, NOAA-20, and NOAA-21 satellites.",
-          tags: ["REST API", "CSV", ["Free (key required)", "free"], "Satellite"],
-          category: "Earth Science",
-          link: "https://firms.modaps.eosdis.nasa.gov/api/"
-        }
-      ]
-    },
-
-    "Imagery & Maps" => {
-      accent: "#66bb6a",
-      comment: "IMAGERY & MAPS",
-      items: [
-        {
-          icon: "fa-solid fa-video",
-          title: "Windy Webcams",
-          url_label: "windy.com",
-          status: "API",
-          description: "Global network of live webcams with geolocation and streaming.\n        Bounding box and proximity search with preview images,\n        player embeds, and view statistics.",
-          tags: ["REST API", ["API Key", "auth"], "Streaming", "Geo-search"],
-          category: "Imagery",
-          link: "https://api.windy.com/webcams"
-        },
-        {
-          icon: "fa-brands fa-youtube",
-          title: "YouTube Live",
-          url_label: "googleapis.com",
-          status: "LIVE", status_class: "live",
-          description: "Live webcam streams from YouTube with geolocation data.\n        Searches for live broadcasts tagged with locations and embeds\n        them directly on the globe as viewable video feeds.",
-          tags: [["Real-time", "rt"], "REST API", ["API Key", "auth"], "Video"],
-          category: "Imagery",
-          link: "https://developers.google.com/youtube/v3"
-        },
-        {
-          icon: "fa-solid fa-traffic-light",
-          title: "NYC Traffic Cams",
-          url_label: "nyctmc.org",
-          status: "LIVE", status_class: "live",
-          description: "Real-time traffic camera feeds from the New York City Traffic\n        Management Center. Hundreds of cameras across NYC boroughs\n        with live image streams.",
-          tags: [["Real-time", "rt"], "REST API", ["Free", "free"], "NYC"],
-          category: "Imagery",
-          link: "https://webcams.nyctmc.org"
-        },
-        {
-          icon: "fa-solid fa-globe",
-          title: "Cesium Ion",
-          url_label: "cesium.com",
-          status: "ENGINE",
-          description: "3D geospatial visualization platform. Provides the globe renderer,\n        world terrain with water masks, satellite imagery, and\n        OpenStreetMap 3D building tiles.",
-          tags: ["3D Tiles", ["Token", "auth"], "Terrain", "Buildings"],
-          category: "Imagery & Maps",
-          link: "https://cesium.com"
-        },
-        {
-          icon: "fa-solid fa-building",
-          title: "Google 3D Tiles",
-          url_label: "Photorealistic 3D Tiles",
-          status: "ENGINE",
-          description: "Google Photorealistic 3D Tiles via Cesium Ion. High-fidelity\n        textured 3D buildings and terrain as an alternative to\n        OpenStreetMap building blocks for street-level detail.",
-          tags: ["3D Tiles", ["Token", "auth"], "Photorealistic", "Global"],
-          category: "Imagery & Maps",
-          link: "https://cesium.com/platform/cesium-ion/content/google-photorealistic-3d-tiles/"
-        },
-        {
-          icon: "fa-solid fa-map",
-          title: "Natural Earth",
-          url_label: "naturalearthdata.com",
-          status: "OSS", status_class: "oss",
-          description: "Public domain map dataset. Country borders, coastlines,\n        populated places, and urban area polygons. Hosted on GitHub\n        as GeoJSON at multiple resolutions.",
-          tags: ["GeoJSON", ["Free", "free"], "Public Domain", "GitHub"],
-          category: "Imagery & Maps",
-          link: "https://www.naturalearthdata.com"
-        }
-      ]
-    },
-
-    "News & Events" => {
-      comment: "NEWS & EVENTS",
-      items: [
-        {
-          accent: "#ff9800",
-          icon: "fa-solid fa-newspaper",
-          title: "GDELT Project",
-          url_label: "gdeltproject.org",
-          status: "LIVE", status_class: "live",
-          description: "Global Database of Events, Language, and Tone. Monitors world news\n        in 100+ languages, geolocates events, and provides sentiment analysis.\n        GKG GeoJSON API with 15-minute updates. Supported by Google Jigsaw.",
-          tags: [["Real-time", "rt"], "GeoJSON", ["Free", "free"], "100+ Languages"],
-          category: "News & Events",
-          link: "https://www.gdeltproject.org"
-        },
-        {
-          accent: "#ff9800",
-          icon: "fa-solid fa-rss",
-          title: "Multi-source News",
-          url_label: "6 aggregated APIs",
-          status: "API",
-          description: "Aggregates geolocated news from six providers: WorldNewsAPI,\n        Currents API, TheNewsAPI, GNews, Mediastack, and Hacker News (Algolia).\n        Cross-references and deduplicates for global event coverage.",
-          tags: ["REST API", ["API Keys", "auth"], "Multi-source", "Geo-tagged"],
-          category: "News & Events"
-        },
-        {
-          accent: "#4fc3f7",
-          icon: "fa-solid fa-rss",
-          title: "Direct RSS Feeds",
-          url_label: "16 tier-1/2/3 sources",
-          status: "RSS",
-          description: "Direct RSS ingestion from Reuters, BBC, NYT, Guardian, Al Jazeera,\n        CNN, NPR, France 24, Bellingcat, Defense News, The War Zone,\n        Foreign Policy, Arms Control Assoc., UN News, and Google News.\n        4-tier credibility system with propaganda risk labels.",
-          tags: ["RSS/Atom", ["Free", "free"], "Threat Classification", "Credibility Tiers"],
-          category: "News & Events"
-        }
-      ]
-    },
-
-    "Security" => {
-      accent: "#f44336",
-      comment: "SECURITY",
-      items: [
-        {
-          icon: "fa-solid fa-satellite-dish",
-          title: "GPS Interference",
-          url_label: "Derived from ADS-B NACp",
-          status: "COMPUTED", status_class: "computed",
-          description: "Self-computed GPS jamming detection using Navigation Accuracy Category\n        (NACp) values from ADS-B transponders. Same methodology as GPSJam.org.\n        Identifies interference and spoofing zones worldwide.",
-          tags: [["Real-time", "rt"], "NACp Analysis", "Heatmap", "Derived"],
-          category: "Security",
-          link: "https://gpsjam.org"
-        },
-        {
-          icon: "fa-solid fa-crosshairs",
-          title: "UCDP Conflict Events",
-          url_label: "ucdp.uu.se",
-          status: "API",
-          description: "Uppsala Conflict Data Program from Uppsala University. Geolocated military\n        conflict events worldwide including state-based violence, non-state conflicts,\n        and one-sided violence with casualty data.",
-          tags: ["REST API", "GeoJSON", ["Free", "free"], "Conflict Data"],
-          category: "Security",
-          link: "https://ucdp.uu.se"
-        }
-      ]
-    },
-
-    "Infrastructure" => {
-      comment: "INFRASTRUCTURE",
-      items: [
-        {
-          accent: "#e040fb",
-          icon: "fa-solid fa-cloud",
-          title: "Cloudflare Radar",
-          url_label: "radar.cloudflare.com",
-          status: "LIVE", status_class: "live",
-          description: "Internet traffic patterns and DDoS attack data from Cloudflare's global network.\n        Visualizes HTTP traffic flows between countries and highlights active\n        attack origins and targets.",
-          tags: [["Real-time", "rt"], "REST API", ["API Token", "auth"], "Traffic Flows"],
-          category: "Infrastructure",
-          link: "https://radar.cloudflare.com"
-        },
-        {
-          accent: "#ff6d00",
-          icon: "fa-solid fa-oil-well",
-          title: "Global Energy Monitor",
-          url_label: "globalenergymonitor.org",
-          status: "FREE", status_class: "free",
-          description: "Global oil, gas, and hydrogen pipeline routes from the Global Oil Infrastructure\n        Tracker (GOIT) and Global Gas Infrastructure Tracker (GGIT). 6,700+ pipeline\n        geometries with status, capacity, and operator metadata. Licensed under CC BY 4.0.",
-          tags: ["GeoJSON", "MultiLineString", ["CC BY 4.0", "free"]],
-          category: "Infrastructure",
-          link: "https://globalenergymonitor.org/projects/global-oil-infrastructure-tracker/"
-        },
-        {
-          accent: "#90a4ae",
-          icon: nil,
-          title: "Natural Earth",
-          url_label: "naturalearthdata.com",
-          status: "FREE", status_class: "free",
-          description: "Global railway network geometries from Natural Earth 10m cultural vectors.\n        25,000+ rail segments with category, electrification, and continent metadata.\n        Public domain.",
-          tags: ["GeoJSON", "LineString", ["Public Domain", "free"]],
-          category: "Infrastructure",
-          link: "https://www.naturalearthdata.com/downloads/10m-cultural-vectors/railroads/"
-        },
-        {
-          accent: "#e040fb",
-          icon: "fa-solid fa-network-wired",
-          title: "TeleGeography",
-          url_label: "submarinecablemap.com",
-          status: "FREE", status_class: "free",
-          description: "Global submarine fiber-optic cable map. 690+ cables and 1,900+ landing\n        points connecting continents. The physical backbone of the internet\n        rendered as glowing polylines on the globe.",
-          tags: ["GeoJSON", "Static", ["Free", "free"], "MultiLineString"],
-          category: "Infrastructure",
-          link: "https://www.submarinecablemap.com"
-        },
-        {
-          accent: "#e040fb",
-          icon: "fa-solid fa-wifi",
-          title: "IODA",
-          url_label: "ioda.inetintel.cc.gatech.edu",
-          status: "FREE", status_class: "free",
-          description: "Internet Outage Detection and Analysis from Georgia Tech. Monitors\n        country-level connectivity using BGP, active probing, and network\n        telescope data. Detects government shutdowns, cable cuts, and infrastructure failures.",
-          tags: [["Real-time", "rt"], "REST API", ["Free", "free"], "Country-level"],
-          category: "Infrastructure",
-          link: "https://ioda.inetintel.cc.gatech.edu"
-        },
-        {
-          accent: "#e040fb",
-          icon: "fa-solid fa-bolt",
-          title: "Global Power Plants",
-          url_label: "World Resources Institute",
-          status: "OSS", status_class: "oss",
-          description: "World Resources Institute global power plant database. Locations, capacity,\n        fuel types, and operators for 35,000+ power plants across 167 countries.\n        Open data on GitHub.",
-          tags: ["CSV", ["Free", "free"], "GitHub", "35K+ Plants"],
-          category: "Infrastructure",
-          link: "https://github.com/wri/global-power-plant-database"
-        }
-      ]
-    },
-    "Financial & Markets" => {
-      accent: "#66bb6a",
-      comment: "FINANCIAL",
-      items: [
-        {
-          icon: "fa-solid fa-chart-line",
-          title: "Alpha Vantage",
-          url_label: "alphavantage.co",
-          status: "API", status_class: nil,
-          description: "Real-time and historical commodity prices: crude oil (WTI, Brent),
-        natural gas, gold, silver, copper, wheat. Free tier provides 25 API
-        calls/day, refreshed every 6 hours with smart rotation across priority commodities.",
-          tags: ["REST API", ["API Key", "auth"], "JSON", ["Free Tier", "free"]],
-          category: "Financial",
-          link: "https://www.alphavantage.co"
-        },
-        {
-          icon: "fa-solid fa-coins",
-          title: "European Central Bank",
-          url_label: "ecb.europa.eu",
-          status: "FREE", status_class: "free",
-          description: "Daily reference exchange rates for 30+ currencies against EUR.
-        Converted to USD-based rates for 10 major currencies (EUR, GBP, JPY,
-        CNY, CHF, AUD, CAD, RUB, INR, BRL). Updated daily, no API key required.",
-          tags: ["XML", ["No Key", "free"], "Daily Update"],
-          category: "Financial",
-          link: "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
-        }
-      ]
-    }
-  }
+  # Split into rows for the bento layout
+  # Row pattern: 3 cells, then title row, then 3 cells, repeating with varied sizes
 %>
-<div class="src-page">
-  <!-- Scanline overlay -->
-  <div class="src-scanline"></div>
+<div class="bento-sources">
+  <nav class="bento-nav">
+    <%= link_to root_path, class: "bento-nav-back" do %>
+      <i class="fa-solid fa-arrow-left"></i> Back to Globe
+    <% end %>
+  </nav>
 
-  <!-- Hero -->
-  <header class="src-hero">
-    <div class="src-hero-grid">
-      <div class="src-hero-label">
-        <span class="src-blink"></span>
-        <span>LIVE DATA FEEDS</span>
+  <div class="bento-grid">
+    <%# Row 1: 3 items %>
+    <% sources[0..2].each do |s| %>
+      <div class="bento-cell<%= ' bento-cell--wide' if s[:size] == 'wide' %>">
+        <div class="bento-cell-icon"><i class="<%= s[:icon] %>"></i></div>
+        <div class="bento-cell-name"><%= s[:title] %></div>
+        <% if s[:status] %>
+          <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
+        <% end %>
       </div>
-      <h1 class="src-hero-title">Open Source<br>Intelligence</h1>
-      <p class="src-hero-sub">
-        GlobeTracker aggregates <strong>25+ data sources</strong> across aviation, maritime,
-        space, earth science, security, and world news &mdash; all rendered in real-time on a 3D globe.
-        Every feed listed below is publicly accessible, community-driven, or computed in-house.
-      </p>
+    <% end %>
+
+    <%# Row 2: 1 item + TITLE CELL + 1 item %>
+    <div class="bento-cell">
+      <div class="bento-cell-icon"><i class="<%= sources[3][:icon] %>"></i></div>
+      <div class="bento-cell-name"><%= sources[3][:title] %></div>
+      <span class="bento-badge bento-badge--<%= sources[3][:status_class] || 'default' %>"><%= sources[3][:status] %></span>
     </div>
 
-    <div class="src-stats">
-      <div class="src-stat">
-        <span class="src-stat-num">25+</span>
-        <span class="src-stat-label">Data Feeds</span>
-      </div>
-      <div class="src-stat-sep"></div>
-      <div class="src-stat">
-        <span class="src-stat-num">8</span>
-        <span class="src-stat-label">Categories</span>
-      </div>
-      <div class="src-stat-sep"></div>
-      <div class="src-stat">
-        <span class="src-stat-num">14</span>
-        <span class="src-stat-label">Free / No Auth</span>
-      </div>
-      <div class="src-stat-sep"></div>
-      <div class="src-stat">
-        <span class="src-stat-num">5</span>
-        <span class="src-stat-label">Real-time Streams</span>
-      </div>
+    <div class="bento-cell bento-cell--title">
+      <div class="bento-title-label">[01] DATA SOURCES</div>
+      <h1 class="bento-title">Aggregating<br>the world's<br>open data</h1>
+      <p class="bento-title-sub"><%= sources.size %> feeds across aviation, maritime, space, earth science, security, news, and infrastructure.</p>
     </div>
 
-    <div class="src-categories">
-      <span class="src-cat" style="--cat: #4fc3f7;">Aviation</span>
-      <span class="src-cat" style="--cat: #26c6da;">Maritime</span>
-      <span class="src-cat" style="--cat: #ab47bc;">Space</span>
-      <span class="src-cat" style="--cat: #ff7043;">Earth Science</span>
-      <span class="src-cat" style="--cat: #66bb6a;">Imagery & Maps</span>
-      <span class="src-cat" style="--cat: #ff9800;">News & Events</span>
-      <span class="src-cat" style="--cat: #e040fb;">Infrastructure</span>
-      <span class="src-cat" style="--cat: #f44336;">Security</span>
+    <div class="bento-cell">
+      <div class="bento-cell-icon"><i class="<%= sources[4][:icon] %>"></i></div>
+      <div class="bento-cell-name"><%= sources[4][:title] %></div>
+      <span class="bento-badge bento-badge--<%= sources[4][:status_class] || 'default' %>"><%= sources[4][:status] %></span>
     </div>
-  </header>
 
-  <!-- Source Grid -->
-  <section class="src-grid">
+    <%# Remaining sources %>
+    <% sources[5..].each do |s| %>
+      <div class="bento-cell<%= ' bento-cell--wide' if s[:size] == 'wide' %>">
+        <div class="bento-cell-icon"><i class="<%= s[:icon] %>"></i></div>
+        <div class="bento-cell-name"><%= s[:title] %></div>
+        <% if s[:subtitle] %>
+          <div class="bento-cell-sub"><%= s[:subtitle] %></div>
+        <% end %>
+        <% if s[:status] %>
+          <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
+        <% end %>
+      </div>
+    <% end %>
 
-<% sources.each do |section_name, section| %>
-    <!-- ═══════════════ <%= section[:comment] %> ═══════════════ -->
-
-<% section[:items].each do |src| %>
-    <%= render "pages/source_card",
-          accent:       src[:accent] || section[:accent],
-          icon:         src[:icon],
-          title:        src[:title],
-          url_label:    src[:url_label],
-          status:       src[:status],
-          status_class: src[:status_class],
-          description:  src[:description],
-          tags:         src[:tags],
-          category:     src[:category],
-          link:         src[:link] %>
-
-<% end %>
-<% end %>
-  </section>
-
-  <!-- Footer note -->
-  <footer class="src-footer">
-    <div class="src-footer-line"></div>
-    <p>
-      All data is sourced from publicly accessible APIs and open-source projects.
-      GlobeTracker does not store or redistribute raw third-party data beyond what is
-      necessary for real-time visualization. Please respect each provider's terms of service.
-    </p>
-    <div class="src-footer-back">
-      <%= link_to root_path, class: "src-back-link" do %>
-        <i class="fa-solid fa-arrow-left"></i>
-        <span>Back to Globe</span>
-      <% end %>
+    <%# Footer cell %>
+    <div class="bento-cell bento-cell--footer">
+      <div class="bento-footer-text">All feeds are publicly accessible, community-driven, or computed in-house.</div>
     </div>
-  </footer>
+  </div>
 </div>

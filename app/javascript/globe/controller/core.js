@@ -309,18 +309,35 @@ export function applyCoreMethods(GlobeController) {
         return // don't handle other entities while in country select mode
       }
 
+      // Try entity pick first — but only for "important" clickable entities
+      // (situation bubbles, flights, ships, satellites, chokepoints)
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
-        if (this._handleEntityClick(entityId, picked)) return
+        if (typeof entityId === "string") {
+          // These entity types should always handle clicks (they have detail panels)
+          const priorityPrefixes = ["cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-"]
+          const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
+          // But skip cpulse decoration (rings, cores, labels, arcs, hexes)
+          const isPulseDecor = /^cpulse-(ring|core|lbl|arc|hex)-/.test(entityId)
+          if (isPriority && !isPulseDecor) {
+            if (this._handleEntityClick(entityId, picked)) return
+          }
+        }
       }
 
-      // Fallback: check if click landed inside a hex cell (ground-clamped polygons aren't pickable)
+      // Hex cell detection — always check, works even when hexes aren't rendered
       if (this._hexCellData?.length) {
         const globePos = this.screenToLatLng(click.position)
         if (globePos) {
           const hit = this._findHexAtPosition(globePos.lat, globePos.lng)
           if (hit) { this._showHexDetail(hit); return }
         }
+      }
+
+      // Remaining entity types (news dots, conflict events, borders, etc.)
+      if (Cesium.defined(picked) && picked.id) {
+        const entityId = picked.id.id || picked.id
+        if (this._handleEntityClick(entityId, picked)) return
       }
 
       this.closeDetail()

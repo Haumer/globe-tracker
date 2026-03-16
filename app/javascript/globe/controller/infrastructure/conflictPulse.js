@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource, findCountryAtPoint } from "../../utils"
 
 export function applyConflictPulseMethods(GlobeController) {
 
@@ -762,20 +762,33 @@ export function applyConflictPulseMethods(GlobeController) {
       ? this._conflictPulseData?.find(z => z.cell_key === cell.zone_key)
       : null
 
+    // Resolve the hex's own location using country borders
+    let localName = ""
+    if (this._countryFeatures) {
+      try {
+        const country = findCountryAtPoint(this._countryFeatures, cell.lat, cell.lng)
+        if (country) localName = country
+      } catch(e) {}
+    }
+    // Fallback: use a rough label from lat/lng
+    if (!localName) {
+      localName = `${cell.lat.toFixed(1)}°, ${cell.lng.toFixed(1)}°`
+    }
+
     // Show parent zone's headlines if available
     let headlinesHtml = ""
     if (zone) {
       const articles = zone.top_articles || []
       const headlines = articles.length > 0
-        ? articles.slice(0, 4).map(a => {
+        ? articles.slice(0, 3).map(a => {
             const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
             return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-              <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title?.substring(0, 80))}</div>
+              <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title?.substring(0, 70))}</div>
               <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · ${timeAgo}</div>
             </a>`
           }).join("")
-        : (zone.top_headlines || []).slice(0, 4).map(h =>
-            `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h?.substring(0, 80))}</div>`
+        : (zone.top_headlines || []).slice(0, 3).map(h =>
+            `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h?.substring(0, 70))}</div>`
           ).join("")
       if (headlines) {
         headlinesHtml = `<div style="margin-top:8px;">
@@ -785,21 +798,25 @@ export function applyConflictPulseMethods(GlobeController) {
       }
     }
 
-    // Count sibling hexes in the same theater
-    const siblingCount = theater
-      ? this._hexCellData?.filter(h => h.theater === theater).length || 0
-      : 0
-
     // Trend info from parent zone
-    const trendHtml = zone ? `<div style="font:600 10px var(--gt-mono);color:${{surging:"#f44336",active:"#f44336",escalating:"#ff9800",elevated:"#ffc107",baseline:"#66bb6a"}[zone.escalation_trend] || "#ff9800"};letter-spacing:0.5px;margin:4px 0;">${(zone.escalation_trend || "").toUpperCase()} — PULSE ${zone.pulse_score}</div>` : ""
+    const trendColors = {surging:"#f44336",active:"#f44336",escalating:"#ff9800",elevated:"#ffc107",baseline:"#66bb6a"}
+    const trendHtml = zone ? `<div style="font:600 10px var(--gt-mono);color:${trendColors[zone.escalation_trend] || "#ff9800"};letter-spacing:0.5px;margin:4px 0;">${(zone.escalation_trend || "").toUpperCase()} — PULSE ${zone.pulse_score}</div>` : ""
+
+    // Connection line: "Lebanon → Israel-Palestine → Middle East / Iran War"
+    const connectionParts = [localName]
+    if (situation && situation !== localName && situation !== "Unlinked area") connectionParts.push(situation)
+    if (theater) connectionParts.push(theater)
+    const connectionHtml = connectionParts.length > 1
+      ? `<div style="font:400 10px var(--gt-mono,monospace);color:rgba(255,152,0,0.5);margin:4px 0 6px;letter-spacing:0.3px;">${connectionParts.map(p => this._escapeHtml(p)).join(' → ')}</div>`
+      : ""
 
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>${this._escapeHtml(situation)}</div>
-      ${theater ? `<div style="font:500 10px var(--gt-mono);color:#ffa726;letter-spacing:0.5px;margin:2px 0;">${this._escapeHtml(theater)}</div>` : ""}
+      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>${this._escapeHtml(localName)}</div>
+      ${connectionHtml}
       ${trendHtml}
       <div class="detail-grid">
         <div class="detail-field">
-          <span class="detail-label">Articles in cell</span>
+          <span class="detail-label">Articles</span>
           <span class="detail-value">${cell.count}</span>
         </div>
         <div class="detail-field">
@@ -807,16 +824,12 @@ export function applyConflictPulseMethods(GlobeController) {
           <span class="detail-value">${(cell.intensity * 100).toFixed(0)}%</span>
         </div>
         ${zone ? `<div class="detail-field">
-          <span class="detail-label">Zone reports (24h)</span>
+          <span class="detail-label">Reports (24h)</span>
           <span class="detail-value">${zone.count_24h || "—"}</span>
         </div>` : ""}
         ${zone ? `<div class="detail-field">
           <span class="detail-label">Sources</span>
           <span class="detail-value">${zone.source_count || "—"}</span>
-        </div>` : ""}
-        ${siblingCount > 1 ? `<div class="detail-field">
-          <span class="detail-label">Theater cells</span>
-          <span class="detail-value">${siblingCount}</span>
         </div>` : ""}
       </div>
       ${headlinesHtml}
@@ -831,11 +844,53 @@ export function applyConflictPulseMethods(GlobeController) {
     `
     this.detailPanelTarget.style.display = ""
 
-    // Auto-highlight the theater this hex belongs to
+    // Auto-highlight theater + ripple animation
     if (theater) {
       this._highlightedTheater = null
       this.highlightTheater({ currentTarget: { dataset: { theater } } })
+      this._rippleFromHex(cell)
     }
+  }
+
+  // ── Ripple animation: pulse outward from clicked hex ──────
+
+  GlobeController.prototype._rippleFromHex = function(clickedCell) {
+    if (!this._hexCellData?.length) return
+    const Cesium = window.Cesium
+    const ds = this._ds["conflictPulse"]
+    if (!ds) return
+
+    // Find sibling hexes in the same theater, sorted by distance from clicked cell
+    const siblings = this._hexCellData
+      .map((h, i) => {
+        if (h.theater !== clickedCell.theater) return null
+        const d = Math.sqrt((h.lat - clickedCell.lat) ** 2 + (h.lng - clickedCell.lng) ** 2)
+        return { hex: h, idx: i, dist: d }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.dist - b.dist)
+
+    // Animate: stagger the highlight by distance
+    siblings.forEach((s, order) => {
+      const delay = s.dist * 80 // ms per degree of distance
+      const entityId = `cpulse-hex-${s.idx}`
+      const entity = ds.entities.getById(entityId)
+      if (!entity?.polygon) return
+
+      // Flash bright then settle
+      setTimeout(() => {
+        entity.polygon.material = Cesium.Color.fromCssColorString("#ff8f00").withAlpha(0.7)
+        entity.polygon.outlineColor = Cesium.Color.fromCssColorString("#ff6d00")
+        this._requestRender()
+
+        // Settle to highlight color after flash
+        setTimeout(() => {
+          entity.polygon.material = Cesium.Color.fromCssColorString("#ff6d00").withAlpha(0.6)
+          entity.polygon.outlineColor = Cesium.Color.fromCssColorString("#ff6d00").withAlpha(0.9)
+          this._requestRender()
+        }, 200)
+      }, delay)
+    })
   }
 
   // ── Fly to a zone by cell_key ────────────────────────────────

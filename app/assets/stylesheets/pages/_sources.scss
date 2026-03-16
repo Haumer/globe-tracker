@@ -39,10 +39,14 @@
 }
 
 // ── Grid ──────────────────────────────────────────────────
+// 4 columns. Title cell spans 2 cols x 2 rows in the center.
+// Top row: [cell] [TITLE     ] [cell]
+//          [cell] [           ] [cell]
+// Then remaining cells flow in 4-col auto rows.
 
 .bento-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 40px;
@@ -65,6 +69,27 @@
 
   &:hover {
     background: rgba(255, 255, 255, 0.02);
+  }
+
+  // When cell is a link
+  text-decoration: none;
+  color: inherit;
+}
+
+// ── Title Cell — 2x2 center ───────────────────────────────
+
+.bento-cell--title {
+  grid-column: 2 / 4;
+  grid-row: 1 / 3;
+  padding: 48px 36px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  min-height: auto;
+
+  &:hover {
+    background: transparent;
   }
 }
 
@@ -90,33 +115,37 @@
 // ── Badge ─────────────────────────────────────────────────
 
 .bento-badge {
-  font: 600 8px 'JetBrains Mono', monospace;
+  font: 700 9px 'JetBrains Mono', monospace;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  padding: 2px 0;
-  color: rgba(200, 210, 225, 0.25);
+  padding: 3px 8px;
+  border-radius: 3px;
   margin-top: auto;
+  background: rgba(200, 210, 225, 0.06);
+  color: rgba(200, 210, 225, 0.4);
 }
 
-.bento-badge--live     { color: #66bb6a; }
-.bento-badge--free     { color: rgba(79, 195, 247, 0.5); }
-.bento-badge--oss      { color: rgba(255, 213, 79, 0.5); }
-.bento-badge--computed { color: rgba(239, 83, 80, 0.5); }
-.bento-badge--default  { color: rgba(200, 210, 225, 0.2); }
-
-// ── Title Cell ────────────────────────────────────────────
-
-.bento-cell--title {
-  padding: 36px 28px;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  gap: 10px;
-
-  &:hover {
-    background: transparent;
-  }
+.bento-badge--live {
+  color: #81c784;
+  background: rgba(76, 175, 80, 0.12);
 }
+.bento-badge--free {
+  color: #4fc3f7;
+  background: rgba(79, 195, 247, 0.1);
+}
+.bento-badge--oss {
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.1);
+}
+.bento-badge--computed {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.1);
+}
+.bento-badge--default {
+  color: rgba(200, 210, 225, 0.45);
+}
+
+// ── Title Typography ──────────────────────────────────────
 
 .bento-title-label {
   font: 500 9px 'JetBrains Mono', monospace;
@@ -126,7 +155,7 @@
 }
 
 .bento-title {
-  font: 700 28px 'DM Sans', sans-serif;
+  font: 700 32px 'DM Sans', sans-serif;
   color: rgba(220, 230, 245, 0.85);
   line-height: 1.15;
   letter-spacing: -0.8px;
@@ -138,13 +167,13 @@
   color: rgba(200, 210, 225, 0.25);
   line-height: 1.5;
   margin: 0;
-  max-width: 220px;
+  max-width: 260px;
 }
 
 // ── Footer Cell ───────────────────────────────────────────
 
 .bento-cell--footer {
-  grid-column: span 5;
+  grid-column: 1 / -1;
   min-height: 60px;
   justify-content: center;
   align-items: center;
@@ -163,38 +192,28 @@
 
 // ── Responsive ────────────────────────────────────────────
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .bento-grid {
-    grid-template-columns: repeat(4, 1fr);
-    padding: 0 24px;
+    grid-template-columns: repeat(2, 1fr);
+    padding: 0 20px;
+  }
+
+  .bento-cell--title {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   .bento-cell--footer {
-    grid-column: span 4;
+    grid-column: 1 / -1;
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 480px) {
   .bento-grid {
-    grid-template-columns: repeat(3, 1fr);
-    padding: 0 16px;
-  }
-
-  .bento-cell--footer {
-    grid-column: span 3;
+    grid-template-columns: 1fr;
   }
 
   .bento-title {
-    font-size: 24px;
-  }
-}
-
-@media (max-width: 540px) {
-  .bento-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .bento-cell--footer {
-    grid-column: span 2;
+    font-size: 26px;
   }
 }

@@ -49,15 +49,19 @@ class CrossLayerAnalyzer
     insights.concat(earthquake_pipeline_threats)
     insights.concat(weather_flight_disruption)
     insights.concat(conflict_pulse_hotspots)
+    insights.concat(chokepoint_disruptions)
 
     # General-purpose spatiotemporal convergence detection
     # Finds multi-layer hotspots that hardcoded rules don't cover
-    convergences = ConvergenceDetector.detect
-    # Deduplicate: skip convergences that overlap with existing insights (same cell)
-    existing_cells = insights.map { |i| cell_key(i[:lat], i[:lng]) }.to_set
-    convergences.each do |c|
-      key = cell_key(c[:lat], c[:lng])
-      insights << c unless existing_cells.include?(key)
+    begin
+      convergences = ConvergenceDetector.detect
+      existing_cells = insights.map { |i| cell_key(i[:lat], i[:lng]) }.to_set
+      convergences.each do |c|
+        key = cell_key(c[:lat], c[:lng])
+        insights << c unless existing_cells.include?(key)
+      end
+    rescue => e
+      Rails.logger.warn("CrossLayerAnalyzer convergence detection failed: #{e.message}")
     end
 
     insights.sort_by { |i| -severity_score(i[:severity]) }
@@ -697,6 +701,57 @@ class CrossLayerAnalyzer
     end
   rescue => e
     Rails.logger.error("CrossLayerAnalyzer conflict_pulse_hotspots: #{e.message}")
+    []
+  end
+
+  # ── Chokepoint disruption (shipping lane + conflict + commodities)
+
+  def chokepoint_disruptions
+    chokepoints = ChokepointMonitorService.analyze rescue []
+
+    chokepoints.filter_map do |cp|
+      next if cp[:status] == "normal"
+      next if cp[:conflict_pulse].empty?
+
+      top_pulse = cp[:conflict_pulse].max_by { |z| z[:score] }
+      commodity_parts = cp[:commodity_signals].first(3).filter_map do |c|
+        next unless c[:change_pct] && c[:change_pct].abs > 0.5
+        "#{c[:symbol]} #{c[:change_pct] > 0 ? "+" : ""}#{c[:change_pct]}%"
+      end
+
+      flow_parts = []
+      flows = cp[:flows] || {}
+      flows.each do |type, data|
+        next unless data[:pct]
+        flow_parts << "#{data[:pct]}% of world #{type}"
+      end
+
+      severity = cp[:status] == "critical" ? "critical" : (cp[:status] == "elevated" ? "high" : "medium")
+
+      desc = "#{cp[:ships_nearby][:total]} ships nearby"
+      desc += " (#{cp[:ships_nearby][:tankers]} tankers)" if cp[:ships_nearby][:tankers].to_i > 0
+      desc += " — #{flow_parts.join(", ")}" if flow_parts.any?
+      desc += " — #{commodity_parts.join(", ")}" if commodity_parts.any?
+
+      {
+        type: "chokepoint_disruption",
+        severity: severity,
+        title: "#{cp[:name]}: #{top_pulse[:trend]} conflict near #{flow_parts.first || "major shipping lane"}",
+        description: desc,
+        lat: cp[:lat],
+        lng: cp[:lng],
+        entities: {
+          chokepoint: { name: cp[:name], status: cp[:status] },
+          ships: cp[:ships_nearby],
+          flows: flows.transform_values { |f| { pct: f[:pct], note: f[:note] } },
+          commodities: cp[:commodity_signals].first(3),
+          conflict: cp[:conflict_pulse],
+        },
+        detected_at: cp[:checked_at],
+      }
+    end
+  rescue => e
+    Rails.logger.error("CrossLayerAnalyzer chokepoint_disruptions: #{e.message}")
     []
   end
 

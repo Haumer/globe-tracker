@@ -66,6 +66,7 @@ export function applyInsightsMethods(GlobeController) {
       airspace_clearing: "\u{2708}",
       weather_disruption: "\u26C8",
       conflict_pulse: "\u{1F4A5}",
+      chokepoint_disruption: "\u2693",
       convergence: "\u{1F310}",
     }
 
@@ -188,6 +189,7 @@ export function applyInsightsMethods(GlobeController) {
       airspace_clearing: "AIRSPACE + MIL",
       weather_disruption: "WEATHER + AIR",
       conflict_pulse: "DEVELOPING",
+      chokepoint_disruption: "CHOKEPOINT",
       convergence: "CONVERGENCE",
     }
 
@@ -245,6 +247,10 @@ export function applyInsightsMethods(GlobeController) {
           if (ents.cross_layer?.gps_jamming) chips += `<span class="ins-chip ins-chip--jam">${ents.cross_layer.gps_jamming}% jamming</span>`
           if (ents.cross_layer?.internet_outage) chips += `<span class="ins-chip ins-chip--outage">outage: ${ents.cross_layer.internet_outage}</span>`
           if (ents.cross_layer?.fire_hotspots) chips += `<span class="ins-chip ins-chip--fire">${ents.cross_layer.fire_hotspots} fires</span>`
+          if (ents.chokepoint) chips += `<span class="ins-chip ins-chip--cable">${ents.chokepoint.name} (${ents.chokepoint.status})</span>`
+          if (ents.ships?.total) chips += `<span class="ins-chip ins-chip--cable">${ents.ships.total} ships (${ents.ships.tankers || 0} tankers)</span>`
+          if (ents.flows) Object.entries(ents.flows).forEach(([k, v]) => { if (v.pct) chips += `<span class="ins-chip ins-chip--outage">${v.pct}% world ${k}</span>` })
+          if (ents.commodities?.length) ents.commodities.forEach(c => { if (c.change_pct) chips += `<span class="ins-chip ins-chip--${c.change_pct > 0 ? "fire" : "eq"}">${c.symbol} ${c.change_pct > 0 ? "+" : ""}${c.change_pct}%</span>` })
         }
 
         return `<div class="insight-card insight-card--${sev}" data-insight-idx="${idx}">

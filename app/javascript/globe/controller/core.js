@@ -117,6 +117,9 @@ export function applyCoreMethods(GlobeController) {
     this._conflictPulseData = []
     this._conflictPulseEntities = []
     this._conflictPulsePrev = {}
+    this.chokepointsVisible = false
+    this._chokepointData = []
+    this._chokepointEntities = []
     this.trafficVisible = false
     this.trafficArcsVisible = true
     this.trafficBlobsVisible = true
@@ -1073,6 +1076,10 @@ export function applyCoreMethods(GlobeController) {
       { prefix: "pp-", skip: [], handler: (id) => {
         const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
         this.showPowerPlantDetail(d); return true
+      }},
+      { prefix: "choke-", skip: ["choke-zone-", "choke-ships-"], handler: (id) => {
+        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        this.showChokepointDetail(d); return true
       }},
       { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-"], handler: (id) => {
         const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false

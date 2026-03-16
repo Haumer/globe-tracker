@@ -145,6 +145,8 @@ export const GLOBE_TARGETS = [
   "rpTabInsights",
   "financialToggle",
   "qlFinancial",
+  "chokepointsToggle",
+  "qlChokepoints",
   "insightFeedContent",
   "insightFeedCount",
   "entitiesLoading",

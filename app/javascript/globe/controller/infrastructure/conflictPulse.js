@@ -439,13 +439,27 @@ export function applyConflictPulseMethods(GlobeController) {
   // ── Reveal all connected layers ─────────────────────────────
 
   GlobeController.prototype.revealPulseConnections = function(event) {
-    const lat = parseFloat(event.currentTarget.dataset.lat)
-    const lng = parseFloat(event.currentTarget.dataset.lng)
+    const btn = event.currentTarget
+
+    // Toggle: if already revealed, hide all enabled layers
+    if (btn.dataset.revealed === "true") {
+      (this._revealedLayers || []).forEach(toggle => this._disableLayer(toggle))
+      this._revealedLayers = []
+      btn.dataset.revealed = "false"
+      btn.innerHTML = `<i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal All Connected Layers`
+      btn.style.background = "rgba(244,67,54,0.2)"
+      btn.style.borderColor = "rgba(244,67,54,0.4)"
+      btn.style.color = "#f44336"
+      this._toast("Layers hidden", "success")
+      return
+    }
+
+    const lat = parseFloat(btn.dataset.lat)
+    const lng = parseFloat(btn.dataset.lng)
     let signals = {}
-    try { signals = JSON.parse(event.currentTarget.dataset.signals) } catch {}
+    try { signals = JSON.parse(btn.dataset.signals) } catch {}
 
     const Cesium = window.Cesium
-    const btn = event.currentTarget
 
     // Step 1: Fly to area FIRST — this sets the viewport bounds
     // Layers enabled after arrival will only fetch data for the visible area
@@ -483,10 +497,19 @@ export function applyConflictPulseMethods(GlobeController) {
         this._enableLayer("cablesToggle")
         this._enableLayer("chokepointsToggle")
 
-        btn.innerHTML = `<i class="fa-solid fa-check" style="margin-right:4px;"></i>Layers activated`
+        // Track which layers we enabled so we can hide them later
+        this._revealedLayers = enabled.map(name => {
+          const map = { "flights": "flightsToggle", "conflicts": "conflictsToggle", "military flights": "flightsToggle", "gps jamming": "gpsJammingToggle", "fire hotspots": "firesToggle", "known conflict zone": "conflictsToggle", "internet outage": "internetOutagesToggle" }
+          return map[name]
+        }).filter(Boolean)
+        this._revealedLayers.push("cablesToggle", "chokepointsToggle")
+
+        btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Revealed Layers`
         btn.style.background = "rgba(76,175,80,0.2)"
         btn.style.borderColor = "rgba(76,175,80,0.4)"
         btn.style.color = "#4caf50"
+        btn.disabled = false
+        btn.dataset.revealed = "true"
 
         this._toast(`Revealed: ${enabled.join(", ")}`, "success")
       },
@@ -502,6 +525,20 @@ export function applyConflictPulseMethods(GlobeController) {
       const toggle = this[targetName]
       if (toggle && !toggle.checked) {
         toggle.checked = true
+        toggle.dispatchEvent(new Event("change"))
+      }
+    }
+  }
+
+  // ── Helper: disable a layer toggle ──────────────────────────
+
+  GlobeController.prototype._disableLayer = function(toggleName) {
+    const targetName = `${toggleName}Target`
+    const hasTarget = `has${toggleName[0].toUpperCase()}${toggleName.slice(1)}Target`
+    if (this[hasTarget]) {
+      const toggle = this[targetName]
+      if (toggle && toggle.checked) {
+        toggle.checked = false
         toggle.dispatchEvent(new Event("change"))
       }
     }

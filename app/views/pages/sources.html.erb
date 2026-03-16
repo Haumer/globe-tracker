@@ -356,6 +356,36 @@
           link: "https://github.com/wri/global-power-plant-database"
         }
       ]
+    },
+    "Financial & Markets" => {
+      accent: "#66bb6a",
+      comment: "FINANCIAL",
+      items: [
+        {
+          icon: "fa-solid fa-chart-line",
+          title: "Alpha Vantage",
+          url_label: "alphavantage.co",
+          status: "API", status_class: nil,
+          description: "Real-time and historical commodity prices: crude oil (WTI, Brent),
+        natural gas, gold, silver, copper, wheat. Free tier provides 25 API
+        calls/day, refreshed every 6 hours with smart rotation across priority commodities.",
+          tags: ["REST API", ["API Key", "auth"], "JSON", ["Free Tier", "free"]],
+          category: "Financial",
+          link: "https://www.alphavantage.co"
+        },
+        {
+          icon: "fa-solid fa-coins",
+          title: "European Central Bank",
+          url_label: "ecb.europa.eu",
+          status: "FREE", status_class: "free",
+          description: "Daily reference exchange rates for 30+ currencies against EUR.
+        Converted to USD-based rates for 10 major currencies (EUR, GBP, JPY,
+        CNY, CHF, AUD, CAD, RUB, INR, BRL). Updated daily, no API key required.",
+          tags: ["XML", ["No Key", "free"], "Daily Update"],
+          category: "Financial",
+          link: "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+        }
+      ]
     }
   }
 %>

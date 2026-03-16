@@ -43,8 +43,13 @@ class CommodityPriceService
     refresh
   end
 
+  # Alpha Vantage free tier: 25 calls/day. With ~7 priority commodities fetched
+  # per cycle, refresh every 4 hours = 6 cycles × 7 calls = 42 → too many.
+  # Every 6 hours = 4 cycles × 7 = 28 → safe with headroom.
+  REFRESH_INTERVAL = 6.hours
+
   def self.stale?
-    CommodityPrice.maximum(:recorded_at).nil? || CommodityPrice.maximum(:recorded_at) < 1.hour.ago
+    CommodityPrice.maximum(:recorded_at).nil? || CommodityPrice.maximum(:recorded_at) < REFRESH_INTERVAL.ago
   end
 
   def refresh
@@ -75,11 +80,26 @@ class CommodityPriceService
       non_priority = ALPHA_VANTAGE_COMMODITIES.keys - PRIORITY_SYMBOLS
       symbols_this_cycle.concat(non_priority.select.with_index { |_, i| i % 3 == cycle })
 
+      av_calls_today = Rails.cache.read("av_calls_today") || 0
+      av_call_date = Rails.cache.read("av_call_date")
+      if av_call_date != Date.current.to_s
+        av_calls_today = 0
+        Rails.cache.write("av_call_date", Date.current.to_s, expires_in: 2.days)
+      end
+
       symbols_this_cycle.each do |symbol|
         config = ALPHA_VANTAGE_COMMODITIES[symbol]
         next unless config[:av_fn]
 
+        # Hard stop at 20 calls/day (leave 5 headroom from 25 limit)
+        if av_calls_today >= 20
+          Rails.logger.info("Alpha Vantage: daily limit reached (#{av_calls_today}/20), skipping #{symbol}")
+          next
+        end
+
         price = fetch_alpha_vantage_commodity(api_key, config)
+        av_calls_today += 1
+        Rails.cache.write("av_calls_today", av_calls_today, expires_in: 2.days)
         next unless price
 
         prev = CommodityPrice.where(symbol: symbol).order(recorded_at: :desc).first

@@ -132,6 +132,17 @@ class AdminController < ApplicationController
       conflict_events: ConflictEvent.maximum(:updated_at),
       internet_outages: InternetOutage.maximum(:updated_at),
       airports: Airport.maximum(:fetched_at),
+      commodities: CommodityPrice.maximum(:recorded_at),
+      weather_alerts: WeatherAlert.maximum(:fetched_at),
+      notams: Notam.maximum(:fetched_at),
+    }
+
+    # API usage tracking
+    @api_usage = {
+      alpha_vantage: { calls_today: Rails.cache.read("av_calls_today") || 0, daily_limit: 20 },
+      openai: { key_set: ENV["OPENAI_API_KEY"].present? },
+      news_enriched: NewsEvent.where(ai_enriched: true).where("published_at > ?", 24.hours.ago).count,
+      news_unenriched: NewsEvent.where(ai_enriched: [nil, false]).where("published_at > ?", 48.hours.ago).count,
     }
   end
 

@@ -29,13 +29,17 @@ class ConflictPulseService
     articles = NewsEvent.where("published_at > ?", 7.days.ago)
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
-      .select(:id, :title, :url, :latitude, :longitude, :tone, :source, :category,
+      .select(:id, :title, :url, :name, :latitude, :longitude, :tone, :source, :category,
               :threat_level, :credibility, :story_cluster_id, :published_at)
 
     # Grid into 2° cells — use headline-detected event location when it differs from article location
     cells = Hash.new { |h, k| h[k] = [] }
+    # Obvious non-conflict keywords to filter out miscategorized articles
+    noise_patterns = /(oscar|oscara|academy award|grammy|super bowl|world cup|champions league|europa league|\bnba\b|\bnfl\b|\bmlb\b|tennis|golf tournament|cricket match|red carpet|box office|best picture|best actor|best actress|best film)/i
+
     articles.find_each do |a|
       next if a.tone && a.tone.abs < MIN_TONE
+      next if a.title&.match?(noise_patterns)
       # Check if headline mentions a conflict region far from the article's stored location
       event_loc = detect_event_location(a.title)
       if event_loc
@@ -66,8 +70,11 @@ class ConflictPulseService
 
       next if count_24h == 0 && articles_48h.size < MIN_ARTICLES
 
-      # Source diversity (distinct sources in 24h) — require multi-source
-      sources_24h = articles_24h.map(&:source).compact.uniq
+      # Source diversity — use outlet name (not pipeline label) for true diversity
+      # "rss" is one pipeline but serves 120+ outlets (Reuters, BBC, Al Jazeera etc.)
+      outlet_names = articles_24h.filter_map(&:name).map { |n| n.split(" (").first.strip }.uniq
+      # Fall back to pipeline source if no names
+      sources_24h = outlet_names.any? ? outlet_names : articles_24h.map(&:source).compact.uniq
       next if sources_24h.size < MIN_SOURCES
 
       # Weighted article count (tier 1 = 3x, tier 2 = 2x, etc.)

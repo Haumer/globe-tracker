@@ -47,11 +47,16 @@ module Api
       grouped = events.group_by(&:story_cluster_id)
 
       grouped.map do |cluster_id, group|
-        lead = group.first
+        # For multi-article clusters, pick the best lead (highest credibility/priority)
+        lead = group.size > 1 ? group.max_by { |a| a[:priority]&.to_f || 0 } : group.first
         entry = serialize_event(lead)
         if cluster_id.present? && group.size > 1
-          entry[:source_count] = group.size
-          entry[:sources] = group.map(&:source).uniq
+          # Filter out junk single-source clusters (e.g., GDELT location-only dupes)
+          unique_sources = group.map(&:source).compact.uniq.reject(&:blank?)
+          if unique_sources.size > 1
+            entry[:source_count] = group.size
+            entry[:sources] = unique_sources.map { |s| s.split("/").first.strip }
+          end
         end
         entry
       end

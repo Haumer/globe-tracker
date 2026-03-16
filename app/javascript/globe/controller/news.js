@@ -62,8 +62,8 @@ export function applyNewsMethods(GlobeController) {
     if (this._timelineActive) return
     this._toast("Loading news...")
     try {
-      const clustered = this.hasNewsClusterToggleTarget && this.newsClusterToggleTarget.checked
-      const url = clustered ? "/api/news?clustered=true" : "/api/news"
+      // Always use clustered mode — dedup by default. Toggle controls UI grouping.
+      const url = "/api/news?clustered=true"
       const resp = await fetch(url)
       if (!resp.ok) { console.error("News API error:", resp.status); this._toastHide(); return }
       const events = await resp.json()
@@ -718,9 +718,11 @@ export function applyNewsMethods(GlobeController) {
       const title = this._escapeHtml(ev.title || ev.name || "Untitled")
       const isRead = readSet.has(ev.url)
       const readClass = isRead ? " nf-card--read" : ""
-      const clusterBadge = ev.source_count && ev.source_count > 1
-        ? `<span class="nf-card-cluster">${ev.source_count} sources</span>`
-        : ""
+      let clusterBadge = ""
+      if (ev.source_count && ev.source_count > 1) {
+        const sourceNames = (ev.sources || []).filter(s => s && s !== "").map(s => this._escapeHtml(s)).join(", ")
+        clusterBadge = `<span class="nf-card-cluster" title="${sourceNames}">${ev.source_count} sources · ${sourceNames}</span>`
+      }
 
       return `<div class="nf-card${readClass}" data-action="click->globe#focusNewsArticle" data-news-idx="${ev._idx}" data-news-url="${this._escapeHtml(ev.url || "")}"
         <div class="nf-card-bar" style="background:${color};"></div>

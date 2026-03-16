@@ -253,37 +253,39 @@
 // Shape + color for colorblind accessibility: circle=fresh, diamond=warm, square=stale
 .freshness-dot {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 6px;
-  height: 6px;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
   pointer-events: none;
 
   &[data-freshness="fresh"] {
     background: #66bb6a;
-    box-shadow: 0 0 4px #66bb6a;
-    border-radius: 50%; // circle
+    box-shadow: 0 0 6px #66bb6a;
+    border-radius: 50%;
   }
   &[data-freshness="warm"] {
     background: #ffa726;
-    box-shadow: 0 0 4px #ffa726;
+    box-shadow: 0 0 6px #ffa726;
     border-radius: 50%;
-    transform: rotate(45deg); // diamond
-    width: 5px;
-    height: 5px;
+    transform: translateY(-50%) rotate(45deg);
+    width: 6px;
+    height: 6px;
   }
   &[data-freshness="stale"] {
     background: #ef5350;
-    box-shadow: 0 0 4px #ef5350;
-    border-radius: 1px; // square
+    box-shadow: 0 0 6px #ef5350;
+    border-radius: 1px;
   }
 }
 
 .freshness-age {
   position: absolute;
-  top: 1px;
-  right: 12px;
-  font-size: 9px;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  font: 600 8px 'JetBrains Mono', monospace;
   line-height: 1;
   pointer-events: none;
 

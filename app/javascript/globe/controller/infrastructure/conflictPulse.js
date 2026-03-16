@@ -8,8 +8,8 @@ export function applyConflictPulseMethods(GlobeController) {
     this._conflictPulseData = []
     this._conflictPulseEntities = []
     this._conflictPulsePrev = {}  // track previous state for surge detection
-    this._strikeArcsVisible = true
-    this._hexTheaterVisible = true
+    this._strikeArcsVisible = false
+    this._hexTheaterVisible = false
     this._fetchConflictPulse()
     this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000) // 10 min
   }
@@ -193,11 +193,11 @@ export function applyConflictPulseMethods(GlobeController) {
           id: `cpulse-arc-lbl-${idx}`,
           position: arcPositions[midIdx],
           label: {
-            text: `${arc.from_name}→${arc.to_name} (${arc.count})`,
-            font: "9px monospace",
-            fillColor: arcColor.withAlpha(0.7),
+            text: `${arc.from_name} → ${arc.to_name} (${arc.count})`,
+            font: "bold 10px 'JetBrains Mono', monospace",
+            fillColor: Cesium.Color.WHITE.withAlpha(0.8),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -286,13 +286,16 @@ export function applyConflictPulseMethods(GlobeController) {
         this._conflictPulseEntities.push(core)
       }
 
+      // Trend indicator for the icon
+      const trendArrow = { surging: "▲", escalating: "↗", elevated: "→", active: "●", baseline: "↓" }[zone.escalation_trend] || ""
+
       // Clickable billboard — always shown, size varies by tier
-      const iconSize = score >= 70 ? 36 : (score >= 50 ? 32 : 24)
+      const iconSize = score >= 70 ? 38 : (score >= 50 ? 34 : 28)
       const point = ds.entities.add({
         id: `cpulse-${idx}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
         billboard: {
-          image: this._makePulseIcon("", color.toCssColorString(), score),
+          image: this._makePulseIcon(trendArrow, color.toCssColorString(), score),
           width: iconSize,
           height: iconSize,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -303,18 +306,18 @@ export function applyConflictPulseMethods(GlobeController) {
         label: {
           text: zone.situation_name
             ? `${zone.situation_name.toUpperCase()} · ${score}`
-            : (score >= 50 ? `${zone.escalation_trend.toUpperCase()} ${score}` : `${score}`),
-          font: score >= 50 ? "bold 11px monospace" : "bold 9px monospace",
-          fillColor: color.withAlpha(score >= 50 ? 0.95 : 0.7),
+            : `${(zone.escalation_trend || "").toUpperCase()} ${score}`,
+          font: "bold 12px 'JetBrains Mono', monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 3,
+          outlineWidth: 4,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 4),
+          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 6),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, score >= 50 ? 0.3 : 0.2),
-          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, score >= 50 ? 1.5e7 : 8e6, 0.0),
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.35),
+          translucencyByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1.2e7, 0.0),
         },
       })
       this._conflictPulseEntities.push(point)
@@ -392,31 +395,38 @@ export function applyConflictPulseMethods(GlobeController) {
 
   // ── Icon generation ─────────────────────────────────────────
 
-  GlobeController.prototype._makePulseIcon = function(icon, color, score) {
-    const key = `pulse-${icon}-${color}-${score}`
+  GlobeController.prototype._makePulseIcon = function(trendArrow, color, score) {
+    const key = `pulse-${trendArrow}-${color}-${score}`
     if (this._iconCache?.[key]) return this._iconCache[key]
     if (!this._iconCache) this._iconCache = {}
 
-    const size = 32
+    const size = 40
     const canvas = document.createElement("canvas")
     canvas.width = size; canvas.height = size
     const ctx = canvas.getContext("2d")
 
-    // Circle background
+    // Circle background with subtle gradient
     ctx.beginPath()
-    ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2)
-    ctx.fillStyle = "rgba(0,0,0,0.8)"
+    ctx.arc(size / 2, size / 2, size / 2 - 1.5, 0, Math.PI * 2)
+    ctx.fillStyle = "rgba(0,0,0,0.85)"
     ctx.fill()
     ctx.strokeStyle = color
     ctx.lineWidth = 2.5
     ctx.stroke()
 
     // Score text
-    ctx.font = "bold 13px monospace"
+    ctx.font = "bold 14px 'JetBrains Mono', monospace"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.fillStyle = color
-    ctx.fillText(score, size / 2, size / 2)
+    ctx.fillStyle = "#fff"
+    ctx.fillText(score, size / 2, trendArrow ? size / 2 - 3 : size / 2)
+
+    // Trend arrow below score
+    if (trendArrow) {
+      ctx.font = "bold 10px sans-serif"
+      ctx.fillStyle = color
+      ctx.fillText(trendArrow, size / 2, size / 2 + 10)
+    }
 
     const url = canvas.toDataURL()
     this._iconCache[key] = url

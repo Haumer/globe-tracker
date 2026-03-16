@@ -725,7 +725,7 @@ export function applyFlightMethods(GlobeController) {
         point: { pixelSize: 6, color: Cesium.Color.fromCssColorString("#ce93d8"), outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
         label: {
           text: `${data.callsign || icao} (${new Date(first.t * 1000).toISOString().slice(11, 16)} UTC)`,
-          font: "10px monospace",
+          font: "10px 'JetBrains Mono', monospace",
           fillColor: Cesium.Color.fromCssColorString("#ce93d8"),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,

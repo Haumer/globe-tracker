@@ -105,7 +105,7 @@ export function applyFinancialMethods(GlobeController) {
     ctx.stroke()
 
     // Symbol icon
-    ctx.font = isCommodity ? "14px sans-serif" : "bold 12px monospace"
+    ctx.font = isCommodity ? "14px sans-serif" : "bold 12px 'JetBrains Mono', monospace"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
     ctx.fillStyle = color

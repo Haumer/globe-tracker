@@ -106,7 +106,7 @@ export function applyInsightsMethods(GlobeController) {
         },
         label: {
           text: insight.title.length > 40 ? insight.title.slice(0, 37) + "..." : insight.title,
-          font: "11px monospace",
+          font: "11px 'JetBrains Mono', monospace",
           fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,

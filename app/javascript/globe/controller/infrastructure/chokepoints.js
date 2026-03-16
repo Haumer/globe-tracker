@@ -78,7 +78,7 @@ export function applyChokepointsMethods(GlobeController) {
         },
         label: {
           text: cp.name,
-          font: "bold 10px monospace",
+          font: "bold 10px 'JetBrains Mono', monospace",
           fillColor: color.withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
@@ -100,7 +100,7 @@ export function applyChokepointsMethods(GlobeController) {
           position: Cesium.Cartesian3.fromDegrees(cp.lng, cp.lat, 4500),
           label: {
             text: `${cp.ships_nearby.total} ships`,
-            font: "9px monospace",
+            font: "10px 'JetBrains Mono', monospace",
             fillColor: Cesium.Color.fromCssColorString("#26c6da").withAlpha(0.8),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,

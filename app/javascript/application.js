@@ -4,7 +4,8 @@ import "controllers"
 import "@popperjs/core"
 import "bootstrap"
 import { connectAlertsChannel } from "channels/alerts_channel"
+import { connectEventsChannel } from "channels/events_channel"
 
-// Connect ActionCable alerts when DOM is ready
-document.addEventListener("turbo:load", () => connectAlertsChannel())
-document.addEventListener("DOMContentLoaded", () => connectAlertsChannel())
+// Connect ActionCable channels when DOM is ready
+document.addEventListener("turbo:load", () => { connectAlertsChannel(); connectEventsChannel() })
+document.addEventListener("DOMContentLoaded", () => { connectAlertsChannel(); connectEventsChannel() })

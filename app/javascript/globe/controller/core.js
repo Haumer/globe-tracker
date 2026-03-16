@@ -396,6 +396,18 @@ export function applyCoreMethods(GlobeController) {
     this._startConflictPulse()
     this._startMiniTimeline()
 
+    // Listen for real-time breaking events from ActionCable
+    document.addEventListener("globe:breaking-event", (e) => {
+      const data = e.detail
+      if (data.type === "earthquake" && this.earthquakesVisible) {
+        // Refresh earthquake data immediately
+        this.fetchEarthquakes?.()
+      } else if (data.type === "conflict_escalation") {
+        // Refresh conflict pulse
+        this._fetchConflictPulse?.()
+      }
+    })
+
     // Start animation loop
     this.lastAnimTime = performance.now()
     this.animate()

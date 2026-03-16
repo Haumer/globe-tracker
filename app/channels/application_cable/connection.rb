@@ -3,17 +3,15 @@ module ApplicationCable
     identified_by :current_user
 
     def connect
-      self.current_user = find_verified_user
+      self.current_user = find_user
     end
 
     private
 
-    def find_verified_user
-      if (user = env["warden"]&.user)
-        user
-      else
-        reject_unauthorized_connection
-      end
+    def find_user
+      # Allow anonymous connections for public broadcasts (earthquakes, conflicts)
+      # Signed-in users also get per-user alert channel
+      env["warden"]&.user
     end
   end
 end

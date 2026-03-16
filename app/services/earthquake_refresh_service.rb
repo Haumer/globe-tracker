@@ -47,6 +47,19 @@ class EarthquakeRefreshService
     Earthquake.upsert_all(records, unique_by: :external_id)
   end
 
+  def after_upsert(records)
+    # Broadcast significant new earthquakes (M5.0+) via ActionCable
+    records.each do |r|
+      next unless r[:magnitude] && r[:magnitude] >= 5.0
+      # Only broadcast if this is genuinely new (not seen in last hour)
+      next if Rails.cache.read("eq_broadcast:#{r[:external_id]}")
+      Rails.cache.write("eq_broadcast:#{r[:external_id]}", true, expires_in: 1.hour)
+
+      quake = Earthquake.find_by(external_id: r[:external_id])
+      EventsChannel.earthquake(quake) if quake
+    end
+  end
+
   def timeline_config
     { event_type: "earthquake", model_class: Earthquake, time_column: :event_time }
   end

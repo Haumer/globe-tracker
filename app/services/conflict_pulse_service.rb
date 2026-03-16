@@ -15,14 +15,58 @@ class ConflictPulseService
   # High-propaganda sources get discounted further
   HIGH_RISK_DISCOUNT = 0.3
 
+  # Situation names — map cell regions to human-readable labels
+  SITUATION_NAMES = {
+    "Israel-Palestine" => { lat: 30..33, lng: 34..36 },
+    "Iran Theater" => { lat: 34..37, lng: 50..54 },
+    "Lebanon-Israel Border" => { lat: 33..35, lng: 35..36 },
+    "Eastern Ukraine Front" => { lat: 48..52, lng: 34..40 },
+    "Kyiv Region" => { lat: 50..52, lng: 29..32 },
+    "Moscow / Western Russia" => { lat: 54..57, lng: 36..40 },
+    "Iraq Theater" => { lat: 32..35, lng: 43..46 },
+    "Gaza Strip" => { lat: 30..32, lng: 34..35 },
+    "Strait of Hormuz" => { lat: 25..28, lng: 55..58 },
+    "Red Sea / Bab el-Mandeb" => { lat: 12..16, lng: 42..46 },
+    "Gulf States" => { lat: 23..26, lng: 46..56 },
+    "Sudan / Khartoum" => { lat: 14..17, lng: 31..34 },
+    "Pakistan-Afghanistan" => { lat: 32..36, lng: 68..74 },
+    "Myanmar" => { lat: 18..22, lng: 94..98 },
+    "Cuba" => { lat: 22..24, lng: -84..-82 },
+    "Washington DC" => { lat: 38..40, lng: -78..-76 },
+    "Taiwan Strait" => { lat: 23..26, lng: 118..122 },
+    "Korean Peninsula" => { lat: 37..40, lng: 125..128 },
+  }.freeze
+
   class << self
     def analyze
-      Rails.cache.fetch(CACHE_KEY, expires_in: 10.minutes) { new.compute }
+      Rails.cache.fetch(CACHE_KEY, expires_in: 10.minutes) { new.compute_full }
     end
 
     def invalidate
       Rails.cache.delete(CACHE_KEY)
     end
+  end
+
+  def compute_full
+    zones = compute
+
+    # Assign situation names to zones
+    zones.each { |z| z[:situation_name] = resolve_situation_name(z) }
+
+    # Extract strike arcs from all conflict headlines (last 7 days)
+    all_headlines = NewsEvent.where("published_at > ?", 7.days.ago)
+      .where(category: CONFLICT_CATEGORIES)
+      .where.not(title: [nil, ""])
+      .pluck(:title)
+    strike_arcs = StrikeArcExtractor.extract(all_headlines)
+
+    # Build hex cells for theater visualization (lower threshold than zones)
+    hex_cells = build_hex_cells
+
+    { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }
+  rescue => e
+    Rails.logger.error("ConflictPulseService compute_full: #{e.message}")
+    { zones: compute, strike_arcs: [], hex_cells: [] }
   end
 
   def compute
@@ -292,5 +336,58 @@ class ConflictPulseService
   rescue => e
     Rails.logger.warn("ConflictPulseService cross-layer error: #{e.message}")
     {}
+  end
+
+  # Build hex cells for theater visualization — lower threshold than zones
+  def build_hex_cells
+    articles = NewsEvent.where("published_at > ?", 7.days.ago)
+      .where.not(latitude: nil, longitude: nil)
+      .where(category: CONFLICT_CATEGORIES)
+      .select(:id, :latitude, :longitude, :published_at, :tone)
+
+    cells = Hash.new(0)
+    articles.find_each do |a|
+      next if a.tone && a.tone.abs < MIN_TONE
+      key = cell_key(a.latitude, a.longitude)
+      cells[key] += 1
+    end
+
+    return [] if cells.empty?
+    max_count = cells.values.max.to_f
+
+    cells.filter_map do |key, count|
+      next if count < 2
+      lat, lng = key.split(",").map(&:to_f)
+      {
+        lat: lat + CELL_SIZE / 2.0,
+        lng: lng + CELL_SIZE / 2.0,
+        count: count,
+        intensity: (count / max_count).round(2),
+      }
+    end
+  end
+
+  def resolve_situation_name(zone)
+    lat = zone[:lat]
+    lng = zone[:lng]
+
+    # Check static situation names
+    SITUATION_NAMES.each do |name, bounds|
+      return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+    end
+
+    # Fallback: extract most-mentioned location from top headlines
+    headlines = (zone[:top_headlines] || []).join(" ").downcase
+    best_match = nil
+    best_count = 0
+    StrikeArcExtractor::ACTORS.each do |keyword, info|
+      count = headlines.scan(keyword).size
+      if count > best_count
+        best_count = count
+        best_match = info[:name]
+      end
+    end
+
+    best_match ? "#{best_match} Region" : nil
   end
 end

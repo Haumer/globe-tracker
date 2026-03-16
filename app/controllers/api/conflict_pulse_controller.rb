@@ -3,8 +3,8 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      zones = ConflictPulseService.analyze
-      render json: { zones: zones, count: zones.size }
+      data = ConflictPulseService.analyze
+      render json: data.merge(count: data[:zones]&.size || 0)
     end
   end
 end

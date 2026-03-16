@@ -6,7 +6,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
   end
 
   test "returns empty array with no conflict news" do
-    result = ConflictPulseService.analyze
+    data = ConflictPulseService.analyze; result = data[:zones] || []
     assert_equal [], result
   end
 
@@ -26,7 +26,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
       )
     end
 
-    result = ConflictPulseService.analyze
+    data = ConflictPulseService.analyze; result = data[:zones] || []
 
     assert result.any?, "Should detect at least one pulse zone"
     zone = result.first
@@ -89,7 +89,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
       )
     end
 
-    result = ConflictPulseService.analyze
+    data = ConflictPulseService.analyze; result = data[:zones] || []
     assert result.any?
     zone = result.first
     assert zone[:spike_ratio] > 2.0, "Spike ratio should reflect frequency surge"
@@ -125,7 +125,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
       )
     end
 
-    result = ConflictPulseService.analyze
+    data = ConflictPulseService.analyze; result = data[:zones] || []
     assert result.any?
     zone = result.first
     assert zone[:cross_layer_signals][:military_flights], "Should detect military flights"

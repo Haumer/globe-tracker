@@ -50,6 +50,8 @@ export function applyConflictPulseMethods(GlobeController) {
       zones.forEach(z => { this._conflictPulsePrev[z.cell_key] = z })
 
       this._conflictPulseData = zones
+      this._strikeArcData = data.strike_arcs || []
+      this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
     } catch (e) {
       console.warn("Conflict pulse fetch failed:", e)
@@ -123,6 +125,86 @@ export function applyConflictPulseMethods(GlobeController) {
     this._pulsingRings = []
 
     ds.entities.suspendEvents()
+
+    // ── Layer 1: Hex theater (background — shows geographic extent) ──
+    if (this._hexCellData?.length) {
+      const hexRadius = 1.0 // degrees, matches 2° CELL_SIZE
+      this._hexCellData.forEach((cell, idx) => {
+        if (cell.intensity < 0.05) return
+        const t = cell.intensity
+        // Color: yellow (low) → orange (mid) → red (high)
+        const r = Math.round(255 * Math.min(0.6 + t * 0.4, 1))
+        const g = Math.round(255 * Math.max(0.3 - t * 0.25, 0))
+        const b = 0
+        const hexColor = Cesium.Color.fromBytes(r, g, b)
+
+        const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
+        const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
+
+        const hex = ds.entities.add({
+          id: `cpulse-hex-${idx}`,
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(positions),
+            material: hexColor.withAlpha(0.03 + t * 0.12),
+            outline: true,
+            outlineColor: hexColor.withAlpha(0.1 + t * 0.3),
+            outlineWidth: 1,
+            height: 4800,
+          },
+        })
+        this._conflictPulseEntities.push(hex)
+      })
+    }
+
+    // ── Layer 2: Strike arcs (directional attack flows) ──
+    if (this._strikeArcData?.length) {
+      this._strikeArcData.forEach((arc, idx) => {
+        if (arc.count < 2) return
+        const t = Math.min(arc.count / 20, 1)
+        const arcColor = Cesium.Color.fromCssColorString("#f44336")
+
+        // Build great-circle arc positions
+        const arcPositions = this._buildArcPositions(arc.from_lat, arc.from_lng, arc.to_lat, arc.to_lng, 30)
+        if (!arcPositions.length) return
+
+        const line = ds.entities.add({
+          id: `cpulse-arc-${idx}`,
+          polyline: {
+            positions: arcPositions,
+            width: Math.min(1.5 + arc.count * 0.2, 5),
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.15,
+              color: arcColor.withAlpha(0.3 + t * 0.4),
+            }),
+          },
+        })
+        this._conflictPulseEntities.push(line)
+
+        // Small label at midpoint
+        const midIdx = Math.floor(arcPositions.length / 2)
+        const midLabel = ds.entities.add({
+          id: `cpulse-arc-lbl-${idx}`,
+          position: arcPositions[midIdx],
+          label: {
+            text: `${arc.from_name}→${arc.to_name} (${arc.count})`,
+            font: "9px monospace",
+            fillColor: arcColor.withAlpha(0.7),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            pixelOffset: new Cesium.Cartesian2(0, -6),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(5e5, 0.8, 8e6, 0.0),
+            translucencyByDistance: new Cesium.NearFarScalar(5e5, 0.8, 8e6, 0.0),
+          },
+        })
+        this._conflictPulseEntities.push(midLabel)
+      })
+    }
+
+    // ── Layer 3: Situation nodes (pulse zones with names) ──
     this._conflictPulseData.forEach((zone, idx) => {
       const score = zone.pulse_score
       const t = Math.min((score - 20) / 60, 1)
@@ -212,7 +294,9 @@ export function applyConflictPulseMethods(GlobeController) {
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1.0, 1e7, 0.4),
         },
         label: {
-          text: score >= 50 ? `${zone.escalation_trend.toUpperCase()} ${score}` : `${score}`,
+          text: zone.situation_name
+            ? `${zone.situation_name.toUpperCase()} · ${score}`
+            : (score >= 50 ? `${zone.escalation_trend.toUpperCase()} ${score}` : `${score}`),
           font: score >= 50 ? "bold 11px monospace" : "bold 9px monospace",
           fillColor: color.withAlpha(score >= 50 ? 0.95 : 0.7),
           outlineColor: Cesium.Color.BLACK,
@@ -277,6 +361,26 @@ export function applyConflictPulseMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._conflictPulseEntities = []
+  }
+
+  // ── Great-circle arc builder ─────────────────────────────────
+
+  GlobeController.prototype._buildArcPositions = function(lat1, lng1, lat2, lng2, segments) {
+    const Cesium = window.Cesium
+    const positions = []
+    const start = Cesium.Cartographic.fromDegrees(lng1, lat1)
+    const end = Cesium.Cartographic.fromDegrees(lng2, lat2)
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      // SLERP on the ellipsoid
+      const lat = lat1 + (lat2 - lat1) * t
+      const lng = lng1 + (lng2 - lng1) * t
+      // Add altitude arc (peaks in the middle for visual clarity)
+      const arcHeight = Math.sin(t * Math.PI) * 200000 // 200km peak
+      positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, arcHeight))
+    }
+    return positions
   }
 
   // ── Icon generation ─────────────────────────────────────────
@@ -361,7 +465,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid fa-bolt" style="margin-right:6px;"></i>DEVELOPING SITUATION
+        <i class="fa-solid fa-bolt" style="margin-right:6px;"></i>${zone.situation_name ? this._escapeHtml(zone.situation_name) : "DEVELOPING SITUATION"}
       </div>
       <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
         ${zone.escalation_trend.toUpperCase()} — PULSE ${zone.pulse_score}

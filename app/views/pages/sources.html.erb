@@ -1,39 +1,41 @@
 <%
   sources = [
-    { icon: "fa-solid fa-plane",            title: "ADS-B Exchange",        status: "LIVE",     status_class: "live",     size: "wide",  link: "https://api.adsb.lol" },
-    { icon: "fa-solid fa-tower-broadcast",  title: "OpenSky Network",       status: "API",      link: "https://opensky-network.org" },
-    { icon: "fa-solid fa-ship",             title: "AIS Stream",            status: "LIVE",     status_class: "live",     link: "https://aisstream.io" },
-    { icon: "fa-solid fa-satellite",        title: "CelesTrak",             status: "API",      link: "https://celestrak.org" },
-    { icon: "fa-solid fa-house-crack",      title: "USGS Earthquakes",      status: "LIVE",     status_class: "live",     link: "https://earthquake.usgs.gov" },
-    { icon: "fa-solid fa-fire",             title: "NASA FIRMS",            status: "API",      link: "https://firms.modaps.eosdis.nasa.gov" },
-    { icon: "fa-solid fa-newspaper",        title: "GDELT Project",         status: "LIVE",     status_class: "live",     size: "wide",  link: "https://gdeltproject.org" },
-    { icon: "fa-solid fa-rss",              title: "Direct RSS Feeds",      status: "RSS",      subtitle: "16 tier-1/2/3 outlets" },
-    { icon: "fa-solid fa-rss",              title: "Multi-source News",     status: "API",      subtitle: "6 aggregated APIs" },
+    { icon: "fa-solid fa-plane",            title: "ADS-B Exchange",        status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-tower-broadcast",  title: "OpenSky Network",       status: "API" },
+    { icon: "fa-solid fa-ship",             title: "AIS Stream",            status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-satellite",        title: "CelesTrak",             status: "API" },
+    { icon: "fa-solid fa-house-crack",      title: "USGS Earthquakes",      status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-fire",             title: "NASA FIRMS",            status: "API" },
+    { icon: "fa-solid fa-newspaper",        title: "GDELT Project",         status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-rss",              title: "Direct RSS Feeds",      status: "RSS" },
+    { icon: "fa-solid fa-rss",              title: "Multi-source News",     status: "API" },
     { icon: "fa-solid fa-satellite-dish",   title: "GPS Interference",      status: "COMPUTED", status_class: "computed" },
-    { icon: "fa-solid fa-crosshairs",       title: "UCDP Conflicts",        status: "API",      link: "https://ucdp.uu.se" },
-    { icon: "fa-solid fa-cloud",            title: "Cloudflare Radar",      status: "LIVE",     status_class: "live",     link: "https://radar.cloudflare.com" },
-    { icon: "fa-solid fa-network-wired",    title: "TeleGeography",         status: "FREE",     status_class: "free",     link: "https://submarinecablemap.com" },
-    { icon: "fa-solid fa-wifi",             title: "IODA Outages",          status: "FREE",     status_class: "free",     link: "https://ioda.inetintel.cc.gatech.edu" },
-    { icon: "fa-solid fa-bolt",             title: "NASA EONET",            status: "API",      link: "https://eonet.gsfc.nasa.gov" },
-    { icon: "fa-solid fa-video",            title: "Windy Webcams",         status: "API",      link: "https://api.windy.com/webcams" },
-    { icon: "fa-brands fa-youtube",         title: "YouTube Live",          status: "LIVE",     status_class: "live",     link: "https://developers.google.com/youtube/v3" },
+    { icon: "fa-solid fa-crosshairs",       title: "UCDP Conflicts",        status: "API" },
+    { icon: "fa-solid fa-cloud",            title: "Cloudflare Radar",      status: "LIVE",     status_class: "live" },
+    { icon: "fa-solid fa-network-wired",    title: "TeleGeography",         status: "FREE",     status_class: "free" },
+    { icon: "fa-solid fa-wifi",             title: "IODA Outages",          status: "FREE",     status_class: "free" },
+    { icon: "fa-solid fa-bolt",             title: "NASA EONET",            status: "API" },
+    { icon: "fa-solid fa-video",            title: "Windy Webcams",         status: "API" },
+    { icon: "fa-brands fa-youtube",         title: "YouTube Live",          status: "LIVE",     status_class: "live" },
     { icon: "fa-solid fa-traffic-light",    title: "NYC Traffic Cams",      status: "LIVE",     status_class: "live" },
-    { icon: "fa-solid fa-globe",            title: "Cesium Ion",            status: "ENGINE",   link: "https://cesium.com" },
+    { icon: "fa-solid fa-globe",            title: "Cesium Ion",            status: "ENGINE" },
     { icon: "fa-solid fa-building",         title: "Google 3D Tiles",       status: "ENGINE" },
-    { icon: "fa-solid fa-map",              title: "Natural Earth",         status: "FREE",     status_class: "free",     link: "https://naturalearthdata.com" },
-    { icon: "fa-solid fa-user-astronaut",   title: "UCS Satellites",        status: "OSS",      status_class: "oss",      link: "https://ucsusa.org" },
+    { icon: "fa-solid fa-map",              title: "Natural Earth",         status: "FREE",     status_class: "free" },
+    { icon: "fa-solid fa-user-astronaut",   title: "UCS Satellites",        status: "OSS",      status_class: "oss" },
     { icon: "fa-solid fa-user-secret",      title: "Classified Sat Intel",  status: "COMPUTED", status_class: "computed" },
-    { icon: "fa-solid fa-plane-lock",       title: "OpenAIP Airspace",      status: "API",      link: "https://openaip.net" },
-    { icon: "fa-solid fa-plane-departure",  title: "OurAirports",           status: "OSS",      status_class: "oss",      link: "https://ourairports.com" },
+    { icon: "fa-solid fa-plane-lock",       title: "OpenAIP Airspace",      status: "API" },
+    { icon: "fa-solid fa-plane-departure",  title: "OurAirports",           status: "OSS",      status_class: "oss" },
     { icon: "fa-solid fa-jet-fighter",      title: "Military Classifier",   status: "COMPUTED", status_class: "computed" },
-    { icon: "fa-solid fa-oil-well",         title: "Global Energy Monitor", status: "FREE",     status_class: "free",     link: "https://globalenergymonitor.org" },
+    { icon: "fa-solid fa-oil-well",         title: "Global Energy Monitor", status: "FREE",     status_class: "free" },
     { icon: "fa-solid fa-bolt",             title: "Power Plant Database",  status: "OSS",      status_class: "oss" },
-    { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API",      link: "https://alphavantage.co" },
-    { icon: "fa-solid fa-coins",            title: "European Central Bank", status: "FREE",     status_class: "free",     link: "https://ecb.europa.eu" },
+    { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API" },
+    { icon: "fa-solid fa-coins",            title: "European Central Bank", status: "FREE",     status_class: "free" },
   ]
 
-  # Split into rows for the bento layout
-  # Row pattern: 3 cells, then title row, then 3 cells, repeating with varied sizes
+  # Place title cell in the center of the grid.
+  # 5 columns: 12 sources (fills rows 1-2 + 2 into row 3), then title at col 3, then rest.
+  first_half = sources[0..11]
+  second_half = sources[12..]
 %>
 <div class="bento-sources">
   <nav class="bento-nav">
@@ -43,23 +45,13 @@
   </nav>
 
   <div class="bento-grid">
-    <%# Row 1: 3 items %>
-    <% sources[0..2].each do |s| %>
-      <div class="bento-cell<%= ' bento-cell--wide' if s[:size] == 'wide' %>">
+    <% first_half.each do |s| %>
+      <div class="bento-cell">
         <div class="bento-cell-icon"><i class="<%= s[:icon] %>"></i></div>
         <div class="bento-cell-name"><%= s[:title] %></div>
-        <% if s[:status] %>
-          <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
-        <% end %>
+        <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
       </div>
     <% end %>
-
-    <%# Row 2: 1 item + TITLE CELL + 1 item %>
-    <div class="bento-cell">
-      <div class="bento-cell-icon"><i class="<%= sources[3][:icon] %>"></i></div>
-      <div class="bento-cell-name"><%= sources[3][:title] %></div>
-      <span class="bento-badge bento-badge--<%= sources[3][:status_class] || 'default' %>"><%= sources[3][:status] %></span>
-    </div>
 
     <div class="bento-cell bento-cell--title">
       <div class="bento-title-label">[01] DATA SOURCES</div>
@@ -67,27 +59,14 @@
       <p class="bento-title-sub"><%= sources.size %> feeds across aviation, maritime, space, earth science, security, news, and infrastructure.</p>
     </div>
 
-    <div class="bento-cell">
-      <div class="bento-cell-icon"><i class="<%= sources[4][:icon] %>"></i></div>
-      <div class="bento-cell-name"><%= sources[4][:title] %></div>
-      <span class="bento-badge bento-badge--<%= sources[4][:status_class] || 'default' %>"><%= sources[4][:status] %></span>
-    </div>
-
-    <%# Remaining sources %>
-    <% sources[5..].each do |s| %>
-      <div class="bento-cell<%= ' bento-cell--wide' if s[:size] == 'wide' %>">
+    <% second_half.each do |s| %>
+      <div class="bento-cell">
         <div class="bento-cell-icon"><i class="<%= s[:icon] %>"></i></div>
         <div class="bento-cell-name"><%= s[:title] %></div>
-        <% if s[:subtitle] %>
-          <div class="bento-cell-sub"><%= s[:subtitle] %></div>
-        <% end %>
-        <% if s[:status] %>
-          <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
-        <% end %>
+        <span class="bento-badge bento-badge--<%= s[:status_class] || 'default' %>"><%= s[:status] %></span>
       </div>
     <% end %>
 
-    <%# Footer cell %>
     <div class="bento-cell bento-cell--footer">
       <div class="bento-footer-text">All feeds are publicly accessible, community-driven, or computed in-house.</div>
     </div>

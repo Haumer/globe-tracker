@@ -29,8 +29,12 @@ class ConflictPulseService
     "Red Sea / Bab el-Mandeb" => { lat: 12..16, lng: 42..46 },
     "Gulf States" => { lat: 23..26, lng: 46..56 },
     "Sudan / Khartoum" => { lat: 14..17, lng: 31..34 },
+    "Turkey" => { lat: 37..42, lng: 28..44 },
+    "Iran Region" => { lat: 27..30, lng: 47..55 },
+    "Kuwait" => { lat: 28..30, lng: 46..49 },
+    "Eastern Mediterranean" => { lat: 34..38, lng: 22..28 },
     "Pakistan-Afghanistan" => { lat: 32..36, lng: 68..74 },
-    "Myanmar" => { lat: 18..22, lng: 94..98 },
+    "Myanmar Region" => { lat: 10..22, lng: 94..102 },
     "Cuba" => { lat: 22..24, lng: -84..-82 },
     "Washington DC" => { lat: 38..40, lng: -78..-76 },
     "Taiwan Strait" => { lat: 23..26, lng: 118..122 },
@@ -42,12 +46,12 @@ class ConflictPulseService
     "Middle East / Iran War" => [
       "Israel-Palestine", "Iran Theater", "Iran Region", "Lebanon-Israel Border",
       "Iraq Theater", "Strait of Hormuz", "Red Sea / Bab el-Mandeb",
-      "Gulf States", "Gaza Strip",
+      "Gulf States", "Gaza Strip", "Turkey", "Kuwait", "Eastern Mediterranean",
     ],
     "Russia-Ukraine War" => [
       "Eastern Ukraine Front", "Kyiv Region", "Moscow / Western Russia",
     ],
-    "Myanmar Civil War" => ["Myanmar"],
+    "Myanmar Civil War" => ["Myanmar", "Myanmar Region"],
     "Afghanistan-Pakistan" => ["Pakistan-Afghanistan"],
   }.freeze
 

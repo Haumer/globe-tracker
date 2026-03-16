@@ -737,28 +737,64 @@ export function applyConflictPulseMethods(GlobeController) {
       ? this._conflictPulseData?.find(z => z.cell_key === cell.zone_key)
       : null
 
+    // Show parent zone's headlines if available
+    let headlinesHtml = ""
+    if (zone) {
+      const articles = zone.top_articles || []
+      const headlines = articles.length > 0
+        ? articles.slice(0, 4).map(a => {
+            const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
+            return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title?.substring(0, 80))}</div>
+              <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · ${timeAgo}</div>
+            </a>`
+          }).join("")
+        : (zone.top_headlines || []).slice(0, 4).map(h =>
+            `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h?.substring(0, 80))}</div>`
+          ).join("")
+      if (headlines) {
+        headlinesHtml = `<div style="margin-top:8px;">
+          <div style="font:600 9px var(--gt-mono);text-transform:uppercase;letter-spacing:1px;color:rgba(255,152,0,0.6);margin-bottom:6px;">Related Headlines</div>
+          ${headlines}
+        </div>`
+      }
+    }
+
+    // Count sibling hexes in the same theater
+    const siblingCount = theater
+      ? this._hexCellData?.filter(h => h.theater === theater).length || 0
+      : 0
+
+    // Trend info from parent zone
+    const trendHtml = zone ? `<div style="font:600 10px var(--gt-mono);color:${{surging:"#f44336",active:"#f44336",escalating:"#ff9800",elevated:"#ffc107",baseline:"#66bb6a"}[zone.escalation_trend] || "#ff9800"};letter-spacing:0.5px;margin:4px 0;">${(zone.escalation_trend || "").toUpperCase()} — PULSE ${zone.pulse_score}</div>` : ""
+
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>Conflict Theater Hex</div>
-      <div class="detail-country">${this._escapeHtml(situation)}</div>
-      ${theater ? `<div style="font:500 10px var(--gt-mono);color:#ffa726;letter-spacing:0.5px;margin:4px 0 8px;">${this._escapeHtml(theater)}</div>` : ""}
+      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>${this._escapeHtml(situation)}</div>
+      ${theater ? `<div style="font:500 10px var(--gt-mono);color:#ffa726;letter-spacing:0.5px;margin:2px 0;">${this._escapeHtml(theater)}</div>` : ""}
+      ${trendHtml}
       <div class="detail-grid">
         <div class="detail-field">
-          <span class="detail-label">Articles</span>
+          <span class="detail-label">Articles in cell</span>
           <span class="detail-value">${cell.count}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Intensity</span>
           <span class="detail-value">${(cell.intensity * 100).toFixed(0)}%</span>
         </div>
-        <div class="detail-field">
-          <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${cell.lat.toFixed(1)}°, ${cell.lng.toFixed(1)}°</span>
-        </div>
         ${zone ? `<div class="detail-field">
-          <span class="detail-label">Pulse Score</span>
-          <span class="detail-value">${zone.pulse_score}</span>
+          <span class="detail-label">Zone reports (24h)</span>
+          <span class="detail-value">${zone.count_24h || "—"}</span>
+        </div>` : ""}
+        ${zone ? `<div class="detail-field">
+          <span class="detail-label">Sources</span>
+          <span class="detail-value">${zone.source_count || "—"}</span>
+        </div>` : ""}
+        ${siblingCount > 1 ? `<div class="detail-field">
+          <span class="detail-label">Theater cells</span>
+          <span class="detail-value">${siblingCount}</span>
         </div>` : ""}
       </div>
+      ${headlinesHtml}
       ${zone ? `<button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;"
         data-action="click->globe#flyToConflictZone" data-zone-key="${this._escapeHtml(zone.cell_key)}">
         <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>Go to ${this._escapeHtml(situation)}
@@ -772,7 +808,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
     // Auto-highlight the theater this hex belongs to
     if (theater) {
-      this._highlightedTheater = null // reset first so toggle works
+      this._highlightedTheater = null
       this.highlightTheater({ currentTarget: { dataset: { theater } } })
     }
   }

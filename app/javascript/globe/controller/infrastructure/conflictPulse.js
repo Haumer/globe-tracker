@@ -162,7 +162,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._conflictPulseEntities.push(ring)
 
       // Pulsing outer ring for surging zones or zones that just increased
-      if (zone.escalation_trend === "surging" || increased.has(zone.cell_key)) {
+      if (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key)) {
         const pulseRing = ds.entities.add({
           id: `cpulse-pulse-${idx}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
@@ -324,7 +324,7 @@ export function applyConflictPulseMethods(GlobeController) {
   }
 
   GlobeController.prototype.showConflictPulseDetail = function(zone) {
-    const trendColors = { surging: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
+    const trendColors = { surging: "#f44336", active: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
     const color = trendColors[zone.escalation_trend] || "#ff9800"
 
     // Cross-layer signal chips (clickable — fly to area with relevant layer)

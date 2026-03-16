@@ -101,7 +101,15 @@ class ConflictPulseService
       cluster_score = [story_count / 4.0 * 10, 10].min
       cross_score = [signals.size * 5, 15].min
 
-      pulse_score = (freq_score + spike_score + tone_score + diversity_score + cluster_score + cross_score).round(0)
+      # Sustained intensity bonus: high-volume zones are critical even without a spike
+      # 20+ weighted articles/24h = ongoing major event (war, large-scale conflict)
+      intensity_bonus = if weighted_24h >= 50 then 20
+                        elsif weighted_24h >= 20 then 12
+                        elsif weighted_24h >= 10 then 5
+                        else 0
+                        end
+
+      pulse_score = [(freq_score + spike_score + tone_score + diversity_score + cluster_score + cross_score + intensity_bonus).round(0), 100].min
 
       next if pulse_score < MIN_PULSE_SCORE
 
@@ -111,6 +119,8 @@ class ConflictPulseService
         "surging"
       elsif spike_ratio > 2.0 || tone_worsening
         "escalating"
+      elsif weighted_24h >= 20 || pulse_score >= 70
+        "active"
       elsif pulse_score >= 20
         "elevated"
       else

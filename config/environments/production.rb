@@ -66,7 +66,7 @@ Rails.application.configure do
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
 
   # Use Redis for caching (conflict pulse, insights, trains, anomalies, etc.)
-  config.cache_store = :redis_cache_store, {
+  redis_cache_opts = {
     url: ENV.fetch("REDIS_URL", "redis://localhost:6379/1"),
     expires_in: 10.minutes,
     connect_timeout: 2,
@@ -77,6 +77,11 @@ Rails.application.configure do
       Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
     },
   }
+  # Heroku Redis uses self-signed certs with rediss:// URLs
+  if ENV["REDIS_URL"]&.start_with?("rediss://")
+    redis_cache_opts[:ssl_params] = { verify_mode: OpenSSL::SSL::VERIFY_NONE }
+  end
+  config.cache_store = :redis_cache_store, redis_cache_opts
 
   config.active_job.queue_adapter = :sidekiq
 

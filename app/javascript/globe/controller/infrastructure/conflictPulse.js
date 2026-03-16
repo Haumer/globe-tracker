@@ -547,6 +547,12 @@ export function applyConflictPulseMethods(GlobeController) {
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
+
+    // Auto-highlight the theater this zone belongs to
+    if (zone.theater) {
+      this._highlightedTheater = null
+      this.highlightTheater({ currentTarget: { dataset: { theater: zone.theater } } })
+    }
   }
 
   // ── Reveal all connected layers ─────────────────────────────
@@ -686,6 +692,31 @@ export function applyConflictPulseMethods(GlobeController) {
 
   // ── Time ago helper ────────────────────────────────────────
 
+  // Find which hex cell contains a given lat/lng using point-in-polygon test
+  GlobeController.prototype._findHexAtPosition = function(lat, lng) {
+    if (!this._hexCellData?.length) return null
+    for (const cell of this._hexCellData) {
+      if (!cell.vertices || cell.vertices.length !== 6) continue
+      if (cell.intensity < 0.01) continue
+      // Quick bounding-box check first
+      const lats = cell.vertices.map(v => v[0])
+      const lngs = cell.vertices.map(v => v[1])
+      if (lat < Math.min(...lats) || lat > Math.max(...lats)) continue
+      if (lng < Math.min(...lngs) || lng > Math.max(...lngs)) continue
+      // Ray-casting point-in-polygon
+      let inside = false
+      for (let i = 0, j = 5; i < 6; j = i++) {
+        const yi = cell.vertices[i][0], xi = cell.vertices[i][1]
+        const yj = cell.vertices[j][0], xj = cell.vertices[j][1]
+        if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+          inside = !inside
+        }
+      }
+      if (inside) return cell
+    }
+    return null
+  }
+
   GlobeController.prototype._timeAgo = function(date) {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
     if (seconds < 60) return "just now"
@@ -738,6 +769,12 @@ export function applyConflictPulseMethods(GlobeController) {
       </button>` : ""}
     `
     this.detailPanelTarget.style.display = ""
+
+    // Auto-highlight the theater this hex belongs to
+    if (theater) {
+      this._highlightedTheater = null // reset first so toggle works
+      this.highlightTheater({ currentTarget: { dataset: { theater } } })
+    }
   }
 
   // ── Fly to a zone by cell_key ────────────────────────────────

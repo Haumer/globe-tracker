@@ -314,6 +314,15 @@ export function applyCoreMethods(GlobeController) {
         if (this._handleEntityClick(entityId, picked)) return
       }
 
+      // Fallback: check if click landed inside a hex cell (ground-clamped polygons aren't pickable)
+      if (this._hexCellData?.length) {
+        const globePos = this.screenToLatLng(click.position)
+        if (globePos) {
+          const hit = this._findHexAtPosition(globePos.lat, globePos.lng)
+          if (hit) { this._showHexDetail(hit); return }
+        }
+      }
+
       this.closeDetail()
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 

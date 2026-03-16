@@ -274,7 +274,7 @@ export function applySituationalMethods(GlobeController) {
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign">M${eq.mag.toFixed(1)} Earthquake</div>
-      <div class="detail-country">${eq.title}</div>
+      <div class="detail-country">${this._escapeHtml(eq.title)}</div>
       <div class="event-badges">${alertBadge}${tsunamiBadge}</div>
       <div class="detail-grid">
         <div class="detail-field">
@@ -295,7 +295,7 @@ export function applySituationalMethods(GlobeController) {
         </div>
       </div>
       ${shakeMapBtn}
-      ${typeof eq.url === "string" && eq.url.startsWith("http") ? `<a href="${eq.url}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
+      ${typeof eq.url === "string" && /^https?:\/\//i.test(eq.url) ? `<a href="${this._safeUrl(eq.url)}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${eq.lat}" data-lng="${eq.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
@@ -695,7 +695,7 @@ export function applySituationalMethods(GlobeController) {
         </div>` : ""}
       </div>
       ${sourceLinks ? `<div class="event-sources">Sources: ${sourceLinks}</div>` : ""}
-      ${typeof ev.link === "string" && ev.link.startsWith("http") ? `<a href="${ev.link}" target="_blank" rel="noopener" class="detail-track-btn">View on NASA EONET</a>` : ""}
+      ${typeof ev.link === "string" && /^https?:\/\//i.test(ev.link) ? `<a href="${this._safeUrl(ev.link)}" target="_blank" rel="noopener" class="detail-track-btn">View on NASA EONET</a>` : ""}
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${ev.lat}" data-lng="${ev.lng}">
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>

@@ -147,11 +147,11 @@ export function applyNewsMethods(GlobeController) {
       const descHtml = clusterEvents.slice(0, 8).map(ev => {
         const c = categoryColors[ev.category] || "#90a4ae"
         return `<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${ev.category}${ev.source ? ' · ' + ev.source : ''}</div>
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${ev.title || ev.name || "Unknown"}</div>
-          ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">' + ev.name + '</div>' : ''}
-          <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${ev.level}</div>
-          <a href="${ev.url}" target="_blank" rel="noopener" style="color: ${c}; font-size: 11px;">Read →</a>
+          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${this._escapeHtml(ev.category)}${ev.source ? ' · ' + this._escapeHtml(ev.source) : ''}</div>
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${this._escapeHtml(ev.title || ev.name || "Unknown")}</div>
+          ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">' + this._escapeHtml(ev.name) + '</div>' : ''}
+          <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${this._escapeHtml(ev.level)}</div>
+          <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" style="color: ${c}; font-size: 11px;">Read →</a>
         </div>`
       }).join("")
       const moreNote = count > 8 ? `<div style="font-size: 11px; color: #6b7a8d;">+ ${count - 8} more stories</div>` : ""
@@ -865,7 +865,7 @@ export function applyNewsMethods(GlobeController) {
       const toneColor = a.tone < -2 ? "#f44336" : a.tone > 2 ? "#4caf50" : "#90a4ae"
       return `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
         <div style="font:500 10px var(--gt-mono);color:${color};">
-          <a href="${this._escapeHtml(a.url)}" target="_blank" rel="noopener" style="color:${color};text-decoration:none;">${this._escapeHtml(a.domain)}</a>
+          <a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="color:${color};text-decoration:none;">${this._escapeHtml(a.domain)}</a>
         </div>
         <div style="font:400 9px var(--gt-mono);color:var(--gt-text-dim);line-height:1.3;">${this._escapeHtml(a.name || "")}</div>
         <div style="font:400 9px var(--gt-mono);color:${toneColor};">${a.category} · tone ${a.tone}</div>

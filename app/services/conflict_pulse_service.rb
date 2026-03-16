@@ -32,11 +32,21 @@ class ConflictPulseService
       .select(:id, :title, :url, :latitude, :longitude, :tone, :source, :category,
               :threat_level, :credibility, :story_cluster_id, :published_at)
 
-    # Grid into 2° cells
+    # Grid into 2° cells — use headline-detected event location when it differs from article location
     cells = Hash.new { |h, k| h[k] = [] }
     articles.find_each do |a|
-      # Filter out low-intensity articles (probably miscategorized)
       next if a.tone && a.tone.abs < MIN_TONE
+      # Check if headline mentions a conflict region far from the article's stored location
+      event_loc = detect_event_location(a.title)
+      if event_loc
+        event_cell = cell_key(event_loc[0], event_loc[1])
+        stored_cell = cell_key(a.latitude, a.longitude)
+        if event_cell != stored_cell
+          # Article is about a conflict elsewhere — count it toward the event location
+          cells[event_cell] << a
+          next
+        end
+      end
       cells[cell_key(a.latitude, a.longitude)] << a
     end
 
@@ -159,6 +169,59 @@ class ConflictPulseService
   end
 
   private
+
+  # Conflict-specific location keywords with coordinates.
+  # These are active conflict zones — when a headline mentions them,
+  # the article is ABOUT this place regardless of where the reporter is.
+  EVENT_LOCATIONS = {
+    # Preposition patterns: "war in Iran", "strikes on Gaza", "attack in Baghdad"
+    "iran" => [35.7, 51.4], "tehran" => [35.7, 51.4],
+    "israel" => [31.8, 35.2], "tel aviv" => [32.1, 34.8],
+    "gaza" => [31.5, 34.5], "west bank" => [31.9, 35.3],
+    "ukraine" => [50.4, 30.5], "kyiv" => [50.4, 30.5], "kiev" => [50.4, 30.5],
+    "kharkiv" => [50.0, 36.2], "donbas" => [48.0, 37.8],
+    "russia" => [55.8, 37.6], "moscow" => [55.8, 37.6],
+    "iraq" => [33.3, 44.4], "baghdad" => [33.3, 44.4],
+    "syria" => [33.5, 36.3], "damascus" => [33.5, 36.3],
+    "lebanon" => [33.9, 35.5], "beirut" => [33.9, 35.5],
+    "yemen" => [15.4, 44.2], "sanaa" => [15.4, 44.2],
+    "sudan" => [15.6, 32.5], "khartoum" => [15.6, 32.5],
+    "myanmar" => [19.8, 96.1],
+    "afghanistan" => [34.5, 69.2], "kabul" => [34.5, 69.2],
+    "pakistan" => [33.7, 73.0],
+    "somalia" => [2.0, 45.3], "mogadishu" => [2.0, 45.3],
+    "libya" => [32.9, 13.2],
+    "hormuz" => [26.6, 56.3], "strait of hormuz" => [26.6, 56.3],
+    "red sea" => [20.0, 38.0],
+    "taiwan" => [25.0, 121.5],
+    "north korea" => [39.0, 125.8],
+    "kuwait" => [29.4, 48.0],
+    "cuba" => [23.1, -82.4],
+  }.freeze
+
+  # Prepositions that signal the event happened AT the following location
+  EVENT_PREPOSITIONS = /\b(?:in|on|at|near|over|across|from|against|hits?|strikes?|attacks?|bombs?|invades?)\s+/i
+
+  def detect_event_location(title)
+    return nil if title.blank?
+    lower = title.downcase
+
+    # First try preposition + location ("war in Iran", "strikes on Gaza")
+    EVENT_LOCATIONS.each do |keyword, coords|
+      if lower.match?(/#{EVENT_PREPOSITIONS}#{Regexp.escape(keyword)}\b/i)
+        return coords
+      end
+    end
+
+    # Fallback: any mention of an active conflict zone gets credit
+    # but only for very specific conflict location names (not country names that could be the source)
+    specific_locations = %w[gaza hormuz donbas kharkiv kyiv baghdad beirut sanaa mogadishu kabul damascus]
+    specific_locations.each do |loc|
+      return EVENT_LOCATIONS[loc] if lower.include?(loc)
+    end
+
+    nil
+  end
 
   def cell_key(lat, lng)
     "#{(lat / CELL_SIZE).floor * CELL_SIZE},#{(lng / CELL_SIZE).floor * CELL_SIZE}"

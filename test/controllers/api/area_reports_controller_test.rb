@@ -8,8 +8,10 @@ class Api::AreaReportsControllerTest < ActionDispatch::IntegrationTest
     assert_kind_of Hash, data
   end
 
-  test "GET /api/area_report without bounds still succeeds" do
+  test "GET /api/area_report without bounds returns 422" do
     get "/api/area_report"
-    assert_response :success
+    assert_response :unprocessable_entity
+    data = JSON.parse(response.body)
+    assert data["error"].include?("bounding box")
   end
 end

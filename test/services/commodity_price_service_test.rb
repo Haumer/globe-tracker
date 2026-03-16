@@ -2,7 +2,7 @@ require "test_helper"
 
 class CommodityPriceServiceTest < ActiveSupport::TestCase
   test "COMMODITY_MAP contains expected symbols" do
-    map = CommodityPriceService::COMMODITY_MAP
+    map = CommodityPriceService::ALPHA_VANTAGE_COMMODITIES
     assert map.key?("OIL_WTI")
     assert map.key?("GOLD")
     assert map.key?("COPPER")

@@ -38,6 +38,6 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
 
   test "constants are defined" do
     assert_equal 10, GlobalPollerService::FLIGHT_POLL_INTERVAL
-    assert_equal 30, GlobalPollerService::FULL_POLL_INTERVAL
+    assert_equal 60, GlobalPollerService::FULL_POLL_INTERVAL
   end
 end

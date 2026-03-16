@@ -1,4 +1,9 @@
 class Rack::Attack
+  # Disable throttling in test environment
+  if Rails.env.test?
+    Rack::Attack.enabled = false
+  end
+
   # Use Rails.cache as the backing store (Redis in production)
   # In dev with NullStore, throttling is effectively disabled — that's fine
   Rack::Attack.cache.store = if Rails.cache.is_a?(ActiveSupport::Cache::NullStore)

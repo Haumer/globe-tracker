@@ -76,6 +76,7 @@ class GlobalPollerService
             purge_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_purge
             if purge_elapsed >= 3600
               enqueue_once(PurgeStaleDataJob)
+              enqueue_once(GenerateBriefJob) unless Rails.cache.read(IntelligenceBriefService::CACHE_KEY)
               @last_purge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             end
           rescue => e

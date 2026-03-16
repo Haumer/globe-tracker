@@ -50,6 +50,7 @@ Rails.application.routes.draw do
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]
     resources :commodities, only: [:index]
+    resource :brief, only: [:show]
     resource :exports, only: [] do
       get :geojson
       get :csv

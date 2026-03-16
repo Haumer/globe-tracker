@@ -290,4 +290,55 @@ export function applyInsightsMethods(GlobeController) {
     }
   }
 
+  // ── Intelligence Brief ──────────────────────────────────
+
+  GlobeController.prototype.loadBrief = async function() {
+    const container = document.getElementById("intelligence-brief")
+    if (!container) return
+
+    // Toggle visibility
+    if (container.style.display !== "none") {
+      container.style.display = "none"
+      return
+    }
+
+    container.style.display = ""
+    container.innerHTML = `<div style="font:400 11px 'JetBrains Mono',monospace;color:rgba(200,210,225,0.4);padding:12px 0;">Generating intelligence brief...</div>`
+
+    try {
+      const resp = await fetch("/api/brief")
+      if (!resp.ok) { container.innerHTML = `<div style="color:#ef5350;font:400 11px monospace;">Failed to load brief.</div>`; return }
+      const data = await resp.json()
+
+      if (data.status === "generating") {
+        container.innerHTML = `<div style="font:400 11px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.6);padding:12px 0;"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>${data.message}</div>`
+        // Retry in 15 seconds
+        setTimeout(() => this.loadBrief(), 15000)
+        return
+      }
+
+      const brief = data.brief || "No brief available."
+      const generatedAt = data.generated_at ? new Date(data.generated_at).toLocaleString() : ""
+      const ctx = data.context_summary || {}
+
+      // Format the brief text — convert section headers to styled spans
+      const formatted = this._escapeHtml(brief)
+        .replace(/^(CRITICAL|HIGH|NOTABLE|CROSS-LAYER CONNECTIONS|MARKET IMPACT)/gm,
+          '<span style="display:block;font:700 11px \'JetBrains Mono\',monospace;color:#ff9800;letter-spacing:1px;margin:14px 0 6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">$1</span>')
+        .replace(/\n- /g, '\n<span style="color:rgba(255,152,0,0.4);margin-right:4px;">▸</span>')
+        .replace(/\n/g, '<br>')
+
+      container.innerHTML = `
+        <div style="font:400 11px/1.7 'DM Sans',sans-serif;color:rgba(200,210,225,0.75);">
+          ${formatted}
+        </div>
+        <div style="font:400 9px 'JetBrains Mono',monospace;color:rgba(200,210,225,0.2);margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);">
+          Generated ${generatedAt} · ${ctx.conflict_zones || 0} zones · ${ctx.earthquakes || 0} quakes · ${ctx.news_articles || 0} articles
+        </div>
+      `
+    } catch (e) {
+      container.innerHTML = `<div style="color:#ef5350;font:400 11px monospace;">Error: ${e.message}</div>`
+    }
+  }
+
 }

@@ -55,16 +55,17 @@ class ThreatClassifier
     def classify(title)
       lower = title.to_s.downcase
 
-      has_softener = SOFTENER_WORDS.any? { |w| lower.include?(w) }
+      has_softener = SOFTENER_WORDS.any? { |w| lower.match?(/\b#{Regexp.escape(w)}\b/) }
       has_historical = HISTORICAL_PATTERNS.any? { |p| lower.match?(p) }
       has_question = lower.match?(QUESTION_PREFIXES) || lower.match?(OPINION_MARKERS)
-      has_positive = POSITIVE_OUTCOME_WORDS.any? { |w| lower.include?(w) }
-      has_critical_target = CRITICAL_TARGETS.any? { |t| lower.include?(t) }
-      has_military_escalation = MILITARY_ESCALATION.any? { |w| lower.include?(w) }
+      has_positive = POSITIVE_OUTCOME_WORDS.any? { |w| lower.match?(/\b#{Regexp.escape(w)}\b/) }
+      has_critical_target = CRITICAL_TARGETS.any? { |t| lower.match?(/\b#{Regexp.escape(t)}\b/) }
+      has_military_escalation = MILITARY_ESCALATION.any? { |w| lower.match?(/\b#{Regexp.escape(w)}\b/) }
 
-      # Score every category
+      # Score every category — use word-boundary matching to avoid false positives
+      # (e.g., "warmer" matching "war", "attacking" matching "attack")
       scored = CATEGORIES.map do |cat|
-        matched = cat[:words].select { |w| lower.include?(w) }
+        matched = cat[:words].select { |w| lower.match?(/\b#{Regexp.escape(w)}\b/) }
         next nil if matched.empty?
 
         score = matched.size # +1 per keyword match

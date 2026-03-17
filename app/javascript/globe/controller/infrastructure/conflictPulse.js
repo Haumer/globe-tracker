@@ -561,11 +561,6 @@ export function applyConflictPulseMethods(GlobeController) {
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
 
-    // Auto-highlight the theater this zone belongs to
-    if (zone.theater) {
-      this._highlightedTheater = null
-      this.highlightTheater({ currentTarget: { dataset: { theater: zone.theater } } })
-    }
   }
 
   // ── Reveal all connected layers ─────────────────────────────
@@ -852,7 +847,7 @@ export function applyConflictPulseMethods(GlobeController) {
     }
   }
 
-  // ── Ripple animation: pulse outward from clicked hex ──────
+  // ── Ripple animation: wavefront pulses across hex grid from click point ──
 
   GlobeController.prototype._rippleFromHex = function(clickedCell) {
     if (!this._hexCellData?.length) return
@@ -860,37 +855,67 @@ export function applyConflictPulseMethods(GlobeController) {
     const ds = this._ds["conflictPulse"]
     if (!ds) return
 
-    // Find sibling hexes in the same theater, sorted by distance from clicked cell
-    const siblings = this._hexCellData
-      .map((h, i) => {
-        if (h.theater !== clickedCell.theater) return null
-        const d = Math.sqrt((h.lat - clickedCell.lat) ** 2 + (h.lng - clickedCell.lng) ** 2)
-        return { hex: h, idx: i, dist: d }
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.dist - b.dist)
+    // Cancel previous ripple
+    if (this._rippleFrame) { cancelAnimationFrame(this._rippleFrame); this._rippleFrame = null }
 
-    // Animate: stagger the highlight by distance
-    siblings.forEach((s, order) => {
-      const delay = s.dist * 80 // ms per degree of distance
-      const entityId = `cpulse-hex-${s.idx}`
-      const entity = ds.entities.getById(entityId)
-      if (!entity?.polygon) return
-
-      // Flash bright then settle
-      setTimeout(() => {
-        entity.polygon.material = Cesium.Color.fromCssColorString("#ff8f00").withAlpha(0.7)
-        entity.polygon.outlineColor = Cesium.Color.fromCssColorString("#ff6d00")
-        this._requestRender()
-
-        // Settle to highlight color after flash
-        setTimeout(() => {
-          entity.polygon.material = Cesium.Color.fromCssColorString("#ff6d00").withAlpha(0.6)
-          entity.polygon.outlineColor = Cesium.Color.fromCssColorString("#ff6d00").withAlpha(0.9)
-          this._requestRender()
-        }, 200)
-      }, delay)
+    // Collect theater siblings with distance from click point (in degrees)
+    const siblings = []
+    let maxDist = 0
+    this._hexCellData.forEach((h, i) => {
+      if (h.theater !== clickedCell.theater) return
+      const d = Math.sqrt((h.lat - clickedCell.lat) ** 2 + (h.lng - clickedCell.lng) ** 2)
+      maxDist = Math.max(maxDist, d)
+      siblings.push({ idx: i, dist: d })
     })
+    if (!siblings.length) return
+
+    // Wavefront settings
+    const speed = maxDist / 1.2        // degrees per second — full reach in 1.2s
+    const waveFront = 4.0              // width of the bright band in degrees
+    const startTime = performance.now()
+    const totalDuration = 2000         // ms total animation
+
+    const highlightColor = Cesium.Color.fromCssColorString("#ff6d00")
+    const dimColor = Cesium.Color.fromCssColorString("#ff6d00")
+
+    const animate = () => {
+      const elapsed = (performance.now() - startTime) / 1000 // seconds
+      const waveDist = elapsed * speed // how far the wavefront has traveled
+
+      siblings.forEach(s => {
+        const entity = ds.entities.getById(`cpulse-hex-${s.idx}`)
+        if (!entity?.polygon) return
+
+        // How far is this hex from the wavefront center?
+        const delta = waveDist - s.dist
+
+        if (delta < 0) {
+          // Wavefront hasn't reached this hex yet — dim
+          entity.polygon.material = dimColor.withAlpha(0.08)
+          entity.polygon.outlineColor = dimColor.withAlpha(0.15)
+        } else if (delta < waveFront) {
+          // Inside the wavefront band — bright flash, intensity based on position in band
+          const bandT = delta / waveFront // 0 = leading edge, 1 = trailing edge
+          const flash = 1.0 - bandT * 0.5 // bright at leading edge, dimmer at trailing
+          entity.polygon.material = highlightColor.withAlpha(0.3 + flash * 0.5)
+          entity.polygon.outlineColor = highlightColor.withAlpha(0.5 + flash * 0.5)
+        } else {
+          // Wavefront has passed — settle to steady highlight
+          entity.polygon.material = highlightColor.withAlpha(0.5)
+          entity.polygon.outlineColor = highlightColor.withAlpha(0.85)
+        }
+      })
+
+      this._requestRender()
+
+      if (performance.now() - startTime < totalDuration) {
+        this._rippleFrame = requestAnimationFrame(animate)
+      } else {
+        this._rippleFrame = null
+      }
+    }
+
+    this._rippleFrame = requestAnimationFrame(animate)
   }
 
   // ── Fly to a zone by cell_key ────────────────────────────────

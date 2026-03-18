@@ -153,13 +153,17 @@ class ConflictPulseService
     link_hexes_to_zones(hex_cells, zones)
 
     # Broadcast surging/escalating zones via ActionCable
-    zones.each do |z|
-      next unless %w[surging escalating].include?(z[:escalation_trend])
-      next unless z[:pulse_score] >= 70
-      cache_key = "cpulse_broadcast:#{z[:cell_key]}:#{z[:escalation_trend]}"
-      next if Rails.cache.read(cache_key)
-      Rails.cache.write(cache_key, true, expires_in: 30.minutes)
-      EventsChannel.conflict_escalation(z)
+    begin
+      zones.each do |z|
+        next unless %w[surging escalating].include?(z[:escalation_trend])
+        next unless z[:pulse_score] >= 70
+        cache_key = "cpulse_broadcast:#{z[:cell_key]}:#{z[:escalation_trend]}"
+        next if Rails.cache.read(cache_key)
+        Rails.cache.write(cache_key, true, expires_in: 30.minutes)
+        EventsChannel.conflict_escalation(z)
+      end
+    rescue => e
+      Rails.logger.warn("ConflictPulseService broadcast skipped: #{e.message}")
     end
 
     { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }

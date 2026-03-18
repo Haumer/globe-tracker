@@ -9,6 +9,7 @@
   <%= render "pages/stats_bar" if controller_name == 'pages' && action_name == 'home' %>
 
   <div class="globe-nav-links">
+    <%= link_to "Home", landing_path, class: "globe-nav-link" %>
     <%= link_to "Data Sources", sources_path, class: "globe-nav-link" %>
     <% if user_signed_in? %>
       <%= link_to "Log out", destroy_user_session_path, data: { turbo_method: :delete }, class: "globe-nav-link" %>

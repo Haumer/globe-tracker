@@ -1,11 +1,10 @@
-import { createConsumer } from "@rails/actioncable"
+import { getConsumer } from "channels/consumer"
 
-let consumer = null
 let subscription = null
 
 export function connectEventsChannel() {
-  if (consumer) return
-  consumer = createConsumer()
+  if (subscription) return
+  const consumer = getConsumer()
 
   subscription = consumer.subscriptions.create("EventsChannel", {
     connected() {},
@@ -101,5 +100,4 @@ function escapeHtml(str) {
 
 export function disconnectEventsChannel() {
   if (subscription) { subscription.unsubscribe(); subscription = null }
-  if (consumer) { consumer.disconnect(); consumer = null }
 }

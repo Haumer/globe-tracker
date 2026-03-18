@@ -251,6 +251,7 @@ class ConflictPulseService
         top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, tone: a.tone&.round(1), published_at: a.published_at&.iso8601 } },
         categories: categories,
         cross_layer_signals: signals,
+        signal_context: signal_descriptions(signals),
         detected_at: now.iso8601,
       }
     end
@@ -363,6 +364,20 @@ class ConflictPulseService
     dlat = radius_km / 111.0
     dlng = radius_km / (111.0 * Math.cos(lat * Math::PI / 180)).abs
     { lamin: lat - dlat, lamax: lat + dlat, lomin: lng - dlng, lomax: lng + dlng }
+  end
+
+  SIGNAL_DESCRIPTIONS = {
+    military_flights: "Military aircraft on patrol or reconnaissance near active hostilities",
+    gps_jamming: "Electronic warfare degrading civilian aviation navigation in the region",
+    internet_outage: "Major internet disruption — possible infrastructure damage or state censorship",
+    fire_hotspots: "Satellite-detected fires consistent with airstrikes or burning infrastructure",
+    known_conflict_zone: "Historical conflict events from UCDP database — baseline for current escalation",
+  }.freeze
+
+  def signal_descriptions(signals)
+    signals.each_with_object({}) do |(key, _val), ctx|
+      ctx[key] = SIGNAL_DESCRIPTIONS[key] if SIGNAL_DESCRIPTIONS[key]
+    end
   end
 
   def cross_layer_signals(lat, lng)

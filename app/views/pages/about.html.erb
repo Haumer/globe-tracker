@@ -1,0 +1,147 @@
+<div class="about-page-wrap">
+  <nav class="bento-nav">
+    <%= link_to root_path, class: "bento-nav-back" do %>
+      <i class="fa-solid fa-arrow-left"></i> Back to Globe
+    <% end %>
+  </nav>
+
+  <div class="about-grid">
+    <%# ── Hero ── %>
+    <div class="about-cell about-cell--hero">
+      <div class="about-label">[00] ABOUT</div>
+      <h1 class="about-hero-title">Real-time global<br>intelligence on<br>a 3D globe</h1>
+      <p class="about-hero-sub">GlobeTracker aggregates 30+ open data feeds — aviation, maritime, space, conflict, natural disasters, infrastructure, and news — into a single interactive Cesium globe with live updates.</p>
+    </div>
+
+    <%# ── Capabilities ── %>
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-plane"></i></div>
+      <div class="about-cap-title">Aviation</div>
+      <div class="about-cap-desc">Live ADS-B tracking, military aircraft classification, airport data, airspace boundaries, and NOTAMs.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-ship"></i></div>
+      <div class="about-cap-title">Maritime</div>
+      <div class="about-cap-desc">Real-time AIS vessel tracking with chokepoint monitoring at critical straits and waterways.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-satellite"></i></div>
+      <div class="about-cap-title">Space</div>
+      <div class="about-cap-desc">Satellite constellation tracking via CelesTrak, classified satellite intelligence, and GPS jamming detection.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-crosshairs"></i></div>
+      <div class="about-cap-title">Conflict</div>
+      <div class="about-cap-desc">ACLED and UCDP conflict data with computed pulse zones showing real-time escalation and de-escalation patterns.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-house-crack"></i></div>
+      <div class="about-cap-title">Natural Events</div>
+      <div class="about-cap-desc">USGS earthquakes, NASA FIRMS fire hotspots, EONET natural events, and severe weather alerts — all live.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-network-wired"></i></div>
+      <div class="about-cap-title">Infrastructure</div>
+      <div class="about-cap-desc">Submarine cables, oil & gas pipelines, power plants, railways, and energy infrastructure mapped globally.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-newspaper"></i></div>
+      <div class="about-cap-title">News Intelligence</div>
+      <div class="about-cap-desc">GDELT, RSS, and multi-source news with AI-powered threat classification, geocoding, and daily intelligence briefs.</div>
+    </div>
+
+    <div class="about-cell about-cell--cap">
+      <div class="about-cap-icon"><i class="fa-solid fa-wifi"></i></div>
+      <div class="about-cap-title">Internet & Comms</div>
+      <div class="about-cap-desc">Cloudflare Radar traffic anomalies and IODA internet outage detection across global networks.</div>
+    </div>
+
+    <%# ── How It Works ── %>
+    <div class="about-cell about-cell--wide">
+      <div class="about-label">[01] HOW IT WORKS</div>
+      <div class="about-steps">
+        <div class="about-step">
+          <span class="about-step-num">01</span>
+          <div>
+            <div class="about-step-title">Ingest</div>
+            <div class="about-step-desc">Background jobs poll APIs, WebSocket streams, and RSS feeds on intervals from 30 seconds to 24 hours.</div>
+          </div>
+        </div>
+        <div class="about-step">
+          <span class="about-step-num">02</span>
+          <div>
+            <div class="about-step-title">Enrich</div>
+            <div class="about-step-desc">AI classifiers tag military aircraft, score threat levels, geocode news events, and detect anomalies.</div>
+          </div>
+        </div>
+        <div class="about-step">
+          <span class="about-step-num">03</span>
+          <div>
+            <div class="about-step-title">Push</div>
+            <div class="about-step-desc">ActionCable delivers breaking events to connected browsers in real time — no refresh needed.</div>
+          </div>
+        </div>
+        <div class="about-step">
+          <span class="about-step-num">04</span>
+          <div>
+            <div class="about-step-title">Visualize</div>
+            <div class="about-step-desc">Cesium renders everything on a photorealistic 3D globe with Google tiles, time-slider, and layer controls.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# ── Tech Stack ── %>
+    <div class="about-cell about-cell--stack">
+      <div class="about-label">[02] STACK</div>
+      <div class="about-stack-items">
+        <div class="about-stack-item">
+          <span class="about-stack-tag">BACKEND</span>
+          <span class="about-stack-val">Ruby on Rails</span>
+        </div>
+        <div class="about-stack-item">
+          <span class="about-stack-tag">GLOBE</span>
+          <span class="about-stack-val">CesiumJS</span>
+        </div>
+        <div class="about-stack-item">
+          <span class="about-stack-tag">3D TILES</span>
+          <span class="about-stack-val">Google Photorealistic</span>
+        </div>
+        <div class="about-stack-item">
+          <span class="about-stack-tag">REALTIME</span>
+          <span class="about-stack-val">ActionCable</span>
+        </div>
+        <div class="about-stack-item">
+          <span class="about-stack-tag">AI</span>
+          <span class="about-stack-val">OpenAI</span>
+        </div>
+        <div class="about-stack-item">
+          <span class="about-stack-tag">DB</span>
+          <span class="about-stack-val">PostgreSQL</span>
+        </div>
+      </div>
+    </div>
+
+    <%# ── Numbers ── %>
+    <div class="about-cell about-cell--stat">
+      <div class="about-stat-num">30+</div>
+      <div class="about-stat-label">Data Sources</div>
+    </div>
+
+    <div class="about-cell about-cell--stat">
+      <div class="about-stat-num">24/7</div>
+      <div class="about-stat-label">Live Monitoring</div>
+    </div>
+
+    <%# ── Footer ── %>
+    <div class="about-cell about-cell--footer">
+      <div class="about-footer-text">Built as a personal project. All data from publicly accessible or open-source feeds.</div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,267 @@
+// ═══════════════════════════════════════════════════════════
+// About Page — Bento Grid Layout
+// ═══════════════════════════════════════════════════════════
+
+.about-page {
+  background: #0a0c10;
+  margin: 0;
+
+  .globe-nav {
+    background: rgba(10, 12, 16, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+.about-page-wrap {
+  min-height: 100vh;
+  background: #0a0c10;
+  padding: 80px 0 60px;
+}
+
+// ── Grid ──────────────────────────────────────────────────
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+// ── Cell base ─────────────────────────────────────────────
+
+.about-cell {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+}
+
+// ── Label ─────────────────────────────────────────────────
+
+.about-label {
+  font: 500 9px 'JetBrains Mono', monospace;
+  letter-spacing: 3px;
+  color: rgba(200, 210, 225, 0.2);
+  text-transform: uppercase;
+}
+
+// ── Hero — full width ─────────────────────────────────────
+
+.about-cell--hero {
+  grid-column: 1 / -1;
+  padding: 56px 36px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.about-hero-title {
+  font: 700 36px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.85);
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+  margin: 0;
+}
+
+.about-hero-sub {
+  font: 400 13px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.3);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 520px;
+}
+
+// ── Capability cells ──────────────────────────────────────
+
+.about-cell--cap {
+  gap: 6px;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+}
+
+.about-cap-icon {
+  font-size: 18px;
+  color: rgba(200, 210, 225, 0.25);
+  margin-bottom: 4px;
+
+  .about-cell--cap:hover & {
+    color: rgba(200, 210, 225, 0.5);
+  }
+}
+
+.about-cap-title {
+  font: 600 14px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.8);
+  letter-spacing: -0.2px;
+}
+
+.about-cap-desc {
+  font: 400 11px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.25);
+  line-height: 1.55;
+}
+
+// ── How It Works — full width ─────────────────────────────
+
+.about-cell--wide {
+  grid-column: 1 / -1;
+  padding: 40px 36px;
+  gap: 24px;
+}
+
+.about-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+}
+
+.about-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.about-step-num {
+  font: 700 20px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.1);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.about-step-title {
+  font: 600 13px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.7);
+  margin-bottom: 4px;
+}
+
+.about-step-desc {
+  font: 400 11px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.25);
+  line-height: 1.55;
+}
+
+// ── Tech Stack ────────────────────────────────────────────
+
+.about-cell--stack {
+  grid-column: span 2;
+  padding: 32px 28px;
+  gap: 16px;
+}
+
+.about-stack-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.about-stack-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.about-stack-tag {
+  font: 700 8px 'JetBrains Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(200, 210, 225, 0.06);
+  color: rgba(200, 210, 225, 0.35);
+  flex-shrink: 0;
+}
+
+.about-stack-val {
+  font: 500 12px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.6);
+}
+
+// ── Stat cells ────────────────────────────────────────────
+
+.about-cell--stat {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.about-stat-num {
+  font: 700 28px 'JetBrains Mono', monospace;
+  color: rgba(220, 230, 245, 0.7);
+  letter-spacing: -1px;
+}
+
+.about-stat-label {
+  font: 500 10px 'JetBrains Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(200, 210, 225, 0.2);
+}
+
+// ── Footer ────────────────────────────────────────────────
+
+.about-cell--footer {
+  grid-column: 1 / -1;
+  min-height: 60px;
+  justify-content: center;
+  align-items: center;
+}
+
+.about-footer-text {
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.15);
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+// ── Responsive ────────────────────────────────────────────
+
+@media (max-width: 900px) {
+  .about-grid {
+    grid-template-columns: repeat(2, 1fr);
+    padding: 0 20px;
+  }
+
+  .about-cell--hero,
+  .about-cell--wide,
+  .about-cell--footer {
+    grid-column: 1 / -1;
+  }
+
+  .about-cell--stack {
+    grid-column: 1 / -1;
+  }
+
+  .about-steps {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about-hero-title {
+    font-size: 28px;
+  }
+
+  .about-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .about-stack-items {
+    grid-template-columns: 1fr;
+  }
+}

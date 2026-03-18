@@ -2,7 +2,7 @@
 <div id="right-panel" data-globe-target="rightPanel" style="display:none;" role="tabpanel">
   <button class="detail-close" data-action="click->globe#closeRightPanel" aria-label="Close panel">&times;</button>
   <div class="rp-tabs" role="tablist" aria-label="Data panels">
-    <button class="rp-tab active" data-action="click->globe#switchRightTab" data-rp-tab="entities" data-globe-target="rpTabEntities" role="tab" aria-selected="true">
+    <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="entities" data-globe-target="rpTabEntities" style="display:none;" role="tab" aria-selected="false">
       <i class="fa-solid fa-list" aria-hidden="true"></i> <span class="rp-tab-label">Entities</span>
     </button>
     <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="news" data-globe-target="rpTabNews" style="display:none;" role="tab" aria-selected="false">
@@ -10,6 +10,9 @@
     </button>
     <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="threats" data-globe-target="rpTabThreats" style="display:none;" role="tab" aria-selected="false">
       <i class="fa-solid fa-shield-halved" aria-hidden="true"></i> <span class="rp-tab-label">Threats</span>
+    </button>
+    <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="situations" data-globe-target="rpTabSituations" style="display:none;" role="tab" aria-selected="false">
+      <i class="fa-solid fa-crosshairs" aria-hidden="true"></i> <span class="rp-tab-label">Situations</span>
     </button>
     <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="insights" data-globe-target="rpTabInsights" role="tab" aria-selected="false">
       <i class="fa-solid fa-brain" aria-hidden="true"></i> <span class="rp-tab-label">Insights</span>
@@ -25,7 +28,7 @@
   </div>
 
   <%# ── Entities pane ── %>
-  <div id="entity-list-panel" class="rp-pane rp-pane--active" data-rp-pane="entities" data-globe-target="entityListPanel" role="region" aria-label="Entity list">
+  <div id="entity-list-panel" class="rp-pane" data-rp-pane="entities" data-globe-target="entityListPanel" role="region" aria-label="Entity list">
     <div class="entity-list-header" data-globe-target="entityListHeader"></div>
     <div class="entity-list-tabs" role="tablist" aria-label="Entity types">
       <button class="entity-tab active" data-action="click->globe#switchEntityTab" data-tab="flights" role="tab" aria-selected="true">
@@ -102,6 +105,17 @@
     <span class="rp-loading" data-globe-target="threatsLoading" style="display:none;">Loading...</span>
     <p class="rp-empty" data-globe-target="threatsEmpty" style="display:none;">No cyber threats detected in view.</p>
     <div class="threats-content" data-globe-target="threatsContent"></div>
+  </div>
+
+  <%# ── Situations pane ── %>
+  <div class="rp-pane" data-rp-pane="situations" role="region" aria-label="Conflict situations">
+    <div class="sit-header">
+      <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> SITUATIONS</span>
+      <span class="sit-count" data-globe-target="sitCount">0 zones</span>
+    </div>
+    <span class="rp-loading" data-globe-target="sitLoading" style="display:none;">Loading...</span>
+    <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">No active situations detected.</p>
+    <div class="sit-list" data-globe-target="sitList"></div>
   </div>
 
   <%# ── Insights pane ── %>

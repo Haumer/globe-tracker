@@ -13,6 +13,12 @@
       <meta name="current-user-id" content="<%= current_user.id %>">
     <% end %>
 
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0a0c10">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,9 +28,14 @@
       <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
     <% end %>
     <%= javascript_importmap_tags %>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js");
+      }
+    </script>
   </head>
 
-  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %>">
+  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %><%= 'about-page' if controller_name == 'pages' && action_name == 'about' %><%= 'landing-page' if controller_name == 'pages' && action_name == 'landing' %>">
     <%= render "shared/navbar" %>
     <%= render "shared/flashes" %>
     <%= yield %>

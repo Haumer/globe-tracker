@@ -318,7 +318,7 @@ export function applyCoreMethods(GlobeController) {
           const priorityPrefixes = ["cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           // But skip cpulse decoration (rings, cores, labels, arcs, hexes)
-          const isPulseDecor = /^cpulse-(ring|core|lbl|arc|hex)-/.test(entityId)
+          const isPulseDecor = /^cpulse-(ring|core|lbl|hex)-/.test(entityId)
           if (isPriority && !isPulseDecor) {
             if (this._handleEntityClick(entityId, picked)) return
           }
@@ -1134,11 +1134,19 @@ export function applyCoreMethods(GlobeController) {
         const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
         this.showChokepointDetail(d); return true
       }},
+      { prefix: "cpulse-arc-lbl-", handler: (id) => {
+        const idx = parseInt(id); const arc = this._strikeArcData?.[idx]; if (!arc) return false
+        this.showStrikeArcDetail(arc); return true
+      }},
+      { prefix: "cpulse-arc-", handler: (id) => {
+        const idx = parseInt(id); const arc = this._strikeArcData?.[idx]; if (!arc) return false
+        this.showStrikeArcDetail(arc); return true
+      }},
       { prefix: "cpulse-hex-", handler: (id) => {
         const idx = parseInt(id); const cell = this._hexCellData?.[idx]; if (!cell) return false
         this._showHexDetail(cell); return true
       }},
-      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-", "cpulse-hex-"], handler: (id) => {
+      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-", "cpulse-arc-", "cpulse-hex-"], handler: (id) => {
         const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},

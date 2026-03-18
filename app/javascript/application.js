@@ -6,6 +6,10 @@ import "bootstrap"
 import { connectAlertsChannel } from "channels/alerts_channel"
 import { connectEventsChannel } from "channels/events_channel"
 
-// Connect ActionCable channels when DOM is ready
-document.addEventListener("turbo:load", () => { connectAlertsChannel(); connectEventsChannel() })
-document.addEventListener("DOMContentLoaded", () => { connectAlertsChannel(); connectEventsChannel() })
+// Only connect ActionCable on the globe page (avoid wasting Puma threads on static pages)
+function connectIfGlobe() {
+  if (!document.body.classList.contains("globe-page")) return
+  connectEventsChannel()
+  connectAlertsChannel()
+}
+document.addEventListener("turbo:load", connectIfGlobe)

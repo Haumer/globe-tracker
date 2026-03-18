@@ -1,7 +1,9 @@
 Rails.application.routes.draw do
   devise_for :users
   root to: "pages#home"
+  get "home", to: "pages#landing", as: :landing
   get "sources", to: "pages#sources"
+  get "about", to: "pages#about"
 
   get "admin", to: "admin#dashboard", as: :admin
   get "admin/api_health", to: "admin#api_health", as: :admin_api_health

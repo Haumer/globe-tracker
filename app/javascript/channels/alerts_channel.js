@@ -1,14 +1,13 @@
-import { createConsumer } from "@rails/actioncable"
+import { getConsumer } from "channels/consumer"
 
-let consumer = null
 let subscription = null
 
 export function connectAlertsChannel() {
   // Only connect for signed-in users
   if (!document.querySelector('meta[name="current-user-id"]')) return
 
-  if (consumer) return // Already connected
-  consumer = createConsumer()
+  if (subscription) return
+  const consumer = getConsumer()
 
   subscription = consumer.subscriptions.create("AlertsChannel", {
     connected() {},
@@ -102,9 +101,5 @@ export function disconnectAlertsChannel() {
   if (subscription) {
     subscription.unsubscribe()
     subscription = null
-  }
-  if (consumer) {
-    consumer.disconnect()
-    consumer = null
   }
 }

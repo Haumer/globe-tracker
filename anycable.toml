@@ -1,0 +1,18 @@
+# AnyCable server configuration.
+# Read more at https://docs.anycable.io/anycable-go/configuration
+
+secret = "anycable-local-secret"
+
+# Broadcasting adapter — HTTP from Rails to AnyCable-Go
+broadcast_adapters = ["http"]
+
+[logging]
+debug = true
+
+# Use HTTP RPC for custom ActionCable channels (EventsChannel, AlertsChannel)
+[rpc]
+implementation = "http"
+host = "http://localhost:3002/_anycable"
+
+[redis]
+url = "redis://localhost:6379/1"

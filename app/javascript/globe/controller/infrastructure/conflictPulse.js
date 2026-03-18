@@ -52,9 +52,12 @@ export function applyConflictPulseMethods(GlobeController) {
       zones.forEach(z => { this._conflictPulsePrev[z.cell_key] = z })
 
       this._conflictPulseData = zones
+      this._conflictPulseZones = zones
       this._strikeArcData = data.strike_arcs || []
       this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
+      this._renderSituationPanel()
+      if (this._syncRightPanels) this._syncRightPanels()
     } catch (e) {
       console.warn("Conflict pulse fetch failed:", e)
     }
@@ -169,6 +172,7 @@ export function applyConflictPulseMethods(GlobeController) {
         if (arc.count < 2) return
         const t = Math.min(arc.count / 20, 1)
         const arcColor = Cesium.Color.fromCssColorString("#f44336")
+        const width = Math.min(1.5 + arc.count * 0.2, 5)
 
         // Build great-circle arc positions
         const arcPositions = this._buildArcPositions(arc.from_lat, arc.from_lng, arc.to_lat, arc.to_lng, 30)
@@ -178,16 +182,20 @@ export function applyConflictPulseMethods(GlobeController) {
           id: `cpulse-arc-${idx}`,
           polyline: {
             positions: arcPositions,
-            width: Math.min(1.5 + arc.count * 0.2, 5),
+            width: width,
             material: new Cesium.PolylineGlowMaterialProperty({
               glowPower: 0.15,
               color: arcColor.withAlpha(0.3 + t * 0.4),
             }),
           },
+          properties: {
+            arcIdx: idx,
+            clickable: true,
+          },
         })
         this._conflictPulseEntities.push(line)
 
-        // Small label at midpoint
+        // Clickable midpoint billboard for interaction
         const midIdx = Math.floor(arcPositions.length / 2)
         const midLabel = ds.entities.add({
           id: `cpulse-arc-lbl-${idx}`,
@@ -205,6 +213,10 @@ export function applyConflictPulseMethods(GlobeController) {
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
             scaleByDistance: new Cesium.NearFarScalar(5e5, 0.8, 8e6, 0.0),
             translucencyByDistance: new Cesium.NearFarScalar(5e5, 0.8, 8e6, 0.0),
+          },
+          properties: {
+            arcIdx: idx,
+            clickable: true,
           },
         })
         this._conflictPulseEntities.push(midLabel)
@@ -549,7 +561,7 @@ export function applyConflictPulseMethods(GlobeController) {
       </button>` : ""}
 
       <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${this._escapeHtml(JSON.stringify(s))}">
-        <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal All Connected Layers
+        <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area
       </button>
 
       <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
@@ -563,17 +575,17 @@ export function applyConflictPulseMethods(GlobeController) {
 
   }
 
-  // ── Reveal all connected layers ─────────────────────────────
+  // ── Explore area — scoped layer reveal (only layers with signals, viewport-bounded) ──
 
   GlobeController.prototype.revealPulseConnections = function(event) {
     const btn = event.currentTarget
 
-    // Toggle: if already revealed, hide all enabled layers
+    // Toggle off: hide layers we enabled
     if (btn.dataset.revealed === "true") {
       (this._revealedLayers || []).forEach(toggle => this._disableLayer(toggle))
       this._revealedLayers = []
       btn.dataset.revealed = "false"
-      btn.innerHTML = `<i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal All Connected Layers`
+      btn.innerHTML = `<i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area`
       btn.style.background = "rgba(244,67,54,0.2)"
       btn.style.borderColor = "rgba(244,67,54,0.4)"
       btn.style.color = "#f44336"
@@ -588,16 +600,15 @@ export function applyConflictPulseMethods(GlobeController) {
 
     const Cesium = window.Cesium
 
-    // Step 1: Fly to area FIRST — this sets the viewport bounds
-    // Layers enabled after arrival will only fetch data for the visible area
+    // Fly to area at ~300km altitude — tight viewport scopes data fetches
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>Flying to area...`
     btn.disabled = true
 
     this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800000),
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, 400000),
       duration: 1.5,
       complete: () => {
-        // Step 2: Now enable layers — viewport-aware fetching means only nearby data loads
+        // Only enable layers that have actual detected signals for this zone
         const layerMap = {
           military_flights: "flightsToggle",
           gps_jamming: "gpsJammingToggle",
@@ -606,41 +617,84 @@ export function applyConflictPulseMethods(GlobeController) {
           internet_outage: "internetOutagesToggle",
         }
 
+        this._revealedLayers = []
         const enabled = []
 
-        // Always enable flights + conflicts for context
-        this._enableLayer("flightsToggle"); enabled.push("flights")
-        this._enableLayer("conflictsToggle"); enabled.push("conflicts")
-
-        // Enable layers that have detected signals
         for (const [signal, toggle] of Object.entries(layerMap)) {
           if (signals[signal]) {
             this._enableLayer(toggle)
+            this._revealedLayers.push(toggle)
             enabled.push(signal.replace(/_/g, " "))
           }
         }
 
-        // Lightweight static layers (no API calls — already cached)
-        this._enableLayer("cablesToggle")
-        this._enableLayer("chokepointsToggle")
+        if (!enabled.length) {
+          // No signals — at least show conflicts for context
+          this._enableLayer("conflictsToggle")
+          this._revealedLayers.push("conflictsToggle")
+          enabled.push("conflicts")
+        }
 
-        // Track which layers we enabled so we can hide them later
-        this._revealedLayers = enabled.map(name => {
-          const map = { "flights": "flightsToggle", "conflicts": "conflictsToggle", "military flights": "flightsToggle", "gps jamming": "gpsJammingToggle", "fire hotspots": "firesToggle", "known conflict zone": "conflictsToggle", "internet outage": "internetOutagesToggle" }
-          return map[name]
-        }).filter(Boolean)
-        this._revealedLayers.push("cablesToggle", "chokepointsToggle")
-
-        btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Revealed Layers`
+        btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Layers`
         btn.style.background = "rgba(76,175,80,0.2)"
         btn.style.borderColor = "rgba(76,175,80,0.4)"
         btn.style.color = "#4caf50"
         btn.disabled = false
         btn.dataset.revealed = "true"
 
-        this._toast(`Revealed: ${enabled.join(", ")}`, "success")
+        this._toast(`Showing: ${enabled.join(", ")}`, "success")
       },
     })
+  }
+
+  // ── Strike arc detail panel ────────────────────────────────
+
+  GlobeController.prototype.showStrikeArcDetail = function(arc) {
+    const width = Math.min(1.5 + arc.count * 0.2, 5).toFixed(1)
+    const intensity = arc.count >= 15 ? "Very high" : arc.count >= 8 ? "High" : arc.count >= 4 ? "Moderate" : "Low"
+
+    let headlinesHtml = ""
+    const samples = arc.sample_headlines || []
+    if (samples.length) {
+      headlinesHtml = samples.map(h =>
+        `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h)}</div>`
+      ).join("")
+    }
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:#f44336;">
+        <i class="fa-solid fa-arrows-left-right" style="margin-right:6px;"></i>STRIKE ARC
+      </div>
+      <div style="font:600 14px var(--gt-sans,sans-serif);color:rgba(220,230,245,0.85);margin:4px 0 8px;">
+        ${this._escapeHtml(arc.from_name)} → ${this._escapeHtml(arc.to_name)}
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Mentions</span>
+          <span class="detail-value" style="color:#f44336;">${arc.count}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Intensity</span>
+          <span class="detail-value">${intensity}</span>
+        </div>
+      </div>
+
+      <div style="margin:10px 0;">
+        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">ARC THICKNESS</div>
+        <div style="font:400 10px var(--gt-sans,sans-serif);color:rgba(200,210,225,0.4);line-height:1.5;">
+          Width scales with mention count (${width}px). More headlines mentioning this actor pair → thicker arc. Extracted from ${arc.count} headlines that mention both "${this._escapeHtml(arc.from_name)}" and "${this._escapeHtml(arc.to_name)}" with directional attack language.
+        </div>
+      </div>
+
+      ${headlinesHtml ? `
+        <div style="margin:10px 0;">
+          <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">SAMPLE HEADLINES</div>
+          ${headlinesHtml}
+        </div>
+      ` : ""}
+    `
+    this.detailPanelTarget.style.display = ""
   }
 
   // ── Helper: enable a layer toggle if it exists and is off ──
@@ -995,5 +1049,233 @@ export function applyConflictPulseMethods(GlobeController) {
     })
 
     this._requestRender()
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Situations Right Panel — theater-grouped, expandable cards
+  // ═══════════════════════════════════════════════════════════
+
+  GlobeController.prototype._renderSituationPanel = function() {
+    const list = this.hasSitListTarget ? this.sitListTarget : null
+    const countEl = this.hasSitCountTarget ? this.sitCountTarget : null
+    if (!list) return
+
+    const zones = this._conflictPulseZones || []
+    if (countEl) countEl.textContent = `${zones.length} zone${zones.length !== 1 ? "s" : ""}`
+
+    if (!zones.length) {
+      list.innerHTML = ""
+      return
+    }
+
+    // Group by theater
+    const theaters = {}
+    zones.forEach(z => {
+      const t = z.theater || "Other"
+      ;(theaters[t] ||= []).push(z)
+    })
+
+    // Sort theaters by max pulse_score descending
+    const sorted = Object.entries(theaters).sort((a, b) => {
+      const maxA = Math.max(...a[1].map(z => z.pulse_score))
+      const maxB = Math.max(...b[1].map(z => z.pulse_score))
+      return maxB - maxA
+    })
+
+    // Track expanded state
+    if (!this._sitExpanded) this._sitExpanded = {}
+
+    const trendColors = { surging: "#f44336", active: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
+    const trendArrows = { surging: "▲", escalating: "↗", active: "●", elevated: "→", baseline: "↓" }
+
+    let html = ""
+    sorted.forEach(([theater, theaterZones], tIdx) => {
+      const maxScore = Math.max(...theaterZones.map(z => z.pulse_score))
+      const collapsed = maxScore < 40
+
+      html += `<div class="sit-theater${collapsed ? " sit-theater--collapsed" : ""}">`
+      html += `<div class="sit-theater-header" data-action="click->globe#toggleSitTheater" data-idx="${tIdx}">
+        <span class="sit-theater-arrow">${collapsed ? "▸" : "▾"}</span>
+        <span class="sit-theater-name">${this._escapeHtml(theater)}</span>
+        <span class="sit-theater-count">${theaterZones.length}</span>
+      </div>`
+      html += `<div class="sit-theater-body"${collapsed ? ' style="display:none;"' : ""}>`
+
+      theaterZones.sort((a, b) => b.pulse_score - a.pulse_score).forEach(zone => {
+        const color = trendColors[zone.escalation_trend] || "#ff9800"
+        const arrow = trendArrows[zone.escalation_trend] || ""
+        const key = zone.cell_key
+        const state = this._sitExpanded[key] || "collapsed"
+
+        html += `<div class="sit-zone sit-zone--${state}" data-zone-key="${this._escapeHtml(key)}">`
+
+        // Always: compact header line
+        html += `<div class="sit-zone-header" data-action="click->globe#toggleSitZone" data-zone-key="${this._escapeHtml(key)}">
+          <span class="sit-zone-name">${this._escapeHtml(zone.situation_name || "Developing")}</span>
+          <span class="sit-zone-score" style="color:${color};">${zone.pulse_score} ${arrow} <span class="sit-zone-trend">${zone.escalation_trend.toUpperCase()}</span></span>
+        </div>`
+
+        // Summary state: top headline + signal count chips
+        if (state === "summary" || state === "expanded") {
+          const topArticle = (zone.top_articles || [])[0]
+          html += `<div class="sit-zone-summary">`
+          if (topArticle) {
+            const timeAgo = topArticle.published_at ? this._timeAgo(new Date(topArticle.published_at)) : ""
+            html += `<div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
+              <div class="sit-zone-meta">${this._escapeHtml(topArticle.source || "")} · ${timeAgo}</div>`
+          }
+          // Signal count chips (compact)
+          const s = zone.cross_layer_signals || {}
+          const chips = []
+          if (s.military_flights) chips.push(`<span class="sit-chip sit-chip--mil">🛩 ${s.military_flights}</span>`)
+          if (s.gps_jamming) chips.push(`<span class="sit-chip sit-chip--jam">📡 ${s.gps_jamming}%</span>`)
+          if (s.fire_hotspots) chips.push(`<span class="sit-chip sit-chip--fire">🔥 ${s.fire_hotspots}</span>`)
+          if (s.known_conflict_zone) chips.push(`<span class="sit-chip sit-chip--hist">📊 ${s.known_conflict_zone}</span>`)
+          if (s.internet_outage) chips.push(`<span class="sit-chip sit-chip--out">⚡ outage</span>`)
+          if (chips.length) html += `<div class="sit-zone-chips">${chips.join("")}</div>`
+          html += `</div>`
+        }
+
+        // Expanded state: full detail
+        if (state === "expanded") {
+          html += `<div class="sit-zone-detail">`
+
+          // Stats
+          html += `<div class="sit-zone-stats">
+            <span>${zone.count_24h} reports today</span> · <span>${zone.source_count} sources</span> · <span>spike ${zone.spike_ratio}x</span>
+          </div>`
+
+          // Top stories
+          const articles = (zone.top_articles || []).slice(0, 5)
+          if (articles.length) {
+            html += `<div class="sit-section-label">TOP STORIES</div>`
+            articles.forEach(a => {
+              const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
+              html += `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" class="sit-article">
+                <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
+                <div class="sit-article-meta">${this._escapeHtml(a.source || "")} · ${timeAgo}</div>
+              </a>`
+            })
+            if (zone.count_24h > 5) html += `<div class="sit-more">+${zone.count_24h - 5} more</div>`
+          }
+
+          // Why these layers matter
+          const signals = zone.cross_layer_signals || {}
+          const context = zone.signal_context || {}
+          const signalEntries = Object.entries(signals).filter(([_, v]) => v)
+          if (signalEntries.length) {
+            html += `<div class="sit-section-label">WHY THESE LAYERS MATTER</div>`
+            const signalIcons = {
+              military_flights: "🛩",
+              gps_jamming: "📡",
+              fire_hotspots: "🔥",
+              known_conflict_zone: "📊",
+              internet_outage: "⚡",
+            }
+            const signalLabels = {
+              military_flights: "military flights",
+              gps_jamming: "GPS jamming",
+              fire_hotspots: "fire hotspots",
+              known_conflict_zone: "historical incidents",
+              internet_outage: "internet outage",
+            }
+            signalEntries.forEach(([key, val]) => {
+              const icon = signalIcons[key] || "📎"
+              const label = signalLabels[key] || key.replace(/_/g, " ")
+              const desc = context[key] || ""
+              const valStr = typeof val === "number" ? (key === "gps_jamming" ? `${val}%` : val) : val
+              html += `<div class="sit-signal">
+                <div class="sit-signal-header">${icon} ${valStr} ${this._escapeHtml(label)}</div>
+                ${desc ? `<div class="sit-signal-desc">${this._escapeHtml(desc)}</div>` : ""}
+              </div>`
+            })
+          }
+
+          // Explore button
+          html += `<button class="sit-explore-btn" data-action="click->globe#exploreSituation" data-zone-key="${this._escapeHtml(key)}">
+            Explore this area →
+          </button>`
+
+          html += `</div>`
+        }
+
+        html += `</div>` // .sit-zone
+      })
+
+      html += `</div></div>` // .sit-theater-body, .sit-theater
+    })
+
+    list.innerHTML = html
+  }
+
+  // ── Toggle theater group collapse ──────────────────────────
+
+  GlobeController.prototype.toggleSitTheater = function(event) {
+    const header = event.currentTarget
+    const theater = header.closest(".sit-theater")
+    if (!theater) return
+    const body = theater.querySelector(".sit-theater-body")
+    const arrow = header.querySelector(".sit-theater-arrow")
+    if (!body) return
+    const hidden = body.style.display === "none"
+    body.style.display = hidden ? "" : "none"
+    if (arrow) arrow.textContent = hidden ? "▾" : "▸"
+    theater.classList.toggle("sit-theater--collapsed", !hidden)
+  }
+
+  // ── Toggle zone card state: collapsed → summary → expanded → collapsed ──
+
+  GlobeController.prototype.toggleSitZone = function(event) {
+    const key = event.currentTarget.dataset.zoneKey
+    if (!this._sitExpanded) this._sitExpanded = {}
+    const current = this._sitExpanded[key] || "collapsed"
+    const next = current === "collapsed" ? "summary" : current === "summary" ? "expanded" : "collapsed"
+    this._sitExpanded[key] = next
+    this._renderSituationPanel()
+  }
+
+  // ── Explore situation: scoped layer reveal ─────────────────
+
+  GlobeController.prototype.exploreSituation = function(event) {
+    const key = event.currentTarget.dataset.zoneKey
+    const zone = this._conflictPulseZones?.find(z => z.cell_key === key)
+    if (!zone) return
+
+    const signals = zone.cross_layer_signals || {}
+    const Cesium = window.Cesium
+
+    // Save current camera for back navigation
+    this._savedExploreCamera = {
+      position: Cesium.Cartesian3.clone(this.viewer.camera.position),
+      heading: this.viewer.camera.heading,
+      pitch: this.viewer.camera.pitch,
+      roll: this.viewer.camera.roll,
+    }
+
+    // Track which layers we enable so we can undo
+    this._exploreRevealedLayers = []
+
+    // Fly to zone
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 800000),
+      duration: 1.5,
+      complete: () => {
+        // Enable only layers with actual signals
+        const layerMap = {
+          military_flights: "flightsToggle",
+          gps_jamming: "gpsJammingToggle",
+          fire_hotspots: "firesToggle",
+          known_conflict_zone: "conflictsToggle",
+          internet_outage: "internetOutagesToggle",
+        }
+        for (const [signal, toggle] of Object.entries(layerMap)) {
+          if (signals[signal]) {
+            this._enableLayer(toggle)
+            this._exploreRevealedLayers.push(toggle)
+          }
+        }
+        this._toast(`Exploring ${zone.situation_name || "situation"}`, "success")
+      },
+    })
   }
 }

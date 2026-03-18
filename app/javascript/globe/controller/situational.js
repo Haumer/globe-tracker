@@ -1113,17 +1113,19 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype._syncRightPanels = function() {
     // Determine which tabs should be visible based on active layers/data
-    const hasEntities = true // Always show entities tab
+    const hasEntities = this.flightsVisible || this.shipsVisible || this.satellitesVisible
     const hasNews = this.newsVisible && this._newsData?.length > 0
     const hasThreats = !!this._threatsActive
     const hasCameras = this.camerasVisible && this._webcamData?.length > 0
     const hasAlerts = this.signedInValue && this._alertData?.length > 0
     const hasInsights = this._insightsData?.length > 0
+    const hasSituations = this._conflictPulseZones?.length > 0
 
-    // Show/hide tab buttons (entities always visible)
-    if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = ""
+    // Show/hide tab buttons
+    if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
     if (this.hasRpTabNewsTarget) this.rpTabNewsTarget.style.display = hasNews ? "" : "none"
     if (this.hasRpTabThreatsTarget) this.rpTabThreatsTarget.style.display = hasThreats ? "" : "none"
+    if (this.hasRpTabSituationsTarget) this.rpTabSituationsTarget.style.display = hasSituations ? "" : "none"
     if (this.hasRpTabCamerasTarget) this.rpTabCamerasTarget.style.display = hasCameras ? "" : "none"
     if (this.hasRpTabAlertsTarget) this.rpTabAlertsTarget.style.display = hasAlerts ? "" : "none"
     if (this.hasRpTabInsightsTarget) this.rpTabInsightsTarget.style.display = hasInsights ? "" : "none"
@@ -1134,7 +1136,7 @@ export function applySituationalMethods(GlobeController) {
       return
     }
 
-    const anyTabVisible = hasEntities || hasNews || hasThreats || hasCameras || hasAlerts || hasInsights
+    const anyTabVisible = hasEntities || hasNews || hasThreats || hasSituations || hasCameras || hasAlerts || hasInsights
     if (!anyTabVisible) {
       if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
       this._repositionDetailStack(12)
@@ -1146,14 +1148,16 @@ export function applySituationalMethods(GlobeController) {
     // If current active tab is now hidden, switch to first visible tab
     const activePane = this.hasRightPanelTarget && this.rightPanelTarget.querySelector(".rp-pane--active")
     const activePaneKey = activePane?.dataset.rpPane
-    const activeTabHidden = (activePaneKey === "news" && !hasNews) ||
+    const activeTabHidden = (activePaneKey === "entities" && !hasEntities) ||
+                            (activePaneKey === "news" && !hasNews) ||
                             (activePaneKey === "threats" && !hasThreats) ||
+                            (activePaneKey === "situations" && !hasSituations) ||
                             (activePaneKey === "cameras" && !hasCameras) ||
                             (activePaneKey === "alerts" && !hasAlerts) ||
                             (activePaneKey === "insights" && !hasInsights)
 
     if (activeTabHidden || !activePaneKey) {
-      const firstVisible = hasEntities ? "entities" : hasNews ? "news" : hasThreats ? "threats" : hasInsights ? "insights" : hasCameras ? "cameras" : "alerts"
+      const firstVisible = hasSituations ? "situations" : hasEntities ? "entities" : hasNews ? "news" : hasInsights ? "insights" : hasThreats ? "threats" : hasCameras ? "cameras" : "alerts"
       this._activateRightTab(firstVisible)
     }
 

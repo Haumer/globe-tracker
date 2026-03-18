@@ -1,0 +1,188 @@
+<div class="landing">
+
+  <%# ── Hero ── %>
+  <section class="landing-hero">
+    <div class="landing-hero-inner">
+      <h1 class="landing-headline">Every open-source signal, mapped.</h1>
+      <p class="landing-sub">A real-time intelligence platform that aggregates 30+ open data feeds — flights, ships, satellites, conflicts, earthquakes, fires, news, and infrastructure — onto a single 3D globe.</p>
+      <div class="landing-cta-row">
+        <%= link_to root_path, class: "landing-cta" do %>
+          Open the Globe
+        <% end %>
+        <%= link_to "Data Sources", sources_path, class: "landing-cta landing-cta--secondary" %>
+      </div>
+    </div>
+  </section>
+
+  <%# ── What it tracks ── %>
+  <section class="landing-section">
+    <div class="landing-section-inner">
+      <h2 class="landing-section-title">What it tracks</h2>
+
+      <div class="landing-domains">
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Aviation</h3>
+          <p class="landing-domain-desc">Live ADS-B flight tracking with military aircraft classification, airport data, airspace boundaries, and NOTAMs.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">ADS-B Exchange</span>
+            <span class="landing-feed">OpenSky</span>
+            <span class="landing-feed">OpenAIP</span>
+            <span class="landing-feed">OurAirports</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Maritime</h3>
+          <p class="landing-domain-desc">Real-time AIS vessel tracking with chokepoint monitoring at critical straits — Hormuz, Malacca, Suez, and more.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">AIS Stream</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Space</h3>
+          <p class="landing-domain-desc">Satellite orbits, classified satellite enrichment, and GPS jamming zone detection.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">CelesTrak</span>
+            <span class="landing-feed">UCS Database</span>
+            <span class="landing-feed">GPSJam</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Conflict</h3>
+          <p class="landing-domain-desc">ACLED and UCDP event data with computed conflict pulse zones showing escalation and hotspot intensity.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">ACLED</span>
+            <span class="landing-feed">UCDP</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Natural Events</h3>
+          <p class="landing-domain-desc">Earthquakes, fire hotspots, natural disasters, and severe weather alerts — all geo-located and continuously updated.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">USGS</span>
+            <span class="landing-feed">NASA FIRMS</span>
+            <span class="landing-feed">EONET</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Infrastructure</h3>
+          <p class="landing-domain-desc">Submarine cables, pipelines, power plants, and railways mapped globally.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">TeleGeography</span>
+            <span class="landing-feed">GEM</span>
+            <span class="landing-feed">WRI</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">News</h3>
+          <p class="landing-domain-desc">Multi-source news from GDELT and RSS with AI threat classification, geocoding, and daily intelligence briefs.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">GDELT</span>
+            <span class="landing-feed">RSS</span>
+          </div>
+        </div>
+
+        <div class="landing-domain">
+          <h3 class="landing-domain-name">Internet</h3>
+          <p class="landing-domain-desc">Traffic anomalies and internet outage detection across global networks.</p>
+          <div class="landing-domain-feeds">
+            <span class="landing-feed">Cloudflare Radar</span>
+            <span class="landing-feed">IODA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%# ── How it works ── %>
+  <section class="landing-section landing-section--alt">
+    <div class="landing-section-inner">
+      <h2 class="landing-section-title">How it works</h2>
+
+      <div class="landing-pipeline">
+        <div class="landing-pipe-step">
+          <div class="landing-pipe-num">1</div>
+          <div>
+            <h3 class="landing-pipe-name">Ingest</h3>
+            <p class="landing-pipe-desc">Background jobs poll APIs, WebSocket streams, and RSS feeds on intervals from 30 seconds to 24 hours.</p>
+          </div>
+        </div>
+        <div class="landing-pipe-step">
+          <div class="landing-pipe-num">2</div>
+          <div>
+            <h3 class="landing-pipe-name">Classify</h3>
+            <p class="landing-pipe-desc">AI classifiers tag military aircraft, score threat levels, detect GPS jamming zones, and compute conflict intensities.</p>
+          </div>
+        </div>
+        <div class="landing-pipe-step">
+          <div class="landing-pipe-num">3</div>
+          <div>
+            <h3 class="landing-pipe-name">Push</h3>
+            <p class="landing-pipe-desc">ActionCable delivers breaking events to the browser in real time. No refresh needed.</p>
+          </div>
+        </div>
+        <div class="landing-pipe-step">
+          <div class="landing-pipe-num">4</div>
+          <div>
+            <h3 class="landing-pipe-name">Render</h3>
+            <p class="landing-pipe-desc">CesiumJS renders everything on a photorealistic 3D globe with Google tiles, time-slider, and layer controls.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%# ── Features ── %>
+  <section class="landing-section">
+    <div class="landing-section-inner">
+      <h2 class="landing-section-title">Features</h2>
+
+      <div class="landing-features">
+        <div class="landing-feature">40+ toggleable layers</div>
+        <div class="landing-feature">Time-slider playback</div>
+        <div class="landing-feature">Watchlists and alerts</div>
+        <div class="landing-feature">AI intelligence briefs</div>
+        <div class="landing-feature">Live webcam feeds</div>
+        <div class="landing-feature">Real-time push updates</div>
+        <div class="landing-feature">GeoJSON and CSV export</div>
+        <div class="landing-feature">Commodity price tracking</div>
+        <div class="landing-feature">Military aircraft detection</div>
+        <div class="landing-feature">GPS jamming detection</div>
+        <div class="landing-feature">Chokepoint monitoring</div>
+        <div class="landing-feature">Area intelligence reports</div>
+      </div>
+    </div>
+  </section>
+
+  <%# ── Stack ── %>
+  <section class="landing-section landing-section--alt">
+    <div class="landing-section-inner">
+      <h2 class="landing-section-title">Built with</h2>
+      <div class="landing-stack">
+        <span class="landing-stack-item">Ruby on Rails</span>
+        <span class="landing-stack-item">CesiumJS</span>
+        <span class="landing-stack-item">Google 3D Tiles</span>
+        <span class="landing-stack-item">ActionCable</span>
+        <span class="landing-stack-item">Stimulus</span>
+        <span class="landing-stack-item">PostgreSQL</span>
+        <span class="landing-stack-item">Sidekiq</span>
+        <span class="landing-stack-item">OpenAI</span>
+      </div>
+    </div>
+  </section>
+
+  <%# ── Bottom ── %>
+  <section class="landing-bottom">
+    <div class="landing-section-inner">
+      <%= link_to root_path, class: "landing-cta" do %>
+        Open the Globe
+      <% end %>
+      <p class="landing-bottom-note">Personal project. All data from publicly accessible or open-source feeds.</p>
+    </div>
+  </section>
+</div>

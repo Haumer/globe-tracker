@@ -135,16 +135,19 @@ export function applyMiniTimelineMethods(GlobeController) {
       html += `<div class="mt-dot" style="position:absolute;left:${bucket.pct}%;top:${top}px;width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:${opacity};pointer-events:all;cursor:pointer;" data-mt-lat="${firstEv.lat}" data-mt-lng="${firstEv.lng}" data-mt-title="${(firstEv.title || firstEv.name || bucket.type).replace(/"/g, '&quot;')}" data-mt-type="${bucket.type}" data-mt-count="${count}"></div>`
     }
 
-    // Anomaly diamonds — rendered at far right (they're current, not historical)
-    anomalies.forEach((a, i) => {
-      if (!a.lat) return
+    // Anomaly pips — small vertical ticks along the right edge, color-coded by type
+    const maxAnomalies = Math.min(anomalies.length, 16)
+    const pipWidth = 3
+    const pipSpacing = Math.max(1, Math.floor(60 / maxAnomalies))
+    for (let i = 0; i < maxAnomalies; i++) {
+      const a = anomalies[i]
+      if (!a.lat) continue
       const color = ANOMALY_COLORS[a.type] || a.color || "#f44336"
-      const size = Math.min(6 + a.severity, 14)
-      const top = 8 - size / 2
-      // Stack anomalies near the right edge
-      const rightPct = 98 - i * 3
-      html += `<div class="mt-dot mt-anomaly" style="position:absolute;left:${rightPct}%;top:${top}px;width:${size}px;height:${size}px;transform:rotate(45deg);background:${color};pointer-events:all;cursor:pointer;box-shadow:0 0 4px ${color};" data-mt-lat="${a.lat}" data-mt-lng="${a.lng}" data-mt-title="${(a.title || a.type).replace(/"/g, '&quot;')}" data-mt-type="${a.type}" data-mt-count="1"></div>`
-    })
+      const pipHeight = Math.min(4 + Math.round(a.severity * 0.8), 12)
+      const top = 14 - pipHeight
+      const rightPct = 97 - i * pipSpacing
+      html += `<div class="mt-dot mt-anomaly" style="position:absolute;left:${rightPct}%;top:${top}px;width:${pipWidth}px;height:${pipHeight}px;border-radius:1px;background:${color};opacity:0.9;pointer-events:all;cursor:pointer;" data-mt-lat="${a.lat}" data-mt-lng="${a.lng}" data-mt-title="${(a.title || a.type).replace(/"/g, '&quot;')}" data-mt-type="${a.type}" data-mt-count="1"></div>`
+    }
 
     container.innerHTML = html
     this._renderAnomalyIndicator()

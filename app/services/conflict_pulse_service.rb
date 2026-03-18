@@ -15,7 +15,7 @@ class ConflictPulseService
   # High-propaganda sources get discounted further
   HIGH_RISK_DISCOUNT = 0.3
 
-  # Situation names — map cell regions to human-readable labels
+  # Situation names — map cell regions to human-readable labels (checked first, most specific)
   SITUATION_NAMES = {
     "Israel-Palestine" => { lat: 30..33, lng: 34..36 },
     "Iran Theater" => { lat: 34..37, lng: 50..54 },
@@ -39,6 +39,68 @@ class ConflictPulseService
     "Washington DC" => { lat: 38..40, lng: -78..-76 },
     "Taiwan Strait" => { lat: 23..26, lng: 118..122 },
     "Korean Peninsula" => { lat: 37..40, lng: 125..128 },
+  }.freeze
+
+  # Country/region bounds — broad fallback when SITUATION_NAMES doesn't match
+  COUNTRY_BOUNDS = {
+    "Ukraine" => { lat: 44..53, lng: 22..41 },
+    "Russia" => { lat: 41..82, lng: 19..180 },
+    "Syria" => { lat: 32..37, lng: 35..42 },
+    "Yemen" => { lat: 12..19, lng: 42..54 },
+    "Libya" => { lat: 19..34, lng: 9..25 },
+    "Somalia" => { lat: -2..12, lng: 41..51 },
+    "Ethiopia" => { lat: 3..15, lng: 33..48 },
+    "Nigeria" => { lat: 4..14, lng: 3..15 },
+    "Mali" => { lat: 10..25, lng: -12..4 },
+    "DR Congo" => { lat: -14..6, lng: 12..32 },
+    "Mozambique" => { lat: -27..-10, lng: 30..41 },
+    "South Sudan" => { lat: 3..13, lng: 24..36 },
+    "Central African Republic" => { lat: 2..11, lng: 14..28 },
+    "Burkina Faso" => { lat: 9..15, lng: -6..3 },
+    "Niger" => { lat: 11..24, lng: 0..16 },
+    "Chad" => { lat: 7..24, lng: 13..24 },
+    "Cameroon" => { lat: 2..13, lng: 8..17 },
+    "Egypt" => { lat: 22..32, lng: 25..37 },
+    "Saudi Arabia" => { lat: 16..33, lng: 34..56 },
+    "Jordan" => { lat: 29..34, lng: 35..39 },
+    "Afghanistan" => { lat: 29..39, lng: 60..75 },
+    "Pakistan" => { lat: 24..37, lng: 61..78 },
+    "India" => { lat: 6..36, lng: 68..98 },
+    "China" => { lat: 18..54, lng: 73..135 },
+    "North Korea" => { lat: 37..43, lng: 124..131 },
+    "South Korea" => { lat: 33..39, lng: 124..130 },
+    "Japan" => { lat: 24..46, lng: 123..146 },
+    "Philippines" => { lat: 5..21, lng: 117..127 },
+    "Indonesia" => { lat: -11..6, lng: 95..141 },
+    "Thailand" => { lat: 5..21, lng: 97..106 },
+    "Vietnam" => { lat: 8..24, lng: 102..110 },
+    "Mexico" => { lat: 14..33, lng: -118..-86 },
+    "Colombia" => { lat: -5..13, lng: -80..-67 },
+    "Venezuela" => { lat: 1..13, lng: -73..-60 },
+    "Brazil" => { lat: -34..6, lng: -74..-35 },
+    "United States" => { lat: 24..50, lng: -125..-66 },
+    "Canada" => { lat: 41..84, lng: -141..-52 },
+    "United Kingdom" => { lat: 49..61, lng: -9..2 },
+    "France" => { lat: 41..52, lng: -5..10 },
+    "Germany" => { lat: 47..55, lng: 6..15 },
+    "Poland" => { lat: 49..55, lng: 14..25 },
+    "Romania" => { lat: 43..49, lng: 20..30 },
+    "Spain" => { lat: 36..44, lng: -10..4 },
+    "Italy" => { lat: 36..47, lng: 6..19 },
+    "Greece" => { lat: 34..42, lng: 19..30 },
+    "Algeria" => { lat: 19..37, lng: -9..12 },
+    "Tunisia" => { lat: 30..38, lng: 7..12 },
+    "Morocco" => { lat: 27..36, lng: -13..-1 },
+    "South Africa" => { lat: -35..-22, lng: 16..33 },
+    "Kenya" => { lat: -5..5, lng: 34..42 },
+    "Tanzania" => { lat: -12..-1, lng: 29..41 },
+    "Angola" => { lat: -18..-4, lng: 12..24 },
+    "Australia" => { lat: -44..-10, lng: 113..154 },
+    "Argentina" => { lat: -56..-21, lng: -74..-53 },
+    "Peru" => { lat: -19..0, lng: -82..-68 },
+    "Chile" => { lat: -56..-17, lng: -76..-66 },
+    "Ecuador" => { lat: -5..2, lng: -81..-75 },
+    "Haiti" => { lat: 18..20, lng: -75..-71 },
   }.freeze
 
   # Theaters — group related situations into broader conflicts
@@ -541,12 +603,12 @@ class ConflictPulseService
     lat = zone[:lat]
     lng = zone[:lng]
 
-    # Check static situation names
+    # 1. Check specific situation names first
     SITUATION_NAMES.each do |name, bounds|
       return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
     end
 
-    # Fallback: extract most-mentioned location from top headlines
+    # 2. Fallback: extract most-mentioned location from top headlines
     headlines = (zone[:top_headlines] || []).join(" ").downcase
     best_match = nil
     best_count = 0
@@ -557,7 +619,18 @@ class ConflictPulseService
         best_match = info[:name]
       end
     end
+    return "#{best_match} Region" if best_match
 
-    best_match ? "#{best_match} Region" : nil
+    # 3. Country-bounds lookup
+    COUNTRY_BOUNDS.each do |name, bounds|
+      return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+    end
+
+    # 4. Last resort — latitude-based region label
+    if lat > 60 then "Arctic Region"
+    elsif lat > 30 then "Northern #{lng > 0 ? 'Eastern' : 'Western'} Region"
+    elsif lat > -30 then "Tropical #{lng > 0 ? 'Eastern' : 'Western'} Region"
+    else "Southern #{lng > 0 ? 'Eastern' : 'Western'} Region"
+    end
   end
 end

@@ -103,18 +103,44 @@ class ConflictPulseService
     "Haiti" => { lat: 18..20, lng: -75..-71 },
   }.freeze
 
-  # Theaters — group related situations into broader conflicts
-  THEATERS = {
-    "Middle East / Iran War" => [
-      "Israel-Palestine", "Iran Theater", "Iran Region", "Lebanon-Israel Border",
-      "Iraq Theater", "Strait of Hormuz", "Red Sea / Bab el-Mandeb",
-      "Gulf States", "Gaza Strip", "Turkey", "Kuwait", "Eastern Mediterranean",
-    ],
-    "Russia-Ukraine War" => [
-      "Eastern Ukraine Front", "Kyiv Region", "Moscow / Western Russia",
-    ],
-    "Myanmar Civil War" => ["Myanmar", "Myanmar Region"],
-    "Afghanistan-Pakistan" => ["Pakistan-Afghanistan"],
+  # Named theaters — specific conflict clusters that should be grouped together
+  NAMED_THEATERS = {
+    "Israel-Palestine" => "Middle East / Iran War",
+    "Iran Theater" => "Middle East / Iran War",
+    "Iran Region" => "Middle East / Iran War",
+    "Lebanon-Israel Border" => "Middle East / Iran War",
+    "Iraq Theater" => "Middle East / Iran War",
+    "Strait of Hormuz" => "Middle East / Iran War",
+    "Red Sea / Bab el-Mandeb" => "Middle East / Iran War",
+    "Gulf States" => "Middle East / Iran War",
+    "Gaza Strip" => "Middle East / Iran War",
+    "Kuwait" => "Middle East / Iran War",
+    "Eastern Mediterranean" => "Middle East / Iran War",
+    "Saudi Arabia" => "Middle East / Iran War",
+    "Jordan" => "Middle East / Iran War",
+    "Yemen" => "Middle East / Iran War",
+    "Syria" => "Middle East / Iran War",
+    "Eastern Ukraine Front" => "Russia-Ukraine War",
+    "Kyiv Region" => "Russia-Ukraine War",
+    "Moscow / Western Russia" => "Russia-Ukraine War",
+    "Ukraine" => "Russia-Ukraine War",
+    "Myanmar Region" => "Myanmar Civil War",
+    "Pakistan-Afghanistan" => "Afghanistan-Pakistan",
+    "Afghanistan" => "Afghanistan-Pakistan",
+    "Pakistan" => "Afghanistan-Pakistan",
+    "Turkey" => "Middle East / Iran War",
+  }.freeze
+
+  # Region bounds for dynamic theater assignment — fallback when no named theater matches
+  THEATER_REGIONS = {
+    "Africa" =>          { lat: -35..37, lng: -18..52 },
+    "East Asia" =>       { lat: 18..54, lng: 100..146 },
+    "South Asia" =>      { lat: 5..37, lng: 60..100 },
+    "Southeast Asia" =>  { lat: -11..24, lng: 94..141 },
+    "Europe" =>          { lat: 35..72, lng: -10..40 },
+    "Russia & Central Asia" => { lat: 40..82, lng: 40..180 },
+    "Americas" =>        { lat: -56..72, lng: -170..-30 },
+    "Oceania" =>         { lat: -50..0, lng: 110..180 },
   }.freeze
 
   class << self
@@ -133,7 +159,7 @@ class ConflictPulseService
     # Assign situation names and theater groupings to zones
     zones.each do |z|
       z[:situation_name] = resolve_situation_name(z)
-      z[:theater] = THEATERS.find { |_, situs| situs.include?(z[:situation_name]) }&.first
+      z[:theater] = resolve_theater(z)
     end
 
     # Extract strike arcs from all conflict headlines (last 7 days)
@@ -636,5 +662,21 @@ class ConflictPulseService
     elsif lat > -30 then "Tropical #{lng > 0 ? 'Eastern' : 'Western'} Region"
     else "Southern #{lng > 0 ? 'Eastern' : 'Western'} Region"
     end
+  end
+
+  def resolve_theater(zone)
+    # 1. Named theater for known conflict clusters
+    named = NAMED_THEATERS[zone[:situation_name]]
+    return named if named
+
+    # 2. Region-based fallback from coordinates
+    lat = zone[:lat]
+    lng = zone[:lng]
+    THEATER_REGIONS.each do |region, bounds|
+      return region if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+    end
+
+    # 3. Should never happen, but just in case
+    "Global"
   end
 end

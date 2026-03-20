@@ -26,8 +26,8 @@ export function applyGpsJammingMethods(GlobeController) {
       if (!this.gpsJammingVisible) return
       const cells = await resp.json()
       if (!this.gpsJammingVisible) return
-      this._gpsJammingData = cells
-      this._renderGpsJamming(cells)
+      this._gpsJammingData = this.filterToRegion(cells)
+      this._renderGpsJamming(this._gpsJammingData)
       this._markFresh("gpsJamming")
       this._toastHide()
     } catch (e) {

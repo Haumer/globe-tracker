@@ -768,6 +768,17 @@ export function applyCoreMethods(GlobeController) {
     return !!this._activeRegion || !!this._activeCircle || this.selectedCountries.size > 0
   }
 
+  // Filter an array of geo-objects to only those within the active region/filter.
+  // Accepts objects with {latitude, longitude} or {lat, lng}.
+  GlobeController.prototype.filterToRegion = function(items) {
+    if (!this.hasActiveFilter()) return items
+    return items.filter(item => {
+      const lat = item.latitude ?? item.lat
+      const lng = item.longitude ?? item.lng
+      return lat != null && lng != null && this.pointPassesFilter(lat, lng)
+    })
+  }
+
   // ── Toast ──────────────────────────────────────────────────
 
   GlobeController.prototype._toast = function(msg, type) {

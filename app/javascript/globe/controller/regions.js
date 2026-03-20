@@ -30,16 +30,25 @@ export function applyRegionMethods(GlobeController) {
     // Set active region
     this._activeRegion = region
 
-    // Fly camera to region
+    // Fly camera to region — offset south so the tilted view centers on the region.
+    // When pitch is not straight-down, the camera looks north of its position,
+    // so we shift the camera south proportional to height and tilt angle.
     const Cesium = window.Cesium
     if (Cesium && this.viewer) {
+      const pitch = region.camera.pitch || -Cesium.Math.PI_OVER_TWO
+      const tiltFromDown = Math.abs(pitch + Math.PI / 2) // 0 = straight down, ~0.7 = 45°
+      const heightKm = region.camera.height / 1000
+      // Degrees-lat offset: sqrt of height keeps it sane at high altitudes
+      const latOffset = tiltFromDown * Math.sqrt(heightKm) * 0.25
+      const camLat = region.camera.lat - latOffset
+
       this.viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
-          region.camera.lng, region.camera.lat, region.camera.height
+          region.camera.lng, camLat, region.camera.height
         ),
         orientation: {
           heading: region.camera.heading || 0,
-          pitch: region.camera.pitch || -Cesium.Math.PI_OVER_TWO,
+          pitch: pitch,
           roll: 0,
         },
         duration: 2.0,

@@ -70,8 +70,8 @@ export function applyNewsMethods(GlobeController) {
       this._handleBackgroundRefresh(resp, "news", events.length > 0, () => {
         if (this.newsVisible && !this._timelineActive) this.fetchNews()
       })
-      this._newsData = events
-      this._renderNews(events)
+      this._newsData = this.filterToRegion(events)
+      this._renderNews(this._newsData)
       this._markFresh("news")
       if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()

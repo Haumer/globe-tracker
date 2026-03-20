@@ -204,7 +204,8 @@ class ChokepointMonitorService
     end
 
     def nearby_conflict_pulse(lat, lng)
-      zones = ConflictPulseService.analyze rescue []
+      result = ConflictPulseService.analyze rescue {}
+      zones = result.is_a?(Hash) ? (result[:zones] || []) : result
       zones.select do |z|
         dlat = (z[:lat] - lat).abs
         dlng = (z[:lng] - lng).abs

@@ -5,5 +5,10 @@ test:
   adapter: test
 
 production:
-  adapter: any_cable
+  adapter: redis
+  url: <%= ENV.fetch("REDIS_URL", "redis://localhost:6379/1") %>
   channel_prefix: globe_tracker_production
+  <% if ENV["REDIS_URL"]&.start_with?("rediss://") %>
+  ssl_params:
+    verify_mode: <%= OpenSSL::SSL::VERIFY_NONE %>
+  <% end %>

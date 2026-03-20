@@ -426,6 +426,7 @@ export function applyUiMethods(GlobeController) {
       selected_countries: [...this.selectedCountries],
       airline_filter: [...this._airlineFilter],
       open_sections: openSections,
+      active_region: this._activeRegion?.key || null,
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
@@ -649,6 +650,11 @@ export function applyUiMethods(GlobeController) {
     // Airline filter
     if (prefs.airline_filter && prefs.airline_filter.length > 0) {
       this._airlineFilter = new Set(prefs.airline_filter)
+    }
+
+    // Region mode restore (overrides camera + layers set above)
+    if (prefs.active_region && this.enterRegion) {
+      this.enterRegion(prefs.active_region)
     }
 
     // Sync quick bar and badges after restore

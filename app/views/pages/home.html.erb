@@ -30,6 +30,14 @@
     </div>
     <% end %>
 
+    <%# Region Mode %>
+    <div class="region-bar">
+      <div id="region-indicator" style="display:none;"></div>
+      <select class="region-select" id="region-select" data-action="change->globe#selectRegion" aria-label="Focus on a region">
+        <option value="">Select Region</option>
+      </select>
+    </div>
+
     <%# Search %>
     <div class="sb-search">
       <i class="fa-solid fa-magnifying-glass sb-search-icon" aria-hidden="true"></i>

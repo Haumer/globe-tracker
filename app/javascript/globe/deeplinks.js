@@ -70,6 +70,11 @@ export function encodeState(controller) {
     parts.push("co:" + [...controller.selectedCountries].join("|"))
   }
 
+  // Active region
+  if (controller._activeRegion) {
+    parts.push("r:" + controller._activeRegion.key)
+  }
+
   return "#" + parts.join(";")
 }
 
@@ -117,6 +122,8 @@ export function decodeHash(hash) {
       result.showMilitary = val.includes("m")
     } else if (key === "co") {
       result.countries = val.split("|")
+    } else if (key === "r") {
+      result.region = val
     }
   }
 
@@ -216,6 +223,11 @@ export function applyDeepLink(controller, state) {
       if (controller.hasBordersToggleTarget) controller.bordersToggleTarget.checked = true
       controller.toggleBorders()
     }
+  }
+
+  // Apply region (overrides camera + layers set above)
+  if (state.region && controller.enterRegion) {
+    controller.enterRegion(state.region)
   }
 
   controller._syncQuickBar()

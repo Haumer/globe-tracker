@@ -391,6 +391,7 @@ export function applyCoreMethods(GlobeController) {
 
     // Load workspace list for signed-in users
     this._loadWorkspaceList()
+    this._initRegions()
     this._startAlertPolling()
     this._startInsightPolling()
     this._startConflictPulse()
@@ -612,6 +613,9 @@ export function applyCoreMethods(GlobeController) {
   // Returns filter bounds from circle/countries, or viewport if no filter active
 
   GlobeController.prototype.getFilterBounds = function() {
+    // Region mode takes highest priority — scopes ALL data fetches
+    if (this._activeRegion) return this._activeRegion.bounds
+
     // Circle filter takes priority
     if (this._activeCircle) {
       const { center, radius } = this._activeCircle
@@ -655,6 +659,11 @@ export function applyCoreMethods(GlobeController) {
   // Check if a point passes the active filter (circle or country)
 
   GlobeController.prototype.pointPassesFilter = function(lat, lng) {
+    if (this._activeRegion) {
+      const b = this._activeRegion.bounds
+      return lat >= b.lamin && lat <= b.lamax && lng >= b.lomin && lng <= b.lomax
+    }
+
     if (this._activeCircle) {
       const dist = this.haversineDistance(this._activeCircle.center, { lat, lng })
       return dist <= this._activeCircle.radius
@@ -756,7 +765,7 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype.hasActiveFilter = function() {
-    return !!this._activeCircle || this.selectedCountries.size > 0
+    return !!this._activeRegion || !!this._activeCircle || this.selectedCountries.size > 0
   }
 
   // ── Toast ──────────────────────────────────────────────────

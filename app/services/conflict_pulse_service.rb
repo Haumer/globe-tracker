@@ -81,8 +81,14 @@ class ConflictPulseService
     "United States" => { lat: 24..50, lng: -125..-66 },
     "Canada" => { lat: 41..84, lng: -141..-52 },
     "United Kingdom" => { lat: 49..61, lng: -9..2 },
-    "France" => { lat: 41..52, lng: -5..10 },
-    "Germany" => { lat: 47..55, lng: 6..15 },
+    "Belgium" => { lat: 49.5..51.5, lng: 2.5..6.5 },
+    "Netherlands" => { lat: 51.3..53.5, lng: 3.4..7.2 },
+    "Denmark" => { lat: 54.5..58, lng: 8..16 },
+    "Sweden" => { lat: 55..69, lng: 11..24 },
+    "Norway" => { lat: 58..71, lng: 4..31 },
+    "Finland" => { lat: 60..70, lng: 20..32 },
+    "Germany" => { lat: 47..54.5, lng: 6..15 },
+    "France" => { lat: 41..49.5, lng: -5..10 },
     "Poland" => { lat: 49..55, lng: 14..25 },
     "Romania" => { lat: 43..49, lng: 20..30 },
     "Spain" => { lat: 36..44, lng: -10..4 },
@@ -382,6 +388,7 @@ class ConflictPulseService
     "north korea" => [39.0, 125.8],
     "kuwait" => [29.4, 48.0],
     "cuba" => [23.1, -82.4],
+    "greenland" => [64.2, -51.7], "denmark" => [55.7, 12.6], "copenhagen" => [55.7, 12.6],
   }.freeze
 
   # Prepositions that signal the event happened AT the following location

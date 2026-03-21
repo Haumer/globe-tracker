@@ -1,7 +1,7 @@
 class PurgeStaleDataJob < ApplicationJob
   queue_as :default
 
-  RETENTION = 7.days
+  RETENTION = 3.days
 
   def perform
     cutoff = RETENTION.ago

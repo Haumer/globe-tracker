@@ -154,9 +154,23 @@ class ConflictPulseService
       Rails.cache.fetch(CACHE_KEY, expires_in: 10.minutes) { new.compute_full }
     end
 
+    # Historical conflict pulse for time-travel playback.
+    # Buckets to the hour so scrubbing within the same hour hits cache.
+    def analyze_at(time)
+      bucket = time.beginning_of_hour
+      cache_key = "conflict_pulse_at:#{bucket.to_i}"
+      Rails.cache.fetch(cache_key, expires_in: 1.hour) do
+        new(at: bucket).compute_full_playback
+      end
+    end
+
     def invalidate
       Rails.cache.delete(CACHE_KEY)
     end
+  end
+
+  def initialize(at: Time.current)
+    @reference_time = at
   end
 
   def compute_full
@@ -169,7 +183,8 @@ class ConflictPulseService
     end
 
     # Extract strike arcs from all conflict headlines (last 7 days)
-    all_headlines = NewsEvent.where("published_at > ?", 7.days.ago)
+    all_headlines = NewsEvent.where("published_at > ?", @reference_time - 7.days)
+      .where("published_at <= ?", @reference_time)
       .where(category: CONFLICT_CATEGORIES)
       .where.not(title: [nil, ""])
       .pluck(:title)
@@ -204,8 +219,34 @@ class ConflictPulseService
     { zones: compute, strike_arcs: [], hex_cells: [] }
   end
 
+  # Playback variant — no cross-layer signals (live-only), no ActionCable broadcast
+  def compute_full_playback
+    zones = compute
+
+    zones.each do |z|
+      z[:situation_name] = resolve_situation_name(z)
+      z[:theater] = resolve_theater(z)
+    end
+
+    all_headlines = NewsEvent.where("published_at > ?", @reference_time - 7.days)
+      .where("published_at <= ?", @reference_time)
+      .where(category: CONFLICT_CATEGORIES)
+      .where.not(title: [nil, ""])
+      .pluck(:title)
+    raw_arcs = StrikeArcExtractor.extract(all_headlines)
+    strike_arcs = snap_arcs_to_zones(raw_arcs, zones)
+    hex_cells = build_hex_cells
+    link_hexes_to_zones(hex_cells, zones)
+
+    { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }
+  rescue => e
+    Rails.logger.error("ConflictPulseService compute_full_playback: #{e.message}")
+    { zones: [], strike_arcs: [], hex_cells: [] }
+  end
+
   def compute
-    articles = NewsEvent.where("published_at > ?", 7.days.ago)
+    articles = NewsEvent.where("published_at > ?", @reference_time - 7.days)
+      .where("published_at <= ?", @reference_time)
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :title, :url, :name, :latitude, :longitude, :tone, :source, :category,
@@ -235,7 +276,7 @@ class ConflictPulseService
       cells[cell_key(a.latitude, a.longitude)] << a
     end
 
-    now = Time.current
+    now = @reference_time
     zones = cells.filter_map do |key, events|
       next if events.size < MIN_ARTICLES
 
@@ -244,8 +285,8 @@ class ConflictPulseService
       centroid_lng = lng + CELL_SIZE / 2.0
 
       # Rolling windows
-      articles_24h = events.select { |e| e.published_at > 24.hours.ago }
-      articles_48h = events.select { |e| e.published_at > 48.hours.ago }
+      articles_24h = events.select { |e| e.published_at > now - 24.hours }
+      articles_48h = events.select { |e| e.published_at > now - 48.hours }
       count_24h = articles_24h.size
       count_7d = events.size
 
@@ -275,7 +316,7 @@ class ConflictPulseService
         avg_tone = 0.0
       end
 
-      tones_prev = events.select { |e| e.published_at&.between?(48.hours.ago, 24.hours.ago) }.filter_map(&:tone)
+      tones_prev = events.select { |e| e.published_at&.between?(now - 48.hours, now - 24.hours) }.filter_map(&:tone)
       prev_tone = tones_prev.any? ? tones_prev.sum / tones_prev.size.to_f : 0.0
 
       # Distinct stories
@@ -483,23 +524,23 @@ class ConflictPulseService
     bounds = bbox(lat, lng, 250)
     signals = {}
 
-    mil = Flight.within_bounds(bounds).where(military: true).where("updated_at > ?", 6.hours.ago).count
+    mil = Flight.within_bounds(bounds).where(military: true).where("updated_at > ?", @reference_time - 6.hours).count
     signals[:military_flights] = mil if mil > 0
 
-    jam = GpsJammingSnapshot.where("recorded_at > ? AND percentage > 10", 6.hours.ago)
+    jam = GpsJammingSnapshot.where("recorded_at > ? AND percentage > 10", @reference_time - 6.hours)
       .where(cell_lat: bounds[:lamin]..bounds[:lamax], cell_lng: bounds[:lomin]..bounds[:lomax])
     signals[:gps_jamming] = jam.maximum(:percentage)&.round(0) if jam.any?
 
     CrossLayerAnalyzer::COUNTRY_CENTROIDS.each do |code, (clat, clng)|
       next unless clat.between?(bounds[:lamin], bounds[:lamax]) && clng.between?(bounds[:lomin], bounds[:lomax])
-      outage = InternetOutage.where(entity_code: code).where("started_at > ? AND level IN (?)", 24.hours.ago, %w[critical major])
+      outage = InternetOutage.where(entity_code: code).where("started_at > ? AND level IN (?)", @reference_time - 24.hours, %w[critical major])
       if outage.any?
         signals[:internet_outage] = outage.first.entity_name
         break
       end
     end
 
-    fires = FireHotspot.where("acq_datetime > ?", 24.hours.ago)
+    fires = FireHotspot.where("acq_datetime > ?", @reference_time - 24.hours)
       .where(latitude: bounds[:lamin]..bounds[:lamax], longitude: bounds[:lomin]..bounds[:lomax]).count
     signals[:fire_hotspots] = fires if fires > 5
 
@@ -522,7 +563,8 @@ class ConflictPulseService
   HEX_COL_W  = HEX_RADIUS * 1.5 / COS_REF
 
   def build_hex_cells
-    articles = NewsEvent.where("published_at > ?", 7.days.ago)
+    articles = NewsEvent.where("published_at > ?", @reference_time - 7.days)
+      .where("published_at <= ?", @reference_time)
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :latitude, :longitude, :published_at, :tone)

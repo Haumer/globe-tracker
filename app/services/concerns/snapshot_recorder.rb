@@ -6,6 +6,12 @@ module SnapshotRecorder
   HEADING_THRESHOLD = 3      # degrees — capture course corrections
   SPEED_THRESHOLD   = 10     # m/s
 
+  # Ships move slowly and there are 22K+ of them — wider thresholds to cut volume ~5x
+  SHIP_LAT_LNG_THRESHOLD = 0.01   # ~1.1 km — ships move slowly, still smooth playback
+  SHIP_HEADING_THRESHOLD = 5      # degrees
+  SHIP_SPEED_THRESHOLD   = 15     # m/s
+  SHIP_MAX_SNAPSHOT_AGE  = 300    # 5 min — ships don't need 60s granularity
+
   # Call after upserting flights to record position snapshots
   def record_flight_snapshots(records)
     return if records.blank?
@@ -16,7 +22,7 @@ module SnapshotRecorder
 
     snapshots = records.filter_map do |r|
       next if r[:latitude].nil? || r[:longitude].nil?
-      next if snapshot_unchanged?(last_snapshots[r[:icao24]], r)
+      next if snapshot_unchanged?(last_snapshots[r[:icao24]], r, entity_type: "flight")
 
       {
         entity_type: "flight",
@@ -49,7 +55,7 @@ module SnapshotRecorder
 
     snapshots = records.filter_map do |r|
       next if r[:latitude].nil? || r[:longitude].nil?
-      next if snapshot_unchanged?(last_snapshots[r[:mmsi]], r)
+      next if snapshot_unchanged?(last_snapshots[r[:mmsi]], r, entity_type: "ship")
 
       {
         entity_type: "ship",
@@ -91,22 +97,28 @@ module SnapshotRecorder
 
   MAX_SNAPSHOT_AGE = 60 # Record at least every 60s so playback has consistent frames
 
-  def snapshot_unchanged?(last, record)
+  def snapshot_unchanged?(last, record, entity_type: "flight")
     return false unless last # no previous record — always insert
 
-    # Always record periodically so playback has consistent data
-    return false if last.respond_to?(:recorded_at) && last.recorded_at && last.recorded_at < MAX_SNAPSHOT_AGE.seconds.ago
+    is_ship = entity_type == "ship"
+    max_age = is_ship ? SHIP_MAX_SNAPSHOT_AGE : MAX_SNAPSHOT_AGE
+    ll_thresh = is_ship ? SHIP_LAT_LNG_THRESHOLD : LAT_LNG_THRESHOLD
+    hdg_thresh = is_ship ? SHIP_HEADING_THRESHOLD : HEADING_THRESHOLD
+    spd_thresh = is_ship ? SHIP_SPEED_THRESHOLD : SPEED_THRESHOLD
 
-    pos_same = (last.latitude - record[:latitude]).abs < LAT_LNG_THRESHOLD &&
-               (last.longitude - record[:longitude]).abs < LAT_LNG_THRESHOLD &&
+    # Always record periodically so playback has consistent data
+    return false if last.respond_to?(:recorded_at) && last.recorded_at && last.recorded_at < max_age.seconds.ago
+
+    pos_same = (last.latitude - record[:latitude]).abs < ll_thresh &&
+               (last.longitude - record[:longitude]).abs < ll_thresh &&
                (!record[:altitude] || !last.altitude || (last.altitude - record[:altitude]).abs < ALT_THRESHOLD)
 
     # Position hasn't moved — skip regardless of heading/speed jitter
     return true if pos_same
 
     # Position moved but heading+speed unchanged — straight-line, interpolatable
-    hdg_same = !record[:heading] || !last.heading || heading_delta(last.heading, record[:heading]) < HEADING_THRESHOLD
-    spd_same = !record[:speed] || !last.speed || (last.speed - record[:speed]).abs < SPEED_THRESHOLD
+    hdg_same = !record[:heading] || !last.heading || heading_delta(last.heading, record[:heading]) < hdg_thresh
+    spd_same = !record[:speed] || !last.speed || (last.speed - record[:speed]).abs < spd_thresh
 
     hdg_same && spd_same
   end

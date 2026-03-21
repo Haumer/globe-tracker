@@ -53,6 +53,9 @@ export function applyTimelineMethods(GlobeController) {
       // Load event data for current cursor position
       this._timelineUpdateEvents()
 
+      // Load historical conflict pulse for initial cursor position
+      this._timelineUpdateConflictPulse()
+
       if (this._timelineKeys.length > 0) {
         this._toast(`Time travel: ${this._timelineKeys.length} frames loaded — press play`, "success")
       } else {
@@ -110,6 +113,11 @@ export function applyTimelineMethods(GlobeController) {
     if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
     if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
     if (this._outageInterval) { clearInterval(this._outageInterval); this._outageInterval = null }
+
+    // Stop conflict pulse live polling and clear existing pulse entities
+    if (this._conflictPulseInterval) { clearInterval(this._conflictPulseInterval); this._conflictPulseInterval = null }
+    this._clearConflictPulseEntities?.()
+    this._lastConflictPulseBucket = null
 
     // Hide only live-data sources that conflict with playback entities
     // Keep static overlays (borders, airports, cities, notams, etc.) visible
@@ -169,6 +177,11 @@ export function applyTimelineMethods(GlobeController) {
     if (this.outagesVisible) {
       this.fetchOutages()
       this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
+    }
+    // Restart live conflict pulse
+    if (this._fetchConflictPulse) {
+      this._fetchConflictPulse()
+      this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000)
     }
   }
 
@@ -302,6 +315,10 @@ export function applyTimelineMethods(GlobeController) {
     const evDs = this._ds["timelineEvents"]
     if (evDs) evDs.entities.removeAll()
 
+    // Clear conflict pulse playback state
+    this._lastConflictPulseBucket = null
+    this._clearConflictPulseEntities?.()
+
     // Clear only live-data entities before resuming — they'll be re-fetched fresh
     const liveDataSources = new Set(["flights", "ships", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
     for (const [name, source] of Object.entries(this._ds)) {
@@ -359,6 +376,7 @@ export function applyTimelineMethods(GlobeController) {
   GlobeController.prototype._timelineEventDebounce = function() {
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     this._timelineEventTimer = setTimeout(() => this._timelineUpdateEvents(), 400)
+    this._timelineUpdateConflictPulse()
   }
 
   GlobeController.prototype._timelineUpdateEvents = async function() {
@@ -391,6 +409,34 @@ export function applyTimelineMethods(GlobeController) {
       this._updateStats()
     } catch (e) {
       console.error("Timeline events error:", e)
+    }
+  }
+
+  // ── Historical conflict pulse for time travel ─────────────
+  GlobeController.prototype._timelineUpdateConflictPulse = async function() {
+    if (!this._timelineActive || !this._timelineCursor) return
+
+    // Bucket cursor to the hour — skip fetch if same bucket as last time
+    const cursorMs = this._timelineCursor.getTime()
+    const bucket = cursorMs - (cursorMs % 3600000)
+    if (bucket === this._lastConflictPulseBucket) return
+    this._lastConflictPulseBucket = bucket
+
+    const at = new Date(bucket).toISOString()
+    try {
+      const resp = await fetch(`/api/playback/conflicts?at=${at}`)
+      if (!resp.ok) return
+      const data = await resp.json()
+
+      this._conflictPulseData = data.zones || []
+      this._conflictPulseZones = data.zones || []
+      this._strikeArcData = data.strike_arcs || []
+      this._hexCellData = data.hex_cells || []
+      this._renderConflictPulse?.()
+      this._renderSituationPanel?.()
+      if (this._syncRightPanels) this._syncRightPanels()
+    } catch (e) {
+      console.warn("Timeline conflict pulse fetch failed:", e)
     }
   }
 

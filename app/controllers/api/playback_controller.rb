@@ -127,6 +127,13 @@ module Api
       render json: timeline_events.filter_map { |te| timeline_event_json(te) }
     end
 
+    # GET /api/playback/conflicts?at=ISO8601
+    def conflicts
+      at = parse_time(params[:at]) || Time.current
+      data = ConflictPulseService.analyze_at(at)
+      render json: data
+    end
+
     # GET /api/playback/satellites?at=ISO8601&category=starlink
     def satellites
       at = parse_time(params[:at]) || Time.current

@@ -99,7 +99,7 @@ class AisStreamService
 
             # Flush periodically
             now = Time.now.to_f
-            if (now - last_flush) > 60 || @buffer.size >= 500
+            if (now - last_flush) > 120 || @buffer.size >= 500
               to_flush = @buffer_mutex.synchronize { @buffer.dup.tap { @buffer.clear } }
               flush_buffer(to_flush)
               last_flush = now

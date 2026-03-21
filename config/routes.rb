@@ -63,6 +63,7 @@ Rails.application.routes.draw do
         get :range
         get :events
         get :satellites
+        get :conflicts
       end
     end
   end

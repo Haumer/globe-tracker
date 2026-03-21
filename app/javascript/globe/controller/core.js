@@ -325,8 +325,8 @@ export function applyCoreMethods(GlobeController) {
         }
       }
 
-      // Hex cell detection — always check, works even when hexes aren't rendered
-      if (this._hexCellData?.length) {
+      // Hex cell detection — only when hex layer is visible
+      if (this._hexCellData?.length && this._hexTheaterVisible) {
         const globePos = this.screenToLatLng(click.position)
         if (globePos) {
           const hit = this._findHexAtPosition(globePos.lat, globePos.lng)

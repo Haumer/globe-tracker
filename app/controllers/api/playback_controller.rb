@@ -61,47 +61,50 @@ module Api
     def range
       expires_in 5.minutes, public: true
 
-      oldest = PositionSnapshot.minimum(:recorded_at)
-      newest = PositionSnapshot.maximum(:recorded_at)
+      data = Rails.cache.fetch("playback:range", expires_in: 2.minutes) do
+        # Use ORDER+LIMIT instead of MIN/MAX — hits the recorded_at index on 64M rows
+        oldest = PositionSnapshot.order(:recorded_at).limit(1).pick(:recorded_at)
+        newest = PositionSnapshot.order(recorded_at: :desc).limit(1).pick(:recorded_at)
 
-      # Find the true global oldest/newest across all data types
-      time_points = [oldest, newest].compact
-      [
-        Earthquake.minimum(:event_time),
-        Earthquake.maximum(:event_time),
-        NaturalEvent.minimum(:event_date),
-        NaturalEvent.maximum(:event_date),
-        NewsEvent.minimum(:published_at),
-        NewsEvent.maximum(:published_at),
-        GpsJammingSnapshot.minimum(:recorded_at),
-        GpsJammingSnapshot.maximum(:recorded_at),
-        InternetOutage.minimum(:started_at),
-        InternetOutage.maximum(:started_at),
-        WeatherAlert.minimum(:onset),
-        WeatherAlert.maximum(:onset),
-        Notam.minimum(:effective_start),
-        Notam.maximum(:effective_start),
-      ].compact.each { |t| time_points << t }
+        # Smaller tables — MIN/MAX is fine
+        time_points = [oldest, newest].compact
+        [
+          Earthquake.minimum(:event_time),    Earthquake.maximum(:event_time),
+          NaturalEvent.minimum(:event_date),  NaturalEvent.maximum(:event_date),
+          NewsEvent.minimum(:published_at),   NewsEvent.maximum(:published_at),
+          GpsJammingSnapshot.minimum(:recorded_at), GpsJammingSnapshot.maximum(:recorded_at),
+          InternetOutage.minimum(:started_at),      InternetOutage.maximum(:started_at),
+          WeatherAlert.minimum(:onset),       WeatherAlert.maximum(:onset),
+          Notam.minimum(:effective_start),    Notam.maximum(:effective_start),
+        ].compact.each { |t| time_points << t }
 
-      global_oldest = time_points.min
-      global_newest = time_points.max
+        global_oldest = time_points.min
+        global_newest = time_points.max
 
-      render json: {
-        oldest: global_oldest&.utc&.iso8601,
-        newest: global_newest&.utc&.iso8601,
-        total_snapshots: PositionSnapshot.count,
-        flights: PositionSnapshot.flights.count,
-        ships: PositionSnapshot.ships.count,
-        layers: {
-          earthquakes: Earthquake.count,
-          natural_events: NaturalEvent.count,
-          news: NewsEvent.count,
-          gps_jamming: GpsJammingSnapshot.count,
-          outages: InternetOutage.count,
-          weather_alerts: WeatherAlert.count,
-          notams: Notam.count,
-        },
-      }
+        # Use pg_class estimate for huge tables — exact count is unnecessary here
+        snap_estimate = ActiveRecord::Base.connection.select_value(
+          "SELECT reltuples::bigint FROM pg_class WHERE relname = 'position_snapshots'"
+        ).to_i
+
+        {
+          oldest: global_oldest&.utc&.iso8601,
+          newest: global_newest&.utc&.iso8601,
+          total_snapshots: snap_estimate,
+          flights: PositionSnapshot.where(entity_type: "flight").order(recorded_at: :desc).limit(1).exists? ? "available" : 0,
+          ships: PositionSnapshot.where(entity_type: "ship").order(recorded_at: :desc).limit(1).exists? ? "available" : 0,
+          layers: {
+            earthquakes: Earthquake.count,
+            natural_events: NaturalEvent.count,
+            news: NewsEvent.count,
+            gps_jamming: GpsJammingSnapshot.count,
+            outages: InternetOutage.count,
+            weather_alerts: WeatherAlert.count,
+            notams: Notam.count,
+          },
+        }
+      end
+
+      render json: data
     end
 
     # GET /api/playback/events?from=ISO8601&to=ISO8601&types=earthquake,news,...

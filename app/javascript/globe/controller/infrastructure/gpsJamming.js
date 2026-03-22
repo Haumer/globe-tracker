@@ -103,6 +103,7 @@ export function applyGpsJammingMethods(GlobeController) {
       }
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   // Generate 6 vertices of a flat-top hexagon at (lat, lng) with given radius in degrees.

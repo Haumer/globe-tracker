@@ -103,6 +103,7 @@ export function applyConflictsMethods(GlobeController) {
       this._conflictEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearConflictEntities = function() {

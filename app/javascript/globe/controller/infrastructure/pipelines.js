@@ -121,6 +121,7 @@ export function applyPipelinesMethods(GlobeController) {
       this._pipelineEntities.push(labelEntity)
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearPipelineEntities = function() {

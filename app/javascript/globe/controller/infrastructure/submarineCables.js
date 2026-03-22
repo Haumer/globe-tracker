@@ -109,6 +109,7 @@ export function applyCablesMethods(GlobeController) {
     if (this.trafficVisible && this._attackedCountries?.size) {
       this._refreshCableAttackHighlights()
     }
+    this._requestRender()
   }
 
   GlobeController.prototype._clearCableEntities = function() {

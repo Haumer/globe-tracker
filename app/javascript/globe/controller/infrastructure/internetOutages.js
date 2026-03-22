@@ -107,6 +107,7 @@ export function applyOutagesMethods(GlobeController) {
       this._outageEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearOutageEntities = function() {

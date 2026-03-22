@@ -83,8 +83,8 @@ export function applyFiresMethods(GlobeController) {
           id: `fire-ring-${f.id}`,
           position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 0),
           ellipse: {
-            semiMinorAxis: Math.min(5000 + frp * 200, 50000),
-            semiMajorAxis: Math.min(5000 + frp * 200, 50000),
+            semiMinorAxis: Math.min(2000 + frp * 50, 15000),
+            semiMajorAxis: Math.min(2000 + frp * 50, 15000),
             material: color.withAlpha(0.08),
             outline: true,
             outlineColor: color.withAlpha(0.2),

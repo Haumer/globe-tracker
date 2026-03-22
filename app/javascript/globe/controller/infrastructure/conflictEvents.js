@@ -59,8 +59,8 @@ export function applyConflictsMethods(GlobeController) {
           id: `conf-ring-${c.id}`,
           position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 0),
           ellipse: {
-            semiMinorAxis: 5000 + deaths * 800,
-            semiMajorAxis: 5000 + deaths * 800,
+            semiMinorAxis: Math.min(5000 + deaths * 300, 30000),
+            semiMajorAxis: Math.min(5000 + deaths * 300, 30000),
             material: cesiumColor.withAlpha(0.06),
             outline: true,
             outlineColor: cesiumColor.withAlpha(0.2),

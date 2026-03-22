@@ -4,7 +4,7 @@ module Api
     skip_before_action :authenticate_user!
 
     NACP_THRESHOLD = 4
-    HEX_SIZE = 0.25 # degrees — radius of each hexagon
+    HEX_SIZE = 1.0 # degrees (~111km) — radius of each hexagon, matches real GPS jamming footprint
     STALE_AFTER = 5.minutes
 
     def index
@@ -29,7 +29,7 @@ module Api
       cutoff = 1.hour.ago
       snaps = GpsJammingSnapshot
                 .where("recorded_at > ?", cutoff)
-                .where("percentage > 0 AND total >= 5")
+                .where("percentage > 0 AND total >= 8")
                 .select(
                   "DISTINCT ON (cell_lat, cell_lng) cell_lat, cell_lng, total, bad, percentage, level, recorded_at"
                 )
@@ -84,7 +84,7 @@ module Api
 
       now = Time.current
       result = cells.values
-                    .select { |c| c[:total] >= 5 }
+                    .select { |c| c[:total] >= 8 }
                     .map do |c|
         pct = (c[:bad].to_f / c[:total] * 100).round(1)
         level = if pct > 10 then "high"

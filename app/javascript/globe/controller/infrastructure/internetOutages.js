@@ -57,7 +57,7 @@ export function applyOutagesMethods(GlobeController) {
 
       const color = levelColors[s.level] || "#ffc107"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
-      const intensity = Math.min(s.score / 100, 1)
+      const intensity = Math.min(Math.log10(Math.max(s.score, 1)) / 5, 1)
       const pixelSize = 8 + intensity * 16
 
       // Pulsing ring for outage area

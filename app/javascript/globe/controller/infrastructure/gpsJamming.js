@@ -53,7 +53,7 @@ export function applyGpsJammingMethods(GlobeController) {
       high: Cesium.Color.fromCssColorString("rgba(244, 67, 54, 0.9)")
     }
 
-    const hexRadius = 0.25 // degrees — matches backend HEX_SIZE for flush tiling
+    const hexRadius = 1.0 // degrees (~111km) — matches backend HEX_SIZE for flush tiling
 
     dataSource.entities.suspendEvents()
     cells.forEach(cell => {

@@ -128,8 +128,8 @@ export function applyPowerPlantsMethods(GlobeController) {
           id: `pp-atk-${p.id}`,
           position: Cesium.Cartesian3.fromDegrees(p.lng, p.lat, 0),
           ellipse: {
-            semiMinorAxis: 20000 + (p.capacity || 1) * 5,
-            semiMajorAxis: 20000 + (p.capacity || 1) * 5,
+            semiMinorAxis: 5000 + Math.sqrt(p.capacity || 1) * 300,
+            semiMajorAxis: 5000 + Math.sqrt(p.capacity || 1) * 300,
             material: Cesium.Color.RED.withAlpha(0.06),
             outline: true,
             outlineColor: Cesium.Color.RED.withAlpha(0.35),

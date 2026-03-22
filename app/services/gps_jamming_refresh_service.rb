@@ -1,6 +1,6 @@
 class GpsJammingRefreshService
   NACP_THRESHOLD = 4
-  HEX_SIZE = 0.25
+  HEX_SIZE = 1.0
   STALE_AFTER = 5.minutes
 
   class << self
@@ -43,7 +43,7 @@ class GpsJammingRefreshService
 
       now = Time.current
       result = cells.values
-                    .select { |c| c[:total] >= 5 }
+                    .select { |c| c[:total] >= 8 }
                     .map do |c|
         pct = (c[:bad].to_f / c[:total] * 100).round(1)
         level = if pct > 10 then "high"

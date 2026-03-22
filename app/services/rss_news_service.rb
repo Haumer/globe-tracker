@@ -7,7 +7,10 @@ class RssNewsService
   include NewsDedupable
   include NewsGeocodable
 
-  refreshes model: NewsEvent, interval: 20.minutes
+  BATCH_COUNT = 4        # 4 batches × 5 min = each feed polled every 20 min
+  BATCH_INTERVAL = 5     # minutes between batches
+
+  refreshes model: NewsEvent, interval: BATCH_INTERVAL.minutes
 
   # ── Source Credibility System ────────────────────────────────
   # Tier 1: Wire services, government, international organizations
@@ -403,7 +406,7 @@ class RssNewsService
   def refresh
     all_records = []
 
-    # Fetch all feeds concurrently
+    # Build full feed list
     all_feeds = []
     SOURCES.each { |info, meta| all_feeds << [info[:url], info[:name], meta] }
     GOOGLE_NEWS_FEEDS.each do |name, url|
@@ -411,8 +414,16 @@ class RssNewsService
       all_feeds << [url, "GN: #{name}", meta]
     end
 
+    # Rotate through batches — each cycle processes ~1/4 of feeds
+    # so new data arrives every 5 min but each source is only hit every 20 min
+    batch_idx = (Rails.cache.read("rss_batch_idx") || 0) % BATCH_COUNT
+    Rails.cache.write("rss_batch_idx", batch_idx + 1)
+
+    batch_size = (all_feeds.size.to_f / BATCH_COUNT).ceil
+    batch_feeds = all_feeds.each_slice(batch_size).to_a[batch_idx] || []
+
     mutex = Mutex.new
-    all_feeds.each_slice(THREAD_POOL_SIZE) do |batch|
+    batch_feeds.each_slice(THREAD_POOL_SIZE) do |batch|
       threads = batch.map do |url, name, meta|
         Thread.new { fetch_feed(url, name, meta) }
       end
@@ -446,7 +457,7 @@ class RssNewsService
     end
 
     Rails.cache.write("rss_news_last_fetch", Time.current)
-    Rails.logger.info("RssNewsService: #{new_records.size} new from #{all_feeds.size} feeds (#{all_records.size} total parsed)")
+    Rails.logger.info("RssNewsService: #{new_records.size} new from batch #{batch_idx + 1}/#{BATCH_COUNT} (#{batch_feeds.size} feeds, #{all_records.size} parsed)")
     new_records.size
   rescue => e
     Rails.logger.error("RssNewsService: #{e.message}")

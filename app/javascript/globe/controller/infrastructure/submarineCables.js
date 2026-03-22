@@ -9,6 +9,7 @@ export function applyCablesMethods(GlobeController) {
       this.fetchCables()
     } else {
       this._clearCableEntities()
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
     this._savePrefs()

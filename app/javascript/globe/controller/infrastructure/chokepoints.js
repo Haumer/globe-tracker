@@ -8,6 +8,7 @@ export function applyChokepointsMethods(GlobeController) {
       this.fetchChokepoints()
     } else {
       this._clearChokepointEntities()
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
     this._savePrefs()

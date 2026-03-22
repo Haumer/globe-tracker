@@ -18,6 +18,7 @@ export function applyRailwaysMethods(GlobeController) {
     } else {
       this._clearRailwayEntities()
       if (this._rwCameraCb) { this.viewer.camera.moveEnd.removeEventListener(this._rwCameraCb); this._rwCameraCb = null }
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
     this._savePrefs()

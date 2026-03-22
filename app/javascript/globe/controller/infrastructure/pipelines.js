@@ -9,6 +9,7 @@ export function applyPipelinesMethods(GlobeController) {
       this.fetchPipelines()
     } else {
       this._clearPipelineEntities()
+      if (this._syncRightPanels) this._syncRightPanels()
     }
     this._syncQuickBar()
     this._savePrefs()

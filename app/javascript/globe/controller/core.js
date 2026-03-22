@@ -225,7 +225,7 @@ export function applyCoreMethods(GlobeController) {
       fullscreenButton: false,
       vrButton: false,
       infoBox: false,
-      selectionIndicator: true,
+      selectionIndicator: false,
       creditContainer: document.createElement("div"),
       requestRenderMode: true,
       maximumRenderTimeChange: Infinity,
@@ -1140,6 +1140,7 @@ export function applyCoreMethods(GlobeController) {
       }},
       { prefix: "cable-", skip: [], handler: (_id) => {
         const props = picked.id.properties; if (!props) return false
+        this._highlightPolyline(picked.id)
         const name = props.cableName?.getValue() || "Unknown cable"
         this.detailContentTarget.innerHTML = `
           <div class="detail-callsign" style="color:#00bcd4;">
@@ -1153,7 +1154,7 @@ export function applyCoreMethods(GlobeController) {
       { prefix: "pipeline-", skip: ["pipeline-label-"], handler: (_id) => {
         const props = picked.id.properties; if (!props) return false
         const pipeId = props.pipelineId?.getValue()
-        if (pipeId) { this.showPipelineDetail(pipeId); return true }
+        if (pipeId) { this._highlightPolyline(picked.id); this.showPipelineDetail(pipeId); return true }
         return false
       }},
       { prefix: "cam-", skip: [], handler: (id) => {
@@ -1185,7 +1186,7 @@ export function applyCoreMethods(GlobeController) {
         this.showChokepointDetail(d); return true
       }},
       { prefix: "rw-", skip: [], handler: (id) => {
-        this.showRailwayDetail(id); return true
+        this._highlightPolyline(picked.id); this.showRailwayDetail(id); return true
       }},
       { prefix: "cpulse-arc-lbl-", handler: (id) => {
         const idx = parseInt(id); const arc = this._strikeArcData?.[idx]; if (!arc) return false
@@ -1353,6 +1354,23 @@ export function applyCoreMethods(GlobeController) {
     if (s.satCategories) {
       applyDeepLink(this, { satCategories: s.satCategories })
     }
+  }
+
+  // ── Polyline Highlight ──────────────────────────────────
+  // Briefly widens + brightens a polyline entity to show it was clicked
+
+  GlobeController.prototype._highlightPolyline = function(entity) {
+    if (!entity?.polyline) return
+    const Cesium = window.Cesium
+    const poly = entity.polyline
+    const origWidth = poly.width?.getValue(Cesium.JulianDate.now()) || 4
+    poly.width = origWidth + 4
+    this._requestRender()
+    clearTimeout(this._polyHighlightTimer)
+    this._polyHighlightTimer = setTimeout(() => {
+      if (entity.polyline) entity.polyline.width = origWidth
+      this._requestRender()
+    }, 2000)
   }
 
   // ── Cities Layer ─────────────────────────────────────────

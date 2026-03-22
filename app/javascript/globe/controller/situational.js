@@ -1010,7 +1010,7 @@ export function applySituationalMethods(GlobeController) {
         },
         label: {
           text: labelPrefix + (w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title),
-          font: "12px JetBrains Mono, monospace",
+          font: "12px JetBrains Mono, sans-serif",
           fillColor: Cesium.Color.WHITE.withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 3,

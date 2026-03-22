@@ -77,6 +77,7 @@ class GlobalPollerService
             if purge_elapsed >= 3600
               enqueue_once(PurgeStaleDataJob)
               enqueue_once(GenerateBriefJob) unless Rails.cache.read(IntelligenceBriefService::CACHE_KEY)
+              CameraRefreshService.recheck_stale_cameras(limit: 200) rescue nil
               @last_purge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             end
           rescue => e
@@ -112,9 +113,26 @@ class GlobalPollerService
       PollAdsbRegionJob.perform_later(region[:name], region[:lat], region[:lon])
     end
 
+    # World regions for camera coverage — cycled through one per full poll
+    CAMERA_REGIONS = [
+      { name: "europe-west",  north: 60, south: 35, east: 15,  west: -10 },
+      { name: "europe-east",  north: 60, south: 35, east: 40,  west: 15 },
+      { name: "na-east",      north: 50, south: 25, east: -65, west: -90 },
+      { name: "na-west",      north: 50, south: 25, east: -90, west: -125 },
+      { name: "east-asia",    north: 45, south: 20, east: 145, west: 100 },
+      { name: "se-asia",      north: 20, south: -10, east: 130, west: 95 },
+      { name: "south-am",     north: 10, south: -40, east: -35, west: -80 },
+      { name: "mideast",      north: 40, south: 15, east: 60,  west: 25 },
+      { name: "oceania",      north: -10, south: -45, east: 180, west: 110 },
+      { name: "africa",       north: 35, south: -35, east: 50,  west: -20 },
+    ].freeze
+
     def poll_secondary
       # AIS stream is a persistent WebSocket — just ensure it's running
       AisStreamService.start unless AisStreamService.running?
+
+      # Cameras: rotate through one world region per cycle
+      poll_cameras
 
       # Enqueue all secondary refreshes as Sidekiq jobs.
       # Each job calls refresh_if_stale internally, so it no-ops if data is fresh.
@@ -140,6 +158,21 @@ class GlobalPollerService
         RefreshPowerPlantsJob,
         EnrichNewsJob,
       ].each { |job| enqueue_once(job) }
+    end
+
+    def poll_cameras
+      region = CAMERA_REGIONS[@poll_count.to_i % CAMERA_REGIONS.size]
+      key = "poller:cameras:#{region[:name]}"
+      # Only refresh each region once per 10 minutes
+      return if Rails.cache.read(key).present?
+
+      Rails.cache.write(key, "1", expires_in: 10.minutes)
+      RefreshCamerasJob.perform_later(
+        { north: region[:north], south: region[:south],
+          east: region[:east], west: region[:west] }
+      )
+    rescue => e
+      Rails.logger.warn("GlobalPollerService camera poll: #{e.message}")
     end
 
     def enqueue_once(job_class)

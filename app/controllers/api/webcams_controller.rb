@@ -25,9 +25,9 @@ module Api
                        .limit(max)
       camera_records = cameras.to_a
 
-      # 2. Enqueue background refresh if any cells are stale or unfetched (authenticated users only)
+      # 2. Enqueue background refresh if any cells are stale or unfetched
       has_stale = camera_records.any?(&:stale?) || camera_records.empty?
-      if has_stale && user_signed_in?
+      if has_stale
         enqueue_background_refresh(
           RefreshCamerasJob,
           { north: north, south: south, east: east, west: west },

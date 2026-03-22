@@ -21,12 +21,13 @@ export function applyPowerPlantsMethods(GlobeController) {
   }
 
   GlobeController.prototype._ensurePowerPlantData = async function() {
-    if (this._powerPlantAll) return
+    if (this._powerPlantAll?.length > 0) return
     this._toast("Loading power plants...")
     try {
       const resp = await fetch("/api/power_plants")
       if (!resp.ok) return
       const raw = await resp.json()
+      if (!raw.length) return // don't cache empty results
       // API returns arrays: [id, lat, lng, fuel, capacity, name, country_code]
       this._powerPlantAll = raw.map(r => ({
         id: r[0], lat: r[1], lng: r[2], fuel: r[3],

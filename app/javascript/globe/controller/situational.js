@@ -885,10 +885,6 @@ export function applySituationalMethods(GlobeController) {
     const plan = this._buildWebcamFetchPlan(center)
     const url = `/api/webcams?${plan.query}&limit=${plan.limit}`
 
-    // Replace stale webcams when the viewport changes materially.
-    this._webcamData = []
-    this.renderWebcams()
-
     this._toast("Loading cameras...")
 
     try {
@@ -898,21 +894,26 @@ export function applySituationalMethods(GlobeController) {
         const data = await resp.json()
         if (fetchId !== this._webcamFetchToken) return
         const cams = data.webcams || []
-        if (cams.length > 0) {
-          this._mergeWebcams(cams)
-          this.renderWebcams()
-          this._updateStats()
-          if (this._syncRightPanels) this._syncRightPanels()
-        }
+
+        // Replace data with new viewport's cameras (don't keep stale ones from old viewport)
+        this._webcamData = cams.map(w => this._normalizeWebcam(w)).filter(w =>
+          w.lat != null && w.lng != null && Number.isFinite(w.lat) && Number.isFinite(w.lng)
+        )
+        this.renderWebcams()
+        this._updateStats()
+        if (this._syncRightPanels) this._syncRightPanels()
 
         // If the server says cameras are stale, a background job is refreshing.
-        // Re-fetch after a short delay to pick up newly fetched cameras.
+        // Re-fetch after delays to pick up newly fetched cameras.
         if (data.stale && fetchId === this._webcamFetchToken) {
-          setTimeout(() => {
-            if (fetchId === this._webcamFetchToken && this.camerasVisible) {
-              this._refetchWebcamsQuiet(url, fetchId)
-            }
-          }, 8000)
+          const retryDelays = [8000, 20000]
+          retryDelays.forEach(delay => {
+            setTimeout(() => {
+              if (fetchId === this._webcamFetchToken && this.camerasVisible) {
+                this._refetchWebcamsQuiet(url, fetchId)
+              }
+            }, delay)
+          })
         }
       }
     } catch (e) { console.warn("Webcam fetch failed:", e) }
@@ -933,7 +934,15 @@ export function applySituationalMethods(GlobeController) {
       if (fetchId !== this._webcamFetchToken) return
       const cams = data.webcams || []
       if (cams.length > 0) {
-        this._mergeWebcams(cams)
+        // Merge new cameras into existing set (background job may have found more)
+        const newNormalized = cams.map(w => this._normalizeWebcam(w)).filter(w =>
+          w.lat != null && w.lng != null && Number.isFinite(w.lat) && Number.isFinite(w.lng)
+        )
+        const existingIds = new Set(this._webcamData.map(w => w.id))
+        const added = newNormalized.filter(w => !existingIds.has(w.id))
+        if (added.length > 0) {
+          this._webcamData = [...this._webcamData, ...added]
+        }
         this.renderWebcams()
         this._updateStats()
         if (this._syncRightPanels) this._syncRightPanels()
@@ -960,15 +969,6 @@ export function applySituationalMethods(GlobeController) {
       lastUpdated: w.lastUpdatedOn,
       viewCount: w.viewCount,
     }
-  }
-
-  GlobeController.prototype._mergeWebcams = function(raw) {
-    const newCams = raw.map(w => this._normalizeWebcam(w)).filter(w =>
-      w.lat != null && w.lng != null && Number.isFinite(w.lat) && Number.isFinite(w.lng)
-    )
-    const existingIds = new Set(this._webcamData.map(w => w.id))
-    const added = newCams.filter(w => !existingIds.has(w.id))
-    this._webcamData = [...this._webcamData, ...added]
   }
 
   GlobeController.prototype.renderWebcams = function() {

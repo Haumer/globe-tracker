@@ -398,6 +398,7 @@ export function applyUiMethods(GlobeController) {
       fireHotspots: this.fireHotspotsVisible,
       weather: this.weatherVisible,
       financial: this.financialVisible,
+      chokepoints: this.chokepointsVisible,
       weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
       weatherOpacity: this._weatherOpacity || 0.6,
       terrain: this.terrainEnabled || false,
@@ -604,6 +605,10 @@ export function applyUiMethods(GlobeController) {
       if (l.financial && this.hasFinancialToggleTarget) {
         this.financialToggleTarget.checked = true
         this.toggleFinancial()
+      }
+      if (l.chokepoints && this.hasChokepointsToggleTarget) {
+        this.chokepointsToggleTarget.checked = true
+        this.toggleChokepoints()
       }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true

@@ -11,8 +11,14 @@ module Api
       data = plants.map { |p|
         [p.id, p.latitude, p.longitude, p.primary_fuel, p.capacity_mw, p.name, p.country_code]
       }
-      expires_in 1.hour, public: true
-      response.headers["ETag"] = Digest::MD5.hexdigest("pp:#{data.size}")
+
+      if data.empty?
+        expires_in 30.seconds, public: true
+      else
+        max_updated = PowerPlant.maximum(:updated_at)&.to_i || 0
+        response.headers["ETag"] = Digest::MD5.hexdigest("pp:#{data.size}:#{max_updated}")
+        expires_in 1.hour, public: true
+      end
       render json: data
     end
   end

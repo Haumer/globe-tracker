@@ -123,6 +123,30 @@ class RssNewsService
       { tier: 2, risk: "low", region: "middle-east" },
     { url: "https://www.omanobserver.om/rssFeed/1", name: "Oman Observer" } =>
       { tier: 2, risk: "medium", affiliation: "Oman", region: "middle-east" },
+    { url: "https://www.middleeasteye.net/rss", name: "Middle East Eye" } =>
+      { tier: 2, risk: "medium", affiliation: "Qatar-linked", region: "middle-east" },
+    { url: "https://english.ahram.org.eg/RSS.aspx", name: "Al-Ahram English" } =>
+      { tier: 2, risk: "medium", affiliation: "Egypt", region: "middle-east" },
+    { url: "https://www.middleeastmonitor.com/feed/", name: "Middle East Monitor" } =>
+      { tier: 2, risk: "medium", region: "middle-east" },
+    { url: "https://www.france24.com/en/middle-east/rss", name: "France 24 ME" } =>
+      { tier: 2, risk: "medium", affiliation: "France", region: "middle-east" },
+    { url: "https://english.alaraby.co.uk/rss", name: "The New Arab" } =>
+      { tier: 2, risk: "medium", affiliation: "Qatar-linked", region: "middle-east" },
+    { url: "https://www.dailysabah.com/rssFeed/main", name: "Daily Sabah" } =>
+      { tier: 2, risk: "medium", affiliation: "Turkey", region: "middle-east" },
+    { url: "https://www.trtworld.com/rss", name: "TRT World" } =>
+      { tier: 2, risk: "medium", affiliation: "Turkey", region: "middle-east" },
+    { url: "https://www.arabnews.com/rss.xml", name: "Arab News Direct" } =>
+      { tier: 2, risk: "medium", affiliation: "Saudi", region: "middle-east" },
+    { url: "https://gulfnews.com/rss", name: "Gulf News" } =>
+      { tier: 2, risk: "medium", affiliation: "UAE", region: "middle-east" },
+    { url: "https://www.khaleejtimes.com/rss", name: "Khaleej Times" } =>
+      { tier: 2, risk: "medium", affiliation: "UAE", region: "middle-east" },
+    { url: "https://english.aawsat.com/feed", name: "Asharq Al-Awsat" } =>
+      { tier: 2, risk: "medium", affiliation: "Saudi", region: "middle-east" },
+    { url: "https://www.i24news.tv/en/rss", name: "i24NEWS" } =>
+      { tier: 2, risk: "medium", affiliation: "Israel", region: "middle-east" },
 
     # Africa
     { url: "https://feeds.bbci.co.uk/news/world/africa/rss.xml", name: "BBC Africa" } =>
@@ -281,6 +305,10 @@ class RssNewsService
     # Global topics
     "World" => "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en",
     "Conflict" => "https://news.google.com/rss/search?q=military+OR+war+OR+conflict+OR+attack&hl=en-US&gl=US&ceid=US:en",
+    "Iran Conflict" => "https://news.google.com/rss/search?q=Iran+strike+OR+Iran+attack+OR+Iran+military+OR+IRGC+OR+Tehran+OR+Hormuz&hl=en-US&gl=US&ceid=US:en",
+    "Gaza Conflict" => "https://news.google.com/rss/search?q=Gaza+OR+Hamas+OR+IDF+OR+Hezbollah+OR+West+Bank+OR+Rafah&hl=en-US&gl=US&ceid=US:en",
+    "Yemen Houthis" => "https://news.google.com/rss/search?q=Houthi+OR+Yemen+strike+OR+Red+Sea+attack+OR+Bab+el-Mandeb&hl=en-US&gl=US&ceid=US:en",
+    "Ukraine War" => "https://news.google.com/rss/search?q=Ukraine+war+OR+Kyiv+attack+OR+Donbas+OR+Crimea+OR+Zaporizhzhia&hl=en-US&gl=US&ceid=US:en",
     "Disaster" => "https://news.google.com/rss/search?q=earthquake+OR+tsunami+OR+hurricane+OR+wildfire+OR+flood&hl=en-US&gl=US&ceid=US:en",
 
     # Site-specific proxies for sources without RSS or that block cloud IPs
@@ -293,6 +321,17 @@ class RssNewsService
     "Times of Israel" => "https://news.google.com/rss/search?q=site:timesofisrael.com+when:2d&hl=en-US&gl=US&ceid=US:en",
     "Jerusalem Post" => "https://news.google.com/rss/search?q=site:jpost.com+when:2d&hl=en-US&gl=US&ceid=US:en",
     "Rudaw" => "https://news.google.com/rss/search?q=site:rudaw.net+when:7d&hl=en-US&gl=US&ceid=US:en",
+    "Amwaj Media" => "https://news.google.com/rss/search?q=site:amwaj.media+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Iran Wire" => "https://news.google.com/rss/search?q=site:iranwire.com+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Al-Monitor" => "https://news.google.com/rss/search?q=site:al-monitor.com+when:2d&hl=en-US&gl=US&ceid=US:en",
+    "MEE" => "https://news.google.com/rss/search?q=site:middleeasteye.net+when:2d&hl=en-US&gl=US&ceid=US:en",
+    "Mada Masr" => "https://news.google.com/rss/search?q=site:madamasr.com+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "L'Orient Today" => "https://news.google.com/rss/search?q=site:lorientlejour.com+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Kurdistan24" => "https://news.google.com/rss/search?q=site:kurdistan24.net+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Ynetnews" => "https://news.google.com/rss/search?q=site:ynetnews.com+when:2d&hl=en-US&gl=US&ceid=US:en",
+    "Wafa" => "https://news.google.com/rss/search?q=site:english.wafa.ps+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Mehr News" => "https://news.google.com/rss/search?q=site:en.mehrnews.com+when:3d&hl=en-US&gl=US&ceid=US:en",
+    "Press TV" => "https://news.google.com/rss/search?q=site:presstv.ir+when:2d&hl=en-US&gl=US&ceid=US:en",
     "Kyiv Independent" => "https://news.google.com/rss/search?q=site:kyivindependent.com+when:3d&hl=en-US&gl=US&ceid=US:en",
     "Nikkei Asia" => "https://news.google.com/rss/search?q=site:asia.nikkei.com+when:3d&hl=en-US&gl=US&ceid=US:en",
     "O Globo" => "https://news.google.com/rss/search?q=site:oglobo.globo.com+when:1d&hl=pt-BR&gl=BR&ceid=BR:pt-419",
@@ -327,6 +366,17 @@ class RssNewsService
     "Haaretz" => { tier: 2, risk: "low", region: "middle-east" },
     "Arab News" => { tier: 2, risk: "medium", affiliation: "Saudi", region: "middle-east" },
     "Rudaw" => { tier: 2, risk: "medium", affiliation: "Kurdistan", region: "middle-east" },
+    "Amwaj Media" => { tier: 2, risk: "low", region: "middle-east" },
+    "Iran Wire" => { tier: 2, risk: "medium", affiliation: "diaspora", region: "middle-east" },
+    "Al-Monitor" => { tier: 2, risk: "low", region: "middle-east" },
+    "MEE" => { tier: 2, risk: "medium", affiliation: "Qatar-linked", region: "middle-east" },
+    "Mada Masr" => { tier: 2, risk: "low", region: "middle-east" },
+    "L'Orient Today" => { tier: 2, risk: "low", region: "middle-east" },
+    "Kurdistan24" => { tier: 2, risk: "medium", affiliation: "Kurdistan", region: "middle-east" },
+    "Ynetnews" => { tier: 2, risk: "low", region: "middle-east" },
+    "Wafa" => { tier: 3, risk: "high", affiliation: "Palestinian Authority", region: "middle-east" },
+    "Mehr News" => { tier: 3, risk: "high", affiliation: "Iran", region: "middle-east" },
+    "Press TV" => { tier: 3, risk: "high", affiliation: "Iran", region: "middle-east" },
     "Kyiv Independent" => { tier: 2, risk: "low", region: "europe" },
     "Nikkei Asia" => { tier: 2, risk: "low", region: "asia" },
     "Bangkok Post" => { tier: 2, risk: "low", region: "asia" },

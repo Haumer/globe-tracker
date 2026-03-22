@@ -423,9 +423,12 @@ class RssNewsService
     batch_feeds = all_feeds.each_slice(batch_size).to_a[batch_idx] || []
 
     mutex = Mutex.new
-    batch_feeds.each_slice(THREAD_POOL_SIZE) do |batch|
+    batch_feeds.shuffle.each_slice(THREAD_POOL_SIZE) do |batch|
       threads = batch.map do |url, name, meta|
-        Thread.new { fetch_feed(url, name, meta) }
+        Thread.new do
+          sleep(rand * 3) # 0-3s jitter per feed within each thread group
+          fetch_feed(url, name, meta)
+        end
       end
       threads.each do |t|
         records = begin; t.value; rescue => e; Rails.logger.warn("RssNewsService thread: #{e.message}"); []; end

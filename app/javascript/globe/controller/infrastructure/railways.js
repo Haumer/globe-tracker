@@ -50,13 +50,15 @@ export function applyRailwaysMethods(GlobeController) {
   }
 
   GlobeController.prototype.renderRailways = function() {
-    this._clearRailwayEntities()
     if (!this._railwayData || !this.railwaysVisible) return
 
     const Cesium = window.Cesium
     const dataSource = this.getRailwaysDataSource()
 
+    // Atomic clear + rebuild in one suspend block to prevent flicker
     dataSource.entities.suspendEvents()
+    this._railwayEntities.forEach(e => dataSource.entities.remove(e))
+    this._railwayEntities = []
     this._railwayData.forEach(rw => {
       if (!rw.coordinates || rw.coordinates.length < 2) return
 

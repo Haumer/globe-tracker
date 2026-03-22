@@ -40,7 +40,6 @@ export function applyPowerPlantsMethods(GlobeController) {
   }
 
   GlobeController.prototype.renderPowerPlants = function() {
-    this._clearPowerPlantEntities()
     if (!this._powerPlantAll) return
 
     const Cesium = window.Cesium
@@ -68,8 +67,27 @@ export function applyPowerPlantsMethods(GlobeController) {
     // Cap at 1500 entities for performance (largest first)
     visible = visible.slice(0, 1500)
 
+    // Build set of IDs we want visible
+    const wantIds = new Set(visible.map(p => `pp-${p.id}`))
+
+    // Single atomic update — remove stale + add new within one suspend
     dataSource.entities.suspendEvents()
+
+    // Remove entities no longer in viewport
+    const keep = []
+    for (const e of this._powerPlantEntities) {
+      if (e.id?.startsWith("pp-atk-") || !wantIds.has(e.id)) {
+        dataSource.entities.remove(e)
+      } else {
+        wantIds.delete(e.id) // already exists, don't re-add
+        keep.push(e)
+      }
+    }
+    this._powerPlantEntities = keep
+
+    // Add only new entities
     visible.forEach(p => {
+      if (!wantIds.has(`pp-${p.id}`)) return // already on screen
       const color = fuelColors[p.fuel] || "#78909c"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const cap = p.capacity || 1

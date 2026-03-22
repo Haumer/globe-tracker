@@ -5,9 +5,8 @@ export function applyPowerPlantsMethods(GlobeController) {
 
   GlobeController.prototype.togglePowerPlants = function() {
     this.powerPlantsVisible = this.hasPowerPlantsToggleTarget && this.powerPlantsToggleTarget.checked
-    console.log("togglePowerPlants called, visible:", this.powerPlantsVisible, "hasTarget:", this.hasPowerPlantsToggleTarget)
     if (this.powerPlantsVisible) {
-      this._ensurePowerPlantData().then(() => { console.log("PP data loaded, count:", this._powerPlantAll?.length); this.renderPowerPlants(); this._updateThreatsPanel() })
+      this._ensurePowerPlantData().then(() => { this.renderPowerPlants(); this._updateThreatsPanel() })
       if (!this._ppCameraCb) {
         this._ppCameraCb = () => { if (this.powerPlantsVisible) this.renderPowerPlants() }
         this.viewer.camera.moveEnd.addEventListener(this._ppCameraCb)
@@ -22,15 +21,12 @@ export function applyPowerPlantsMethods(GlobeController) {
   }
 
   GlobeController.prototype._ensurePowerPlantData = async function() {
-    if (this._powerPlantAll) { console.log("PP: already loaded", this._powerPlantAll.length); return }
-    console.log("PP: fetching from API...")
+    if (this._powerPlantAll) return
     this._toast("Loading power plants...")
     try {
       const resp = await fetch("/api/power_plants")
-      console.log("PP: API response", resp.status, resp.ok)
       if (!resp.ok) return
       const raw = await resp.json()
-      console.log("PP: parsed", raw.length, "plants, first:", raw[0])
       // API returns arrays: [id, lat, lng, fuel, capacity, name, country_code]
       this._powerPlantAll = raw.map(r => ({
         id: r[0], lat: r[1], lng: r[2], fuel: r[3],

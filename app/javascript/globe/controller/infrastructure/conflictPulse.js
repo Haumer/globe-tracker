@@ -172,7 +172,7 @@ export function applyConflictPulseMethods(GlobeController) {
         if (arc.count < 2) return
         const t = Math.min(arc.count / 20, 1)
         const arcColor = Cesium.Color.fromCssColorString("#f44336")
-        const width = Math.min(1.5 + arc.count * 0.2, 5)
+        const width = Math.max(8, Math.min(1.5 + arc.count * 0.2, 12))
 
         // Build great-circle arc positions
         const arcPositions = this._buildArcPositions(arc.from_lat, arc.from_lng, arc.to_lat, arc.to_lng, 30)

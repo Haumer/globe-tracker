@@ -389,7 +389,7 @@ export function applyNewsMethods(GlobeController) {
 
     arcs.forEach((arc, idx) => {
       const alpha = Math.min(0.25 + arc.count * 0.1, 0.7)
-      const width = Math.min(1.5 + arc.count * 0.4, 4)
+      const width = Math.max(8, Math.min(1.5 + arc.count * 0.4, 12))
       const arcColor = Cesium.Color.fromCssColorString("#ffab40").withAlpha(alpha)
 
       const positions = this._slerpArc(arc.srcLat, arc.srcLng, arc.evtLat, arc.evtLng)
@@ -558,7 +558,7 @@ export function applyNewsMethods(GlobeController) {
 
     arcs.forEach((arc, idx) => {
       const alpha = Math.min(0.25 + arc.count * 0.1, 0.7)
-      const width = Math.min(1.5 + arc.count * 0.4, 4)
+      const width = Math.max(8, Math.min(1.5 + arc.count * 0.4, 12))
       const arcColor = Cesium.Color.fromCssColorString("#ffab40").withAlpha(alpha)
 
       const positions = this._slerpArc(arc.srcLat, arc.srcLng, arc.evtLat, arc.evtLng)

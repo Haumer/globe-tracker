@@ -467,6 +467,7 @@ export function applyWeatherMethods(GlobeController) {
       ${areas ? `<div style="font-size:11px;color:var(--gt-text-dim);margin-bottom:4px;">${this._escapeHtml(areas)}</div>` : ""}
       <div style="font-size:12px;line-height:1.4;color:var(--gt-text-sec);">${this._escapeHtml(description)}${description.length >= 400 ? "..." : ""}</div>
     `
-    this._showDetail(html, "weather_alert")
+    this.detailContentTarget.innerHTML = html
+    this.detailPanelTarget.style.display = ""
   }
 }

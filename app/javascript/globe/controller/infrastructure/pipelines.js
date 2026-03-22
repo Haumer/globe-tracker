@@ -89,7 +89,7 @@ export function applyPipelinesMethods(GlobeController) {
         id: `pipeline-${pipe.id}`,
         polyline: {
           positions,
-          width: pipe.type === "gas" ? 2 : 2.5,
+          width: pipe.type === "gas" ? 4 : 5,
           material,
           clampToGround: false,
         },

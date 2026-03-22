@@ -275,13 +275,70 @@ export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype.focusInsight = function(event) {
     const idx = parseInt(event.currentTarget.dataset.insightIdx)
     const insight = this._insightsData?.[idx]
-    if (!insight || insight.lat == null || insight.lng == null) return
+    if (!insight) return
 
-    const Cesium = window.Cesium
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(insight.lng, insight.lat, 500000),
-      duration: 1.5,
-    })
+    // Show insight detail panel
+    this.showInsightDetail(insight)
+
+    // Fly camera if location is available
+    if (insight.lat != null && insight.lng != null) {
+      const Cesium = window.Cesium
+      this.viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(insight.lng, insight.lat, 500000),
+        duration: 1.5,
+      })
+    }
+  }
+
+  GlobeController.prototype.showInsightDetail = function(insight) {
+    const severityColors = { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }
+    const sev = insight.severity || "medium"
+    const sevColor = severityColors[sev] || "#ffc107"
+    const typeLabel = (insight.type || "insight").replace(/_/g, " ").toUpperCase()
+    const description = insight.description || ""
+    const coordStr = (insight.lat != null && insight.lng != null)
+      ? `${insight.lat.toFixed(2)}, ${insight.lng.toFixed(2)}` : "Global"
+
+    let entitiesHtml = ""
+    if (insight.entities) {
+      const ents = insight.entities
+      const items = []
+      if (ents.earthquakes?.count) items.push(`${ents.earthquakes.count} earthquakes (max M${ents.earthquakes.max_mag || "?"})`)
+      if (ents.fires) items.push(`${ents.fires.count} fire hotspots`)
+      if (ents.conflict) items.push(`${ents.conflict.count || ents.conflict.events || ""} conflict events`)
+      if (ents.outages?.length) items.push(`${ents.outages.length} internet outages`)
+      if (ents.flight) items.push(`Flight ${ents.flight.callsign || ents.flight.icao24} (${ents.flight.squawk || "EMG"})`)
+      if (ents.ship) items.push(`Ship: ${ents.ship.name || ents.ship.mmsi}`)
+      if (ents.cable) items.push(`Cable: ${ents.cable.name}`)
+      if (ents.nordo) items.push(`${ents.nordo.count} NORDO aircraft`)
+      if (ents.notams?.length) items.push(`${ents.notams.length} NOTAMs`)
+      if (ents.pipelines?.length) items.push(`${ents.pipelines.length} pipelines`)
+      if (ents.satellite) items.push(`Satellite: ${ents.satellite.name}`)
+      if (ents.weather) items.push(`Weather: ${ents.weather.event}`)
+      if (ents.chokepoint) items.push(`Chokepoint: ${ents.chokepoint.name} (${ents.chokepoint.status})`)
+      if (items.length) {
+        entitiesHtml = `<div style="margin-top:6px;font-size:11px;color:var(--gt-text-sec);">${items.map(i => `<div style="padding:2px 0;">- ${this._escapeHtml(i)}</div>`).join("")}</div>`
+      }
+    }
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${sevColor};">
+        <i class="fa-solid fa-brain" style="margin-right:6px;"></i>${typeLabel}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+        <span style="font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;">${sev}</span>
+      </div>
+      <div class="detail-country">${this._escapeHtml(insight.title)}</div>
+      <div style="font-size:12px;line-height:1.4;color:var(--gt-text-sec);margin:6px 0;">${this._escapeHtml(description)}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Location</span>
+          <span class="detail-value">${coordStr}</span>
+        </div>
+      </div>
+      ${entitiesHtml}
+    `
+    this.detailPanelTarget.style.display = ""
   }
 
   GlobeController.prototype.toggleInsightsFeed = function() {

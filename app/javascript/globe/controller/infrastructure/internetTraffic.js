@@ -171,7 +171,7 @@ export function applyTrafficMethods(GlobeController) {
       if (!originC || !targetC) return
 
       const pct = p.pct || 1
-      const arcWidth = Math.max(2, pct * 0.4)
+      const arcWidth = Math.max(6, pct * 0.4)
       const arcAlpha = Math.min(0.3 + pct * 0.02, 0.8)
 
       // Build a raised geodesic arc with multiple segments for smooth curve

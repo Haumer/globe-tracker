@@ -314,12 +314,12 @@ export function applyCoreMethods(GlobeController) {
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
         if (typeof entityId === "string") {
-          // These entity types should always handle clicks (they have detail panels)
-          const priorityPrefixes = ["cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-"]
+          // These entity types should always handle clicks (they have detail panels).
+          // Decoration entities (rings, cores, labels) are also included — the dispatch
+          // table redirects them to their parent entity's detail panel.
+          const priorityPrefixes = ["cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
-          // But skip cpulse decoration (rings, cores, labels, arcs, hexes)
-          const isPulseDecor = /^cpulse-(ring|core|lbl|hex)-/.test(entityId)
-          if (isPriority && !isPulseDecor) {
+          if (isPriority) {
             if (this._handleEntityClick(entityId, picked)) return
           }
         }
@@ -1066,6 +1066,8 @@ export function applyCoreMethods(GlobeController) {
     if (typeof entityId !== "string") return false
 
     // Dispatch table: prefix → handler
+    // Decoration/ring entries are listed BEFORE their parent prefix so they match first
+    // and redirect clicks to the parent entity's detail panel instead of closing it.
     const handlers = [
       { prefix: "tl-flight-", skip: [], handler: (id) => {
         // Timeline playback flight — show detail from snapshot data
@@ -1103,9 +1105,19 @@ export function applyCoreMethods(GlobeController) {
         const d = this._earthquakeData.find(e => e.id === id); if (!d) return false
         this.showEarthquakeDetail(d); return true
       }},
-      { prefix: "fire-", skip: ["fire-ring-"], handler: (id) => {
+      // Fire ring → parent fire hotspot
+      { prefix: "fire-ring-", skip: [], handler: (id) => {
         const d = this._fireHotspotData?.find(f => f.id === id); if (!d) return false
         this.showFireHotspotDetail(d); return true
+      }},
+      { prefix: "fire-", skip: [], handler: (id) => {
+        const d = this._fireHotspotData?.find(f => f.id === id); if (!d) return false
+        this.showFireHotspotDetail(d); return true
+      }},
+      // EONET ring → parent natural event
+      { prefix: "eonet-ring-", skip: [], handler: (id) => {
+        const d = this._naturalEventData.find(e => e.id === id); if (!d) return false
+        this.showNaturalEventDetail(d); return true
       }},
       { prefix: "eonet-", skip: [], handler: (id) => {
         const d = this._naturalEventData.find(e => e.id === id); if (!d) return false
@@ -1119,7 +1131,11 @@ export function applyCoreMethods(GlobeController) {
         const d = this._newsData?.[parseInt(id)]; if (!d) return false
         this.showNewsDetail(d); return true
       }},
-      { prefix: "outage-", skip: ["outage-ring-"], handler: (id) => {
+      // Outage ring → parent outage
+      { prefix: "outage-ring-", skip: [], handler: (id) => {
+        this.showOutageDetail(id); return true
+      }},
+      { prefix: "outage-", skip: [], handler: (id) => {
         this.showOutageDetail(id); return true
       }},
       { prefix: "cable-", skip: [], handler: (_id) => {
@@ -1146,13 +1162,30 @@ export function applyCoreMethods(GlobeController) {
           this._webcamData.find(c => String(c.id) === id || String(c.id) === String(wId))
         if (!d) return false; this.showWebcamDetail(d); return true
       }},
+      // Power plant attack ring → parent power plant
+      { prefix: "pp-atk-", skip: [], handler: (id) => {
+        const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
+        this.showPowerPlantDetail(d); return true
+      }},
       { prefix: "pp-", skip: [], handler: (id) => {
         const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
         this.showPowerPlantDetail(d); return true
       }},
-      { prefix: "choke-", skip: ["choke-zone-", "choke-ships-"], handler: (id) => {
+      // Chokepoint zone/ships → parent chokepoint
+      { prefix: "choke-zone-", skip: [], handler: (id) => {
         const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
         this.showChokepointDetail(d); return true
+      }},
+      { prefix: "choke-ships-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        this.showChokepointDetail(d); return true
+      }},
+      { prefix: "choke-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        this.showChokepointDetail(d); return true
+      }},
+      { prefix: "rw-", skip: [], handler: (id) => {
+        this.showRailwayDetail(id); return true
       }},
       { prefix: "cpulse-arc-lbl-", handler: (id) => {
         const idx = parseInt(id); const arc = this._strikeArcData?.[idx]; if (!arc) return false
@@ -1166,15 +1199,43 @@ export function applyCoreMethods(GlobeController) {
         const idx = parseInt(id); const cell = this._hexCellData?.[idx]; if (!cell) return false
         this._showHexDetail(cell); return true
       }},
-      { prefix: "cpulse-", skip: ["cpulse-core-", "cpulse-ring-", "cpulse-lbl-", "cpulse-arc-", "cpulse-hex-"], handler: (id) => {
+      // Conflict pulse decoration (ring, core, lbl) → parent conflict pulse zone
+      { prefix: "cpulse-core-", skip: [], handler: (id) => {
         const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},
-      { prefix: "conf-", skip: ["conf-ring-"], handler: (id) => {
+      { prefix: "cpulse-ring-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        this.showConflictPulseDetail(d); return true
+      }},
+      { prefix: "cpulse-lbl-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        this.showConflictPulseDetail(d); return true
+      }},
+      { prefix: "cpulse-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        this.showConflictPulseDetail(d); return true
+      }},
+      // Conflict event ring → parent conflict event
+      { prefix: "conf-ring-", skip: [], handler: (id) => {
         const d = this._conflictData.find(e => e.id === parseInt(id)); if (!d) return false
         this.showConflictDetail(d); return true
       }},
-      { prefix: "traf-", skip: ["traf-atk-", "traf-arc-"], handler: (id) => {
+      { prefix: "conf-", skip: [], handler: (id) => {
+        const d = this._conflictData.find(e => e.id === parseInt(id)); if (!d) return false
+        this.showConflictDetail(d); return true
+      }},
+      // Traffic attack/arc decorations → parent traffic detail
+      { prefix: "traf-atk-", skip: [], handler: (id) => {
+        this.showTrafficDetail(id); return true
+      }},
+      { prefix: "traf-arc-", skip: [], handler: (id) => {
+        // Arc entities use index; try to extract target from arc data
+        const idx = parseInt(id); const arc = this._attackArcData?.[idx]
+        if (arc?.target) { this.showTrafficDetail(arc.target); return true }
+        return false
+      }},
+      { prefix: "traf-", skip: [], handler: (id) => {
         this.showTrafficDetail(id); return true
       }},
       { prefix: "notam-lbl-", skip: [], handler: (id) => {
@@ -1193,7 +1254,12 @@ export function applyCoreMethods(GlobeController) {
         const idx = parseInt(id); const d = this._commodityData?.[idx]; if (!d) return false
         this.showCommodityDetail(d); return true
       }},
-      { prefix: "insight-", skip: ["insight-ring-"], handler: (id) => {
+      // Insight ring → parent insight
+      { prefix: "insight-ring-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._insightsData?.[idx]; if (!d) return false
+        this.focusInsight({ currentTarget: { dataset: { insightIdx: String(idx) } } }); return true
+      }},
+      { prefix: "insight-", skip: [], handler: (id) => {
         const idx = parseInt(id); const d = this._insightsData?.[idx]; if (!d) return false
         this.focusInsight({ currentTarget: { dataset: { insightIdx: String(idx) } } }); return true
       }},

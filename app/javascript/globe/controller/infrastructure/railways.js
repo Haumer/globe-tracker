@@ -72,7 +72,7 @@ export function applyRailwaysMethods(GlobeController) {
       const color = isElec
         ? cachedColor("#64b5f6", 0.8)
         : cachedColor("#b0bec5", 0.75)
-      const width = isMajor ? 2.5 : rw.category === 2 ? 2.0 : 1.5
+      const width = isMajor ? 4 : rw.category === 2 ? 3 : 2.5
 
       const entity = dataSource.entities.add({
         id: `rw-${rw.id}`,
@@ -89,6 +89,39 @@ export function applyRailwaysMethods(GlobeController) {
     })
     dataSource.entities.resumeEvents()
     this._requestRender()
+  }
+
+  GlobeController.prototype.showRailwayDetail = function(id) {
+    const rw = (this._railwayData || []).find(r => String(r.id) === String(id))
+    if (!rw) return
+
+    const categoryLabels = { 1: "Major", 2: "Secondary", 3: "Tertiary" }
+    const categoryLabel = categoryLabels[rw.category] || "Unknown"
+    const electrifiedLabel = rw.electrified === 1 ? "Yes" : "No"
+    const continentLabel = rw.continent || "—"
+    const isElec = rw.electrified === 1
+    const color = isElec ? "#64b5f6" : "#b0bec5"
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${color};">
+        <i class="fa-solid fa-train" style="margin-right:6px;"></i>Railway
+      </div>
+      <div class="detail-country">${this._escapeHtml(continentLabel)}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Category</span>
+          <span class="detail-value">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:4px;"></span>
+            ${categoryLabel}
+          </span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Electrified</span>
+          <span class="detail-value">${electrifiedLabel}</span>
+        </div>
+      </div>
+    `
+    this.detailPanelTarget.style.display = ""
   }
 
   GlobeController.prototype._clearRailwayEntities = function() {

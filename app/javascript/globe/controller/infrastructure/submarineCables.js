@@ -59,7 +59,7 @@ export function applyCablesMethods(GlobeController) {
           id: `cable-${cable.id}-${si}`,
           polyline: {
             positions,
-            width: 1.5,
+            width: 4,
             material: new Cesium.PolylineGlowMaterialProperty({
               glowPower: 0.15,
               color,

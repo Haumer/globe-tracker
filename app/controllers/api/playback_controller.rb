@@ -13,7 +13,13 @@ module Api
       from = [from, to - max_range].max
 
       bounds = parse_bounds
-      interval = (params[:interval] || 30).to_i.clamp(10, 120)
+      # Auto-scale interval for large ranges to keep frame count manageable
+      range_hours = ((to - from) / 1.hour).to_i
+      default_interval = if range_hours > 48 then 120
+                         elsif range_hours > 12 then 60
+                         else 30
+                         end
+      interval = (params[:interval] || default_interval).to_i.clamp(10, 120)
       effective_bounds = bounds.size == 4 ? bounds : {}
 
       if entity_type == "all"

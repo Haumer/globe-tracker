@@ -85,7 +85,7 @@ export function applySatDataMethods(GlobeController) {
     if (!sat) return
 
     const dataSource = this.getSatellitesDataSource()
-    const now = new Date()
+    const now = this._timelineActive && this._timelineCursor ? new Date(this._timelineCursor.getTime()) : new Date()
     const future = new Date(now.getTime() + 2000) // 2s ahead for lerp target
     const gmst = sat.gstime(now)
     const gmstF = sat.gstime(future)

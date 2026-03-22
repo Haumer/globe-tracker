@@ -230,6 +230,11 @@ export function applyMaritimeMethods(GlobeController) {
 
   GlobeController.prototype.toggleShips = function() {
     this.shipsVisible = this.hasShipsToggleTarget && this.shipsToggleTarget.checked
+    if (this._timelineActive) {
+      this._timelineOnLayerToggle?.()
+      this._savePrefs()
+      return
+    }
     if (this._ds["ships"]) {
       this._ds["ships"].show = this.shipsVisible
     }

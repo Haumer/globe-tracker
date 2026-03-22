@@ -838,6 +838,11 @@ export function applyFlightMethods(GlobeController) {
 
   GlobeController.prototype.toggleFlights = function() {
     this.flightsVisible = this.flightsToggleTarget.checked
+    if (this._timelineActive) {
+      this._timelineOnLayerToggle?.()
+      this._savePrefs()
+      return
+    }
     if (this._ds["flights"]) {
       this._ds["flights"].show = this.flightsVisible
     }

@@ -23,10 +23,11 @@ export function applyTimelineMethods(GlobeController) {
       const oldest = new Date(range.oldest)
       // Use current time as the newest bound — range.newest can be future (NOTAMs, weather)
       const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))
-      // Default to last 1 hour for a manageable playback window
-      const oneHourAgo = new Date(newest.getTime() - 60 * 60 * 1000)
-      this._timelineRangeStart = oneHourAgo > oldest ? oneHourAgo : oldest
+      // Default to last 3 days — position snapshots have 3-day retention
+      const threeDaysAgo = new Date(newest.getTime() - 3 * 24 * 60 * 60 * 1000)
+      this._timelineRangeStart = threeDaysAgo > oldest ? threeDaysAgo : oldest
       this._timelineRangeEnd = newest
+      this._timelineOldest = oldest // store absolute oldest for date picker
       this._timelineCursor = new Date(this._timelineRangeStart.getTime())
 
       // Auto-enable flights if nothing is toggled
@@ -71,10 +72,25 @@ export function applyTimelineMethods(GlobeController) {
     const from = this._timelineRangeStart.toISOString()
     const to = this._timelineRangeEnd.toISOString()
 
-    // Only fetch entity types that were active before entering playback
+    // Clear existing timeline entities before reload
+    this._timelineLastKnown = null
+    const ds = this._ds["timeline"]
+    if (ds) ds.entities.removeAll()
+
+    // Fetch entity types based on current toggle state
     let playbackType = "all"
     if (this.flightsVisible && !this.shipsVisible) playbackType = "flight"
     else if (this.shipsVisible && !this.flightsVisible) playbackType = "ship"
+    else if (!this.flightsVisible && !this.shipsVisible) playbackType = "none"
+
+    // Skip position fetch if no tracking layers visible — events still work
+    if (playbackType === "none") {
+      this._timelineFrames = {}
+      this._timelineKeys = []
+      this._timelineFrameIndex = 0
+      return
+    }
+
     let url = `/api/playback?from=${from}&to=${to}&type=${playbackType}`
     // Use country/circle filter bounds if active, otherwise viewport
     const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
@@ -377,6 +393,68 @@ export function applyTimelineMethods(GlobeController) {
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     this._timelineEventTimer = setTimeout(() => this._timelineUpdateEvents(), 400)
     this._timelineUpdateConflictPulse()
+  }
+
+  // ── Date picker — click cursor date to set custom range ───
+  GlobeController.prototype.timelinePickDate = function() {
+    if (!this._timelineActive) return
+    // Create a temporary date input to pick start date
+    const input = document.createElement("input")
+    input.type = "datetime-local"
+    input.style.cssText = "position:fixed;top:-9999px;"
+    // Set bounds
+    const oldest = this._timelineOldest || this._timelineRangeStart
+    input.min = oldest.toISOString().slice(0, 16)
+    input.max = new Date().toISOString().slice(0, 16)
+    input.value = this._timelineRangeStart.toISOString().slice(0, 16)
+    document.body.appendChild(input)
+    input.addEventListener("change", () => {
+      const picked = new Date(input.value + "Z")
+      if (!isNaN(picked)) {
+        this._timelineSetRange(picked, new Date())
+      }
+      input.remove()
+    })
+    // Also clean up if cancelled
+    input.addEventListener("blur", () => setTimeout(() => input.remove(), 200))
+    input.showPicker()
+  }
+
+  GlobeController.prototype._timelineSetRange = async function(start, end) {
+    this._timelineRangeStart = start
+    this._timelineRangeEnd = end
+    this._timelineCursor = new Date(start.getTime())
+    this._timelineFrameIndex = 0
+
+    this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(start)
+    this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(end)
+    this._updateTimelineCursorDisplay()
+    this._syncScrubberToCursor()
+
+    this._toast("Loading time travel data...")
+    await this._timelineLoadFrames()
+    this._timelineUpdateEvents()
+    this._timelineUpdateConflictPulse()
+
+    if (this._timelineKeys.length > 0) {
+      this._toast(`Time travel: ${this._timelineKeys.length} frames loaded`, "success")
+    } else {
+      this._toast("No position snapshots in this range (events still visible)", "error")
+    }
+  }
+
+  // ── Layer toggle reload — detect visibility changes mid-playback ──
+  GlobeController.prototype._timelineOnLayerToggle = function() {
+    if (!this._timelineActive) return
+    // Debounce reload — user may toggle multiple layers quickly
+    if (this._timelineLayerReloadTimer) clearTimeout(this._timelineLayerReloadTimer)
+    this._timelineLayerReloadTimer = setTimeout(async () => {
+      // Reload position frames with new entity type selection
+      await this._timelineLoadFrames()
+      this._renderNearestFrame()
+      // Events already respond to visibility flags, just retrigger
+      this._timelineUpdateEvents()
+    }, 300)
   }
 
   GlobeController.prototype._timelineUpdateEvents = async function() {

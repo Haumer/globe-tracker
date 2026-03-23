@@ -956,11 +956,27 @@ export function applyNewsMethods(GlobeController) {
       Math.abs(n.lng - ev.lng) < 1.0
     )
 
-    const themeTags = (ev.themes || []).map(t =>
-      `<span style="display:inline-block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);padding:2px 7px;border-radius:3px;margin:2px;font-size:10px;color:rgba(200,210,225,0.7);">${t.replace(/^.*_/, "")}</span>`
+    // Clean up theme tags — remove GDELT prefixes, skip raw codes
+    const cleanThemes = (ev.themes || [])
+      .map(t => t.replace(/^.*_/, "").replace(/([a-z])([A-Z])/g, "$1 $2"))
+      .filter(t => t.length > 2 && t.length < 25 && !/^[A-Z]{3,}$/.test(t))
+    const themeTags = cleanThemes.map(t =>
+      `<span style="display:inline-block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);padding:2px 7px;border-radius:3px;margin:2px;font-size:10px;color:rgba(200,210,225,0.7);">${t.toLowerCase()}</span>`
     ).join("")
 
     const timeStr = ev.time ? this._timeAgo(new Date(ev.time)) : ""
+
+    // Deduplicate location parts (e.g., "Baghdad, Baghdad, Iraq" → "Baghdad, Iraq")
+    const locationParts = (ev.name || "").split(",").map(s => s.trim())
+    const dedupedLocation = [...new Set(locationParts)].join(", ")
+
+    // Clean source name — strip "GN: " prefix
+    const sourceName = (ev.source || "").replace(/^GN:\s*/, "")
+
+    // Sentiment as human-readable label
+    const sentimentLabel = Math.abs(ev.tone) >= 7 ? "Strongly negative" :
+      Math.abs(ev.tone) >= 4 ? "Negative" :
+      Math.abs(ev.tone) >= 2 ? "Moderately negative" : "Neutral"
 
     const nearbyHtml = nearby.length > 0 ? `
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
@@ -969,11 +985,13 @@ export function applyNewsMethods(GlobeController) {
         </div>
         ${nearby.slice(0, 10).map(n => {
           const nColor = categoryColors[n.category] || "#90a4ae"
-          const nName = n.name ? n.name.split(",")[0] : "Story"
-          return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.8);text-decoration:none;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          const nTitle = n.title || n.name || "Untitled"
+          const nSource = (n.source || n.name || "").replace(/^GN:\s*/, "").split(",")[0]
+          const nTime = n.time ? this._timeAgo(new Date(n.time)) : ""
+          return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:6px 0;color:rgba(200,210,225,0.85);text-decoration:none;font-size:11px;line-height:1.35;border-bottom:1px solid rgba(255,255,255,0.04);">
             <span style="color:${nColor};margin-right:4px;">●</span>
-            ${this._escapeHtml(nName)}
-            <span style="color:rgba(200,210,225,0.4);font-size:10px;margin-left:4px;">${n.category}</span>
+            ${this._escapeHtml(nTitle.length > 80 ? nTitle.substring(0, 78) + "…" : nTitle)}
+            <div style="color:rgba(200,210,225,0.4);font-size:9px;margin-top:2px;margin-left:12px;">${this._escapeHtml(nSource)}${nTime ? " · " + nTime : ""}</div>
           </a>`
         }).join("")}
       </div>
@@ -981,32 +999,28 @@ export function applyNewsMethods(GlobeController) {
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid ${icon}" style="margin-right:6px;"></i>${ev.category.charAt(0).toUpperCase() + ev.category.slice(1)}
+        <i class="fa-solid ${icon}" style="margin-right:6px;"></i>${this._escapeHtml(ev.title || ev.category.charAt(0).toUpperCase() + ev.category.slice(1))}
       </div>
-      <div class="detail-country">${this._escapeHtml(ev.name || "Unknown location")}</div>
+      <div class="detail-country">${this._escapeHtml(dedupedLocation || "Unknown location")}</div>
       <div class="detail-grid">
         <div class="detail-field">
-          <span class="detail-label">Sentiment</span>
-          <span class="detail-value">${ev.tone} · ${ev.level}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Location</span>
-          <span class="detail-value">${ev.lat.toFixed(2)}°, ${ev.lng.toFixed(2)}°</span>
+          <span class="detail-label">Coverage</span>
+          <span class="detail-value">${sentimentLabel}</span>
         </div>
         ${timeStr ? `<div class="detail-field">
           <span class="detail-label">Published</span>
           <span class="detail-value">${timeStr}</span>
         </div>` : ""}
-        ${ev.threat ? `<div class="detail-field">
-          <span class="detail-label">Threat</span>
-          <span class="detail-value" style="color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a",info:"#90a4ae"}[ev.threat] || "#90a4ae"};">${ev.threat.toUpperCase()}</span>
+        ${sourceName ? `<div class="detail-field">
+          <span class="detail-label">Source</span>
+          <span class="detail-value">${this._escapeHtml(sourceName)}</span>
         </div>` : ""}
         ${ev.credibility ? `<div class="detail-field">
-          <span class="detail-label">Source</span>
+          <span class="detail-label">Credibility</span>
           <span class="detail-value">${this._formatCredibility(ev.credibility)}</span>
         </div>` : ""}
       </div>
-      <div style="margin:8px 0;">${themeTags}</div>
+      ${themeTags ? `<div style="margin:8px 0;">${themeTags}</div>` : ""}
       <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" class="detail-track-btn">Read Article →</a>
       ${nearbyHtml}
     `

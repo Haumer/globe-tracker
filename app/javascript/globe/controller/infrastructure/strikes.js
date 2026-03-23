@@ -37,6 +37,7 @@ export function applyStrikesMethods(GlobeController) {
         id: r[0], lat: r[1], lng: r[2], brightness: r[3],
         confidence: r[4], satellite: r[5], instrument: r[6],
         frp: r[7], daynight: r[8], time: r[9],
+        strikeConfidence: r[10] || "low", clusterSize: r[11] || 0,
       }))
       this.renderStrikes()
       this._toastHide()
@@ -61,10 +62,13 @@ export function applyStrikesMethods(GlobeController) {
       if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(s.lat, s.lng)) return
 
       const frp = s.frp || 1
-      const pixelSize = Math.min(8 + Math.sqrt(frp) * 1.0, 20)
+      // Size and opacity scale with confidence: high=bright+large, low=dim+small
+      const confScale = s.strikeConfidence === "high" ? 1.3 : s.strikeConfidence === "medium" ? 1.0 : 0.7
+      const confAlpha = s.strikeConfidence === "high" ? 0.95 : s.strikeConfidence === "medium" ? 0.8 : 0.5
+      const pixelSize = Math.min((8 + Math.sqrt(frp) * 1.0) * confScale, 24)
 
-      // Glow ring
-      if (frp > 10) {
+      // Glow ring — only for medium/high confidence
+      if (frp > 10 && s.strikeConfidence !== "low") {
         const ring = dataSource.entities.add({
           id: `strike-ring-${s.id}`,
           position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 0),
@@ -88,8 +92,8 @@ export function applyStrikesMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 10),
         point: {
           pixelSize,
-          color: color.withAlpha(0.95),
-          outlineColor: color.withAlpha(0.4),
+          color: color.withAlpha(confAlpha),
+          outlineColor: color.withAlpha(confAlpha * 0.4),
           outlineWidth: 2,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -167,7 +171,11 @@ export function applyStrikesMethods(GlobeController) {
       <div class="detail-callsign" style="color:#e040fb;">
         <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>Possible Strike
       </div>
-      <div style="margin:4px 0 8px;padding:4px 8px;background:rgba(224,64,251,0.1);border:1px solid rgba(224,64,251,0.3);border-radius:4px;font:500 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;">THERMAL ANOMALY IN ACTIVE CONFLICT ZONE</div>
+      <div style="margin:4px 0 8px;padding:4px 8px;background:rgba(224,64,251,0.1);border:1px solid rgba(224,64,251,0.3);border-radius:4px;font:500 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;">
+        ${s.strikeConfidence === "high" ? "HIGH CONFIDENCE — clustered detections + news corroboration" :
+          s.strikeConfidence === "medium" ? ("MEDIUM CONFIDENCE — " + (s.clusterSize >= 2 ? "clustered detections" : "news reports nearby")) :
+          "LOW CONFIDENCE — isolated thermal anomaly"}
+      </div>
       <div class="detail-country">${s.lat.toFixed(3)}°, ${s.lng.toFixed(3)}°</div>
       <div class="detail-grid">
         <div class="detail-field">
@@ -190,6 +198,10 @@ export function applyStrikesMethods(GlobeController) {
           <span class="detail-label">Time</span>
           <span class="detail-value">${ago}</span>
         </div>
+        ${s.clusterSize > 0 ? `<div class="detail-field">
+          <span class="detail-label">Cluster</span>
+          <span class="detail-value" style="color:#e040fb;">${s.clusterSize + 1} detections nearby</span>
+        </div>` : ""}
       </div>
       ${infraHtml}
       ${satLink}

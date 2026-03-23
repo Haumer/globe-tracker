@@ -6,6 +6,19 @@ class NewsRefreshService
   include NewsDedupable
 
   FEED_URL = "https://api.gdeltproject.org/api/v1/gkg_geojson".freeze
+
+  # Targeted conflict queries — GDELT DOC API with GeoJSON output
+  # Each returns geocoded articles matching strike/conflict terms for active theaters
+  CONFLICT_QUERIES = [
+    "Iran strike OR Iran attack OR Iran bomb OR IRGC OR Tehran missile",
+    "Gaza strike OR Gaza bomb OR IDF OR Hamas rocket OR Rafah",
+    "Ukraine strike OR Ukraine missile OR Kyiv drone OR Kharkiv shelling",
+    "Yemen Houthi OR Red Sea attack OR Bab el-Mandeb",
+    "Lebanon Hezbollah OR Beirut strike OR Israel border",
+    "Syria airstrike OR Syria bomb OR Damascus",
+    "Sudan RSF OR Khartoum fighting OR Sudan war",
+  ].freeze
+
   INTERESTING_THEMES = %w[
     ARMEDCONFLICT PROTEST TERROR ECON_BANKRUPTCY ECON_STOCKMARKET
     ENV_EARTHQUAKE ENV_VOLCANO ENV_FLOOD ENV_HURRICANE ENV_WILDFIRE
@@ -82,6 +95,10 @@ class NewsRefreshService
       }
     end
 
+    # Also fetch targeted conflict queries for active theaters
+    conflict_records = fetch_conflict_queries(seen_urls, now)
+    records.concat(conflict_records)
+
     records.each do |record|
       record.each { |key, value| record[key] = value.scrub("") if value.is_a?(String) }
     end
@@ -98,6 +115,7 @@ class NewsRefreshService
       time_column: :published_at
     )
 
+    Rails.logger.info("NewsRefreshService: #{records.size} total (#{conflict_records.size} from conflict queries)")
     records.size
   rescue StandardError => e
     Rails.logger.error("NewsRefreshService: #{e.message}")
@@ -105,6 +123,74 @@ class NewsRefreshService
   end
 
   private
+
+  def fetch_conflict_queries(seen_urls, now)
+    records = []
+
+    # Rotate through queries — one per cycle to avoid rate limits
+    idx = (Rails.cache.read("gdelt_conflict_query_idx") || 0) % CONFLICT_QUERIES.size
+    Rails.cache.write("gdelt_conflict_query_idx", idx + 1)
+
+    # Fetch 2 queries per cycle (current + next) for better coverage
+    [idx, (idx + 1) % CONFLICT_QUERIES.size].each do |qi|
+      query = CONFLICT_QUERIES[qi]
+      query_with_lang = "#{query} sourcelang:eng"
+      query_encoded = URI.encode_www_form_component(query_with_lang)
+      url = "https://api.gdeltproject.org/api/v2/doc/doc?query=#{query_encoded}&mode=ArtList&maxrecords=50&format=json&timespan=3h"
+
+      begin
+        uri = URI(url)
+        resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
+          http.request(Net::HTTP::Get.new(uri))
+        end
+        next unless resp.is_a?(Net::HTTPSuccess)
+
+        body = resp.body.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace, replace: "")
+        data = JSON.parse(body)
+        articles = data["articles"] || []
+
+        articles.each do |art|
+          art_url = art["url"]
+          next if art_url.blank? || seen_urls.include?(art_url)
+          seen_urls.add(art_url)
+
+          title = art["title"]
+          next if title.blank?
+
+          # Use GDELT's source country for rough geocoding — AI enrichment will fix later
+          published_at = begin
+            art["seendate"].present? ? Time.parse(art["seendate"]) : now
+          rescue
+            now
+          end
+
+          records << {
+            url: art_url,
+            name: art["domain"],
+            title: title,
+            latitude: nil, # geocoded by AI enrichment service
+            longitude: nil,
+            tone: -3.0, # default negative for conflict queries — enrichment will refine
+            level: "elevated",
+            category: "conflict",
+            themes: ["ARMEDCONFLICT"],
+            published_at: published_at,
+            fetched_at: now,
+            source: "gdelt",
+            credibility: "tier2/low",
+            created_at: now,
+            updated_at: now,
+          }
+        end
+      rescue => e
+        Rails.logger.warn("NewsRefreshService conflict query #{qi}: #{e.message}")
+      end
+
+      sleep(6) # GDELT rate limit: 1 request per 5 seconds
+    end
+
+    records
+  end
 
   # Extract a readable title from a URL slug (e.g., /2024/03/earthquake-hits-turkey → "Earthquake Hits Turkey")
   def extract_title_from_url(url)

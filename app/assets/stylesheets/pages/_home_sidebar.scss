@@ -248,11 +248,12 @@
 }
 
 .sb-section-hint {
-  font: 400 9px var(--gt-mono);
-  color: rgba(200, 210, 225, 0.3);
+  font: 400 8px var(--gt-mono);
+  color: rgba(200, 210, 225, 0.2);
   letter-spacing: 0;
   text-transform: none;
-  margin-top: 1px;
+  margin-top: 0;
+  line-height: 1.2;
 }
 
 .sb-section-body {
@@ -651,12 +652,13 @@
 
 // ─── Region Mode Bar ────────────────────────────────────────────
 .region-bar {
-  padding: 6px 10px 6px 46px; // offset past hamburger button
+  padding: 8px 10px 6px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .region-select {
-  width: 100%;
+  width: calc(100% - 36px);
+  margin-left: 36px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;

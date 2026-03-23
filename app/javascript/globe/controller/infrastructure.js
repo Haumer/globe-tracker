@@ -10,6 +10,7 @@ import { applyRailwaysMethods } from "./infrastructure/railways"
 import { applyTrainsMethods } from "./infrastructure/trains"
 import { applyConflictPulseMethods } from "./infrastructure/conflictPulse"
 import { applyChokepointsMethods } from "./infrastructure/chokepoints"
+import { applyStrikesMethods } from "./infrastructure/strikes"
 
 export function applyInfrastructureMethods(GlobeController) {
   applyGpsJammingMethods(GlobeController)
@@ -24,4 +25,5 @@ export function applyInfrastructureMethods(GlobeController) {
   applyTrainsMethods(GlobeController)
   applyConflictPulseMethods(GlobeController)
   applyChokepointsMethods(GlobeController)
+  applyStrikesMethods(GlobeController)
 }

@@ -19,6 +19,7 @@
   <input type="checkbox" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
   <input type="checkbox" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
   <input type="checkbox" data-globe-target="fireHotspotsToggle" data-action="change->globe#toggleFireHotspots">
+  <input type="checkbox" data-globe-target="strikesToggle" data-action="change->globe#toggleStrikes">
   <input type="checkbox" data-globe-target="weatherToggle" data-action="change->globe#toggleWeather">
   <input type="checkbox" data-globe-target="financialToggle" data-action="change->globe#toggleFinancial">
   <input type="checkbox" data-globe-target="chokepointsToggle" data-action="change->globe#toggleChokepoints">
@@ -98,6 +99,11 @@
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="fireHotspots" data-globe-target="qlFireHotspots">
         <i class="fa-solid fa-fire sb-layer-icon" style="color: #ff5722;"></i>
         <span class="sb-layer-name">Fire Hotspots</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="strikes" data-globe-target="qlStrikes">
+        <i class="fa-solid fa-crosshairs sb-layer-icon" style="color: #e040fb;"></i>
+        <span class="sb-layer-name">Strikes</span>
         <span class="sb-layer-dot"></span>
       </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="weather" data-globe-target="qlWeather">

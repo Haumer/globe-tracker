@@ -10,6 +10,7 @@ const LAYER_REGISTRY = [
   { key: "events",        toggleTarget: "naturalEventsToggle",method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents",       section: "events",         pill: { label: "EVT",   color: "#ff9800" } },
   { key: "fireHotspots",  toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible",  qlTarget: "qlFireHotspots", section: "events",         pill: { label: "FIRE",  color: "#ff6d00" } },
   { key: "weather",       toggleTarget: "weatherToggle",      method: "toggleWeather",      visibleProp: "weatherVisible",       qlTarget: "qlWeather",      section: "events",         pill: { label: "WX",    color: "#64b5f6" } },
+  { key: "strikes",       toggleTarget: "strikesToggle",      method: "toggleStrikes",      visibleProp: "strikesVisible",       qlTarget: "qlStrikes",      section: "events",         pill: { label: "STRK",  color: "#e040fb" } },
   { key: "conflicts",     toggleTarget: "conflictsToggle",    method: "toggleConflicts",    visibleProp: "conflictsVisible",     qlTarget: "qlConflicts",    section: "events",         pill: { label: "WAR",   color: "#ef5350" } },
   { key: "news",          toggleTarget: "newsToggle",         method: "toggleNews",         visibleProp: "newsVisible",          qlTarget: "qlNews",         section: "events",         pill: { label: "NEWS",  color: "#7c4dff" } },
   { key: "cables",        toggleTarget: "cablesToggle",       method: "toggleCables",       visibleProp: "cablesVisible",        qlTarget: "qlCables",       section: "infrastructure", pill: { label: "CBL",   color: "#00bcd4" } },
@@ -396,6 +397,7 @@ export function applyUiMethods(GlobeController) {
       traffic: this.trafficVisible,
       notams: this.notamsVisible,
       fireHotspots: this.fireHotspotsVisible,
+      strikes: this.strikesVisible,
       weather: this.weatherVisible,
       financial: this.financialVisible,
       chokepoints: this.chokepointsVisible,
@@ -587,6 +589,10 @@ export function applyUiMethods(GlobeController) {
       if (l.fireHotspots && this.hasFireHotspotsToggleTarget) {
         this.fireHotspotsToggleTarget.checked = true
         this.toggleFireHotspots()
+      }
+      if (l.strikes && this.hasStrikesToggleTarget) {
+        this.strikesToggleTarget.checked = true
+        this.toggleStrikes()
       }
       if (l.weather && this.hasWeatherToggleTarget) {
         this._weatherOpacity = l.weatherOpacity || 0.6

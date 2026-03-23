@@ -631,25 +631,22 @@ export function applyConflictPulseMethods(GlobeController) {
           }
         }
 
-        // 2. Only enable lightweight / viewport-scoped layers
-        //    Skip global-dump layers (power plants 35k, pipelines, cables) — they lag the server
+        // 2. Only enable context layers — NOT flights/ships (too noisy, viewport-scoped = loads region)
         const enabled = []
 
-        // Signal-based layers (all viewport-scoped or lightweight)
-        const signalLayers = {
-          military_flights: "flightsToggle",
-          gps_jamming: "gpsJammingToggle",
-          internet_outage: "outagesToggle",
+        // Signal-based layers (only non-noisy ones)
+        if (signals.gps_jamming) {
+          this._enableLayer("gpsJammingToggle")
+          this._revealedLayers.push("gpsJammingToggle")
+          enabled.push("GPS jamming")
         }
-        for (const [signal, toggle] of Object.entries(signalLayers)) {
-          if (signals[signal]) {
-            this._enableLayer(toggle)
-            this._revealedLayers.push(toggle)
-            enabled.push(signal.replace(/_/g, " "))
-          }
+        if (signals.internet_outage) {
+          this._enableLayer("outagesToggle")
+          this._revealedLayers.push("outagesToggle")
+          enabled.push("internet outages")
         }
 
-        // Always show conflicts + news (both lightweight global datasets)
+        // Always show conflicts + news (lightweight, relevant context)
         if (!this.conflictsVisible) {
           this._enableLayer("conflictsToggle")
           this._revealedLayers.push("conflictsToggle")
@@ -659,13 +656,6 @@ export function applyConflictPulseMethods(GlobeController) {
           this._enableLayer("newsToggle")
           this._revealedLayers.push("newsToggle")
           enabled.push("news")
-        }
-
-        // Airports are viewport-scoped and useful for conflict zones
-        if (!this.airportsVisible) {
-          this._enableLayer("airportsToggle")
-          this._revealedLayers.push("airportsToggle")
-          enabled.push("airports")
         }
 
         btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Layers`

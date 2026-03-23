@@ -126,6 +126,43 @@ export function applyStrikesMethods(GlobeController) {
          </button>`
       : ""
 
+    // Find nearby conflict/strike news (within ~3° ≈ 330km)
+    const nearbyNews = (this._newsData || []).filter(n =>
+      (n.category === "conflict" || n.category === "terror") &&
+      Math.abs(n.lat - s.lat) < 3.0 && Math.abs(n.lng - s.lng) < 3.0
+    ).slice(0, 5)
+
+    const newsHtml = nearbyNews.length > 0 ? `
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
+        <div style="font:600 9px var(--gt-mono);color:#e040fb;letter-spacing:1px;margin-bottom:6px;">RELATED REPORTS</div>
+        ${nearbyNews.map(n => {
+          const nTime = n.time ? this._timeAgo(new Date(n.time)) : ""
+          return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.85);text-decoration:none;font-size:10px;line-height:1.3;border-bottom:1px solid rgba(255,255,255,0.04);">
+            ${this._escapeHtml((n.title || "").length > 85 ? n.title.substring(0, 83) + "…" : (n.title || ""))}
+            <div style="color:rgba(200,210,225,0.4);font-size:9px;margin-top:1px;">${this._escapeHtml((n.source || "").replace(/^GN:\s*/, ""))}${nTime ? " · " + nTime : ""}</div>
+          </a>`
+        }).join("")}
+      </div>
+    ` : ""
+
+    // Check if near known infrastructure
+    const nearbyInfra = []
+    if (this._powerPlantAll) {
+      const nearPlants = this._powerPlantAll.filter(p =>
+        Math.abs(p.lat - s.lat) < 0.5 && Math.abs(p.lng - s.lng) < 0.5
+      ).slice(0, 3)
+      nearPlants.forEach(p => {
+        nearbyInfra.push(`<span style="color:#fdd835;"><i class="fa-solid fa-bolt" style="margin-right:3px;"></i>${this._escapeHtml(p.name)} (${p.fuel}, ${p.capacity || "?"} MW)</span>`)
+      })
+    }
+
+    const infraHtml = nearbyInfra.length > 0 ? `
+      <div style="margin-top:8px;padding:5px 8px;background:rgba(253,216,53,0.08);border:1px solid rgba(253,216,53,0.2);border-radius:4px;">
+        <div style="font:600 9px var(--gt-mono);color:#fdd835;letter-spacing:0.5px;margin-bottom:4px;">NEARBY INFRASTRUCTURE</div>
+        ${nearbyInfra.map(h => `<div style="font:400 10px var(--gt-mono);margin:2px 0;">${h}</div>`).join("")}
+      </div>
+    ` : ""
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:#e040fb;">
         <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>Possible Strike
@@ -153,12 +190,10 @@ export function applyStrikesMethods(GlobeController) {
           <span class="detail-label">Time</span>
           <span class="detail-value">${ago}</span>
         </div>
-        <div class="detail-field">
-          <span class="detail-label">Timestamp</span>
-          <span class="detail-value" style="font-size:9px;">${timeStr}</span>
-        </div>
       </div>
+      ${infraHtml}
       ${satLink}
+      ${newsHtml}
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""

@@ -34,11 +34,11 @@ export function applyFiresMethods(GlobeController) {
       const resp = await fetch("/api/fire_hotspots")
       if (!resp.ok) return
       const raw = await resp.json()
-      // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time]
+      // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time, strike]
       this._fireHotspotData = raw.map(r => ({
         id: r[0], lat: r[1], lng: r[2], brightness: r[3],
         confidence: r[4], satellite: r[5], instrument: r[6],
-        frp: r[7], daynight: r[8], time: r[9],
+        frp: r[7], daynight: r[8], time: r[9], strike: r[10] === 1,
       }))
       this._handleBackgroundRefresh(resp, "fire-hotspots", this._fireHotspotData.length > 0, () => {
         if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
@@ -67,14 +67,18 @@ export function applyFiresMethods(GlobeController) {
       const frp = f.frp || 1
       const brightness = f.brightness || 300
 
-      // Color by brightness/FRP: yellow → orange → red → deep red
+      // Strikes get a distinct magenta color; fires use heat scale
       let color
-      if (brightness < 320) color = cachedColor("#ffd54f")
+      if (f.strike) {
+        color = cachedColor("#e040fb") // magenta — distinct from fire colors
+      } else if (brightness < 320) color = cachedColor("#ffd54f")
       else if (brightness < 350) color = cachedColor("#ff9800")
       else if (brightness < 400) color = cachedColor("#ff5722")
       else color = cachedColor("#d50000")
 
-      const pixelSize = Math.min(4 + Math.sqrt(frp) * 0.8, 16)
+      const pixelSize = f.strike
+        ? Math.min(8 + Math.sqrt(frp) * 1.0, 20)  // strikes are larger
+        : Math.min(4 + Math.sqrt(frp) * 0.8, 16)
 
       // Glow ring for high-confidence fires
       const isHigh = f.confidence === "high" || f.confidence === "h" || parseInt(f.confidence) >= 80
@@ -155,10 +159,16 @@ export function applyFiresMethods(GlobeController) {
          </button>`
       : ""
 
+    const isStrike = f.strike
+    const titleColor = isStrike ? "#e040fb" : "#ff5722"
+    const titleIcon = isStrike ? "fa-crosshairs" : "fa-fire"
+    const titleText = isStrike ? "Possible Strike" : "Active Fire / Hotspot"
+
     this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:#ff5722;">
-        <i class="fa-solid fa-fire" style="margin-right:6px;"></i>Active Fire / Hotspot
+      <div class="detail-callsign" style="color:${titleColor};">
+        <i class="fa-solid ${titleIcon}" style="margin-right:6px;"></i>${titleText}
       </div>
+      ${isStrike ? `<div style="margin:4px 0 8px;padding:4px 8px;background:rgba(224,64,251,0.1);border:1px solid rgba(224,64,251,0.3);border-radius:4px;font:500 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;">THERMAL ANOMALY IN ACTIVE CONFLICT ZONE</div>` : ""}
       <div class="detail-country">${f.lat.toFixed(3)}°, ${f.lng.toFixed(3)}°</div>
       <div class="detail-grid">
         <div class="detail-field">

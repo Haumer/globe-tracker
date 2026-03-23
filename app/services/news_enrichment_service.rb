@@ -319,7 +319,13 @@ class NewsEnrichmentService
     def resolve_ai_location(city, country)
       return nil if city&.downcase == "unspecified" && country&.downcase == "unspecified"
 
-      # Try city first (reuse existing geocoding data)
+      # Try airport/landmark lookup first (most precise)
+      if city.present? && city.downcase != "unspecified"
+        coords = lookup_airport(city)
+        return coords if coords
+      end
+
+      # Try city (reuse existing geocoding data)
       if city.present? && city.downcase != "unspecified"
         coords = NewsGeocodable::CITY_COORDS[city.downcase]
         return coords if coords
@@ -339,6 +345,36 @@ class NewsEnrichmentService
       end
 
       nil
+    end
+
+    # Match city name against airport database for precise coordinates
+    def lookup_airport(name)
+      @airport_cache ||= build_airport_cache
+      @airport_cache[name.downcase]
+    end
+
+    def build_airport_cache
+      cache = {}
+      return cache unless defined?(Airport) && Airport.table_exists?
+
+      Airport.where.not(latitude: nil, longitude: nil).find_each do |ap|
+        full = ap.name&.downcase
+        next unless full
+
+        # Index by full name: "LaGuardia Airport" → [lat, lng]
+        cache[full] = [ap.latitude, ap.longitude]
+
+        # Index by short name: "LaGuardia" (without "Airport", "International", etc.)
+        short = full.gsub(/\s*(international|airport|regional|municipal|air base|airbase|afb)\s*/i, "").strip
+        cache[short] = [ap.latitude, ap.longitude] if short.length > 3
+
+        # Index by ICAO/IATA codes
+        cache[ap.icao_code&.downcase] = [ap.latitude, ap.longitude] if ap.icao_code.present?
+        cache[ap.iata_code&.downcase] = [ap.latitude, ap.longitude] if ap.respond_to?(:iata_code) && ap.iata_code.present?
+      end
+
+      Rails.logger.info("NewsEnrichmentService: built airport cache with #{cache.size} entries")
+      cache
     end
   end
 end

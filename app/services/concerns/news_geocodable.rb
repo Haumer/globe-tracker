@@ -269,6 +269,76 @@ module NewsGeocodable
     "beirut airport" => [33.821, 35.488],
     "kabul airport" => [34.566, 69.213],
     "boryspil" => [50.345, 30.895], "kyiv airport" => [50.345, 30.895],
+
+    # --- Military Bases & Installations ---
+    "ramstein" => [49.437, 7.600], "incirlik" => [37.002, 35.426],
+    "al udeid" => [25.117, 51.315], "al dhafra" => [24.248, 54.548],
+    "diego garcia" => [-7.316, 72.411], "camp lemonnier" => [11.547, 43.155],
+    "aviano" => [46.032, 12.597], "rota naval" => [36.645, -6.350],
+    "souda bay" => [35.487, 24.119], "sigonella" => [37.402, 14.922],
+    "lakenheath" => [52.409, 0.561], "raf fairford" => [51.682, -1.790],
+    "nellis" => [36.236, -115.034], "whiteman" => [38.730, -93.548],
+    "andersen air base" => [13.584, 144.924], "kadena" => [26.352, 127.768],
+    "yokota" => [35.749, 139.349], "osan air base" => [37.091, 127.030],
+    "kunsan" => [35.922, 126.616], "thule" => [76.531, -68.703],
+    "bagram" => [34.946, 69.265], "al asad" => [33.786, 42.441],
+    "taji" => [33.529, 44.262],
+    "hmeimim" => [35.411, 35.949], "khmeimim" => [35.411, 35.949],
+    "sevastopol naval" => [44.617, 33.525],
+    "tartus naval" => [34.890, 35.887],
+    "bandar abbas" => [27.183, 56.268],
+    "chabahar" => [25.443, 60.382],
+    "natanz" => [33.725, 51.727], "fordow" => [34.878, 51.590],
+
+    # --- Nuclear Facilities ---
+    "bushehr nuclear" => [28.832, 50.889], "bushehr" => [28.832, 50.889],
+    "dimona" => [31.066, 35.147], "dimona reactor" => [31.066, 35.147],
+    "zaporizhzhia nuclear" => [47.507, 34.585], "enerhodar" => [47.499, 34.639],
+    "chernobyl" => [51.389, 30.099],
+    "parchin" => [35.522, 51.774],
+    "yongbyon" => [39.796, 125.756],
+    "barakah" => [23.960, 52.258],
+
+    # --- Ports & Maritime ---
+    "port of aden" => [12.788, 45.035],
+    "port said" => [31.259, 32.301], "suez canal" => [30.587, 32.316],
+    "port of jeddah" => [21.474, 39.172],
+    "port of fujairah" => [25.112, 56.336],
+    "port of hodeidah" => [14.798, 42.954], "hodeidah" => [14.798, 42.954],
+    "port of djibouti" => [11.595, 43.148],
+    "port of mariupol" => [47.095, 37.553],
+    "port of odesa" => [46.488, 30.753], "odesa port" => [46.488, 30.753],
+    "port of sevastopol" => [44.617, 33.525],
+
+    # --- Straits & Waterways ---
+    "strait of hormuz" => [26.567, 56.250], "hormuz strait" => [26.567, 56.250],
+    "bab el-mandeb" => [12.583, 43.333], "bab al-mandab" => [12.583, 43.333],
+    "strait of malacca" => [2.500, 101.000], "malacca strait" => [2.500, 101.000],
+    "strait of taiwan" => [24.500, 119.500], "taiwan strait" => [24.500, 119.500],
+    "bosphorus" => [41.119, 29.076], "bosporus" => [41.119, 29.076],
+    "dardanelles" => [40.200, 26.400],
+    "suez" => [30.019, 32.572], "panama canal" => [9.080, -79.681],
+    "strait of gibraltar" => [35.967, -5.600],
+
+    # --- Conflict Landmarks ---
+    "azovstal" => [47.097, 37.534],
+    "bakhmut" => [48.595, 38.001], "artyomovsk" => [48.595, 38.001],
+    "avdiivka" => [48.139, 37.748],
+    "kherson" => [46.636, 32.617], "melitopol" => [46.849, 35.368],
+    "mariupol" => [47.097, 37.554],
+    "kramatorsk" => [48.737, 37.557], "sloviansk" => [48.851, 37.175],
+    "khan younis" => [31.346, 34.302], "khan yunis" => [31.346, 34.302],
+    "rafah crossing" => [31.248, 34.248], "rafah" => [31.248, 34.248],
+    "jabalia" => [31.528, 34.484], "jabaliya" => [31.528, 34.484],
+    "deir al-balah" => [31.417, 34.351],
+    "nuseirat" => [31.448, 34.392],
+    "al-shifa hospital" => [31.518, 34.452], "shifa hospital" => [31.518, 34.452],
+    "zaatari camp" => [32.293, 36.323], "zaatari" => [32.293, 36.323],
+
+    # --- Refugee Camps ---
+    "cox's bazar" => [21.438, 92.010], "rohingya camp" => [21.195, 92.161],
+    "dadaab" => [0.053, 40.312], "kakuma" => [3.718, 34.823],
+    "al-hol" => [36.481, 41.175], "al hol camp" => [36.481, 41.175],
   }.freeze
 
   # Pre-sorted by name length descending for longest-match-first

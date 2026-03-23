@@ -265,13 +265,44 @@ export function applyFiresMethods(GlobeController) {
     return null
   }
 
+  // NORAD ID → satellite category mapping for auto-loading
+  const NORAD_CATEGORY = {
+    37849: "weather",  // Suomi NPP
+    43013: "weather",  // NOAA-20
+    54234: "weather",  // NOAA-21
+    25994: "resource", // Terra
+    27424: "resource", // Aqua
+  }
+
   GlobeController.prototype.flyToSatellite = function(event) {
     const noradId = event.currentTarget.dataset.norad
     const satEntity = this._findSatelliteByNorad(noradId)
     if (satEntity) {
       this.viewer.flyTo(satEntity, { duration: 1.5 })
+      return
+    }
+
+    // Auto-load the satellite category if not enabled
+    const category = NORAD_CATEGORY[parseInt(noradId)]
+    if (category && !this._loadedSatCategories.has(category)) {
+      this._toast(`Loading ${category} satellites...`)
+      this.satCategoryVisible[category] = true
+      // Activate the chip UI if visible
+      const chip = this.element?.querySelector(`.sb-chip[data-category="${category}"]`)
+      if (chip) { chip.classList.add("active"); chip.setAttribute("aria-pressed", "true") }
+
+      this.fetchSatCategory(category).then(() => {
+        const entity = this._findSatelliteByNorad(noradId)
+        if (entity) {
+          this.viewer.flyTo(entity, { duration: 1.5 })
+          this._toastHide()
+        } else {
+          this._toast("Satellite not found in loaded data")
+          setTimeout(() => this._toastHide(), 3000)
+        }
+      })
     } else {
-      this._toast("Satellite not loaded — enable the relevant satellite category first")
+      this._toast("Satellite not found — try enabling more satellite categories")
       setTimeout(() => this._toastHide(), 3000)
     }
   }

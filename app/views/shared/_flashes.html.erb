@@ -1,14 +1,25 @@
 <% if notice %>
-  <div class="alert alert-info alert-dismissible fade show m-1" role="alert">
-    <%= notice %>
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close">
-    </button>
-  </div>
+  <div id="rails-flash" data-message="<%= notice %>" data-type="success" style="display:none;"></div>
 <% end %>
 <% if alert %>
-  <div class="alert alert-warning alert-dismissible fade show m-1" role="alert">
-    <%= alert %>
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close">
-    </button>
-  </div>
+  <div id="rails-flash" data-message="<%= alert %>" data-type="error" style="display:none;"></div>
 <% end %>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    var el = document.getElementById("rails-flash");
+    if (!el) return;
+    var msg = el.dataset.message;
+    var type = el.dataset.type;
+    var toast = document.getElementById("gt-toast");
+    if (!toast || !msg) return;
+    toast.classList.remove("visible", "gt-toast--success", "gt-toast--error");
+    toast.innerHTML = "";
+    if (type === "success") toast.classList.add("gt-toast--success");
+    if (type === "error") toast.classList.add("gt-toast--error");
+    var span = document.createElement("span");
+    span.textContent = msg;
+    toast.appendChild(span);
+    toast.classList.add("visible");
+    setTimeout(function() { toast.classList.remove("visible"); }, 4000);
+  });
+</script>

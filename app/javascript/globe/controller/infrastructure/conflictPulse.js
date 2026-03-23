@@ -614,16 +614,22 @@ export function applyConflictPulseMethods(GlobeController) {
     this._revealedLayers = []
     this._revealedCountry = null
 
+    // Ensure border GeoJSON is loaded (needed for country detection) — don't wait for it
+    if (!this.bordersLoaded && this.loadBorders) {
+      this.loadBorders()
+    }
+
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, 400000),
       duration: 1.5,
       complete: () => {
-        // 1. Select the country first — this sets up the filter before any layers fetch data
-        if (this._countryFeatures?.length && this.bordersLoaded) {
+        // 1. Try to select the country (borders may have loaded during the 1.5s fly)
+        if (this._countryFeatures?.length) {
           const countryName = findCountryAtPoint(this._countryFeatures, lat, lng)
           if (countryName && !this.selectedCountries.has(countryName)) {
             if (!this.bordersVisible && this.hasBordersToggleTarget) {
-              this._enableLayer("bordersToggle")
+              this.bordersToggleTarget.checked = true
+              this.toggleBorders()
               this._revealedLayers.push("bordersToggle")
             }
             this.toggleCountrySelection(countryName)
@@ -631,10 +637,9 @@ export function applyConflictPulseMethods(GlobeController) {
           }
         }
 
-        // 2. Only enable context layers — NOT flights/ships (too noisy, viewport-scoped = loads region)
+        // 2. Enable context layers
         const enabled = []
 
-        // Signal-based layers (only non-noisy ones)
         if (signals.gps_jamming) {
           this._enableLayer("gpsJammingToggle")
           this._revealedLayers.push("gpsJammingToggle")
@@ -646,17 +651,14 @@ export function applyConflictPulseMethods(GlobeController) {
           enabled.push("internet outages")
         }
 
-        // Always show conflicts + news (lightweight, relevant context)
-        if (!this.conflictsVisible) {
-          this._enableLayer("conflictsToggle")
-          this._revealedLayers.push("conflictsToggle")
-          enabled.push("conflicts")
-        }
-        if (!this.newsVisible) {
-          this._enableLayer("newsToggle")
-          this._revealedLayers.push("newsToggle")
-          enabled.push("news")
-        }
+        // Always show conflicts + news
+        this._enableLayer("conflictsToggle")
+        this._revealedLayers.push("conflictsToggle")
+        enabled.push("conflicts")
+
+        this._enableLayer("newsToggle")
+        this._revealedLayers.push("newsToggle")
+        enabled.push("news")
 
         btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Layers`
         btn.style.background = "rgba(76,175,80,0.2)"

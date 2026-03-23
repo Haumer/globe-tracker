@@ -580,10 +580,17 @@ export function applyConflictPulseMethods(GlobeController) {
   GlobeController.prototype.revealPulseConnections = function(event) {
     const btn = event.currentTarget
 
-    // Toggle off: hide layers we enabled
+    // Toggle off: hide layers we enabled and deselect country
     if (btn.dataset.revealed === "true") {
       (this._revealedLayers || []).forEach(toggle => this._disableLayer(toggle))
       this._revealedLayers = []
+      if (this._revealedCountry) {
+        this.selectedCountries.delete(this._revealedCountry)
+        this._updateSelectedCountriesBbox()
+        this.updateBorderColors()
+        this._updateDeselectBtn()
+        this._revealedCountry = null
+      }
       btn.dataset.revealed = "false"
       btn.innerHTML = `<i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area`
       btn.style.background = "rgba(244,67,54,0.2)"
@@ -608,19 +615,33 @@ export function applyConflictPulseMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, 400000),
       duration: 1.5,
       complete: () => {
-        // Only enable layers that have actual detected signals for this zone
-        const layerMap = {
-          military_flights: "flightsToggle",
-          gps_jamming: "gpsJammingToggle",
-          fire_hotspots: "firesToggle",
-          known_conflict_zone: "conflictsToggle",
-          internet_outage: "internetOutagesToggle",
+        // 1. Select the country at this location (scopes all data fetches)
+        if (this._countryFeatures?.length && this.bordersLoaded) {
+          const countryName = findCountryAtPoint(this._countryFeatures, lat, lng)
+          if (countryName && !this.selectedCountries.has(countryName)) {
+            // Enable borders if needed for country selection
+            if (!this.bordersVisible && this.hasBordersToggleTarget) {
+              this._enableLayer("bordersToggle")
+              this._revealedLayers.push("bordersToggle")
+            }
+            this.toggleCountrySelection(countryName)
+            this._revealedCountry = countryName
+          }
         }
 
-        this._revealedLayers = []
+        // 2. Enable signal-based layers
+        const signalLayers = {
+          military_flights: "flightsToggle",
+          gps_jamming: "gpsJammingToggle",
+          fire_hotspots: "fireHotspotsToggle",
+          known_conflict_zone: "conflictsToggle",
+          internet_outage: "outagesToggle",
+        }
+
+        this._revealedLayers = this._revealedLayers || []
         const enabled = []
 
-        for (const [signal, toggle] of Object.entries(layerMap)) {
+        for (const [signal, toggle] of Object.entries(signalLayers)) {
           if (signals[signal]) {
             this._enableLayer(toggle)
             this._revealedLayers.push(toggle)
@@ -628,12 +649,26 @@ export function applyConflictPulseMethods(GlobeController) {
           }
         }
 
-        if (!enabled.length) {
-          // No signals — at least show conflicts for context
+        // 3. Always show conflicts + news for context
+        if (!this.conflictsVisible) {
           this._enableLayer("conflictsToggle")
           this._revealedLayers.push("conflictsToggle")
-          enabled.push("conflicts")
         }
+        if (!enabled.includes("conflicts")) enabled.push("conflicts")
+
+        if (!this.newsVisible) {
+          this._enableLayer("newsToggle")
+          this._revealedLayers.push("newsToggle")
+        }
+        enabled.push("news")
+
+        // 4. Enable infrastructure layers relevant to conflict zones
+        const infraLayers = ["powerPlantsToggle", "pipelinesToggle", "airportsToggle"]
+        for (const toggle of infraLayers) {
+          this._enableLayer(toggle)
+          this._revealedLayers.push(toggle)
+        }
+        enabled.push("power plants", "pipelines", "airports")
 
         btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Layers`
         btn.style.background = "rgba(76,175,80,0.2)"
@@ -642,7 +677,8 @@ export function applyConflictPulseMethods(GlobeController) {
         btn.disabled = false
         btn.dataset.revealed = "true"
 
-        this._toast(`Showing: ${enabled.join(", ")}`, "success")
+        const countryLabel = this._revealedCountry ? ` (${this._revealedCountry})` : ""
+        this._toast(`Exploring area${countryLabel}: ${enabled.join(", ")}`, "success")
       },
     })
   }

@@ -611,15 +611,17 @@ export function applyConflictPulseMethods(GlobeController) {
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>Flying to area...`
     btn.disabled = true
 
+    this._revealedLayers = []
+    this._revealedCountry = null
+
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, 400000),
       duration: 1.5,
       complete: () => {
-        // 1. Select the country at this location (scopes all data fetches)
+        // 1. Select the country first — this sets up the filter before any layers fetch data
         if (this._countryFeatures?.length && this.bordersLoaded) {
           const countryName = findCountryAtPoint(this._countryFeatures, lat, lng)
           if (countryName && !this.selectedCountries.has(countryName)) {
-            // Enable borders if needed for country selection
             if (!this.bordersVisible && this.hasBordersToggleTarget) {
               this._enableLayer("bordersToggle")
               this._revealedLayers.push("bordersToggle")
@@ -629,18 +631,16 @@ export function applyConflictPulseMethods(GlobeController) {
           }
         }
 
-        // 2. Enable signal-based layers
+        // 2. Only enable lightweight / viewport-scoped layers
+        //    Skip global-dump layers (power plants 35k, pipelines, cables) — they lag the server
+        const enabled = []
+
+        // Signal-based layers (all viewport-scoped or lightweight)
         const signalLayers = {
           military_flights: "flightsToggle",
           gps_jamming: "gpsJammingToggle",
-          fire_hotspots: "fireHotspotsToggle",
-          known_conflict_zone: "conflictsToggle",
           internet_outage: "outagesToggle",
         }
-
-        this._revealedLayers = this._revealedLayers || []
-        const enabled = []
-
         for (const [signal, toggle] of Object.entries(signalLayers)) {
           if (signals[signal]) {
             this._enableLayer(toggle)
@@ -649,26 +649,24 @@ export function applyConflictPulseMethods(GlobeController) {
           }
         }
 
-        // 3. Always show conflicts + news for context
+        // Always show conflicts + news (both lightweight global datasets)
         if (!this.conflictsVisible) {
           this._enableLayer("conflictsToggle")
           this._revealedLayers.push("conflictsToggle")
+          enabled.push("conflicts")
         }
-        if (!enabled.includes("conflicts")) enabled.push("conflicts")
-
         if (!this.newsVisible) {
           this._enableLayer("newsToggle")
           this._revealedLayers.push("newsToggle")
+          enabled.push("news")
         }
-        enabled.push("news")
 
-        // 4. Enable infrastructure layers relevant to conflict zones
-        const infraLayers = ["powerPlantsToggle", "pipelinesToggle", "airportsToggle"]
-        for (const toggle of infraLayers) {
-          this._enableLayer(toggle)
-          this._revealedLayers.push(toggle)
+        // Airports are viewport-scoped and useful for conflict zones
+        if (!this.airportsVisible) {
+          this._enableLayer("airportsToggle")
+          this._revealedLayers.push("airportsToggle")
+          enabled.push("airports")
         }
-        enabled.push("power plants", "pipelines", "airports")
 
         btn.innerHTML = `<i class="fa-solid fa-eye-slash" style="margin-right:4px;"></i>Hide Layers`
         btn.style.background = "rgba(76,175,80,0.2)"
@@ -678,7 +676,7 @@ export function applyConflictPulseMethods(GlobeController) {
         btn.dataset.revealed = "true"
 
         const countryLabel = this._revealedCountry ? ` (${this._revealedCountry})` : ""
-        this._toast(`Exploring area${countryLabel}: ${enabled.join(", ")}`, "success")
+        this._toast(`Exploring${countryLabel}`, "success")
       },
     })
   }

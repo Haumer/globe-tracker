@@ -344,6 +344,59 @@ class NewsEnrichmentService
         return coords if coords
       end
 
+      # Last resort: Nominatim geocoding (cached, rate-limited)
+      query = [city, country].compact.reject { |s| s.downcase == "unspecified" }.join(", ")
+      if query.present?
+        coords = nominatim_lookup(query)
+        return coords if coords
+      end
+
+      nil
+    end
+
+    # Nominatim (OpenStreetMap) geocoding — only called for locations
+    # not in our hardcoded lists. Results cached in Rails.cache for 30 days
+    # so each unique location is only looked up once.
+    def nominatim_lookup(query)
+      return nil if query.blank? || query.length < 3
+
+      cache_key = "nominatim:#{query.downcase.strip}"
+      cached = Rails.cache.read(cache_key)
+      return nil if cached == :miss  # previously failed lookup
+      return cached if cached        # [lat, lng] from previous success
+
+      # Rate limit: track last request time to enforce 1 req/sec
+      last_req = Rails.cache.read("nominatim:last_request_at")
+      if last_req && (Time.current - last_req) < 1.2
+        sleep(1.2 - (Time.current - last_req))
+      end
+
+      uri = URI("https://nominatim.openstreetmap.org/search")
+      uri.query = URI.encode_www_form(q: query, format: "json", limit: 1)
+      req = Net::HTTP::Get.new(uri)
+      req["User-Agent"] = "GlobeTracker/1.0 (news geocoding)"
+
+      resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true,
+                             open_timeout: 5, read_timeout: 5) { |h| h.request(req) }
+      Rails.cache.write("nominatim:last_request_at", Time.current)
+
+      if resp.is_a?(Net::HTTPSuccess)
+        results = JSON.parse(resp.body)
+        if results.any?
+          lat = results[0]["lat"].to_f
+          lng = results[0]["lon"].to_f
+          coords = [lat, lng]
+          Rails.cache.write(cache_key, coords, expires_in: 30.days)
+          Rails.logger.info("Nominatim: '#{query}' → [#{lat}, #{lng}]")
+          return coords
+        end
+      end
+
+      # Cache misses too so we don't re-query failed lookups
+      Rails.cache.write(cache_key, :miss, expires_in: 7.days)
+      nil
+    rescue => e
+      Rails.logger.warn("Nominatim lookup failed for '#{query}': #{e.message}")
       nil
     end
 

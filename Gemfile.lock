@@ -441,6 +441,7 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
+  addressable
   anycable-rails (~> 1.5)
   autoprefixer-rails
   bootsnap
@@ -455,6 +456,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   pg (~> 1.1)
+  public_suffix
   puma (>= 5.0)
   rack-attack
   rails (~> 7.1.6)

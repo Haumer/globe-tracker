@@ -57,6 +57,8 @@ gem "websocket-client-simple"
 gem "rss"
 gem "rack-attack"
 gem "rubyzip", require: "zip"
+gem "addressable"
+gem "public_suffix"
 
 group :development, :test do
   gem "dotenv-rails"

@@ -360,19 +360,32 @@ export function applyFlightMethods(GlobeController) {
     this._savePrefs()
   }
 
-  // Toggle military flights filter from the Military sidebar section
+  // Toggle military flights from the Military sidebar section.
+  // Enables flights layer if needed, shows ONLY military, hides civilian.
   GlobeController.prototype.toggleMilitaryFlightsFilter = function() {
-    this.showMilitary = !this.showMilitary
-    // Sync the existing military toggle checkbox if present
-    if (this.hasMilitaryToggleTarget) {
-      this.militaryToggleTarget.checked = this.showMilitary
+    this._milFlightsActive = !this._milFlightsActive
+
+    if (this._milFlightsActive) {
+      // Enable flights layer if not already on
+      if (!this.flightsVisible && this.hasFlightsToggleTarget) {
+        this.flightsToggleTarget.checked = true
+        this.toggleFlights()
+      }
+      // Show only military, hide civilian
+      this.showMilitary = true
+      this.showCivilian = false
+      if (this.hasMilitaryToggleTarget) this.militaryToggleTarget.checked = true
+      if (this.hasCivilianToggleTarget) this.civilianToggleTarget.checked = false
+    } else {
+      // Restore: show both
+      this.showMilitary = true
+      this.showCivilian = true
+      if (this.hasMilitaryToggleTarget) this.militaryToggleTarget.checked = true
+      if (this.hasCivilianToggleTarget) this.civilianToggleTarget.checked = true
     }
-    // Update flight visibility
-    for (const [id, data] of this.flightData) {
-      const isMil = this._isMilitaryFlight(data)
-      if (isMil) data.entity.show = this.showMilitary
-    }
-    this.updateEntityList()
+
+    // Re-render to apply filter
+    if (this.flightsVisible) this.renderFlights()
     this._syncQuickBar()
     this._savePrefs()
   }

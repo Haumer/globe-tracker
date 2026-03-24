@@ -26,6 +26,7 @@ export function applyCoreMethods(GlobeController) {
     this._trackingHeightIdx = 2 // default Medium
     this.showCivilian = true
     this.showMilitary = true
+    this._milFlightsActive = false
     this.satelliteData = []
     this._loadedSatCategories = new Set()
     this.satelliteEntities = new Map()

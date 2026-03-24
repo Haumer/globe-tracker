@@ -10,9 +10,13 @@ const LAYER_REGISTRY = [
   { key: "events",        toggleTarget: "naturalEventsToggle",method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents",       section: "events",         pill: { label: "EVT",   color: "#ff9800" } },
   { key: "fireHotspots",  toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible",  qlTarget: "qlFireHotspots", section: "events",         pill: { label: "FIRE",  color: "#ff6d00" } },
   { key: "weather",       toggleTarget: "weatherToggle",      method: "toggleWeather",      visibleProp: "weatherVisible",       qlTarget: "qlWeather",      section: "events",         pill: { label: "WX",    color: "#64b5f6" } },
-  { key: "strikes",       toggleTarget: "strikesToggle",      method: "toggleStrikes",      visibleProp: "strikesVisible",       qlTarget: "qlStrikes",      section: "events",         pill: { label: "STRK",  color: "#e040fb" } },
   { key: "conflicts",     toggleTarget: "conflictsToggle",    method: "toggleConflicts",    visibleProp: "conflictsVisible",     qlTarget: "qlConflicts",    section: "events",         pill: { label: "WAR",   color: "#ef5350" } },
   { key: "news",          toggleTarget: "newsToggle",         method: "toggleNews",         visibleProp: "newsVisible",          qlTarget: "qlNews",         section: "events",         pill: { label: "NEWS",  color: "#7c4dff" } },
+  { key: "militaryFlights", toggleTarget: "militaryToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "showMilitary", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },
+  { key: "airbases",      toggleTarget: "airbasesToggle",     method: "toggleAirbases",     visibleProp: "airbasesVisible",      qlTarget: "qlAirbases",     section: "military",       pill: { label: "ABASE", color: "#ff7043" } },
+  { key: "militaryBases", toggleTarget: "militaryBasesToggle", method: "toggleMilitaryBases", visibleProp: "militaryBasesVisible", qlTarget: "qlMilitaryBases", section: "military", pill: { label: "BASE", color: "#ff5252" } },
+  { key: "navalVessels",  toggleTarget: "navalVesselsToggle", method: "toggleNavalVessels", visibleProp: "navalVesselsVisible",  qlTarget: "qlNavalVessels", section: "military",       pill: { label: "NAVY",  color: "#42a5f5" } },
+  { key: "strikes",       toggleTarget: "strikesToggle",      method: "toggleStrikes",      visibleProp: "strikesVisible",       qlTarget: "qlStrikes",      section: "military",       pill: { label: "STRK",  color: "#e040fb" } },
   { key: "cables",        toggleTarget: "cablesToggle",       method: "toggleCables",       visibleProp: "cablesVisible",        qlTarget: "qlCables",       section: "infrastructure", pill: { label: "CBL",   color: "#00bcd4" } },
   { key: "pipelines",     toggleTarget: "pipelinesToggle",    method: "togglePipelines",    visibleProp: "pipelinesVisible",     qlTarget: "qlPipelines",    section: "infrastructure", pill: { label: "PIPE",  color: "#ff6d00" } },
   { key: "railways",      toggleTarget: "railwaysToggle",     method: "toggleRailways",     visibleProp: "railwaysVisible",      qlTarget: "qlRailways",     section: "infrastructure", pill: { label: "RAIL",  color: "#90a4ae" } },
@@ -189,7 +193,7 @@ export function applyUiMethods(GlobeController) {
     if (Object.values(this.satCategoryVisible).some(v => v)) {
       counts.tracking = (counts.tracking || 0) + 1
     }
-    for (const key of ["tracking", "events", "infrastructure", "cyber"]) {
+    for (const key of ["tracking", "events", "military", "infrastructure", "cyber"]) {
       const count = counts[key] || 0
       const el = document.getElementById("sec-count-" + key)
       if (el) el.textContent = count > 0 ? count + " on" : ""
@@ -401,6 +405,9 @@ export function applyUiMethods(GlobeController) {
       weather: this.weatherVisible,
       financial: this.financialVisible,
       chokepoints: this.chokepointsVisible,
+      militaryBases: this.militaryBasesVisible,
+      airbases: this.airbasesVisible,
+      navalVessels: this.navalVesselsVisible,
       weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
       weatherOpacity: this._weatherOpacity || 0.6,
       terrain: this.terrainEnabled || false,
@@ -615,6 +622,18 @@ export function applyUiMethods(GlobeController) {
       if (l.chokepoints && this.hasChokepointsToggleTarget) {
         this.chokepointsToggleTarget.checked = true
         this.toggleChokepoints()
+      }
+      if (l.militaryBases && this.hasMilitaryBasesToggleTarget) {
+        this.militaryBasesToggleTarget.checked = true
+        this.toggleMilitaryBases()
+      }
+      if (l.airbases && this.hasAirbasesToggleTarget) {
+        this.airbasesToggleTarget.checked = true
+        this.toggleAirbases()
+      }
+      if (l.navalVessels && this.hasNavalVesselsToggleTarget) {
+        this.navalVesselsToggleTarget.checked = true
+        this.toggleNavalVessels()
       }
       if (l.terrain && this.hasTerrainToggleTarget) {
         this.terrainToggleTarget.checked = true

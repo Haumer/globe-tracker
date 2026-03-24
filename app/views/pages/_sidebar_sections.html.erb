@@ -25,6 +25,9 @@
   <input type="checkbox" data-globe-target="chokepointsToggle" data-action="change->globe#toggleChokepoints">
   <input type="checkbox" data-globe-target="railwaysToggle" data-action="change->globe#toggleRailways">
   <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains">
+  <input type="checkbox" data-globe-target="militaryBasesToggle" data-action="change->globe#toggleMilitaryBases">
+  <input type="checkbox" data-globe-target="airbasesToggle" data-action="change->globe#toggleAirbases">
+  <input type="checkbox" data-globe-target="navalVesselsToggle" data-action="change->globe#toggleNavalVessels">
 </div>
 
 <div class="sb-sections">
@@ -101,11 +104,6 @@
         <span class="sb-layer-name">Fire Hotspots</span>
         <span class="sb-layer-dot"></span>
       </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="strikes" data-globe-target="qlStrikes">
-        <i class="fa-solid fa-crosshairs sb-layer-icon" style="color: #e040fb;"></i>
-        <span class="sb-layer-name">Strikes</span>
-        <span class="sb-layer-dot"></span>
-      </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="weather" data-globe-target="qlWeather">
         <i class="fa-solid fa-cloud-sun-rain sb-layer-icon" style="color: #1e88e5;"></i>
         <span class="sb-layer-name">Weather</span>
@@ -152,6 +150,43 @@
             <span>Blobs</span>
           </label>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Military ── %>
+  <div class="sb-section" data-section="military">
+    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+      <span class="sb-section-dot" style="--dot: #ef5350;"></span>
+      <div><span class="sb-section-title">Military</span><div class="sb-section-hint">Flights, airbases, bases, naval, strikes</div></div>
+      <span class="sb-section-count" id="sec-count-military"></span>
+      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
+    </div>
+    <div class="sb-section-body" role="region">
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="militaryFlights" data-globe-target="qlMilitaryFlights">
+        <i class="fa-solid fa-jet-fighter sb-layer-icon" style="color: #ef5350;"></i>
+        <span class="sb-layer-name">Military Flights</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="airbases" data-globe-target="qlAirbases">
+        <i class="fa-solid fa-tower-observation sb-layer-icon" style="color: #ff7043;"></i>
+        <span class="sb-layer-name">Airbases</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="militaryBases" data-globe-target="qlMilitaryBases">
+        <i class="fa-solid fa-shield-halved sb-layer-icon" style="color: #ff5252;"></i>
+        <span class="sb-layer-name">Military Bases</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="navalVessels" data-globe-target="qlNavalVessels">
+        <i class="fa-solid fa-ship sb-layer-icon" style="color: #42a5f5;"></i>
+        <span class="sb-layer-name">Naval Vessels</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="strikes" data-globe-target="qlStrikes">
+        <i class="fa-solid fa-crosshairs sb-layer-icon" style="color: #e040fb;"></i>
+        <span class="sb-layer-name">Strikes</span>
+        <span class="sb-layer-dot"></span>
       </div>
     </div>
   </div>

@@ -52,6 +52,7 @@ Rails.application.routes.draw do
     resources :strikes, only: [:index]
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]
+    resources :military_bases, only: [:index]
     resources :commodities, only: [:index]
     resource :brief, only: [:show]
     resource :exports, only: [] do

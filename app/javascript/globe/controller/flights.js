@@ -360,6 +360,23 @@ export function applyFlightMethods(GlobeController) {
     this._savePrefs()
   }
 
+  // Toggle military flights filter from the Military sidebar section
+  GlobeController.prototype.toggleMilitaryFlightsFilter = function() {
+    this.showMilitary = !this.showMilitary
+    // Sync the existing military toggle checkbox if present
+    if (this.hasMilitaryToggleTarget) {
+      this.militaryToggleTarget.checked = this.showMilitary
+    }
+    // Update flight visibility
+    for (const [id, data] of this.flightData) {
+      const isMil = this._isMilitaryFlight(data)
+      if (isMil) data.entity.show = this.showMilitary
+    }
+    this.updateEntityList()
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
   GlobeController.prototype.showDetail = function(id, data) {
     this._focusedSelection = { type: "flight", id }
     this._renderSelectionTray()

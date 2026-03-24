@@ -123,6 +123,13 @@ export function applyCoreMethods(GlobeController) {
     this.chokepointsVisible = false
     this._chokepointData = []
     this._chokepointEntities = []
+    this.militaryBasesVisible = false
+    this._militaryBaseData = []
+    this._militaryBaseEntities = []
+    this.airbasesVisible = false
+    this._airbaseEntities = []
+    this.navalVesselsVisible = false
+    this._navalVesselEntities = []
     this.trafficVisible = false
     this.trafficArcsVisible = true
     this.trafficBlobsVisible = true
@@ -1177,6 +1184,17 @@ export function applyCoreMethods(GlobeController) {
         if (!d) return false; this.showWebcamDetail(d); return true
       }},
       // Power plant attack ring → parent power plant
+      { prefix: "milbase-", skip: [], handler: (id) => {
+        const d = this._militaryBaseData?.find(b => String(b.id) === id); if (!d) return false
+        this.showMilitaryBaseDetail(d); return true
+      }},
+      { prefix: "airbase-", skip: [], handler: (id) => {
+        this.showAirbaseDetail(id); return true
+      }},
+      { prefix: "naval-", skip: [], handler: (id) => {
+        const d = this.shipData.get(id); if (!d) return false
+        this.showNavalVesselDetail(d); return true
+      }},
       { prefix: "pp-atk-", skip: [], handler: (id) => {
         const d = this._powerPlantData.find(p => p.id === parseInt(id)); if (!d) return false
         this.showPowerPlantDetail(d); return true

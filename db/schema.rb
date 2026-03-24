@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_16_120321) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -256,6 +256,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_16_120321) do
     t.datetime "updated_at", null: false
     t.index ["country_code", "recorded_at"], name: "idx_on_country_code_recorded_at_4ce32fcec1"
     t.index ["recorded_at"], name: "index_internet_traffic_snapshots_on_recorded_at"
+  end
+
+  create_table "military_bases", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.string "name"
+    t.string "base_type"
+    t.string "country"
+    t.string "operator"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.string "source"
+    t.jsonb "metadata", default: {}
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["external_id"], name: "index_military_bases_on_external_id", unique: true
+    t.index ["latitude", "longitude"], name: "index_military_bases_on_latitude_and_longitude"
   end
 
   create_table "natural_events", force: :cascade do |t|

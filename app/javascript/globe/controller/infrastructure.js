@@ -11,6 +11,9 @@ import { applyTrainsMethods } from "./infrastructure/trains"
 import { applyConflictPulseMethods } from "./infrastructure/conflictPulse"
 import { applyChokepointsMethods } from "./infrastructure/chokepoints"
 import { applyStrikesMethods } from "./infrastructure/strikes"
+import { applyMilitaryBasesMethods } from "./infrastructure/militaryBases"
+import { applyAirbasesMethods } from "./infrastructure/airbases"
+import { applyNavalVesselsMethods } from "./infrastructure/navalVessels"
 
 export function applyInfrastructureMethods(GlobeController) {
   applyGpsJammingMethods(GlobeController)
@@ -26,4 +29,7 @@ export function applyInfrastructureMethods(GlobeController) {
   applyConflictPulseMethods(GlobeController)
   applyChokepointsMethods(GlobeController)
   applyStrikesMethods(GlobeController)
+  applyMilitaryBasesMethods(GlobeController)
+  applyAirbasesMethods(GlobeController)
+  applyNavalVesselsMethods(GlobeController)
 }

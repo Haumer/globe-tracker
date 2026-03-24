@@ -36,10 +36,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["text"] || a["summary"] || a["description"],
           country: a["source_country"],
           name: a["source_country"] || a["author"],
           tone: MultiNewsService.sentiment_to_tone(a["sentiment"]),
           published_at: a["publish_date"],
+          category: "world",
           themes: ThreatClassifier.classify("#{a['title']} #{a['text']&.to_s&.first(500)}")[:keywords].first(5),
         }
       },
@@ -64,10 +66,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["text"] || a["summary"] || a["description"],
           country: a["source_country"],
           name: a["source_country"] || a["author"],
           tone: MultiNewsService.sentiment_to_tone(a["sentiment"]),
           published_at: a["publish_date"],
+          category: "world",
           themes: ThreatClassifier.classify("#{a['title']} #{a['text']&.to_s&.first(500)}")[:keywords].first(5),
         }
       },
@@ -86,10 +90,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["description"],
           country: country_name,
           name: country_name || a["author"],
           tone: 0.0,
           published_at: a["published"],
+          category: (a["category"] || []).first,
           themes: (a["category"] || []).first(5),
         }
       },
@@ -106,10 +112,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["description"] || a["snippet"],
           country: a["locale"],
           name: a["source"],
           tone: 0.0,
           published_at: a["published_at"],
+          category: (a["categories"] || []).first,
           themes: (a["categories"] || []).first(5),
         }
       },
@@ -126,10 +134,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["description"] || a["content"],
           country: nil,
           name: a.dig("source", "name"),
           tone: 0.0,
           published_at: a["publishedAt"],
+          category: "top_headlines",
           themes: [],
         }
       },
@@ -146,10 +156,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: a["description"],
           country: a["country"],
           name: a["source"],
           tone: 0.0,
           published_at: a["published_at"],
+          category: a["category"],
           themes: (a["category"]&.split(",") || []).first(5),
         }
       },
@@ -166,10 +178,12 @@ class MultiNewsService
         {
           url: a["url"],
           title: a["title"],
+          summary: nil,
           country: nil,
           name: "Hacker News (#{a['points']} pts)",
           tone: 0.0,
           published_at: a["created_at"],
+          category: "technology",
           themes: a["_tags"]&.select { |t| t.start_with?("story") } || [],
         }
       },
@@ -196,9 +210,12 @@ class MultiNewsService
 
   def refresh_all
     all_records = []
+    ingest_items = []
 
     API_SOURCES.each do |source_config|
-      all_records.concat(fetch_source(source_config))
+      result = fetch_source(source_config)
+      all_records.concat(result[:records])
+      ingest_items.concat(result[:ingest_items])
     end
 
     return 0 if all_records.empty?
@@ -219,6 +236,19 @@ class MultiNewsService
       record[:threat_level] ||= threat[:threat]
       record[:credibility] ||= "tier2/low" # API sources are generally tier 2
     end
+
+    ingest_ids = NewsIngestRecorder.record_all(ingest_items)
+    new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
+    normalized_ids = NewsNormalizationRecorder.record_all(new_records)
+    new_records.each do |record|
+      ids = normalized_ids[record[:url]]
+      next unless ids
+
+      record[:news_source_id] = ids[:news_source_id]
+      record[:news_article_id] = ids[:news_article_id]
+      record[:content_scope] = ids[:content_scope]
+    end
+    NewsClaimRecorder.record_all(new_records)
 
     assign_clusters(new_records)
 
@@ -247,43 +277,72 @@ class MultiNewsService
   # ── Generic source fetcher ────────────────────────────────────
   def fetch_source(config)
     source_name = config[:name]
+    now = Time.current
 
     # Check API key requirement
     if config[:env_key]
       key = ENV[config[:env_key]]
-      return [] if key.blank?
+      return empty_fetch_result if key.blank?
     end
 
     uri = URI(config[:base_url])
     uri.query = URI.encode_www_form(config[:params].call(key))
 
-    data = fetch_json(uri)
-    articles = config[:articles_path].call(data) if data
-    return [] unless articles
+    response = fetch_json(uri)
+    articles = config[:articles_path].call(response[:data]) if response
+    return empty_fetch_result unless articles
 
     source_label = source_name.split("-").first # "worldnews-au,nz" -> "worldnews"
+    records = []
+    ingest_items = []
 
-    articles.filter_map do |article|
-      mapped = config[:mapping].call(article)
+    articles.each_with_index do |article, idx|
+      raw_mapped = config[:mapping].call(article)
+      mapped = NewsSourceAdapter.normalize!(
+        source_adapter: source_name,
+        attrs: raw_mapped.merge(
+          summary: article["description"] || article["text"] || article["summary"] || article["content"] || raw_mapped[:summary],
+          source: source_label
+        )
+      )
+      raw_url = article["url"] || mapped[:url]
+      ingest_items << {
+        item_key: mapped[:url].presence || raw_url.presence || "#{source_name}-#{idx}",
+        source_feed: source_name,
+        source_endpoint_url: uri.to_s,
+        external_id: article["id"] || article["uuid"],
+        raw_url: raw_url,
+        raw_title: article["title"] || mapped[:title],
+        raw_summary: mapped[:summary],
+        raw_published_at: mapped[:published_at] || article["publish_date"] || article["published"] || article["publishedAt"] || article["published_at"] || article["created_at"],
+        fetched_at: now,
+        payload_format: "json",
+        raw_payload: article,
+        http_status: response[:http_status],
+      }
       next if mapped[:url].blank?
 
       lat, lng = resolve_location(mapped[:country], mapped[:title], mapped[:url])
       next unless lat && lng
 
-      build_record(
+      records << build_record(
         url: mapped[:url],
         title: mapped[:title],
+        summary: mapped[:summary],
         name: mapped[:name],
         lat: lat, lng: lng,
         tone: mapped[:tone],
         published_at: parse_time(mapped[:published_at]),
+        category: mapped[:category],
         themes: mapped[:themes],
         source: source_label,
       )
     end
+
+    { records: records, ingest_items: ingest_items }
   rescue => e
     Rails.logger.error("MultiNewsService[#{config[:name]}]: #{e.message}")
-    []
+    empty_fetch_result
   end
 
   # ── Helpers ───────────────────────────────────────────────────
@@ -296,15 +355,21 @@ class MultiNewsService
     req = Net::HTTP::Get.new(uri)
     res = http.request(req)
     return nil unless res.is_a?(Net::HTTPSuccess)
-    JSON.parse(res.body.force_encoding("UTF-8"))
+    { data: JSON.parse(res.body.force_encoding("UTF-8")), http_status: res.code.to_i }
   rescue => e
     Rails.logger.error("MultiNewsService fetch error (#{uri.host}): #{e.message}")
     nil
   end
 
-  def build_record(url:, title:, name:, lat:, lng:, tone:, published_at:, themes:, source:)
+  def empty_fetch_result
+    { records: [], ingest_items: [] }
+  end
+
+  def build_record(url:, title:, summary:, name:, lat:, lng:, tone:, published_at:, category:, themes:, source:)
     now = Time.current
     tone_val = tone.to_f
+    classification_text = [ title, summary ].compact.join(" ")
+    threat = ThreatClassifier.classify(classification_text)
     {
       url: url,
       title: title&.truncate(500),
@@ -313,7 +378,7 @@ class MultiNewsService
       longitude: lng,
       tone: tone_val.round(1),
       level: ThreatClassifier.tone_level(tone_val),
-      category: ThreatClassifier.classify(title)[:category],
+      category: preferred_category(category) || threat[:category],
       themes: themes.is_a?(Array) ? themes : [],
       published_at: published_at || now,
       fetched_at: now,
@@ -328,6 +393,13 @@ class MultiNewsService
     Time.parse(str.to_s)
   rescue ArgumentError
     nil
+  end
+
+  def preferred_category(category)
+    normalized = category.to_s.downcase.presence
+    return nil if normalized.blank? || %w[world top_headlines technology general news latest].include?(normalized)
+
+    normalized
   end
 
 end

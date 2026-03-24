@@ -471,8 +471,7 @@ module NewsGeocodable
                geocode_from_domain(url)
     return nil unless lat && lng
 
-    # Small jitter so same-location articles don't stack exactly
-    [lat + rand(-0.15..0.15), lng + rand(-0.15..0.15)]
+    [lat, lng]
   end
 
   # Word-boundary city matching against title, longest match first

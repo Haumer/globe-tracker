@@ -63,9 +63,9 @@ class NewsEnrichmentService
 
         Categories: conflict, terror, disaster, political, economic, health, science, sports, other
         Cluster key: 3-5 word lowercase hyphenated slug. Same event = same cluster key.
-        For city: use the most specific known city name. If no city, use the capital of the country.
-        For country: use the standard English country name (e.g., "Israel" not "Palestinian Territories", "Pakistan" not "unspecified").
-        Never return "unspecified" — always make your best guess based on the headline context.
+        For city: use the most specific known city name only if the headline supports it.
+        For country: use the standard English country name only if the headline supports it.
+        If the location is unclear from the headline, return null for city and/or country.
 
         Only return the JSON array, no other text.
 
@@ -338,7 +338,7 @@ class NewsEnrichmentService
         code = NewsGeocodable::COUNTRY_NAME_MAP[country.downcase]
         code ||= country.downcase if country.length == 2
         coords = NewsGeocodable::COUNTRY_COORDS[code]
-        return [coords[0] + rand(-0.2..0.2), coords[1] + rand(-0.2..0.2)] if coords
+        return coords if coords
         # Try extra locations
         coords = EXTRA_LOCATIONS[country.downcase]
         return coords if coords

@@ -2,6 +2,24 @@ require "test_helper"
 
 class Api::NewsControllerTest < ActionDispatch::IntegrationTest
   setup do
+    source = NewsSource.create!(
+      canonical_key: "publisher:reuters.com",
+      name: "Reuters",
+      source_kind: "wire",
+      publisher_domain: "reuters.com"
+    )
+    article = NewsArticle.create!(
+      news_source: source,
+      url: "https://example.com/news-ctrl-001",
+      canonical_url: "https://example.com/news-ctrl-001",
+      title: "Test news event",
+      content_scope: "core",
+      publisher_name: "Reuters",
+      publisher_domain: "reuters.com",
+      published_at: 2.hours.ago,
+      fetched_at: Time.current
+    )
+
     @news = NewsEvent.create!(
       url: "https://example.com/news-ctrl-001",
       name: "Vienna",
@@ -12,9 +30,24 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
       level: "negative",
       category: "conflict",
       source: "reuters",
+      content_scope: "core",
+      news_source: source,
+      news_article: article,
       published_at: 2.hours.ago,
       fetched_at: Time.current,
     )
+    claim = NewsClaim.create!(
+      news_article: article,
+      event_family: "conflict",
+      event_type: "military_action",
+      claim_text: @news.title,
+      confidence: 0.91,
+      published_at: @news.published_at
+    )
+    israel = NewsActor.create!(canonical_key: "state:il", name: "Israel", actor_type: "state", country_code: "IL")
+    iran = NewsActor.create!(canonical_key: "state:ir", name: "Iran", actor_type: "state", country_code: "IR")
+    NewsClaimActor.create!(news_claim: claim, news_actor: israel, role: "initiator", position: 0, confidence: 0.92)
+    NewsClaimActor.create!(news_claim: claim, news_actor: iran, role: "target", position: 1, confidence: 0.89)
   end
 
   test "GET /api/news returns JSON array" do
@@ -35,6 +68,11 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     assert_in_delta 48.2, event["lat"], 0.01
     assert_in_delta 16.3, event["lng"], 0.01
     assert_equal "reuters", event["source"]
+    assert_equal "Reuters", event["publisher"]
+    assert_equal "core", event["content_scope"]
+    assert_equal "conflict", event["claim_event_family"]
+    assert_equal "military_action", event["claim_event_type"]
+    assert_equal [ "Israel", "Iran" ], event["actors"].map { |actor| actor["name"] }
     assert_equal "conflict", event["category"]
   end
 

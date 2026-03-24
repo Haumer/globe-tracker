@@ -364,6 +364,10 @@ export function applyInsightsMethods(GlobeController) {
 
     try {
       const resp = await fetch("/api/brief")
+      if (resp.status === 403) {
+        container.innerHTML = `<div style="color:rgba(255,152,0,0.75);font:400 11px monospace;">Brief is currently internal-only.</div>`
+        return
+      }
       if (!resp.ok) { container.innerHTML = `<div style="color:#ef5350;font:400 11px monospace;">Failed to load brief.</div>`; return }
       const data = await resp.json()
 

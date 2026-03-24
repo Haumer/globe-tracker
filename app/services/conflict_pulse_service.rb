@@ -255,7 +255,10 @@ class ConflictPulseService
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :title, :url, :name, :latitude, :longitude, :tone, :source, :category,
-              :threat_level, :credibility, :story_cluster_id, :published_at)
+              :threat_level, :credibility, :story_cluster_id, :published_at, :news_source_id)
+    source_names_by_id = NewsSource.where(id: articles.distinct.pluck(:news_source_id).compact)
+      .pluck(:id, :name)
+      .to_h
 
     # Grid into 2° cells — use headline-detected event location when it differs from article location
     cells = Hash.new { |h, k| h[k] = [] }
@@ -392,7 +395,7 @@ class ConflictPulseService
         story_count: story_count,
         tier_breakdown: tier_counts,
         top_headlines: top_headlines,
-        top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, tone: a.tone&.round(1), published_at: a.published_at&.iso8601 } },
+        top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, publisher: source_names_by_id[a.news_source_id], tone: a.tone&.round(1), published_at: a.published_at&.iso8601 } },
         categories: categories,
         cross_layer_signals: signals,
         signal_context: signal_descriptions(signals),

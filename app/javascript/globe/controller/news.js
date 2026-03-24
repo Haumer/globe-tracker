@@ -146,8 +146,9 @@ export function applyNewsMethods(GlobeController) {
       // Description: show all stories in the cluster
       const descHtml = clusterEvents.slice(0, 8).map(ev => {
         const c = categoryColors[ev.category] || "#90a4ae"
+        const sourceName = ev.publisher || ev.source
         return `<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${this._escapeHtml(ev.category)}${ev.source ? ' · ' + this._escapeHtml(ev.source) : ''}</div>
+          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${this._escapeHtml(ev.category)}${sourceName ? ' · ' + this._escapeHtml(sourceName) : ''}</div>
           <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${this._escapeHtml(ev.title || ev.name || "Unknown")}</div>
           ${ev.name && ev.title ? '<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">' + this._escapeHtml(ev.name) + '</div>' : ''}
           <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${this._escapeHtml(ev.level)}</div>
@@ -671,10 +672,12 @@ export function applyNewsMethods(GlobeController) {
     const filtered = events
       .map((ev, i) => ({ ...ev, _idx: i }))
       .filter(ev => {
+        const actorSearch = (ev.actors || []).map(actor => actor.name || "").join(" ").toLowerCase()
         if (activeChips.length > 0 && !activeChips.includes(ev.category)) return false
         if (search && !(ev.title || "").toLowerCase().includes(search) &&
             !(ev.name || "").toLowerCase().includes(search) &&
-            !(ev.source || "").toLowerCase().includes(search)) return false
+            !(ev.publisher || ev.source || "").toLowerCase().includes(search) &&
+            !actorSearch.includes(search)) return false
         if (hideRead && readSet.has(ev.url)) return false
         return true
       })
@@ -703,13 +706,14 @@ export function applyNewsMethods(GlobeController) {
 
     const html = filtered.map(ev => {
       const color = categoryColors[ev.category] || "#90a4ae"
-      let domain = ev.source || ""
+      let domain = ev.publisher || ev.source || ""
       if (!domain && ev.url) {
         try { domain = new URL(ev.url).hostname.replace(/^www\./, "") } catch {}
       }
 
       const timeAgo = ev.time ? this._timeAgo(new Date(ev.time)) : ""
       const tone = ev.tone || 0
+      const actorNames = (ev.actors || []).map(actor => actor.name).filter(Boolean)
       let toneBg, toneColor, toneLabel
       if (tone <= -2) { toneBg = "rgba(244,67,54,0.12)"; toneColor = "#ef5350"; toneLabel = "negative" }
       else if (tone >= 2) { toneBg = "rgba(76,175,80,0.12)"; toneColor = "#66bb6a"; toneLabel = "positive" }
@@ -731,6 +735,7 @@ export function applyNewsMethods(GlobeController) {
           <div class="nf-card-meta">
             <span class="nf-card-source">${this._escapeHtml(domain)}</span>
             ${timeAgo ? `<span class="nf-card-dot">&middot;</span><span class="nf-card-time">${timeAgo}</span>` : ""}
+            ${actorNames.length ? `<span class="nf-card-dot">&middot;</span><span class="nf-card-time">${this._escapeHtml(actorNames.slice(0, 2).join(", "))}</span>` : ""}
           </div>
           <div class="nf-card-footer">
             ${ev.threat && ev.threat !== "info" ? `<span class="nf-card-tone" style="background:${{critical:"rgba(244,67,54,0.2)",high:"rgba(255,87,34,0.15)",medium:"rgba(255,152,0,0.12)",low:"rgba(102,187,106,0.1)"}[ev.threat]};color:${{critical:"#f44336",high:"#ff5722",medium:"#ff9800",low:"#66bb6a"}[ev.threat]}">${ev.threat}</span>` : ""}
@@ -965,13 +970,18 @@ export function applyNewsMethods(GlobeController) {
     ).join("")
 
     const timeStr = ev.time ? this._timeAgo(new Date(ev.time)) : ""
+    const actorSummary = (ev.actors || []).map(actor => {
+      const role = actor.role ? ` (${actor.role.replace(/_/g, " ")})` : ""
+      return `${actor.name || ""}${role}`
+    }).filter(Boolean)
+    const claimType = ev.claim_event_type ? ev.claim_event_type.replace(/_/g, " ") : ""
 
     // Deduplicate location parts (e.g., "Baghdad, Baghdad, Iraq" → "Baghdad, Iraq")
     const locationParts = (ev.name || "").split(",").map(s => s.trim())
     const dedupedLocation = [...new Set(locationParts)].join(", ")
 
     // Clean source name — strip "GN: " prefix
-    const sourceName = (ev.source || "").replace(/^GN:\s*/, "")
+    const sourceName = (ev.publisher || ev.source || "").replace(/^GN:\s*/, "")
 
     // Sentiment as human-readable label
     const sentimentLabel = Math.abs(ev.tone) >= 7 ? "Strongly negative" :
@@ -986,7 +996,7 @@ export function applyNewsMethods(GlobeController) {
         ${nearby.slice(0, 10).map(n => {
           const nColor = categoryColors[n.category] || "#90a4ae"
           const nTitle = n.title || n.name || "Untitled"
-          const nSource = (n.source || n.name || "").replace(/^GN:\s*/, "").split(",")[0]
+          const nSource = (n.publisher || n.source || n.name || "").replace(/^GN:\s*/, "").split(",")[0]
           const nTime = n.time ? this._timeAgo(new Date(n.time)) : ""
           return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:6px 0;color:rgba(200,210,225,0.85);text-decoration:none;font-size:11px;line-height:1.35;border-bottom:1px solid rgba(255,255,255,0.04);">
             <span style="color:${nColor};margin-right:4px;">●</span>
@@ -1014,6 +1024,14 @@ export function applyNewsMethods(GlobeController) {
         ${sourceName ? `<div class="detail-field">
           <span class="detail-label">Source</span>
           <span class="detail-value">${this._escapeHtml(sourceName)}</span>
+        </div>` : ""}
+        ${claimType ? `<div class="detail-field">
+          <span class="detail-label">Claim</span>
+          <span class="detail-value">${this._escapeHtml(claimType)}</span>
+        </div>` : ""}
+        ${actorSummary.length ? `<div class="detail-field">
+          <span class="detail-label">Actors</span>
+          <span class="detail-value">${this._escapeHtml(actorSummary.join(", "))}</span>
         </div>` : ""}
         ${ev.credibility ? `<div class="detail-field">
           <span class="detail-label">Credibility</span>

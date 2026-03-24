@@ -9,7 +9,7 @@
     { icon: "fa-solid fa-newspaper",        title: "GDELT Project",         status: "LIVE",     status_class: "live",     link: "https://gdeltproject.org" },
     { icon: "fa-solid fa-rss",              title: "Direct RSS Feeds",      status: "RSS" },
     { icon: "fa-solid fa-rss",              title: "Multi-source News",     status: "API" },
-    { icon: "fa-solid fa-satellite-dish",   title: "GPS Interference",      status: "COMPUTED", status_class: "computed", link: "https://gpsjam.org" },
+    { icon: "fa-solid fa-satellite-dish",   title: "GPS Interference",      status: "DERIVED",  status_class: "computed", link: "https://gpsjam.org" },
     { icon: "fa-solid fa-crosshairs",       title: "UCDP Conflicts",        status: "API",      link: "https://ucdp.uu.se" },
     { icon: "fa-solid fa-cloud",            title: "Cloudflare Radar",      status: "LIVE",     status_class: "live",     link: "https://radar.cloudflare.com" },
     { icon: "fa-solid fa-network-wired",    title: "TeleGeography",         status: "FREE",     status_class: "free",     link: "https://submarinecablemap.com" },
@@ -22,10 +22,10 @@
     { icon: "fa-solid fa-building",         title: "Google 3D Tiles",       status: "ENGINE",   link: "https://cesium.com/platform/cesium-ion/content/google-photorealistic-3d-tiles/" },
     { icon: "fa-solid fa-map",              title: "Natural Earth",         status: "FREE",     status_class: "free",     link: "https://naturalearthdata.com" },
     { icon: "fa-solid fa-user-astronaut",   title: "UCS Satellites",        status: "OSS",      status_class: "oss",      link: "https://ucsusa.org/resources/satellite-database" },
-    { icon: "fa-solid fa-user-secret",      title: "Classified Sat Intel",  status: "COMPUTED", status_class: "computed" },
+    { icon: "fa-solid fa-user-secret",      title: "Classified Sat Intel",  status: "DERIVED",  status_class: "computed" },
     { icon: "fa-solid fa-plane-lock",       title: "OpenAIP Airspace",      status: "API",      link: "https://openaip.net" },
     { icon: "fa-solid fa-plane-departure",  title: "OurAirports",           status: "OSS",      status_class: "oss",      link: "https://ourairports.com" },
-    { icon: "fa-solid fa-jet-fighter",      title: "Military Classifier",   status: "COMPUTED", status_class: "computed" },
+    { icon: "fa-solid fa-jet-fighter",      title: "Military Classifier",   status: "DERIVED",  status_class: "computed" },
     { icon: "fa-solid fa-oil-well",         title: "Global Energy Monitor", status: "FREE",     status_class: "free",     link: "https://globalenergymonitor.org" },
     { icon: "fa-solid fa-bolt",             title: "Power Plant Database",  status: "OSS",      status_class: "oss",      link: "https://github.com/wri/global-power-plant-database" },
     { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API",      link: "https://alphavantage.co" },
@@ -76,7 +76,7 @@
     <% rest.each { |s| cell.call(s) } %>
 
     <div class="bento-cell bento-cell--footer">
-      <div class="bento-footer-text">All feeds are publicly accessible, community-driven, or computed in-house.</div>
+      <div class="bento-footer-text">Open-source, public, and derived layers are combined here. Freshness, methodology, and confidence vary by layer.</div>
     </div>
   </div>
 </div>

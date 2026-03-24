@@ -44,11 +44,28 @@ class NewsRefreshService
     now = Time.current
     seen_urls = Set.new
     records = []
+    ingest_items = []
 
-    features.each do |feature|
+    features.each_with_index do |feature, idx|
       coords = feature.dig("geometry", "coordinates")
       props = feature["properties"] || {}
       url = props["url"]
+      location_name = props["name"]
+      raw_title = props["title"] || extract_title_from_url(url) || location_name
+      ingest_items << {
+        item_key: url.presence || "gdelt-geojson-#{idx}",
+        source_feed: "gdelt",
+        source_endpoint_url: FEED_URL,
+        external_id: props["gkgrecordid"] || props["gkgrecordid"],
+        raw_url: url,
+        raw_title: raw_title,
+        raw_summary: props["summary"] || props["snippet"],
+        raw_published_at: props["urlpubtimedate"],
+        fetched_at: now,
+        payload_format: "json",
+        raw_payload: feature,
+        http_status: response.code.to_i,
+      }
 
       next if coords.nil? || coords.length < 2
       next if url.blank? || seen_urls.include?(url)
@@ -72,22 +89,35 @@ class NewsRefreshService
 
       # GDELT GeoJSON "name" is the location, not the article title.
       # Extract a meaningful title from the URL path as fallback.
-      location_name = props["name"]
       title = extract_title_from_url(url) || location_name
       # Skip records where we only have a bare location name (no real headline)
       next if title == location_name && title.present? && title.split(",").first.strip.split.size < 4
 
+      adapted = NewsSourceAdapter.normalize!(
+        source_adapter: "gdelt_geojson",
+        attrs: {
+          url: url,
+          title: title,
+          summary: props["summary"] || props["snippet"],
+          name: location_name,
+          published_at: published_at,
+          category: ThreatClassifier.categorize_themes(matched_themes),
+          themes: matched_themes.first(5),
+          source: "gdelt",
+        }
+      )
+
       records << {
-        url: url,
-        name: location_name,
-        title: title,
+        url: adapted[:url],
+        name: adapted[:name],
+        title: adapted[:title],
         latitude: lat,
         longitude: lng,
         tone: tone.round(1),
         level: ThreatClassifier.tone_level(tone),
-        category: ThreatClassifier.categorize_themes(matched_themes),
-        themes: matched_themes.first(5),
-        published_at: published_at,
+        category: adapted[:category],
+        themes: adapted[:themes],
+        published_at: adapted[:published_at],
         fetched_at: now,
         source: "gdelt",
         created_at: now,
@@ -96,14 +126,29 @@ class NewsRefreshService
     end
 
     # Also fetch targeted conflict queries for active theaters
-    conflict_records = fetch_conflict_queries(seen_urls, now)
+    conflict_result = fetch_conflict_queries(seen_urls, now)
+    conflict_records = conflict_result[:records]
     records.concat(conflict_records)
+    ingest_items.concat(conflict_result[:ingest_items])
 
     records.each do |record|
       record.each { |key, value| record[key] = value.scrub("") if value.is_a?(String) }
     end
 
     return 0 if records.empty?
+
+    ingest_ids = NewsIngestRecorder.record_all(ingest_items)
+    records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
+    normalized_ids = NewsNormalizationRecorder.record_all(records)
+    records.each do |record|
+      ids = normalized_ids[record[:url]]
+      next unless ids
+
+      record[:news_source_id] = ids[:news_source_id]
+      record[:news_article_id] = ids[:news_article_id]
+      record[:content_scope] = ids[:content_scope]
+    end
+    NewsClaimRecorder.record_all(records)
 
     assign_clusters(records)
     NewsEvent.upsert_all(records, unique_by: :url)
@@ -126,6 +171,7 @@ class NewsRefreshService
 
   def fetch_conflict_queries(seen_urls, now)
     records = []
+    ingest_items = []
 
     # Rotate through queries — one per cycle to avoid rate limits
     idx = (Rails.cache.read("gdelt_conflict_query_idx") || 0) % CONFLICT_QUERIES.size
@@ -149,8 +195,23 @@ class NewsRefreshService
         data = JSON.parse(body)
         articles = data["articles"] || []
 
-        articles.each do |art|
+        articles.each_with_index do |art, article_idx|
           art_url = art["url"]
+          ingest_items << {
+            item_key: art_url.presence || "gdelt-doc-#{qi}-#{article_idx}",
+            source_feed: "gdelt-conflict",
+            source_endpoint_url: url,
+            external_id: art["socialimage"] || art["sourcecountry"] || art_url,
+            raw_url: art_url,
+            raw_title: art["title"],
+            raw_summary: art["seendate"],
+            raw_published_at: art["seendate"],
+            fetched_at: now,
+            payload_format: "json",
+            raw_payload: art,
+            http_status: resp.code.to_i,
+          }
+
           next if art_url.blank? || seen_urls.include?(art_url)
           seen_urls.add(art_url)
 
@@ -164,17 +225,31 @@ class NewsRefreshService
             now
           end
 
+          adapted = NewsSourceAdapter.normalize!(
+            source_adapter: "gdelt_conflict_query",
+            attrs: {
+              url: art_url,
+              title: title,
+              summary: art["snippet"] || art["excerpt"],
+              name: art["domain"],
+              published_at: published_at,
+              category: "conflict",
+              themes: ["ARMEDCONFLICT"],
+              source: "gdelt",
+            }
+          )
+
           records << {
-            url: art_url,
-            name: art["domain"],
-            title: title,
+            url: adapted[:url],
+            name: adapted[:name],
+            title: adapted[:title],
             latitude: nil, # geocoded by AI enrichment service
             longitude: nil,
             tone: -3.0, # default negative for conflict queries — enrichment will refine
             level: "elevated",
-            category: "conflict",
-            themes: ["ARMEDCONFLICT"],
-            published_at: published_at,
+            category: adapted[:category],
+            themes: adapted[:themes],
+            published_at: adapted[:published_at],
             fetched_at: now,
             source: "gdelt",
             credibility: "tier2/low",
@@ -189,7 +264,7 @@ class NewsRefreshService
       sleep(6) # GDELT rate limit: 1 request per 5 seconds
     end
 
-    records
+    { records: records, ingest_items: ingest_items }
   end
 
   # Extract a readable title from a URL slug (e.g., /2024/03/earthquake-hits-turkey → "Earthquake Hits Turkey")

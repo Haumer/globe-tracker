@@ -27,7 +27,7 @@ module Api
 
       # 2. Enqueue background refresh if any cells are stale or unfetched
       has_stale = camera_records.any?(&:stale?) || camera_records.empty?
-      if has_stale
+      if has_stale && current_user.present?
         enqueue_background_refresh(
           RefreshCamerasJob,
           { north: north, south: south, east: east, west: west },

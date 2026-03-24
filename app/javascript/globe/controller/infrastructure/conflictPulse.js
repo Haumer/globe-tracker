@@ -482,7 +482,7 @@ export function applyConflictPulseMethods(GlobeController) {
           const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
           return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
             <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title)}</div>
-            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
+            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.publisher || a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
           </a>`
         }).join("")
       : (zone.top_headlines || []).map(h =>
@@ -859,7 +859,7 @@ export function applyConflictPulseMethods(GlobeController) {
             const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
             return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
               <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title?.substring(0, 70))}</div>
-              <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.source || "")} · ${timeAgo}</div>
+              <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
             </a>`
           }).join("")
         : (zone.top_headlines || []).slice(0, 3).map(h =>
@@ -1148,7 +1148,7 @@ export function applyConflictPulseMethods(GlobeController) {
           if (topArticle) {
             const timeAgo = topArticle.published_at ? this._timeAgo(new Date(topArticle.published_at)) : ""
             html += `<div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
-              <div class="sit-zone-meta">${this._escapeHtml(topArticle.source || "")} · ${timeAgo}</div>`
+              <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>`
           }
           // Signal count chips (compact)
           const s = zone.cross_layer_signals || {}
@@ -1179,7 +1179,7 @@ export function applyConflictPulseMethods(GlobeController) {
               const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
               html += `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" class="sit-article">
                 <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
-                <div class="sit-article-meta">${this._escapeHtml(a.source || "")} · ${timeAgo}</div>
+                <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
               </a>`
             })
             if (zone.count_24h > 5) html += `<div class="sit-more">+${zone.count_24h - 5} more</div>`

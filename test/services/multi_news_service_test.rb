@@ -16,11 +16,13 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
     record = @service.send(:build_record,
       url: "https://example.com/news/1",
       title: "Test Article",
+      summary: "Missile strike raises tensions",
       name: "Test Source",
       lat: 48.2,
       lng: 16.3,
       tone: -3.5,
       published_at: Time.current,
+      category: nil,
       themes: ["conflict", "military"],
       source: "worldnews"
     )

@@ -178,7 +178,7 @@ export function applyStrikesMethods(GlobeController) {
           const nTime = n.time ? this._timeAgo(new Date(n.time)) : ""
           return `<a href="${this._safeUrl(n.url)}" target="_blank" rel="noopener" style="display:block;padding:5px 0;color:rgba(200,210,225,0.85);text-decoration:none;font-size:10px;line-height:1.3;border-bottom:1px solid rgba(255,255,255,0.04);">
             ${this._escapeHtml((n.title || "").length > 85 ? n.title.substring(0, 83) + "…" : (n.title || ""))}
-            <div style="color:rgba(200,210,225,0.4);font-size:9px;margin-top:1px;">${this._escapeHtml((n.source || "").replace(/^GN:\s*/, ""))}${nTime ? " · " + nTime : ""}</div>
+            <div style="color:rgba(200,210,225,0.4);font-size:9px;margin-top:1px;">${this._escapeHtml(((n.publisher || n.source || "")).replace(/^GN:\s*/, ""))}${nTime ? " · " + nTime : ""}</div>
           </a>`
         }).join("")}
       </div>

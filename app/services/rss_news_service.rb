@@ -405,6 +405,7 @@ class RssNewsService
 
   def refresh
     all_records = []
+    ingest_items = []
 
     # Build full feed list
     all_feeds = []
@@ -431,8 +432,16 @@ class RssNewsService
         end
       end
       threads.each do |t|
-        records = begin; t.value; rescue => e; Rails.logger.warn("RssNewsService thread: #{e.message}"); []; end
-        mutex.synchronize { all_records.concat(records) }
+        result = begin
+          t.value
+        rescue => e
+          Rails.logger.warn("RssNewsService thread: #{e.message}")
+          { records: [], ingest_items: [] }
+        end
+        mutex.synchronize do
+          all_records.concat(result[:records])
+          ingest_items.concat(result[:ingest_items])
+        end
       end
     end
 
@@ -447,6 +456,19 @@ class RssNewsService
       .map { |t| normalize_title(t) }
 
     new_records = dedup_by_title(candidates, existing_titles: existing_titles)
+    ingest_ids = NewsIngestRecorder.record_all(ingest_items)
+    new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
+    normalized_ids = NewsNormalizationRecorder.record_all(new_records)
+    new_records.each do |record|
+      ids = normalized_ids[record[:url]]
+      next unless ids
+
+      record[:news_source_id] = ids[:news_source_id]
+      record[:news_article_id] = ids[:news_article_id]
+      record[:content_scope] = ids[:content_scope]
+    end
+    NewsClaimRecorder.record_all(new_records)
+    RssArticleHydrationService.enqueue_candidates(new_records)
     assign_clusters(new_records)
 
     if new_records.any?
@@ -482,48 +504,78 @@ class RssNewsService
 
     unless response.is_a?(Net::HTTPSuccess)
       Rails.logger.warn("RssNewsService[#{source_name}]: HTTP #{response.code}")
-      return []
+      return { records: [], ingest_items: [] }
     end
 
     feed = RSS::Parser.parse(response.body, false)
-    return [] unless feed
+    return { records: [], ingest_items: [] } unless feed
 
     now = Time.current
-    (feed.items || []).first(30).filter_map do |item|
+    records = []
+    ingest_items = []
+
+    (feed.items || []).first(30).each_with_index do |item, idx|
       title = item.title&.to_s&.strip
-      link = item.link.is_a?(String) ? item.link : item.link&.href
-      next if title.blank? || link.blank?
+      raw_link = item.link.is_a?(String) ? item.link : item.link&.href
+      next if title.blank? || raw_link.blank?
 
-      link = clean_google_url(link) if link.include?("news.google.com")
+      link = raw_link.include?("news.google.com") ? clean_google_url(raw_link) : raw_link
+      summary = rss_item_summary(item)
+      adapted = NewsSourceAdapter.normalize!(
+        source_adapter: "rss:#{source_name.parameterize}",
+        attrs: {
+          url: link,
+          title: title,
+          summary: summary,
+          name: source_name,
+          published_at: parse_pub_date(item),
+          source: "rss",
+        }
+      )
+      ingest_items << {
+        item_key: adapted[:url].presence || "#{source_name}-#{idx}",
+        source_feed: source_name,
+        source_endpoint_url: url,
+        external_id: rss_item_guid(item),
+        raw_url: raw_link,
+        raw_title: adapted[:title],
+        raw_summary: adapted[:summary],
+        raw_published_at: parse_pub_date(item),
+        fetched_at: now,
+        payload_format: "rss",
+        raw_payload: rss_item_payload(item, raw_link),
+        http_status: response.code.to_i,
+      }
 
-      lat, lng = geocode_title(title)
+      lat, lng = geocode_title(adapted[:title])
       next unless lat && lng
 
-      threat = ThreatClassifier.classify(title)
+      threat = ThreatClassifier.classify([ adapted[:title], adapted[:summary] ].compact.join(" "))
       credibility = [("tier#{meta[:tier]}"), meta[:risk], meta[:affiliation]].compact.join("/")
 
-      {
-        url: link.truncate(2000),
-        title: title.truncate(500),
-        name: source_name.truncate(200),
-        latitude: lat + rand(-0.1..0.1),
-        longitude: lng + rand(-0.1..0.1),
+      records << {
+        url: adapted[:url],
+        title: adapted[:title],
+        name: adapted[:name],
+        latitude: lat,
+        longitude: lng,
         tone: threat[:tone],
         level: threat[:level],
         category: threat[:category],
         threat_level: threat[:threat],
         credibility: credibility,
         themes: threat[:keywords].first(5),
-        published_at: parse_pub_date(item) || now,
+        published_at: adapted[:published_at] || now,
         fetched_at: now,
         source: "rss",
         created_at: now,
         updated_at: now,
       }
     end
+    { records: records, ingest_items: ingest_items }
   rescue => e
     Rails.logger.warn("RssNewsService[#{source_name}]: #{e.message}")
-    []
+    { records: [], ingest_items: [] }
   end
 
   # Geocoding provided by NewsGeocodable concern
@@ -547,6 +599,34 @@ class RssNewsService
   def clean_google_url(url)
     match = url.match(/url=([^&]+)/) if url.include?("url=")
     match ? URI.decode_www_form_component(match[1]) : url
+  end
+
+  def rss_item_guid(item)
+    return nil unless item.respond_to?(:guid) && item.guid.present?
+
+    item.guid.respond_to?(:content) ? item.guid.content : item.guid.to_s
+  end
+
+  def rss_item_summary(item)
+    if item.respond_to?(:description) && item.description.present?
+      item.description.to_s
+    elsif item.respond_to?(:summary) && item.summary.present?
+      item.summary.to_s
+    elsif item.respond_to?(:content_encoded) && item.content_encoded.present?
+      item.content_encoded.to_s
+    end
+  end
+
+  def rss_item_payload(item, raw_link)
+    {
+      "title" => item.title&.to_s,
+      "link" => raw_link,
+      "description" => rss_item_summary(item),
+      "guid" => rss_item_guid(item),
+      "pub_date" => parse_pub_date(item)&.iso8601,
+      "categories" => (item.respond_to?(:categories) ? Array(item.categories).map(&:to_s) : []),
+      "author" => (item.respond_to?(:author) ? item.author&.to_s : nil),
+    }.compact
   end
 
   # dedup_by_title, normalize_title, jaccard provided by NewsDedupable concern

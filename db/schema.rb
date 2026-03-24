@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_24_100000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -296,6 +296,87 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_100000) do
     t.index ["fetched_at"], name: "index_natural_events_on_fetched_at"
   end
 
+  create_table "news_actors", force: :cascade do |t|
+    t.string "canonical_key", null: false
+    t.string "name", null: false
+    t.string "actor_type", null: false
+    t.string "country_code"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["actor_type"], name: "index_news_actors_on_actor_type"
+    t.index ["canonical_key"], name: "index_news_actors_on_canonical_key", unique: true
+    t.index ["country_code"], name: "index_news_actors_on_country_code"
+  end
+
+  create_table "news_articles", force: :cascade do |t|
+    t.bigint "news_source_id", null: false
+    t.bigint "news_ingest_id"
+    t.string "url", null: false
+    t.string "canonical_url", null: false
+    t.string "title"
+    t.text "summary"
+    t.string "publisher_name"
+    t.string "publisher_domain"
+    t.string "language"
+    t.datetime "published_at"
+    t.datetime "fetched_at"
+    t.string "normalization_status", default: "normalized", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "content_scope", default: "adjacent", null: false
+    t.string "scope_reason"
+    t.string "hydration_status", default: "not_requested", null: false
+    t.integer "hydration_attempts", default: 0, null: false
+    t.datetime "hydration_last_attempted_at"
+    t.datetime "hydrated_at"
+    t.string "hydration_error"
+    t.index ["canonical_url"], name: "index_news_articles_on_canonical_url", unique: true
+    t.index ["content_scope"], name: "index_news_articles_on_content_scope"
+    t.index ["hydrated_at"], name: "index_news_articles_on_hydrated_at"
+    t.index ["hydration_status"], name: "index_news_articles_on_hydration_status"
+    t.index ["news_ingest_id"], name: "index_news_articles_on_news_ingest_id"
+    t.index ["news_source_id"], name: "index_news_articles_on_news_source_id"
+    t.index ["published_at"], name: "index_news_articles_on_published_at"
+    t.index ["publisher_domain"], name: "index_news_articles_on_publisher_domain"
+  end
+
+  create_table "news_claim_actors", force: :cascade do |t|
+    t.bigint "news_claim_id", null: false
+    t.bigint "news_actor_id", null: false
+    t.string "role", null: false
+    t.integer "position", null: false
+    t.float "confidence"
+    t.string "matched_text"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_actor_id"], name: "index_news_claim_actors_on_news_actor_id"
+    t.index ["news_claim_id", "news_actor_id", "role"], name: "idx_news_claim_actors_unique_role", unique: true
+    t.index ["news_claim_id", "position"], name: "idx_news_claim_actors_unique_position", unique: true
+    t.index ["news_claim_id"], name: "index_news_claim_actors_on_news_claim_id"
+  end
+
+  create_table "news_claims", force: :cascade do |t|
+    t.bigint "news_article_id", null: false
+    t.string "event_type", null: false
+    t.text "claim_text"
+    t.float "confidence"
+    t.string "extraction_method", default: "heuristic", null: false
+    t.string "extraction_version", default: "headline_rules_v1", null: false
+    t.datetime "published_at"
+    t.boolean "primary", default: true, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "event_family", default: "general", null: false
+    t.index ["event_family"], name: "index_news_claims_on_event_family"
+    t.index ["event_type"], name: "index_news_claims_on_event_type"
+    t.index ["news_article_id"], name: "index_news_claims_on_news_article_id", unique: true
+    t.index ["published_at"], name: "index_news_claims_on_published_at"
+  end
+
   create_table "news_events", force: :cascade do |t|
     t.string "url"
     t.string "name"
@@ -315,15 +396,58 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_100000) do
     t.string "threat_level"
     t.string "story_cluster_id"
     t.boolean "ai_enriched", default: false
+    t.bigint "news_ingest_id"
+    t.bigint "news_source_id"
+    t.bigint "news_article_id"
+    t.string "content_scope"
     t.index ["ai_enriched"], name: "index_news_events_on_ai_enriched"
     t.index ["category"], name: "index_news_events_on_category"
+    t.index ["content_scope"], name: "index_news_events_on_content_scope"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
+    t.index ["news_article_id"], name: "index_news_events_on_news_article_id"
+    t.index ["news_ingest_id"], name: "index_news_events_on_news_ingest_id"
+    t.index ["news_source_id"], name: "index_news_events_on_news_source_id"
     t.index ["published_at", "story_cluster_id"], name: "idx_news_published_cluster"
     t.index ["published_at"], name: "index_news_events_on_published_at"
     t.index ["source"], name: "index_news_events_on_source"
     t.index ["story_cluster_id"], name: "index_news_events_on_story_cluster_id"
     t.index ["title"], name: "index_news_events_on_title"
     t.index ["url"], name: "index_news_events_on_url", unique: true
+  end
+
+  create_table "news_ingests", force: :cascade do |t|
+    t.string "source_feed", null: false
+    t.string "source_endpoint_url", null: false
+    t.string "external_id"
+    t.string "raw_url"
+    t.text "raw_title"
+    t.text "raw_summary"
+    t.datetime "raw_published_at"
+    t.datetime "fetched_at", null: false
+    t.string "payload_format", null: false
+    t.jsonb "raw_payload", default: {}, null: false
+    t.integer "http_status"
+    t.string "content_hash", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["content_hash"], name: "index_news_ingests_on_content_hash", unique: true
+    t.index ["fetched_at"], name: "index_news_ingests_on_fetched_at"
+    t.index ["source_feed"], name: "index_news_ingests_on_source_feed"
+  end
+
+  create_table "news_sources", force: :cascade do |t|
+    t.string "canonical_key", null: false
+    t.string "name", null: false
+    t.string "source_kind", default: "publisher", null: false
+    t.string "publisher_domain"
+    t.string "publisher_country"
+    t.string "publisher_city"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["canonical_key"], name: "index_news_sources_on_canonical_key", unique: true
+    t.index ["publisher_domain"], name: "index_news_sources_on_publisher_domain"
+    t.index ["source_kind"], name: "index_news_sources_on_source_kind"
   end
 
   create_table "notams", force: :cascade do |t|
@@ -587,6 +711,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_100000) do
 
   add_foreign_key "alerts", "users"
   add_foreign_key "alerts", "watches"
+  add_foreign_key "news_articles", "news_ingests"
+  add_foreign_key "news_articles", "news_sources"
+  add_foreign_key "news_claim_actors", "news_actors"
+  add_foreign_key "news_claim_actors", "news_claims"
+  add_foreign_key "news_claims", "news_articles"
+  add_foreign_key "news_events", "news_articles"
+  add_foreign_key "news_events", "news_ingests"
+  add_foreign_key "news_events", "news_sources"
   add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"
 end

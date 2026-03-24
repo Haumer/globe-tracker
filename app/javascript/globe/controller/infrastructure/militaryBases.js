@@ -59,7 +59,8 @@ export function applyMilitaryBasesMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchMilitaryBases = async function() {
-    const bounds = this.getViewportBounds()
+    // Use filter bounds (selected country) if available, otherwise viewport
+    const bounds = (this.hasActiveFilter && this.hasActiveFilter()) ? this.getFilterBounds() : this.getViewportBounds()
     let url = "/api/military_bases"
     if (bounds) {
       url += `?north=${bounds.lamax}&south=${bounds.lamin}&east=${bounds.lomax}&west=${bounds.lomin}`

@@ -104,7 +104,7 @@ export function applyMilitaryBasesMethods(GlobeController) {
     if (this.hasActiveFilter && this.hasActiveFilter()) {
       visible = visible.filter(b => this.pointPassesFilter(b.lat, b.lng))
     }
-    visible = visible.slice(0, 1000)
+    visible = visible.slice(0, 300)
 
     const wantIds = new Set(visible.map(b => `milbase-${b.id}`))
 
@@ -138,23 +138,24 @@ export function applyMilitaryBasesMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(b.lng, b.lat, 50),
         billboard: {
           image: this._milBaseIcons[bt],
-          scale: 1.0,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
+          scale: 0.7,
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 0.9, 5e6, 0.25),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: b.name || "Base",
+          text: b.name || "",
           font: LABEL_DEFAULTS.font,
-          fillColor: cesiumColor.withAlpha(0.9),
+          fillColor: cesiumColor.withAlpha(0.8),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,
           style: LABEL_DEFAULTS.style(),
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           pixelOffset: LABEL_DEFAULTS.pixelOffsetBelow(),
-          scaleByDistance: LABEL_DEFAULTS.scaleByDistance(),
+          scaleByDistance: new Cesium.NearFarScalar(5e4, 0.8, 2e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(5e4, 1.0, 1e6, 0),
           translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
         },
       })

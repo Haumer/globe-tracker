@@ -27,6 +27,9 @@ export function applyCoreMethods(GlobeController) {
     this.showCivilian = true
     this.showMilitary = true
     this._milFlightsActive = false
+    this._milFlightData = []
+    this._milFlightEntities = []
+    this._milFlightInterval = null
     this.satelliteData = []
     this._loadedSatCategories = new Set()
     this.satelliteEntities = new Map()
@@ -328,7 +331,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "fire-", "outage-", "conf-", "insight-", "traf-"]
+          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked)) return
@@ -1122,6 +1125,11 @@ export function applyCoreMethods(GlobeController) {
         const d = this._strikeDetections?.find(f => f.id === id); if (!d) return false
         this.showStrikeDetail(d); return true
       }},
+      // Military flights (independent layer)
+      { prefix: "milflt-", skip: [], handler: (id) => {
+        const d = this._milFlightData?.find(f => f.icao24 === id); if (!d) return false
+        this.showDetail(d); return true
+      }},
       { prefix: "strike-", skip: [], handler: (id) => {
         const d = this._strikeDetections?.find(f => f.id === id); if (!d) return false
         this.showStrikeDetail(d); return true
@@ -1421,6 +1429,7 @@ export function applyCoreMethods(GlobeController) {
     if (this._outageInterval) clearInterval(this._outageInterval)
     if (this._trainPollTimer) clearInterval(this._trainPollTimer)
     if (this._strikesInterval) clearInterval(this._strikesInterval)
+    if (this._milFlightInterval) clearInterval(this._milFlightInterval)
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame)
     this._stopInsightPolling()
     if (this._handler) this._handler.destroy()

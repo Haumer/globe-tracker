@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource, createPlaneIcon } from "../utils"
 
 export function applyFlightMethods(GlobeController) {
   GlobeController.prototype.fetchFlights = async function() {
@@ -360,34 +360,91 @@ export function applyFlightMethods(GlobeController) {
     this._savePrefs()
   }
 
-  // Toggle military flights from the Military sidebar section.
-  // Enables flights layer if needed, shows ONLY military, hides civilian.
+  // Independent military flights layer — own fetch, own entities, no dependency on Tracking flights
   GlobeController.prototype.toggleMilitaryFlightsFilter = function() {
     this._milFlightsActive = !this._milFlightsActive
 
     if (this._milFlightsActive) {
-      // Enable flights layer if not already on
-      if (!this.flightsVisible && this.hasFlightsToggleTarget) {
-        this.flightsToggleTarget.checked = true
-        this.toggleFlights()
+      this._fetchMilitaryFlights()
+      if (!this._milFlightInterval) {
+        this._milFlightInterval = setInterval(() => {
+          if (this._milFlightsActive) this._fetchMilitaryFlights()
+        }, 10000)
       }
-      // Show only military, hide civilian
-      this.showMilitary = true
-      this.showCivilian = false
-      if (this.hasMilitaryToggleTarget) this.militaryToggleTarget.checked = true
-      if (this.hasCivilianToggleTarget) this.civilianToggleTarget.checked = false
     } else {
-      // Restore: show both
-      this.showMilitary = true
-      this.showCivilian = true
-      if (this.hasMilitaryToggleTarget) this.militaryToggleTarget.checked = true
-      if (this.hasCivilianToggleTarget) this.civilianToggleTarget.checked = true
+      this._clearMilFlightEntities()
+      if (this._milFlightInterval) { clearInterval(this._milFlightInterval); this._milFlightInterval = null }
     }
-
-    // Re-render to apply filter
-    if (this.flightsVisible) this.renderFlights()
     this._syncQuickBar()
     this._savePrefs()
+  }
+
+  GlobeController.prototype._fetchMilitaryFlights = async function() {
+    const bounds = this.getViewportBounds()
+    let url = "/api/flights?filter=military"
+    if (bounds) {
+      url += `&lamin=${bounds.lamin}&lomin=${bounds.lomin}&lamax=${bounds.lamax}&lomax=${bounds.lomax}`
+    }
+    try {
+      const resp = await fetch(url)
+      if (!resp.ok) return
+      const flights = await resp.json()
+      this._milFlightData = flights
+      this._renderMilFlights()
+    } catch (e) { console.error("Military flights fetch failed:", e) }
+  }
+
+  GlobeController.prototype._renderMilFlights = function() {
+    this._clearMilFlightEntities()
+    if (!this._milFlightData?.length || !this._milFlightsActive) return
+
+    const Cesium = window.Cesium
+    const ds = getDataSource(this.viewer, this._ds, "mil-flights")
+
+    ds.entities.suspendEvents()
+    this._milFlightData.forEach(f => {
+      if (!f.latitude || !f.longitude) return
+
+      const entity = ds.entities.add({
+        id: `milflt-${f.icao24}`,
+        position: Cesium.Cartesian3.fromDegrees(f.longitude, f.latitude, (f.altitude || 0) * 0.3 + 50),
+        billboard: {
+          image: this._milPlaneIcon || (this._milPlaneIcon = createPlaneIcon("#ef5350")),
+          scale: 0.9,
+          rotation: -Cesium.Math.toRadians(f.heading || 0),
+          alignedAxis: Cesium.Cartesian3.UNIT_Z,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 8e6, 0.3),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: f.callsign || f.icao24 || "",
+          font: "11px JetBrains Mono, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("#ef5350").withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          pixelOffset: new Cesium.Cartesian2(0, 14),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 3e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 2e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._milFlightEntities.push(entity)
+    })
+    ds.entities.resumeEvents()
+    this._requestRender()
+  }
+
+  GlobeController.prototype._clearMilFlightEntities = function() {
+    const ds = this._ds["mil-flights"]
+    if (ds) {
+      ds.entities.suspendEvents()
+      this._milFlightEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+      this._requestRender()
+    }
+    this._milFlightEntities = []
   }
 
   GlobeController.prototype.showDetail = function(id, data) {

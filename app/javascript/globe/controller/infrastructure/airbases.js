@@ -140,6 +140,7 @@ export function applyAirbasesMethods(GlobeController) {
           <span class="detail-value">${ap.lat.toFixed(4)}, ${ap.lng.toFixed(4)}</span>
         </div>
       </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: OurAirports / FAA</div>
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""

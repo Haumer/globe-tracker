@@ -241,6 +241,7 @@ export function applyStrikesMethods(GlobeController) {
       ${infraHtml}
       ${satLink}
       ${newsHtml}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: NASA FIRMS (${this._escapeHtml(s.instrument || "VIIRS")} on ${this._escapeHtml(s.satellite || "Unknown")})</div>
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""

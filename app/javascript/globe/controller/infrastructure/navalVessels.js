@@ -186,6 +186,7 @@ export function applyNavalVesselsMethods(GlobeController) {
         ${data.flag ? `<div class="detail-field"><span class="detail-label">Flag</span><span class="detail-value">${this._escapeHtml(data.flag)}</span></div>` : ""}
         ${data.destination ? `<div class="detail-field"><span class="detail-label">Destination</span><span class="detail-value">${this._escapeHtml(data.destination)}</span></div>` : ""}
       </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: AIS (AISStream.io)</div>
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""

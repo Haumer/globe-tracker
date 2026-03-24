@@ -205,6 +205,7 @@ export function applyMilitaryBasesMethods(GlobeController) {
           <span class="detail-value">${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}</span>
         </div>
       </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${base.source === "manual" ? "Curated intelligence data" : "OpenStreetMap contributors"}</div>
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""

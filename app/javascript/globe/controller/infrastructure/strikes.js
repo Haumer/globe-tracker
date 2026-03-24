@@ -1,5 +1,38 @@
 import { getDataSource, cachedColor, LABEL_DEFAULTS } from "../../utils"
 
+function createStrikeIcon(confidence) {
+  const size = 28
+  const canvas = document.createElement("canvas")
+  canvas.width = size; canvas.height = size
+  const ctx = canvas.getContext("2d")
+  const cx = size / 2, cy = size / 2
+
+  // Outer ring
+  const alpha = confidence === "high" ? 1.0 : confidence === "medium" ? 0.8 : 0.5
+  ctx.strokeStyle = `rgba(224, 64, 251, ${alpha})`
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 10, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // Crosshairs
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.moveTo(cx, 2); ctx.lineTo(cx, 8)   // top
+  ctx.moveTo(cx, size - 8); ctx.lineTo(cx, size - 2)  // bottom
+  ctx.moveTo(2, cy); ctx.lineTo(8, cy)   // left
+  ctx.moveTo(size - 8, cy); ctx.lineTo(size - 2, cy)  // right
+  ctx.stroke()
+
+  // Center dot
+  ctx.fillStyle = `rgba(224, 64, 251, ${alpha})`
+  ctx.beginPath()
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+
+  return canvas.toDataURL()
+}
+
 const SAT_NORAD = {
   "Suomi NPP": 37849, "NOAA-20": 43013, "NOAA-21": 54234,
   "Terra": 25994, "Aqua": 27424,
@@ -87,15 +120,17 @@ export function applyStrikesMethods(GlobeController) {
         this._strikeEntities.push(ring)
       }
 
+      if (!this._strikeIcons) this._strikeIcons = {}
+      const iconKey = s.strikeConfidence
+      if (!this._strikeIcons[iconKey]) this._strikeIcons[iconKey] = createStrikeIcon(iconKey)
+
       const entity = dataSource.entities.add({
         id: `strike-${s.id}`,
         position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 10),
-        point: {
-          pixelSize,
-          color: color.withAlpha(confAlpha),
-          outlineColor: color.withAlpha(confAlpha * 0.4),
-          outlineWidth: 2,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4),
+        billboard: {
+          image: this._strikeIcons[iconKey],
+          scale: confScale,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },

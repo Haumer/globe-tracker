@@ -8,9 +8,11 @@ module Api
     INDUSTRIAL_EXCLUSION_RADIUS = 0.05 # ~5.5km
 
     def index
+      # Include nominal confidence in active conflict zones — during active strikes,
+      # even moderate-confidence detections (FRP 10-60 MW) are likely real
       hotspots = FireHotspot.recent
-        .where(confidence: %w[high h])
-        .where("frp > 20 OR brightness > 360 OR daynight = 'N'")
+        .where("confidence IN ('high', 'h', 'nominal', 'n') OR CAST(confidence AS INTEGER) >= 50")
+        .where("frp > 10 OR brightness > 340 OR daynight = 'N'")
         .order(acq_datetime: :desc)
 
       # Filter to conflict zones

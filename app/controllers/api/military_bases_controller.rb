@@ -15,7 +15,14 @@ module Api
         )
       end
 
-      bases = bases.order(id: :asc).limit(500)
+      # Prioritize: named bases first, then by strategic importance
+      bases = bases.order(
+        Arel.sql("CASE WHEN name IS NOT NULL AND name != '' THEN 0 ELSE 1 END"),
+        Arel.sql("CASE base_type
+          WHEN 'nuclear' THEN 0 WHEN 'missile' THEN 1 WHEN 'air_force' THEN 2
+          WHEN 'navy' THEN 3 WHEN 'army' THEN 4 WHEN 'logistics' THEN 5
+          WHEN 'training' THEN 6 ELSE 7 END"),
+      ).limit(500)
 
       data = bases.map { |b|
         [b.id, b.latitude, b.longitude, b.name, b.base_type, b.country, b.operator]

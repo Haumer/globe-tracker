@@ -105,7 +105,7 @@ export function applyMilitaryBasesMethods(GlobeController) {
     if (this.hasActiveFilter && this.hasActiveFilter()) {
       visible = visible.filter(b => this.pointPassesFilter(b.lat, b.lng))
     }
-    visible = visible.slice(0, 300)
+    visible = visible.slice(0, 1000)
 
     const wantIds = new Set(visible.map(b => `milbase-${b.id}`))
 

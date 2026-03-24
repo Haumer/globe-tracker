@@ -35,12 +35,13 @@ class MilitaryBaseRefreshService
 
     REGION_BBOXES.each do |region, bbox|
       south, west, north, east = bbox
+      # Only fetch active installation types — exclude bunker, trench, ruins
       query = <<~OQL
         [out:json][timeout:120][bbox:#{south},#{west},#{north},#{east}];
         (
-          node["military"];
-          way["military"];
-          relation["military"];
+          node["military"~"barracks|base|airfield|naval_base|range|training_area|office|checkpoint"];
+          way["military"~"barracks|base|airfield|naval_base|range|training_area|office|checkpoint"];
+          relation["military"~"barracks|base|airfield|naval_base|range|training_area|office|checkpoint"];
         );
         out center body;
       OQL

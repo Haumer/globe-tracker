@@ -158,6 +158,7 @@ export function applyFinancialMethods(GlobeController) {
           <span class="detail-value">${item.category}</span>
         </div>
       </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Alpha Vantage / ECB</div>
     `
     this.detailPanelTarget.style.display = ""
   }

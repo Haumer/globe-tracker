@@ -317,6 +317,7 @@ export function applyTrainsMethods(GlobeController) {
         data-watch-conditions='${JSON.stringify({ entity_type: "train", identifier: t.name, match: "name_exact" })}'>
         <i class="fa-solid fa-eye"></i> Watch
       </button>` : ""}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ÖBB / Deutsche Bahn HAFAS</div>
     `
     this.detailPanelTarget.style.display = ""
 

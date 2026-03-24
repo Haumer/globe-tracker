@@ -145,6 +145,7 @@ export function applyOutagesMethods(GlobeController) {
         </div>
       </div>
       <a href="https://ioda.inetintel.cc.gatech.edu/country/${s.code}" target="_blank" rel="noopener" class="detail-track-btn">View on IODA →</a>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: IODA (Georgia Tech)</div>
     `
     this.detailPanelTarget.style.display = ""
   }

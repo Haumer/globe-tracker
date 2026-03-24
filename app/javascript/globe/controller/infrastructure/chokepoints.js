@@ -260,6 +260,7 @@ export function applyChokepointsMethods(GlobeController) {
       </button>
 
       ${this._connectionsPlaceholder()}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: EIA / UNCTAD / S&P Global</div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("ship", cp.lat, cp.lng)

@@ -157,6 +157,7 @@ export function applyConflictsMethods(GlobeController) {
         <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
       </button>
       ${this._connectionsPlaceholder()}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: UCDP / ACLED</div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", c.lat, c.lng)

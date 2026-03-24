@@ -198,6 +198,7 @@ export function applyFiresMethods(GlobeController) {
       </div>
       ${satLink}
       ${this._connectionsPlaceholder()}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: NASA FIRMS (VIIRS/MODIS)</div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("fire_hotspot", f.lat, f.lng, { satellite: f.satellite })

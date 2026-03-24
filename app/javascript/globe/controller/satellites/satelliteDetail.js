@@ -104,6 +104,7 @@ export function applySatDetailMethods(GlobeController) {
         <i class="fa-solid fa-binoculars" style="margin-right:4px;"></i>Predict Visible Passes
       </button>
       <div class="sat-passes-result" data-globe-sat-passes></div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: CelesTrak / NORAD TLE data</div>
     `
     this.detailPanelTarget.style.display = ""
 

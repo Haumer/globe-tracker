@@ -348,6 +348,7 @@ export function applyTrafficMethods(GlobeController) {
       </div>
       ${attackHtml}
       ${this._trafficData.recorded_at ? `<div style="margin-top:8px;font:400 9px var(--gt-mono);color:var(--gt-text-dim);">Updated: ${new Date(this._trafficData.recorded_at).toLocaleString()}</div>` : ""}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Netscout / Arbor Networks</div>
     `
     this.detailPanelTarget.style.display = ""
   }

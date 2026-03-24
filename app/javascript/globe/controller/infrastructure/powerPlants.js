@@ -296,6 +296,7 @@ export function applyPowerPlantsMethods(GlobeController) {
         </div>
       ` : ""}
       ${this._connectionsPlaceholder()}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Global Power Plant Database (WRI)</div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("power_plant", pp.lat, pp.lng, { country_code: pp.country })

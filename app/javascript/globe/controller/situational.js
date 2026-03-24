@@ -106,6 +106,7 @@ export function applySituationalMethods(GlobeController) {
           <span class="detail-value">${ap.lat.toFixed(4)}°, ${ap.lng.toFixed(4)}°</span>
         </div>
       </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: OurAirports / FAA</div>
     `
     this.detailPanelTarget.style.display = ""
 
@@ -301,6 +302,7 @@ export function applySituationalMethods(GlobeController) {
       </button>
       ${this._connectionsPlaceholder()}
       <div class="shakemap-infra" data-globe-shakemap-infra style="display:none;"></div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: USGS Earthquake Hazards Program</div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("earthquake", eq.lat, eq.lng)

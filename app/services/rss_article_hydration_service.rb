@@ -318,6 +318,7 @@ class RssArticleHydrationService
           content_scope: article.content_scope,
         },
       ])
+      NewsStoryClusterer.recluster_article(article)
     end
 
     def can_replace_canonical_url?(article, canonical_url)

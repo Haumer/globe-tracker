@@ -61,6 +61,9 @@ export function applyTrainsMethods(GlobeController) {
       if (!resp.ok) return
       const newData = await resp.json()
       this._trainData = newData
+      const firstTrain = Array.isArray(newData) && newData.length > 0 ? newData[0] : null
+      this._trainFeedFetchedAt = firstTrain?.fetchedAt || null
+      this._trainFeedExpiresAt = firstTrain?.expiresAt || null
       this._updateTrainPositions(newData)
       this.renderTrains()
     } catch (e) {
@@ -272,6 +275,11 @@ export function applyTrainsMethods(GlobeController) {
     const movingLabel = pos ? (pos.moving ? "Moving" : "Stopped") : ""
     const movingColor = pos?.moving ? "#66bb6a" : "#ff9800"
     const speedLabel = pos?.speedKmh && pos.moving ? `~${pos.speedKmh} km/h` : ""
+    const cacheMeta = this._cacheMeta(t.fetchedAt || this._trainFeedFetchedAt, t.expiresAt || this._trainFeedExpiresAt)
+    const cacheStatus = (() => {
+      const expiresAt = this._parseDateValue(t.expiresAt || this._trainFeedExpiresAt)
+      return expiresAt && expiresAt.getTime() <= Date.now() ? "stale" : "ready"
+    })()
 
     const catIcon = {
       str: "fa-train-tram", Bus: "fa-bus", obu: "fa-bus",
@@ -283,6 +291,9 @@ export function applyTrainsMethods(GlobeController) {
         <i class="fa-solid ${catIcon}" style="margin-right:6px;"></i>${this._escapeHtml(t.name)}
       </div>
       <div class="detail-country">${this._escapeHtml(t.categoryLong || t.category)}${t.operator ? ` · ${this._escapeHtml(t.operator)}` : ""}${t.flag ? ` <span class="fi fi-${t.flag.toLowerCase()}"></span>` : ""}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px;">
+        ${this._statusChip(cacheStatus, cacheStatus === "stale" ? "stale train cache" : "cached train position")}
+      </div>
       <div class="detail-grid">
         ${movingLabel ? `<div class="detail-field">
           <span class="detail-label">Status</span>
@@ -304,6 +315,10 @@ export function applyTrainsMethods(GlobeController) {
           <span class="detail-label">Position</span>
           <span class="detail-value">${t.lat.toFixed(4)}, ${t.lng.toFixed(4)}</span>
         </div>
+        <div class="detail-field">
+          <span class="detail-label">Updated</span>
+          <span class="detail-value">${t.fetchedAt ? this._timeAgo(new Date(t.fetchedAt)) : "—"}</span>
+        </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
         <button class="detail-track-btn ${isTracking ? "tracking" : ""}" id="train-track-btn" data-train-id="${t.id}" style="flex:1;">
@@ -317,7 +332,7 @@ export function applyTrainsMethods(GlobeController) {
         data-watch-conditions='${JSON.stringify({ entity_type: "train", identifier: t.name, match: "name_exact" })}'>
         <i class="fa-solid fa-eye"></i> Watch
       </button>` : ""}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ÖBB / Deutsche Bahn HAFAS</div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ÖBB / Deutsche Bahn HAFAS${cacheMeta ? ` · ${this._escapeHtml(cacheMeta)}` : ""}</div>
     `
     this.detailPanelTarget.style.display = ""
 

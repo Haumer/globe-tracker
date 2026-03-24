@@ -26,25 +26,34 @@ class HafasTrainService
     new.fetch(bbox: bbox, operators: operators)
   end
 
+  def self.fetch_snapshots(bbox: nil, operators: nil)
+    new.fetch_snapshots(bbox: bbox, operators: operators)
+  end
+
   def fetch(bbox: nil, operators: nil)
+    fetch_snapshots(bbox: bbox, operators: operators).flat_map { |snapshot| snapshot[:trains] || [] }
+  end
+
+  def fetch_snapshots(bbox: nil, operators: nil)
     selected = operators ? OPERATORS.slice(*operators.map(&:to_sym)) : OPERATORS
     threads = selected.map do |key, config|
       Thread.new do
-        Thread.current[:results] = fetch_operator(key, config, bbox)
+        Thread.current[:results] = fetch_operator_snapshot(key, config, bbox)
       rescue => e
         Rails.logger.warn("HafasTrainService [#{key}]: #{e.message}")
-        Thread.current[:results] = []
+        Thread.current[:results] = failure_snapshot(key, config, bbox: bbox, error_code: e.class.name.demodulize.underscore)
       end
     end
 
     threads.each { |t| t.join(12) }
-    threads.flat_map { |t| t[:results] || [] }
+    threads.map { |t| t[:results] }.compact
   end
 
   private
 
-  def fetch_operator(key, config, bbox)
+  def fetch_operator_snapshot(key, config, bbox)
     rect = bbox ? bbox_to_rect(bbox) : config[:default_rect]
+    fetched_at = Time.current
 
     uri = URI("#{config[:url]}?rnd=#{(Time.now.to_f * 1000).to_i}")
     http = Net::HTTP.new(uri.host, uri.port)
@@ -59,10 +68,31 @@ class HafasTrainService
     response = http.request(request)
     unless response.is_a?(Net::HTTPSuccess)
       Rails.logger.warn("HafasTrainService [#{key}]: HTTP #{response.code}")
-      return []
+      return failure_snapshot(
+        key,
+        config,
+        bbox: bbox,
+        rect: rect,
+        fetched_at: fetched_at,
+        raw_payload: { "http_status" => response.code.to_i },
+        error_code: "http_#{response.code}"
+      )
     end
 
-    parse_response(JSON.parse(response.body), key, config)
+    data = JSON.parse(response.body)
+
+    {
+      operator_key: key.to_s,
+      operator_name: config[:label],
+      operator_flag: config[:flag],
+      request_bbox: bbox,
+      request_rect: rect,
+      fetched_at: fetched_at,
+      raw_payload: data,
+      trains: parse_response(data, key, config),
+      status: "fetched",
+      error_code: nil,
+    }
   end
 
   def bbox_to_rect(bbox)
@@ -124,5 +154,20 @@ class HafasTrainService
         progress: jny["proc"],
       }
     end
+  end
+
+  def failure_snapshot(key, config, bbox:, rect: nil, fetched_at: Time.current, raw_payload: {}, error_code:)
+    {
+      operator_key: key.to_s,
+      operator_name: config[:label],
+      operator_flag: config[:flag],
+      request_bbox: bbox,
+      request_rect: rect,
+      fetched_at: fetched_at,
+      raw_payload: raw_payload,
+      trains: [],
+      status: "failed",
+      error_code: error_code,
+    }
   end
 end

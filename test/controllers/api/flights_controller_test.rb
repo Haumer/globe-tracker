@@ -1,7 +1,15 @@
 require "test_helper"
 
 class Api::FlightsControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
+
   setup do
+    @original_queue_adapter = ActiveJob::Base.queue_adapter
+    ActiveJob::Base.queue_adapter = :test
+    clear_enqueued_jobs
+    clear_performed_jobs
+    Rails.cache.clear
+
     @flight = Flight.create!(
       icao24: "abc123",
       callsign: "TEST01",
@@ -15,6 +23,13 @@ class Api::FlightsControllerTest < ActionDispatch::IntegrationTest
       military: false,
       updated_at: Time.current,
     )
+  end
+
+  teardown do
+    clear_enqueued_jobs
+    clear_performed_jobs
+    ActiveJob::Base.queue_adapter = @original_queue_adapter
+    Rails.cache.clear
   end
 
   test "GET /api/flights returns JSON array" do
@@ -64,5 +79,42 @@ class Api::FlightsControllerTest < ActionDispatch::IntegrationTest
     data = JSON.parse(response.body)
     icaos = data.map { |f| f["icao24"] }
     assert_not_includes icaos, "old999"
+  end
+
+  test "show returns persisted flight route when available" do
+    FlightRoute.create!(
+      callsign: "TEST01",
+      flight_icao24: "abc123",
+      route: ["LOWW", "EDDF"],
+      raw_payload: { "route" => ["LOWW", "EDDF"] },
+      operator_iata: "LH",
+      flight_number: "123",
+      status: "fetched",
+      fetched_at: Time.current,
+      expires_at: 30.minutes.from_now,
+    )
+
+    assert_no_enqueued_jobs do
+      get "/api/flights/TEST01"
+    end
+
+    assert_response :success
+    data = JSON.parse(response.body)
+    assert_equal "available", data["route_status"]
+    assert_equal ["LOWW", "EDDF"], data.dig("route", "route")
+    assert_equal "LH", data.dig("route", "operator_iata")
+  end
+
+  test "show enqueues route refresh when route is missing" do
+    assert_enqueued_with(job: RefreshFlightRouteJob, args: ["TEST01", "abc123"]) do
+      get "/api/flights/TEST01"
+    end
+
+    assert_response :success
+    data = JSON.parse(response.body)
+    assert_equal "pending", data["route_status"]
+
+    route = FlightRoute.find_by!(callsign: "TEST01")
+    assert_equal "pending", route.status
   end
 end

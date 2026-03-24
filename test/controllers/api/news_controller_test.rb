@@ -104,4 +104,31 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     assert cluster["source_count"] >= 2
     assert_kind_of Array, cluster["sources"]
   end
+
+  test "clustered mode keeps unclustered articles separate" do
+    NewsEvent.create!(
+      url: "https://example.com/news-ctrl-004",
+      title: "Unclustered story one",
+      latitude: 48.2, longitude: 16.3,
+      tone: -2.0, source: "bbc",
+      story_cluster_id: nil,
+      published_at: 1.hour.ago,
+      fetched_at: Time.current,
+    )
+    NewsEvent.create!(
+      url: "https://example.com/news-ctrl-005",
+      title: "Unclustered story two",
+      latitude: 48.2, longitude: 16.3,
+      tone: -1.5, source: "ap",
+      story_cluster_id: nil,
+      published_at: 1.hour.ago,
+      fetched_at: Time.current,
+    )
+
+    get "/api/news", params: { clustered: "true" }
+    data = JSON.parse(response.body)
+
+    assert data.any? { |entry| entry["title"] == "Unclustered story one" }
+    assert data.any? { |entry| entry["title"] == "Unclustered story two" }
+  end
 end

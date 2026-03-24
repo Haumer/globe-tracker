@@ -47,14 +47,31 @@ module Api
       # Return full flight detail + route in one call
       flight = Flight.find_by("callsign = ? OR icao24 = ?", callsign, callsign)
       detail = flight ? flight.attributes.compact : {}
+      lookup_callsign = flight&.callsign.presence || callsign
+      route_record = lookup_callsign.present? ? FlightRoute.find_by(callsign: lookup_callsign.strip.upcase) : nil
 
-      # Route lookup cached in Redis — external API call only on cache miss
-      route = Rails.cache.fetch("flight_route:#{callsign}", expires_in: 30.minutes) do
-        ::OpenskyService.fetch_route(callsign)
+      if route_record&.available?
+        detail[:route] = route_record.payload
+      elsif lookup_callsign.present?
+        FlightRouteRefreshService.enqueue_if_needed(callsign: lookup_callsign, flight_icao24: flight&.icao24)
       end
-      detail[:route] = route unless route[:error]
+
+      detail[:route_status] = route_status_for(route_record, lookup_callsign)
+      detail[:route_fetched_at] = route_record&.fetched_at&.iso8601
+      detail[:route_expires_at] = route_record&.expires_at&.iso8601
+      detail[:route_error] = route_record&.error_code if route_record&.status == "failed"
 
       render json: detail
+    end
+
+    private
+
+    def route_status_for(route_record, lookup_callsign)
+      return "unavailable" if lookup_callsign.blank?
+      return "available" if route_record&.available?
+      return route_record.status if route_record.present?
+
+      "pending"
     end
   end
 end

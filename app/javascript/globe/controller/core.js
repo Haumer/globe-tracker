@@ -124,9 +124,11 @@ export function applyCoreMethods(GlobeController) {
     this._conflictPulseData = []
     this._conflictPulseEntities = []
     this._conflictPulsePrev = {}
+    this._conflictPulseSnapshotStatus = null
     this.chokepointsVisible = false
     this._chokepointData = []
     this._chokepointEntities = []
+    this._chokepointSnapshotStatus = null
     this.militaryBasesVisible = false
     this._militaryBaseData = []
     this._militaryBaseEntities = []
@@ -151,6 +153,10 @@ export function applyCoreMethods(GlobeController) {
     this._webcamEntityMap = new Map()
     this._webcamFetchToken = 0
     this._webcamLastFetchCenter = null
+    this._webcamCollectionStatus = null
+    this._trainFeedFetchedAt = null
+    this._trainFeedExpiresAt = null
+    this._insightSnapshotStatus = null
     this.countrySelectMode = false
     this.drawMode = false
     this._drawCenter = null
@@ -1052,6 +1058,68 @@ export function applyCoreMethods(GlobeController) {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
     return `${Math.floor(seconds / 86400)}d ago`
+  }
+
+  GlobeController.prototype._parseDateValue = function(value) {
+    if (!value) return null
+    const date = value instanceof Date ? value : new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  GlobeController.prototype._statusTone = function(status) {
+    switch (status) {
+      case "ready":
+      case "available":
+      case "fetched":
+        return { color: "#66bb6a", background: "rgba(102,187,106,0.14)" }
+      case "pending":
+        return { color: "#4fc3f7", background: "rgba(79,195,247,0.14)" }
+      case "stale":
+        return { color: "#ffb300", background: "rgba(255,179,0,0.16)" }
+      case "error":
+      case "failed":
+        return { color: "#ef5350", background: "rgba(239,83,80,0.16)" }
+      case "unavailable":
+        return { color: "#90a4ae", background: "rgba(144,164,174,0.16)" }
+      default:
+        return { color: "#90a4ae", background: "rgba(144,164,174,0.16)" }
+    }
+  }
+
+  GlobeController.prototype._statusLabel = function(status, kind = "snapshot") {
+    switch (status) {
+      case "ready":
+        return `ready ${kind}`
+      case "available":
+        return `${kind} ready`
+      case "pending":
+        return `${kind} pending`
+      case "stale":
+        return `stale ${kind}`
+      case "error":
+        return `${kind} error`
+      case "failed":
+        return `${kind} unavailable`
+      case "unavailable":
+        return `${kind} unavailable`
+      default:
+        return kind
+    }
+  }
+
+  GlobeController.prototype._statusChip = function(status, label = null) {
+    const tone = this._statusTone(status)
+    const text = label || this._statusLabel(status).toUpperCase()
+    return `<span class="detail-chip" style="background:${tone.background};color:${tone.color};">${this._escapeHtml(text.toUpperCase())}</span>`
+  }
+
+  GlobeController.prototype._cacheMeta = function(fetchedAt, expiresAt) {
+    const fetched = this._parseDateValue(fetchedAt)
+    const expires = this._parseDateValue(expiresAt)
+    const parts = []
+    if (fetched) parts.push(`updated ${this._timeAgo(fetched)}`)
+    if (expires) parts.push(expires.getTime() > Date.now() ? "cache fresh" : "cache stale")
+    return parts.join(" · ")
   }
 
   GlobeController.prototype._escapeHtml = function(str) {

@@ -896,6 +896,7 @@ export function applySituationalMethods(GlobeController) {
         const data = await resp.json()
         if (fetchId !== this._webcamFetchToken) return
         const cams = data.webcams || []
+        this._webcamCollectionStatus = data.stale ? "stale" : "ready"
 
         // Replace data with new viewport's cameras (don't keep stale ones from old viewport)
         this._webcamData = cams.map(w => this._normalizeWebcam(w)).filter(w =>
@@ -904,19 +905,6 @@ export function applySituationalMethods(GlobeController) {
         this.renderWebcams()
         this._updateStats()
         if (this._syncRightPanels) this._syncRightPanels()
-
-        // If the server says cameras are stale, a background job is refreshing.
-        // Re-fetch after delays to pick up newly fetched cameras.
-        if (data.stale && fetchId === this._webcamFetchToken) {
-          const retryDelays = [8000, 20000]
-          retryDelays.forEach(delay => {
-            setTimeout(() => {
-              if (fetchId === this._webcamFetchToken && this.camerasVisible) {
-                this._refetchWebcamsQuiet(url, fetchId)
-              }
-            }, delay)
-          })
-        }
       }
     } catch (e) { console.warn("Webcam fetch failed:", e) }
 
@@ -925,31 +913,6 @@ export function applySituationalMethods(GlobeController) {
       if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
     }
-  }
-
-  // Silent re-fetch after background job populates fresh cameras
-  GlobeController.prototype._refetchWebcamsQuiet = async function(url, fetchId) {
-    try {
-      const resp = await fetch(url)
-      if (fetchId !== this._webcamFetchToken || !resp.ok) return
-      const data = await resp.json()
-      if (fetchId !== this._webcamFetchToken) return
-      const cams = data.webcams || []
-      if (cams.length > 0) {
-        // Merge new cameras into existing set (background job may have found more)
-        const newNormalized = cams.map(w => this._normalizeWebcam(w)).filter(w =>
-          w.lat != null && w.lng != null && Number.isFinite(w.lat) && Number.isFinite(w.lng)
-        )
-        const existingIds = new Set(this._webcamData.map(w => w.id))
-        const added = newNormalized.filter(w => !existingIds.has(w.id))
-        if (added.length > 0) {
-          this._webcamData = [...this._webcamData, ...added]
-        }
-        this.renderWebcams()
-        this._updateStats()
-        if (this._syncRightPanels) this._syncRightPanels()
-      }
-    } catch (e) { /* silent */ }
   }
 
   GlobeController.prototype._normalizeWebcam = function(w) {
@@ -970,6 +933,7 @@ export function applySituationalMethods(GlobeController) {
       channelTitle: w.channelTitle || null,
       lastUpdated: w.lastUpdatedOn,
       viewCount: w.viewCount,
+      stale: !!w.stale,
     }
   }
 
@@ -1065,11 +1029,14 @@ export function applySituationalMethods(GlobeController) {
     })
 
     if (this.hasCamFeedCountTarget) {
-      this.camFeedCountTarget.textContent = `${cams.length} camera${cams.length !== 1 ? "s" : ""}`
+      const base = `${cams.length} camera${cams.length !== 1 ? "s" : ""}`
+      const suffix = this._webcamCollectionStatus === "stale" ? " · stale cache" : ""
+      this.camFeedCountTarget.textContent = `${base}${suffix}`
     }
 
     if (cams.length === 0) {
-      this.camFeedListTarget.innerHTML = '<div style="padding:24px 14px;text-align:center;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">No cameras found</div>'
+      const emptyLabel = this._webcamCollectionStatus === "stale" ? "No cameras in the current cached view." : "No cameras found"
+      this.camFeedListTarget.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">${emptyLabel}</div>`
       return
     }
 
@@ -1081,6 +1048,7 @@ export function applySituationalMethods(GlobeController) {
       const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
       const badgeBg = isRealtime ? "#ff4444" : cam.live ? "#4caf50" : "#666"
       const badgeText = isRealtime ? "LIVE" : cam.live ? "PERIODIC" : "TIMELAPSE"
+      const cacheBadge = cam.stale ? '<span class="cf-card-badge" style="background:#ffb300;color:#111;">STALE</span>' : ""
       const title = this._escapeHtml((cam.title || "").length > 40 ? cam.title.substring(0, 38) + "…" : (cam.title || "Untitled"))
       const thumbHtml = cam.thumbnailIcon
         ? `<img class="cf-card-thumb" src="${cam.thumbnailIcon}" alt="" loading="lazy">`
@@ -1094,6 +1062,7 @@ export function applySituationalMethods(GlobeController) {
             <span class="cf-card-source">${sourceLabel}</span>
             ${location ? `<span style="color:var(--gt-text-dim);font:500 9px var(--gt-mono);">&middot;</span><span class="cf-card-location">${this._escapeHtml(location)}</span>` : ""}
             <span class="cf-card-badge" style="background:${badgeBg};color:#fff;">${badgeText}</span>
+            ${cacheBadge}
           </div>
         </div>
         ${thumbHtml}
@@ -1118,10 +1087,10 @@ export function applySituationalMethods(GlobeController) {
     const hasEntities = this.flightsVisible || this.shipsVisible || this.satellitesVisible
     const hasNews = this.newsVisible && this._newsData?.length > 0
     const hasThreats = !!this._threatsActive
-    const hasCameras = this.camerasVisible && this._webcamData?.length > 0
+    const hasCameras = this.camerasVisible && (((this._webcamData?.length) || 0) > 0 || !!this._webcamCollectionStatus)
     const hasAlerts = this.signedInValue && this._alertData?.length > 0
-    const hasInsights = this._insightsData?.length > 0
-    const hasSituations = this._conflictPulseZones?.length > 0
+    const hasInsights = ((this._insightsData?.length) || 0) > 0 || !!this._insightSnapshotStatus
+    const hasSituations = ((this._conflictPulseZones?.length) || 0) > 0 || !!this._conflictPulseSnapshotStatus
 
     // Show/hide tab buttons
     if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
@@ -1241,6 +1210,7 @@ export function applySituationalMethods(GlobeController) {
     const location = [cam.city, cam.region, cam.country].filter(Boolean).join(", ")
     const sourceLabel = { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube Live" }[cam.source] || cam.source
     const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
+    const cacheMeta = this._cacheMeta(cam.lastUpdated, cam.stale ? cam.lastUpdated : null)
     const liveBadge = isRealtime
       ? '<span style="background:#ff4444;color:#fff;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">LIVE</span>'
       : cam.live
@@ -1306,6 +1276,9 @@ export function applySituationalMethods(GlobeController) {
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign"><i class="fa-solid fa-video" style="color: ${cam.live ? '#4caf50' : '#29b6f6'};"></i> ${sourceLabel}${liveBadge}</div>
       <div class="detail-country">${this._escapeHtml(cam.title)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px;">
+        ${this._statusChip(cam.stale ? "stale" : "ready", cam.stale ? "stale camera cache" : "cached camera")}
+      </div>
       ${thumbHtml}
       <div class="detail-grid">
         <div class="detail-field">
@@ -1315,6 +1288,10 @@ export function applySituationalMethods(GlobeController) {
         <div class="detail-field">
           <span class="detail-label">Updated</span>
           <span class="detail-value">${updated}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Cache</span>
+          <span class="detail-value">${cam.stale ? "Stale" : "Fresh"}</span>
         </div>
         ${cam.channelTitle ? `<div class="detail-field">
           <span class="detail-label">Channel</span>
@@ -1330,6 +1307,7 @@ export function applySituationalMethods(GlobeController) {
         </div>
       </div>
       <a href="${watchUrl}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-${cam.playerLink ? 'play' : 'arrow-up-right-from-square'}"></i> ${cam.playerLink ? 'Watch Live' : 'View Source'}</a>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${this._escapeHtml(sourceLabel)}${cacheMeta ? ` · ${this._escapeHtml(cacheMeta)}` : ""}</div>
     `
     this.detailPanelTarget.style.display = ""
 

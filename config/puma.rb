@@ -12,6 +12,11 @@ min_threads_count = ENV.fetch("RAILS_MIN_THREADS") { max_threads_count }
 threads min_threads_count, max_threads_count
 
 rails_env = ENV.fetch("RAILS_ENV") { "development" }
+auto_start_background_services = if ENV.key?("AUTO_START_BACKGROUND_SERVICES")
+  ENV["AUTO_START_BACKGROUND_SERVICES"] == "1"
+else
+  rails_env == "production"
+end
 
 if rails_env == "production"
   # If you are running more than 1 thread per process, the workers count
@@ -45,12 +50,14 @@ plugin :tmp_restart
 
 # Auto-start the global poller after Puma boots (production & development)
 on_worker_boot do
-  GlobalPollerService.start
+  GlobalPollerService.start if auto_start_background_services
 end
 
 # For single-mode (no workers), use on_booted instead
 on_booted do
-  GlobalPollerService.start unless GlobalPollerService.running?
+  if auto_start_background_services
+    GlobalPollerService.start unless GlobalPollerService.running?
+  end
 end
 
 # Graceful shutdown — stop background threads before Puma tears down

@@ -55,19 +55,29 @@ module Api
     end
 
     def clustered_response(events, claim_summaries)
-      grouped = events.group_by(&:story_cluster_id)
+      cluster_keys = events.filter_map(&:story_cluster_id).uniq
+      clusters_by_key = NewsStoryCluster.where(cluster_key: cluster_keys).index_by(&:cluster_key)
+      grouped = events.group_by { |event| event.story_cluster_id.presence || "event:#{event.id}" }
 
-      grouped.map do |cluster_id, group|
+      grouped.map do |_grouping_key, group|
         # For multi-article clusters, pick the best lead (highest credibility/priority)
         lead = group.size > 1 ? group.max_by { |a| a[:priority]&.to_f || 0 } : group.first
         entry = serialize_event(lead, claim_summaries[lead.news_article_id])
-        if cluster_id.present? && group.size > 1
+        cluster = lead.story_cluster_id.present? ? clusters_by_key[lead.story_cluster_id] : nil
+        if cluster
+          entry[:cluster_id] = cluster.cluster_key
+          entry[:cluster_confidence] = cluster.cluster_confidence
+          entry[:verification_status] = cluster.verification_status
+          entry[:article_count] = cluster.article_count
+          entry[:source_count] = cluster.source_count
+        end
+        if lead.story_cluster_id.present? && group.size > 1
           # Filter out junk single-source clusters (e.g., GDELT location-only dupes)
           unique_sources = group.filter_map { |article| article.news_source&.name || article.source }
             .uniq
             .reject(&:blank?)
           if unique_sources.size > 1
-            entry[:source_count] = group.size
+            entry[:source_count] = [ entry[:source_count].to_i, group.size ].max
             entry[:sources] = unique_sources
           end
         end

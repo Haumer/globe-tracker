@@ -1,5 +1,6 @@
 class RefreshCamerasJob < ApplicationJob
   queue_as :default
+  tracks_polling source: "cameras", poll_type: "webcams"
 
   def perform(bbox = {}, sources: nil)
     CameraRefreshService.new(

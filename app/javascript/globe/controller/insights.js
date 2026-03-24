@@ -22,10 +22,11 @@ export function applyInsightsMethods(GlobeController) {
       if (!resp.ok) return
       const data = await resp.json()
       this._insightsData = data.insights || []
+      this._insightSnapshotStatus = data.snapshot_status || "ready"
       this._renderInsightMarkers()
       this._renderInsightFeed()
       // Show insights tab if we have data
-      if (this._insightsData.length > 0 && this.hasRpTabInsightsTarget) {
+      if ((this._insightsData.length > 0 || this._insightSnapshotStatus) && this.hasRpTabInsightsTarget) {
         this.rpTabInsightsTarget.style.display = ""
       }
       if (this._syncRightPanels) this._syncRightPanels()
@@ -157,13 +158,21 @@ export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._renderInsightFeed = function() {
     if (!this.hasInsightFeedContentTarget) return
     const insights = this._insightsData || []
+    const snapshotStatus = this._insightSnapshotStatus || "pending"
 
     if (this.hasInsightFeedCountTarget) {
-      this.insightFeedCountTarget.textContent = `${insights.length} insight${insights.length !== 1 ? "s" : ""}`
+      const base = `${insights.length} insight${insights.length !== 1 ? "s" : ""}`
+      const suffix = snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(snapshotStatus, "snapshot")}`
+      this.insightFeedCountTarget.textContent = `${base}${suffix}`
     }
 
     if (insights.length === 0) {
-      this.insightFeedContentTarget.innerHTML = '<div class="insight-empty">No cross-layer correlations detected. Insights appear when multiple data layers overlap geographically.</div>'
+      const emptyLabel = {
+        pending: "Insight snapshot pending. Correlations appear after the stored layers finish updating.",
+        stale: "No stored insights in the latest snapshot.",
+        error: "Insight snapshot unavailable.",
+      }[snapshotStatus] || "No cross-layer correlations detected. Insights appear when multiple data layers overlap geographically."
+      this.insightFeedContentTarget.innerHTML = `<div class="insight-empty">${this._escapeHtml(emptyLabel)}</div>`
       return
     }
 
@@ -193,7 +202,11 @@ export function applyInsightsMethods(GlobeController) {
       convergence: "CONVERGENCE",
     }
 
-    const html = insights
+    const statusBanner = snapshotStatus === "ready"
+      ? ""
+      : `<div style="margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
+
+    const html = statusBanner + insights
       .sort((a, b) => (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3))
       .map((insight, idx) => {
         const sev = insight.severity || "medium"

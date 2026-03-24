@@ -155,8 +155,12 @@ class GlobalPollerService
         RefreshCommodityPricesJob,
         RefreshPipelinesJob,
         RefreshRailwaysJob,
+        RefreshLiveTrainsJob,
         RefreshPowerPlantsJob,
         EnrichNewsJob,
+        RefreshConflictPulseSnapshotJob,
+        RefreshChokepointsSnapshotJob,
+        RefreshInsightsSnapshotJob,
       ].each { |job| enqueue_once(job) }
     end
 

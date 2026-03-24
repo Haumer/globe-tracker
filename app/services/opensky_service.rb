@@ -49,7 +49,8 @@ class OpenskyService
       callsign: data["callsign"],
       route: data["route"],
       operator_iata: data["operatorIata"],
-      flight_number: data["flightNumber"]
+      flight_number: data["flightNumber"],
+      raw_payload: data,
     }
     # LRU eviction: drop oldest entries when cache exceeds limit
     @route_cache.shift while @route_cache.size >= ROUTE_CACHE_MAX

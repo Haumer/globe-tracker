@@ -450,6 +450,7 @@ export function applyFlightMethods(GlobeController) {
   GlobeController.prototype.showDetail = function(id, data) {
     this._focusedSelection = { type: "flight", id }
     this._renderSelectionTray()
+    this._clearFlightRoute()
     const callsign = data.callsign || id
     const alt = data.currentAlt
     const speed = data.speed
@@ -589,13 +590,13 @@ export function applyFlightMethods(GlobeController) {
     const cached = this._routeCache && this._routeCache[callsign]
     const routeEl = document.getElementById("detail-route")
     if (cached && routeEl) {
-      routeEl.innerHTML = `
-        <span class="route-airport">${cached.originLabel}</span>
-        <span class="route-arrow">→</span>
-        <span class="route-airport">${cached.destLabel}</span>
-      `
+      routeEl.innerHTML = this._renderFlightRouteDetail(cached)
       if (cached.origin && cached.dest) {
         this._drawFlightRoute(callsign, cached.origin, cached.dest)
+      }
+      const cachedExpiresAt = this._parseDateValue(cached.expiresAt)
+      if (cachedExpiresAt && cachedExpiresAt.getTime() <= Date.now()) {
+        this.fetchRoute(callsign)
       }
     } else if (callsign) {
       this.fetchRoute(callsign)
@@ -641,19 +642,30 @@ export function applyFlightMethods(GlobeController) {
 
       if (!response.ok) {
         console.warn("Route API error:", response.status)
-        if (el) el.innerHTML = `<span class="route-unavailable">Route unavailable</span>`
+        if (el) el.innerHTML = this._renderFlightRouteDetail({ status: "failed" })
         return
       }
 
       const data = await response.json()
-      if (data.error || !data.route || data.route.length < 2) {
-        console.warn("No route data:", data)
-        if (el) el.innerHTML = `<span class="route-unavailable">Route not found</span>`
+      const routeStatus = data.route_status || "unavailable"
+      const routePayload = data.route || {}
+      const routeStops = Array.isArray(routePayload.route) ? routePayload.route : []
+
+      if (routeStatus !== "available" || routeStops.length < 2) {
+        if (routeStatus === "available") console.warn("No route data:", data)
+        if (el) {
+          el.innerHTML = this._renderFlightRouteDetail({
+            status: routeStatus === "available" ? "unavailable" : routeStatus,
+            fetchedAt: data.route_fetched_at,
+            expiresAt: data.route_expires_at,
+            error: data.route_error,
+          })
+        }
         return
       }
 
-      const originIcao = data.route[0]
-      const destIcao = data.route[data.route.length - 1]
+      const originIcao = routeStops[0]
+      const destIcao = routeStops[routeStops.length - 1]
       const origin = this._getAirport(originIcao)
       const dest = this._getAirport(destIcao)
 
@@ -662,15 +674,23 @@ export function applyFlightMethods(GlobeController) {
 
       // Cache route for this callsign
       if (!this._routeCache) this._routeCache = {}
-      this._routeCache[callsign] = { originIcao, destIcao, origin, dest, originLabel, destLabel }
+      this._routeCache[callsign] = {
+        status: routeStatus,
+        originIcao,
+        destIcao,
+        origin,
+        dest,
+        originLabel,
+        destLabel,
+        fetchedAt: data.route_fetched_at,
+        expiresAt: data.route_expires_at,
+        operatorIata: routePayload.operator_iata,
+        flightNumber: routePayload.flight_number,
+      }
 
       // Update the route element if still in DOM
       if (el) {
-        el.innerHTML = `
-          <span class="route-airport">${originLabel}</span>
-          <span class="route-arrow">→</span>
-          <span class="route-airport">${destLabel}</span>
-        `
+        el.innerHTML = this._renderFlightRouteDetail(this._routeCache[callsign])
       }
 
       // Draw route arc on globe
@@ -680,8 +700,43 @@ export function applyFlightMethods(GlobeController) {
     } catch (e) {
       console.warn("Route fetch failed:", e)
       const el = document.getElementById("detail-route")
-      if (el) el.innerHTML = `<span class="route-unavailable">Route unavailable</span>`
+      if (el) el.innerHTML = this._renderFlightRouteDetail({ status: "failed" })
     }
+  }
+
+  GlobeController.prototype._renderFlightRouteDetail = function(route) {
+    const status = route?.status || "pending"
+    const meta = this._cacheMeta(route?.fetchedAt, route?.expiresAt)
+
+    if (status !== "available") {
+      const statusLabel = {
+        pending: "Route lookup queued",
+        failed: "Route unavailable",
+        unavailable: "Route unavailable",
+      }[status] || "Route unavailable"
+      const errorLabel = route?.error ? ` · ${String(route.error).replace(/_/g, " ")}` : ""
+      return `
+        ${this._statusChip(status, this._statusLabel(status, "route"))}
+        <div style="margin-top:6px;">
+          <span class="route-unavailable">${this._escapeHtml(statusLabel + errorLabel)}</span>
+        </div>
+        ${meta ? `<div style="margin-top:4px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.45);">${this._escapeHtml(meta)}</div>` : ""}
+      `
+    }
+
+    const operatorMeta = [route.operatorIata, route.flightNumber].filter(Boolean).join(" · ")
+    return `
+      <div>
+        <span class="route-airport">${this._escapeHtml(route.originLabel || route.originIcao || "Unknown")}</span>
+        <span class="route-arrow">→</span>
+        <span class="route-airport">${this._escapeHtml(route.destLabel || route.destIcao || "Unknown")}</span>
+      </div>
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+        ${this._statusChip(status, "stored route")}
+        ${operatorMeta ? `<span class="detail-chip" style="background:rgba(79,195,247,0.12);color:#4fc3f7;">${this._escapeHtml(operatorMeta)}</span>` : ""}
+      </div>
+      ${meta ? `<div style="margin-top:4px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.45);">${this._escapeHtml(meta)}</div>` : ""}
+    `
   }
 
   GlobeController.prototype._drawFlightRoute = function(callsign, origin, dest) {

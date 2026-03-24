@@ -50,12 +50,12 @@ class Api::WebcamsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, body["webcams"].size
   end
 
-  test "enqueues refresh job when cameras are stale and user signed in" do
+  test "does not enqueue refresh job when cameras are stale and user signed in" do
     Camera.update_all(expires_at: 1.hour.ago)
     user = User.create!(email: "cam-test@example.com", password: "password123")
     sign_in user
 
-    assert_enqueued_with(job: RefreshCamerasJob) do
+    assert_no_enqueued_jobs(only: RefreshCamerasJob) do
       get "/api/webcams", params: { north: 49, south: 47, east: 17, west: 15 }
     end
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -169,6 +169,25 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
     t.index ["latitude", "longitude"], name: "index_fire_hotspots_on_latitude_and_longitude"
   end
 
+  create_table "flight_routes", force: :cascade do |t|
+    t.string "callsign", null: false
+    t.string "flight_icao24"
+    t.string "operator_iata"
+    t.string "flight_number"
+    t.jsonb "route", default: [], null: false
+    t.jsonb "raw_payload", default: {}, null: false
+    t.string "status", default: "pending", null: false
+    t.string "error_code"
+    t.datetime "fetched_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["callsign"], name: "index_flight_routes_on_callsign", unique: true
+    t.index ["expires_at"], name: "index_flight_routes_on_expires_at"
+    t.index ["flight_icao24"], name: "index_flight_routes_on_flight_icao24"
+    t.index ["status"], name: "index_flight_routes_on_status"
+  end
+
   create_table "flights", force: :cascade do |t|
     t.string "callsign"
     t.float "latitude"
@@ -256,6 +275,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
     t.datetime "updated_at", null: false
     t.index ["country_code", "recorded_at"], name: "idx_on_country_code_recorded_at_4ce32fcec1"
     t.index ["recorded_at"], name: "index_internet_traffic_snapshots_on_recorded_at"
+  end
+
+  create_table "layer_snapshots", force: :cascade do |t|
+    t.string "snapshot_type", null: false
+    t.string "scope_key", default: "global", null: false
+    t.string "status", default: "ready", null: false
+    t.string "error_code"
+    t.jsonb "payload", default: {}, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_layer_snapshots_on_expires_at"
+    t.index ["snapshot_type", "scope_key"], name: "index_layer_snapshots_on_snapshot_type_and_scope_key", unique: true
+    t.index ["status"], name: "index_layer_snapshots_on_status"
   end
 
   create_table "military_bases", force: :cascade do |t|
@@ -450,6 +485,45 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
     t.index ["source_kind"], name: "index_news_sources_on_source_kind"
   end
 
+  create_table "news_story_clusters", force: :cascade do |t|
+    t.string "cluster_key", null: false
+    t.string "canonical_title"
+    t.string "content_scope", default: "adjacent", null: false
+    t.string "event_family", null: false
+    t.string "event_type", null: false
+    t.string "location_name"
+    t.float "latitude"
+    t.float "longitude"
+    t.string "geo_precision", default: "unknown", null: false
+    t.datetime "first_seen_at", null: false
+    t.datetime "last_seen_at", null: false
+    t.integer "article_count", default: 0, null: false
+    t.integer "source_count", default: 0, null: false
+    t.float "cluster_confidence", default: 0.0, null: false
+    t.string "verification_status", default: "single_source", null: false
+    t.bigint "lead_news_article_id"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["cluster_key"], name: "index_news_story_clusters_on_cluster_key", unique: true
+    t.index ["content_scope", "last_seen_at"], name: "index_news_story_clusters_on_content_scope_and_last_seen_at"
+    t.index ["event_family", "last_seen_at"], name: "index_news_story_clusters_on_event_family_and_last_seen_at"
+    t.index ["lead_news_article_id"], name: "index_news_story_clusters_on_lead_news_article_id"
+  end
+
+  create_table "news_story_memberships", force: :cascade do |t|
+    t.bigint "news_story_cluster_id", null: false
+    t.bigint "news_article_id", null: false
+    t.float "match_score", default: 0.0, null: false
+    t.boolean "primary", default: true, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_article_id"], name: "index_news_story_memberships_on_news_article_id", unique: true
+    t.index ["news_story_cluster_id", "primary"], name: "idx_news_story_memberships_cluster_primary"
+    t.index ["news_story_cluster_id"], name: "index_news_story_memberships_on_news_story_cluster_id"
+  end
+
   create_table "notams", force: :cascade do |t|
     t.string "external_id", null: false
     t.string "source"
@@ -633,6 +707,47 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
     t.index ["recorded_at"], name: "index_timeline_events_on_recorded_at"
   end
 
+  create_table "train_ingests", force: :cascade do |t|
+    t.string "source_key", null: false
+    t.string "source_name", null: false
+    t.string "status", default: "fetched", null: false
+    t.string "error_code"
+    t.jsonb "request_metadata", default: {}, null: false
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["fetched_at"], name: "index_train_ingests_on_fetched_at"
+    t.index ["source_key"], name: "index_train_ingests_on_source_key"
+    t.index ["status"], name: "index_train_ingests_on_status"
+  end
+
+  create_table "train_observations", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.bigint "train_ingest_id"
+    t.string "source", default: "hafas", null: false
+    t.string "operator_key"
+    t.string "operator_name"
+    t.string "name"
+    t.string "category"
+    t.string "category_long"
+    t.string "flag"
+    t.float "latitude"
+    t.float "longitude"
+    t.string "direction"
+    t.integer "progress"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at", null: false
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_train_observations_on_expires_at"
+    t.index ["external_id"], name: "index_train_observations_on_external_id", unique: true
+    t.index ["fetched_at"], name: "index_train_observations_on_fetched_at"
+    t.index ["operator_key"], name: "index_train_observations_on_operator_key"
+    t.index ["train_ingest_id"], name: "index_train_observations_on_train_ingest_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
@@ -719,6 +834,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_24_203000) do
   add_foreign_key "news_events", "news_articles"
   add_foreign_key "news_events", "news_ingests"
   add_foreign_key "news_events", "news_sources"
+  add_foreign_key "news_story_clusters", "news_articles", column: "lead_news_article_id"
+  add_foreign_key "news_story_memberships", "news_articles"
+  add_foreign_key "news_story_memberships", "news_story_clusters"
+  add_foreign_key "train_observations", "train_ingests"
   add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"
 end

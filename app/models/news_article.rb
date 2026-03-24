@@ -4,6 +4,8 @@ class NewsArticle < ApplicationRecord
 
   has_many :news_claims, dependent: :delete_all
   has_many :news_events, dependent: :nullify
+  has_one :primary_story_membership, -> { where(primary: true) }, class_name: "NewsStoryMembership", dependent: :delete
+  has_one :news_story_cluster, through: :primary_story_membership
 
   validates :url, :canonical_url, :normalization_status, :content_scope, presence: true
 

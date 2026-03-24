@@ -93,6 +93,7 @@ class RssArticleHydrationServiceTest < ActiveSupport::TestCase
 
     hydrated = RssArticleHydrationService.hydrate(article.id)
     claim = NewsClaim.find_by!(news_article_id: article.id)
+    cluster_key = NewsStoryClusterer.recluster_article(article)
 
     assert hydrated
     assert_equal "hydrated", article.reload.hydration_status
@@ -101,6 +102,8 @@ class RssArticleHydrationServiceTest < ActiveSupport::TestCase
     assert_equal "https://example.com/articles/diplomacy-001", article.canonical_url
     assert_equal "diplomacy", claim.event_family
     assert_equal "negotiation", claim.event_type
+    assert_not_nil cluster_key
+    assert cluster_key.present?
   end
 
   test "hydrate retries transient failures with backoff" do

@@ -1,7 +1,6 @@
 module Api
   class WebcamsController < ApplicationController
     skip_before_action :authenticate_user!
-    include BackgroundRefreshable
 
     def index
       north = params[:north]&.to_f
@@ -25,16 +24,8 @@ module Api
                        .limit(max)
       camera_records = cameras.to_a
 
-      # 2. Enqueue background refresh if any cells are stale or unfetched
       has_stale = camera_records.any?(&:stale?) || camera_records.empty?
-      if has_stale && current_user.present?
-        enqueue_background_refresh(
-          RefreshCamerasJob,
-          { north: north, south: south, east: east, west: west },
-          key: "cameras:#{north.round(1)},#{south.round(1)},#{east.round(1)},#{west.round(1)}",
-          debounce: 2.minutes,
-        )
-      end
+      expires_in 30.seconds, public: true
 
       render json: {
         webcams: camera_records.map { |c| serialize_camera(c) },

@@ -21,8 +21,13 @@ export function applyChokepointsMethods(GlobeController) {
       if (!resp.ok) return
       const data = await resp.json()
       this._chokepointData = data.chokepoints || []
+      this._chokepointSnapshotStatus = data.snapshot_status || "ready"
       this._renderChokepoints()
-      this._toastHide()
+      if (this._chokepointSnapshotStatus === "ready") {
+        this._toastHide()
+      } else {
+        this._toast(`Chokepoints: ${this._statusLabel(this._chokepointSnapshotStatus, "snapshot")}`)
+      }
     } catch (e) {
       console.warn("Chokepoint fetch failed:", e)
     }
@@ -167,6 +172,7 @@ export function applyChokepointsMethods(GlobeController) {
   GlobeController.prototype.showChokepointDetail = function(cp) {
     const statusColors = { critical: "#f44336", elevated: "#ff9800", monitoring: "#ffc107", normal: "#4fc3f7" }
     const color = statusColors[cp.status] || "#4fc3f7"
+    const snapshotStatus = this._chokepointSnapshotStatus || "pending"
 
     // Flow chips
     let flowsHtml = ""
@@ -207,6 +213,9 @@ export function applyChokepointsMethods(GlobeController) {
       </div>
       <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono);letter-spacing:1px;margin-bottom:8px;">
         ${cp.status.toUpperCase()}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px;">
+        ${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}
       </div>
       <div style="font:400 10px var(--gt-mono);color:#aaa;margin-bottom:10px;line-height:1.4;">
         ${this._escapeHtml(cp.description || "")}

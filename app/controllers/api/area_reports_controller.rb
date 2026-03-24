@@ -8,12 +8,24 @@ module Api
         return render json: { error: "Incomplete bounding box — lamin, lamax, lomin, lomax are all required" }, status: :unprocessable_entity
       end
 
-      cache_key = "area_report:#{bounds.values.map { |v| v.to_f.round(1) }.join(',')}"
-      report = Rails.cache.fetch(cache_key, expires_in: 2.minutes) do
-        AreaReport.generate(bounds)
+      snapshot = AreaReportSnapshotService.fetch(bounds)
+      if snapshot&.fresh?
+        report = snapshot.payload
+        snapshot_status = "ready"
+      else
+        report = snapshot&.payload.presence
+        if report.blank?
+          snapshot = AreaReportSnapshotService.refresh(bounds)
+          report = snapshot.payload
+          snapshot_status = "ready"
+        else
+          AreaReportSnapshotService.enqueue_refresh(bounds)
+          snapshot_status = snapshot.status == "error" ? "error" : "stale"
+        end
       end
+
       expires_in 2.minutes, public: true
-      render json: report
+      render json: report.merge(snapshot_status: snapshot_status)
     end
   end
 end

@@ -30,6 +30,7 @@ export function applyConflictPulseMethods(GlobeController) {
       if (!resp.ok) return
       const data = await resp.json()
       const zones = data.zones || []
+      this._conflictPulseSnapshotStatus = data.snapshot_status || "ready"
 
       // Detect new surges — compare to previous state
       const prev = this._conflictPulsePrev || {}
@@ -1087,10 +1088,20 @@ export function applyConflictPulseMethods(GlobeController) {
     if (!list) return
 
     const zones = this._conflictPulseZones || []
-    if (countEl) countEl.textContent = `${zones.length} zone${zones.length !== 1 ? "s" : ""}`
+    const snapshotStatus = this._conflictPulseSnapshotStatus || "pending"
+    if (countEl) {
+      const base = `${zones.length} zone${zones.length !== 1 ? "s" : ""}`
+      const suffix = snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(snapshotStatus, "snapshot")}`
+      countEl.textContent = `${base}${suffix}`
+    }
 
     if (!zones.length) {
-      list.innerHTML = ""
+      const emptyLabel = {
+        pending: "Conflict pulse snapshot pending.",
+        stale: "Showing no active zones from the latest stored snapshot.",
+        error: "Conflict pulse snapshot unavailable.",
+      }[snapshotStatus] || "No active zones."
+      list.innerHTML = `<div style="padding:16px 14px;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">${this._escapeHtml(emptyLabel)}</div>`
       return
     }
 
@@ -1115,6 +1126,9 @@ export function applyConflictPulseMethods(GlobeController) {
     const trendArrows = { surging: "▲", escalating: "↗", active: "●", elevated: "→", baseline: "↓" }
 
     let html = ""
+    if (snapshotStatus !== "ready") {
+      html += `<div style="padding:0 0 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
+    }
     sorted.forEach(([theater, theaterZones], tIdx) => {
       const maxScore = Math.max(...theaterZones.map(z => z.pulse_score))
       const collapsed = maxScore < 40

@@ -763,8 +763,12 @@ export function applyGeographyMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderAreaReport = function(r) {
+    const snapshotStatus = r.snapshot_status || "ready"
     let html = `<div style="margin-top:10px;border-top:1px solid #333;padding-top:8px;">`
-    html += `<div style="font:600 9px monospace;color:#4fc3f7;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">AREA REPORT</div>`
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <div style="font:600 9px monospace;color:#4fc3f7;letter-spacing:1px;text-transform:uppercase;">AREA REPORT</div>
+      ${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}
+    </div>`
 
     // Flights
     if (r.flights) {

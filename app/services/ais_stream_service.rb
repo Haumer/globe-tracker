@@ -159,6 +159,7 @@ class AisStreamService
 
       all_keys = %i[mmsi name ship_type latitude longitude speed heading course destination flag]
       now = Time.current
+      started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       # Deduplicate by mmsi, keeping the last occurrence
       deduped = records.each_with_object({}) { |r, h| h[r[:mmsi]] = r }.values
@@ -173,8 +174,25 @@ class AisStreamService
 
       Ship.upsert_all(normalized, unique_by: :mmsi)
       record_ship_snapshots(normalized)
+      PollingStatRecorder.record(
+        source: "ais",
+        poll_type: "ships",
+        status: "success",
+        records_fetched: records.size,
+        records_stored: normalized.size,
+        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round,
+      )
       Rails.logger.info("AIS Stream: flushed #{records.size} ships (total in DB: #{Ship.count})")
     rescue => e
+      PollingStatRecorder.record(
+        source: "ais",
+        poll_type: "ships",
+        status: "error",
+        records_fetched: records.size,
+        records_stored: 0,
+        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round,
+        error_message: "#{e.class}: #{e.message}",
+      )
       Rails.logger.error("AIS Stream flush error: #{e.message}")
     end
   end

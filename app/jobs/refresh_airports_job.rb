@@ -1,5 +1,6 @@
 class RefreshAirportsJob < ApplicationJob
   queue_as :default
+  tracks_polling source: "ourairports", poll_type: "airports"
 
   def perform
     OurAirportsService.refresh_if_stale

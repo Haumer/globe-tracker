@@ -15,6 +15,13 @@ module Api
         )
       end
 
+      # Exclude historical fortifications (bunkers, trenches) — they clutter the map
+      # and aren't operationally relevant. Keep them only if explicitly named as a base.
+      bases = bases.where.not(base_type: %w[logistics other])
+        .or(MilitaryBase.where(base_type: %w[logistics other])
+          .where.not(name: [nil, ""])
+          .where("name NOT ILIKE '%bunker%' AND name NOT ILIKE '%stellung%' AND name NOT ILIKE '%trench%'"))
+
       # Prioritize: named bases first, then by strategic importance
       bases = bases.order(
         Arel.sql("CASE WHEN name IS NOT NULL AND name != '' THEN 0 ELSE 1 END"),

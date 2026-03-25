@@ -1,26 +1,34 @@
 class PollerRuntimeState
   SERVICE_NAME = "poller".freeze
-  HEARTBEAT_TTL = 90.seconds
+  HEARTBEAT_TTL = 25.minutes
 
   class << self
     def status
       state = current_state
       metadata = state.metadata || {}
       heartbeat_fresh = state.reported_at.present? && state.reported_at >= HEARTBEAT_TTL.ago
-      runtime_running = heartbeat_fresh && %w[running paused stopping].include?(state.reported_state)
+      runtime_running = heartbeat_fresh && state.reported_state == "running"
+      runtime_paused = heartbeat_fresh && state.reported_state == "paused"
+      runtime_stopped = state.desired_state == "stopped" ||
+        (heartbeat_fresh && state.reported_state == "stopped")
 
       {
         desired_state: state.desired_state,
         reported_state: state.reported_state,
         running: runtime_running,
-        paused: runtime_running && state.reported_state == "paused",
-        stale: !heartbeat_fresh,
+        paused: runtime_paused,
+        stopped: runtime_stopped,
+        stale: !runtime_stopped && !heartbeat_fresh,
         externally_managed: true,
+        scheduler: metadata["scheduler"] || "heroku",
         started_at: parse_time(metadata["started_at"]),
         last_poll_at: parse_time(metadata["last_poll_at"]),
+        last_tick_at: parse_time(metadata["last_tick_at"]) || state.reported_at,
         last_heartbeat_at: state.reported_at,
         poll_count: metadata["poll_count"].to_i,
+        ais_mode: metadata["ais_mode"] || "disabled",
         ais_running: metadata["ais_running"] == true,
+        last_error: metadata["last_error"],
       }
     end
 
@@ -40,6 +48,17 @@ class PollerRuntimeState
 
     def request_stop!
       current_state.update!(desired_state: "stopped")
+    end
+
+    def increment_poll_count!(now: Time.current)
+      state = current_state
+      state.with_lock do
+        metadata = (state.metadata || {}).dup
+        metadata["poll_count"] = metadata["poll_count"].to_i + 1
+        metadata["started_at"] ||= now.iso8601
+        state.update!(metadata: metadata)
+        metadata["poll_count"]
+      end
     end
 
     def desired_state

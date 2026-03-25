@@ -14,20 +14,22 @@
       </a>
     </div>
 
-    <%# ── Poller Status ── %>
+    <%# ── Polling Scheduler Status ── %>
     <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
       <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
         <div>
-          <h2 style="margin: 0 0 8px; font-size: 18px; color: #e0e6ed;">Global Poller</h2>
+          <h2 style="margin: 0 0 8px; font-size: 18px; color: #e0e6ed;">Polling Scheduler</h2>
           <div style="display: flex; gap: 24px; flex-wrap: wrap;">
             <span>
               Status:
-              <% if @poller_status[:running] && @poller_status[:paused] %>
+              <% if @poller_status[:paused] %>
                 <span style="color: #ffa726; font-weight: 600;">Paused</span>
               <% elsif @poller_status[:running] %>
                 <span style="color: #66bb6a; font-weight: 600;">Running</span>
+              <% elsif @poller_status[:stopped] %>
+                <span style="color: #ef5350; font-weight: 600;">Disabled</span>
               <% elsif @poller_status[:stale] %>
-                <span style="color: #ffb300; font-weight: 600;">No Heartbeat</span>
+                <span style="color: #ffb300; font-weight: 600;">No Recent Tick</span>
               <% else %>
                 <span style="color: #ef5350; font-weight: 600;">Stopped</span>
               <% end %>
@@ -36,20 +38,21 @@
               <span>Started: <strong><%= @poller_status[:started_at]&.strftime("%H:%M:%S") %></strong></span>
             <% end %>
             <% if @poller_status[:last_poll_at] %>
-              <span>Last poll: <strong><%= @poller_status[:last_poll_at]&.strftime("%H:%M:%S") %></strong></span>
+              <span>Last tick: <strong><%= @poller_status[:last_poll_at]&.strftime("%H:%M:%S") %></strong></span>
             <% end %>
             <% if @poller_status[:last_heartbeat_at] %>
               <span>Last heartbeat: <strong><%= @poller_status[:last_heartbeat_at]&.strftime("%H:%M:%S") %></strong></span>
             <% end %>
             <span>Polls: <strong><%= @poller_status[:poll_count] %></strong></span>
             <span>Desired: <strong><%= @poller_status[:desired_state] %></strong></span>
+            <span>AIS: <strong><%= @poller_status[:ais_mode] %></strong></span>
           </div>
           <div style="margin-top: 8px; color: #6b7a8d; font-size: 12px;">
-            Managed by the dedicated <code>poller</code> process. Web no longer starts the poller or AIS stream during boot.
+            Managed by Heroku Scheduler. Recommended command: <code>bundle exec rake scheduler:polling_tick</code> every 10 minutes. Sidekiq executes the enqueued jobs. AIS streaming is disabled in this mode.
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
-          <% if @poller_status[:running] %>
+          <% if @poller_status[:running] || @poller_status[:paused] %>
             <%= form_tag admin_pause_poller_path, method: :post, style: "margin: 0;" do %>
               <button type="submit" style="background: <%= @poller_status[:paused] ? '#ffa726' : '#42a5f5' %>; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
                 <%= @poller_status[:paused] ? "Resume" : "Pause" %>
@@ -57,13 +60,13 @@
             <% end %>
             <%= form_tag admin_stop_poller_path, method: :post, style: "margin: 0;" do %>
               <button type="submit" style="background: #ef5350; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
-                Stop
+                Disable
               </button>
             <% end %>
           <% else %>
             <%= form_tag admin_toggle_poller_path, method: :post, style: "margin: 0;" do %>
               <button type="submit" style="background: #66bb6a; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
-                Start Poller
+                Enable
               </button>
             <% end %>
           <% end %>

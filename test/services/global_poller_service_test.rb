@@ -1,43 +1,78 @@
 require "test_helper"
 
 class GlobalPollerServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
-    # Ensure clean state — stop if running from a previous test
-    GlobalPollerService.instance_variable_set(:@running, false)
-    GlobalPollerService.instance_variable_set(:@paused, false)
-    GlobalPollerService.instance_variable_set(:@thread, nil)
+    @original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    ServiceRuntimeState.where(service_name: "poller").delete_all
+    Rails.cache.clear
+    clear_enqueued_jobs
+    clear_performed_jobs
+    ActiveJob::Base.queue_adapter = :test
   end
 
-  test "status returns a hash with expected keys" do
-    status = GlobalPollerService.status
-    assert_kind_of Hash, status
-    assert status.key?(:running)
-    assert status.key?(:paused)
-    assert status.key?(:poll_count)
+  teardown do
+    Rails.cache = @original_cache
   end
 
-  test "initially not running and not paused" do
-    assert_not GlobalPollerService.running?
-    assert_not GlobalPollerService.paused?
+  test "tick enqueues due jobs and records a running heartbeat" do
+    travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_equal "running", result[:status]
+      assert_operator result[:jobs_enqueued], :>, 0
+      assert_enqueued_with(job: PollOpenskyJob)
+      assert_enqueued_with(job: PollAdsbMilitaryJob)
+      assert_enqueued_with(job: RefreshNewsJob)
+      assert_enqueued_with(job: RefreshConflictEventsJob)
+
+      status = GlobalPollerService.status
+      assert status[:running]
+      assert_equal "disabled", status[:ais_mode]
+      assert_equal "heroku", status[:scheduler]
+      assert_equal 1, status[:poll_count]
+    end
   end
 
-  test "pause sets paused state" do
-    GlobalPollerService.pause
-    assert GlobalPollerService.paused?
-    GlobalPollerService.resume
-    assert_not GlobalPollerService.paused?
+  test "tick does not enqueue duplicates within the same scheduler slot" do
+    travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
+      first = GlobalPollerService.tick!
+      first_count = enqueued_jobs.size
+
+      second = GlobalPollerService.tick!
+
+      assert_equal "running", first[:status]
+      assert_equal "running", second[:status]
+      assert_equal first_count, enqueued_jobs.size
+      assert_equal 2, GlobalPollerService.status[:poll_count]
+    end
   end
 
-  test "stop resets all state" do
-    GlobalPollerService.instance_variable_set(:@running, true)
-    GlobalPollerService.instance_variable_set(:@paused, true)
-    GlobalPollerService.stop
-    assert_not GlobalPollerService.running?
-    assert_not GlobalPollerService.paused?
+  test "tick respects paused state" do
+    PollerRuntimeState.request_pause!
+
+    travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_equal "paused", result[:status]
+      assert_equal 0, result[:jobs_enqueued]
+      assert_enqueued_jobs 0
+      assert GlobalPollerService.paused?
+    end
   end
 
-  test "constants are defined" do
-    assert_equal 10, GlobalPollerService::FLIGHT_POLL_INTERVAL
-    assert_equal 60, GlobalPollerService::FULL_POLL_INTERVAL
+  test "tick respects stopped state" do
+    PollerRuntimeState.request_stop!
+
+    travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_equal "stopped", result[:status]
+      assert_equal 0, result[:jobs_enqueued]
+      assert_enqueued_jobs 0
+      assert_equal true, GlobalPollerService.status[:stopped]
+    end
   end
 end

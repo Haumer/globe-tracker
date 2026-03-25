@@ -20,8 +20,10 @@ class PollerRuntimeStateTest < ActiveSupport::TestCase
       metadata: {
         "started_at" => Time.current.iso8601,
         "last_poll_at" => 10.seconds.ago.iso8601,
+        "last_tick_at" => 10.seconds.ago.iso8601,
         "poll_count" => 12,
-        "ais_running" => true,
+        "ais_mode" => "disabled",
+        "ais_running" => false,
       }
     )
 
@@ -29,7 +31,8 @@ class PollerRuntimeStateTest < ActiveSupport::TestCase
     assert status[:running]
     assert_not status[:stale]
     assert_equal 12, status[:poll_count]
-    assert_equal true, status[:ais_running]
+    assert_equal "disabled", status[:ais_mode]
+    assert_equal false, status[:ais_running]
   end
 
   test "pause and resume change desired state" do
@@ -38,5 +41,12 @@ class PollerRuntimeStateTest < ActiveSupport::TestCase
 
     PollerRuntimeState.request_resume!
     assert_equal "running", PollerRuntimeState.desired_state
+  end
+
+  test "increment poll count persists in metadata" do
+    count = PollerRuntimeState.increment_poll_count!
+
+    assert_equal 1, count
+    assert_equal 1, PollerRuntimeState.status[:poll_count]
   end
 end

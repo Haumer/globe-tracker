@@ -14,12 +14,13 @@ class HealthController < ActionController::Base
 
   def show
     db_ok   = check_database
-    poller  = check_poller
-    sources = check_sources
+    poller_status = PollerRuntimeState.status
+    poller  = check_poller(poller_status)
+    sources = check_sources(poller_status)
 
     status = if !db_ok || %w[stopped stale].include?(poller)
                "down"
-             elsif sources.values.any? { |s| s[:status] != "ok" }
+             elsif sources.values.any? { |s| !%w[ok disabled].include?(s[:status]) }
                "degraded"
              else
                "healthy"
@@ -44,15 +45,15 @@ class HealthController < ActionController::Base
     false
   end
 
-  def check_poller
-    runtime_status = PollerRuntimeState.status
+  def check_poller(runtime_status)
     return "paused" if runtime_status[:paused]
+    return "stopped" if runtime_status[:stopped]
     return "running" if runtime_status[:running]
 
     runtime_status[:stale] ? "stale" : "stopped"
   end
 
-  def check_sources
+  def check_sources(runtime_status)
     # Grab the latest successful poll per source in one query
     latest = PollingStat
       .successful
@@ -64,6 +65,11 @@ class HealthController < ActionController::Base
     results = {}
 
     STALENESS_THRESHOLDS.each do |key, threshold|
+      if key == "ais" && runtime_status[:ais_mode] == "disabled"
+        results[key] = { status: "disabled", last_success: nil, age_seconds: nil }
+        next
+      end
+
       # For "adsb", match any source starting with "adsb-"
       if key == "adsb"
         matching = latest.select { |src, _| src.start_with?("adsb-") }

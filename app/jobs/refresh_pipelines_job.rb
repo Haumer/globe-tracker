@@ -1,5 +1,5 @@
 class RefreshPipelinesJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "pipelines", poll_type: "pipelines"
 
   def perform

@@ -1,5 +1,5 @@
 class RefreshAcledJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "acled", poll_type: "conflict_events"
 
   def perform

@@ -1,5 +1,5 @@
 class RefreshCommodityPricesJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "commodities", poll_type: "commodity_prices"
 
   def perform

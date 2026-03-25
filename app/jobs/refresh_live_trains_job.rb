@@ -1,5 +1,5 @@
 class RefreshLiveTrainsJob < ApplicationJob
-  queue_as :default
+  queue_as :fast_live
   tracks_polling source: "hafas", poll_type: "trains"
 
   def perform

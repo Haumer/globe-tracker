@@ -1,5 +1,5 @@
 class PollAdsbMilitaryJob < ApplicationJob
-  queue_as :default
+  queue_as :fast_live
   tracks_polling source: "adsb-military", poll_type: "flights"
 
   def perform

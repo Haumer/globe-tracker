@@ -1,6 +1,6 @@
 class GlobalPollerService
-  LOOP_INTERVAL = 15.seconds
-  ENQUEUE_LOCK_SLACK = 15.seconds
+  LOOP_INTERVAL = 5.seconds
+  ENQUEUE_LOCK_SLACK = 5.seconds
 
   ADSB_REGIONS = [
     { name: "europe", lat: 50, lon: 10 },
@@ -29,11 +29,11 @@ class GlobalPollerService
   ].freeze
 
   JOB_SCHEDULES = [
-    { job: PollOpenskyJob, every: 1.minute, offset: 0.seconds },
-    { job: PollAdsbMilitaryJob, every: 1.minute, offset: 15.seconds },
-    { job: RefreshLiveTrainsJob, every: 1.minute, offset: 30.seconds },
+    { job: PollOpenskyJob, every: 15.seconds, offset: 0.seconds },
+    { job: PollAdsbMilitaryJob, every: 15.seconds, offset: 5.seconds },
+    { job: RefreshLiveTrainsJob, every: 30.seconds, offset: 10.seconds },
     { job: RefreshEarthquakesJob, every: 2.minutes, offset: 0.seconds },
-    { job: PollAdsbRegionJob, every: 2.minutes, offset: 45.seconds, dynamic: :adsb_region },
+    { job: PollAdsbRegionJob, every: 30.seconds, offset: 20.seconds, dynamic: :adsb_region },
     { job: RefreshNewsJob, every: 5.minutes, offset: 0.seconds },
     { job: RefreshRssNewsJob, every: 5.minutes, offset: 1.minute },
     { job: RefreshMultiNewsJob, every: 5.minutes, offset: 2.minutes },
@@ -65,10 +65,10 @@ class GlobalPollerService
   ].freeze
 
   LIVE_LAYER_CADENCES = {
-    flights_global: 1.minute,
-    flights_military: 1.minute,
-    flights_regional_rotation: 2.minutes,
-    trains: 1.minute,
+    flights_global: 15.seconds,
+    flights_military: 15.seconds,
+    flights_regional_rotation: 30.seconds,
+    trains: 30.seconds,
     ais_stream: :continuous,
     earthquakes: 2.minutes,
     fast_news: 5.minutes,

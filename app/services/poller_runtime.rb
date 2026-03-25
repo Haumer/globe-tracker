@@ -1,5 +1,5 @@
 class PollerRuntime
-  LOOP_INTERVAL = 15.seconds
+  LOOP_INTERVAL = GlobalPollerService::LOOP_INTERVAL
 
   class << self
     def run

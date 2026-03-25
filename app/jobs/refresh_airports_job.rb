@@ -1,5 +1,5 @@
 class RefreshAirportsJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "ourairports", poll_type: "airports"
 
   def perform

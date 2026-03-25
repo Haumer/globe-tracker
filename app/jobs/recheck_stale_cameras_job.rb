@@ -1,5 +1,5 @@
 class RecheckStaleCamerasJob < ApplicationJob
-  queue_as :default
+  queue_as :background
 
   def perform
     CameraRefreshService.recheck_stale_cameras

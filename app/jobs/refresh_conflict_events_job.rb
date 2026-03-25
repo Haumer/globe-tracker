@@ -1,5 +1,5 @@
 class RefreshConflictEventsJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "ucdp", poll_type: "conflict_events"
 
   def perform

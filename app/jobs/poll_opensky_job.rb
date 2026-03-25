@@ -1,5 +1,5 @@
 class PollOpenskyJob < ApplicationJob
-  queue_as :default
+  queue_as :fast_live
   tracks_polling source: "opensky", poll_type: "flights"
 
   def perform

@@ -45,7 +45,7 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
 
     clear_enqueued_jobs
 
-    travel_to Time.zone.parse("2026-03-25 10:00:15 UTC") do
+    travel_to Time.zone.parse("2026-03-25 10:00:05 UTC") do
       result = GlobalPollerService.tick!
       assert_includes result[:job_names], "PollAdsbMilitaryJob"
       refute_includes result[:job_names], "PollOpenskyJob"
@@ -53,10 +53,19 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
 
     clear_enqueued_jobs
 
-    travel_to Time.zone.parse("2026-03-25 10:00:30 UTC") do
+    travel_to Time.zone.parse("2026-03-25 10:00:10 UTC") do
       result = GlobalPollerService.tick!
       assert_includes result[:job_names], "RefreshLiveTrainsJob"
       refute_includes result[:job_names], "PollAdsbMilitaryJob"
+    end
+  end
+
+  test "tick enqueues rotating regional adsb jobs on the fast live cadence" do
+    travel_to Time.zone.parse("2026-03-25 10:00:20 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_includes result[:job_names], "PollAdsbRegionJob(europe)"
+      refute_includes result[:job_names], "PollOpenskyJob"
     end
   end
 

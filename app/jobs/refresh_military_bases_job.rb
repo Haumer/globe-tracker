@@ -1,5 +1,5 @@
 class RefreshMilitaryBasesJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "military-bases", poll_type: "military_bases"
 
   def perform

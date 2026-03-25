@@ -1,5 +1,5 @@
 class PollAdsbRegionJob < ApplicationJob
-  queue_as :default
+  queue_as :fast_live
   tracks_polling source: ->(_job, args) { "adsb-#{args.first}" }, poll_type: "flights"
 
   def perform(region_name, lat, lon)

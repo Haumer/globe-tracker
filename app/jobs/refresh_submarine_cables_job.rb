@@ -1,5 +1,5 @@
 class RefreshSubmarineCablesJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "submarine-cables", poll_type: "submarine_cables"
 
   def perform

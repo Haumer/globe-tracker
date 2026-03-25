@@ -1,5 +1,7 @@
 ---
 :concurrency: <%= ENV.fetch("SIDEKIQ_CONCURRENCY", 3) %>
 :queues:
-  - default
+  - [fast_live, 5]
+  - [default, 3]
+  - [background, 1]
   - mailers

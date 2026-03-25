@@ -1,5 +1,5 @@
 class PurgeStaleDataJob < ApplicationJob
-  queue_as :default
+  queue_as :background
 
   RETENTION = 3.days
 

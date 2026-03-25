@@ -1,5 +1,5 @@
 class RefreshSatellitesJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "celestrak", poll_type: "satellites"
 
   def perform(category = nil)

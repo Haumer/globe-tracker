@@ -1,5 +1,5 @@
 class RefreshPowerPlantsJob < ApplicationJob
-  queue_as :default
+  queue_as :background
   tracks_polling source: "power-plants", poll_type: "power_plants"
 
   def perform

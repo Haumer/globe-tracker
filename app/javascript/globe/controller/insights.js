@@ -304,6 +304,10 @@ export function applyInsightsMethods(GlobeController) {
   }
 
   GlobeController.prototype.showInsightDetail = function(insight) {
+    if (this._buildInsightContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildInsightContext(insight))
+    }
+
     const severityColors = { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }
     const sev = insight.severity || "medium"
     const sevColor = severityColors[sev] || "#ffc107"

@@ -4,7 +4,7 @@ require "json"
 class NewsEnrichmentService
   BATCH_SIZE = 50
   GEOCODE_MODEL = "gpt-4.1-nano"
-  CLUSTER_MODEL = "claude-haiku-4-5-20251001"
+  CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
   class << self
     def enrich_recent(limit: 200)
@@ -46,7 +46,7 @@ class NewsEnrichmentService
 
     private
 
-    # ── Combined: geocode + classify + cluster in one call ─────
+    # ── Combined: geocode + classify in one call ────────────────
 
     def combined_enrich(articles, provider)
       headlines = articles.map.with_index do |a, i|
@@ -57,12 +57,10 @@ class NewsEnrichmentService
         For each headline, determine:
         1. The PHYSICAL LOCATION where the event occurred (not the news source location)
         2. The category
-        3. A cluster key to group duplicate/related stories
 
-        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict", "cluster": "baghdad-embassy-attack"}, ...]
+        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict"}, ...]
 
         Categories: conflict, terror, disaster, political, economic, health, science, sports, other
-        Cluster key: 3-5 word lowercase hyphenated slug. Same event = same cluster key.
         For city: use the most specific known city name only if the headline supports it.
         For country: use the standard English country name only if the headline supports it.
         If the location is unclear from the headline, return null for city and/or country.
@@ -83,7 +81,6 @@ class NewsEnrichmentService
       results = parse_json_array(data)
       return unless results
 
-      now = Time.current
       results.each do |r|
         idx = (r["i"] || r["index"]).to_i - 1
         article = articles[idx]
@@ -106,12 +103,6 @@ class NewsEnrichmentService
           updates[:category] = cat
         end
 
-        # Cluster — always update if present
-        cluster_key = r["cluster"]&.strip&.downcase&.gsub(/[^a-z0-9\-]/, "-")
-        if cluster_key.present? && cluster_key != "unspecified"
-          updates[:story_cluster_id] = Digest::MD5.hexdigest(cluster_key)[0..7]
-        end
-
         article.update_columns(updates)
       end
 
@@ -124,104 +115,6 @@ class NewsEnrichmentService
       # Other error — mark as enriched to prevent infinite retry on bad data
       Rails.logger.warn("NewsEnrichmentService combined_enrich error: #{e.message}")
       articles.each { |a| a.update_columns(ai_enriched: true) rescue nil }
-    end
-
-    # ── OpenAI: geocode + classify (fallback) ──────────────────
-
-    def geocode_batch(articles)
-      api_key = ENV["OPENAI_API_KEY"]
-      return unless api_key.present?
-
-      headlines = articles.map.with_index do |a, i|
-        "#{i + 1}. #{a.title&.truncate(120)}"
-      end.join("\n")
-
-      prompt = <<~PROMPT
-        For each headline, return the PHYSICAL LOCATION where the event occurred (not where the news source is based).
-        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict"}, ...]
-        Categories: conflict, terror, disaster, political, economic, health, science, sports, other
-        If the event location is unclear, use the most prominent location mentioned.
-        Only return the JSON array, no other text.
-
-        #{headlines}
-      PROMPT
-
-      data = openai_chat(api_key, prompt)
-      return unless data
-
-      results = parse_json_array(data)
-      return unless results
-
-      now = Time.current
-      results.each do |r|
-        idx = (r["i"] || r["index"]).to_i - 1
-        article = articles[idx]
-        next unless article
-
-        city = r["city"]&.strip
-        country = r["country"]&.strip
-        cat = r["cat"]&.strip&.downcase
-
-        # Resolve lat/lng from city or country
-        lat, lng = resolve_ai_location(city, country)
-        next unless lat && lng
-
-        updates = { ai_enriched: true }
-        updates[:latitude] = lat
-        updates[:longitude] = lng
-        updates[:category] = cat if cat.present? && %w[conflict terror disaster political economic health science sports other].include?(cat)
-
-        article.update_columns(updates)
-      end
-    rescue => e
-      Rails.logger.warn("NewsEnrichmentService geocode error: #{e.message}")
-    end
-
-    # ── Claude: semantic dedup + story clustering ──────────────
-
-    def cluster_batch(articles)
-      api_key = ENV["ANTHROPIC_API_KEY"]
-      return unless api_key.present?
-
-      headlines = articles.map.with_index do |a, i|
-        "#{i + 1}. #{a.title&.truncate(120)}"
-      end.join("\n")
-
-      prompt = <<~PROMPT
-        Group these headlines into story clusters. Headlines about the same event/story get the same cluster key.
-        Return JSON array: [{"i": 1, "cluster": "baghdad-embassy-attack"}, ...]
-        The cluster key should be a short lowercase slug (3-5 words, hyphenated).
-        Different aspects of the same event share a cluster (e.g., "embassy attacked" and "casualties reported from embassy" are the same cluster).
-        Unrelated stories each get their own unique cluster key.
-        Only return the JSON array, no other text.
-
-        #{headlines}
-      PROMPT
-
-      data = claude_message(api_key, prompt)
-      return unless data
-
-      results = parse_json_array(data)
-      return unless results
-
-      # Build cluster mapping
-      cluster_map = {}
-      results.each do |r|
-        idx = (r["i"] || r["index"]).to_i - 1
-        cluster_key = r["cluster"]&.strip&.downcase&.gsub(/[^a-z0-9\-]/, "-")
-        next unless cluster_key.present?
-        cluster_map[idx] = cluster_key
-      end
-
-      # Generate stable cluster IDs from keys
-      cluster_map.each do |idx, key|
-        article = articles[idx]
-        next unless article
-        cluster_id = Digest::MD5.hexdigest(key)[0..7]
-        article.update_columns(story_cluster_id: cluster_id, ai_enriched: true)
-      end
-    rescue => e
-      Rails.logger.warn("NewsEnrichmentService cluster error: #{e.message}")
     end
 
     # ── API clients ────────────────────────────────────────────
@@ -261,7 +154,7 @@ class NewsEnrichmentService
     def claude_message(api_key, prompt)
       uri = URI("https://api.anthropic.com/v1/messages")
       body = {
-        model: CLUSTER_MODEL,
+        model: CLAUDE_MODEL,
         max_tokens: 2000,
         messages: [{ role: "user", content: prompt }],
       }

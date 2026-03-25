@@ -1,9 +1,25 @@
 require "test_helper"
 
 class AisStreamServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
+    @original_queue_adapter = ActiveJob::Base.queue_adapter
+    ActiveJob::Base.queue_adapter = :test
+    clear_enqueued_jobs
+    clear_performed_jobs
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
     AisStreamService.instance_variable_set(:@running, false)
     AisStreamService.instance_variable_set(:@thread, nil)
+  end
+
+  teardown do
+    clear_enqueued_jobs
+    clear_performed_jobs
+    ActiveJob::Base.queue_adapter = @original_queue_adapter
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
   end
 
   test "running? returns false by default" do
@@ -56,5 +72,18 @@ class AisStreamServiceTest < ActiveSupport::TestCase
 
     result = AisStreamService.send(:parse_message, data)
     assert_equal 90.0, result[:heading]
+  end
+
+  test "flush_buffer enqueues operational ontology sync" do
+    records = [
+      { mmsi: "123456789", name: "TEST VESSEL", latitude: 51.5, longitude: -0.1 }
+    ]
+
+    assert_enqueued_with(job: OperationalOntologyBatchJob) do
+      AisStreamService.send(:flush_buffer, records)
+    end
+
+    ship = Ship.find_by!(mmsi: "123456789")
+    assert_equal "TEST VESSEL", ship.name
   end
 end

@@ -131,6 +131,10 @@ export function applyFinancialMethods(GlobeController) {
   }
 
   GlobeController.prototype.showCommodityDetail = function(item) {
+    if (this._buildCommodityContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildCommodityContext(item))
+    }
+
     const isUp = item.change_pct > 0
     const changeColor = isUp ? "#4caf50" : item.change_pct < 0 ? "#f44336" : "#ffc107"
     const changeStr = item.change_pct != null

@@ -171,6 +171,7 @@ export function applyCoreMethods(GlobeController) {
     this._entityListRequested = false
     this._alertData = []
     this._alertUnseenCount = 0
+    this._selectedContext = null
     this._ds = {} // shared datasource cache for getDataSource()
     this._backgroundRefreshRetryTimers = {}
     this._backgroundRefreshRetryCounts = {}
@@ -1307,6 +1308,18 @@ export function applyCoreMethods(GlobeController) {
       { prefix: "cpulse-hex-", handler: (id) => {
         const idx = parseInt(id); const cell = this._hexCellData?.[idx]; if (!cell) return false
         this._showHexDetail(cell); return true
+      }},
+      { prefix: "cpulse-strat-ring-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        this.showStrategicSituationDetail(d); return true
+      }},
+      { prefix: "cpulse-strat-lbl-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        this.showStrategicSituationDetail(d); return true
+      }},
+      { prefix: "cpulse-strat-", skip: [], handler: (id) => {
+        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        this.showStrategicSituationDetail(d); return true
       }},
       // Conflict pulse decoration (ring, core, lbl) → parent conflict pulse zone
       { prefix: "cpulse-core-", skip: [], handler: (id) => {

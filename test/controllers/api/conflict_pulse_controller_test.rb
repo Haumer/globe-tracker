@@ -5,7 +5,7 @@ class Api::ConflictPulseControllerTest < ActionDispatch::IntegrationTest
     LayerSnapshot.create!(
       snapshot_type: "conflict_pulse",
       scope_key: "global",
-      payload: { zones: [], strike_arcs: [], hex_cells: [] },
+      payload: { zones: [], strategic_situations: [], strike_arcs: [], hex_cells: [] },
       status: "ready",
       fetched_at: Time.current,
       expires_at: 5.minutes.from_now,
@@ -15,6 +15,7 @@ class Api::ConflictPulseControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     data = JSON.parse(response.body)
     assert_kind_of Array, data["zones"]
+    assert_kind_of Array, data["strategic_situations"]
     assert_kind_of Integer, data["count"]
     assert_equal "ready", data["snapshot_status"]
   end
@@ -41,6 +42,7 @@ class Api::ConflictPulseControllerTest < ActionDispatch::IntegrationTest
     zone = data["zones"].first
     assert zone["pulse_score"] >= 20
     assert zone["top_headlines"].any?
+    assert_kind_of Array, data["strategic_situations"]
     assert_equal "ready", data["snapshot_status"]
   end
 end

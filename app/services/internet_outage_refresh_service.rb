@@ -87,6 +87,7 @@ class InternetOutageRefreshService
       }
     end
     TimelineEvent.upsert_all(timeline_rows, unique_by: %i[eventable_type eventable_id]) if timeline_rows.any?
+    OperationalOntologySyncService.enqueue_recent("outages")
 
     records.size
   end

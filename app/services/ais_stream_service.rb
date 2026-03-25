@@ -174,6 +174,7 @@ class AisStreamService
 
       Ship.upsert_all(normalized, unique_by: :mmsi)
       record_ship_snapshots(normalized)
+      OperationalOntologySyncService.enqueue_recent("ships")
       PollingStatRecorder.record(
         source: "ais",
         poll_type: "ships",

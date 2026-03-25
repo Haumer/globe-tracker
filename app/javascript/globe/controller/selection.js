@@ -389,7 +389,8 @@ export function applySelectionMethods(GlobeController) {
     return c.toDataURL()
   }
 
-  GlobeController.prototype._makeWebcamIcon = function(color = "#29b6f6") {
+  GlobeController.prototype._makeWebcamIcon = function(color = "#29b6f6", options = {}) {
+    const mode = options.mode || "periodic"
     const size = 28
     const c = document.createElement("canvas")
     c.width = size
@@ -397,13 +398,20 @@ export function applySelectionMethods(GlobeController) {
     const ctx = c.getContext("2d")
     const cx = size / 2, cy = size / 2
 
+    if (mode === "realtime" || mode === "live") {
+      ctx.beginPath()
+      ctx.arc(cx, cy, 11.5, 0, Math.PI * 2)
+      ctx.fillStyle = mode === "realtime" ? "rgba(255,68,68,0.18)" : "rgba(76,175,80,0.16)"
+      ctx.fill()
+    }
+
     // Drop shadow
     ctx.shadowColor = "rgba(0,0,0,0.5)"
     ctx.shadowBlur = 3
     ctx.shadowOffsetY = 1
 
     // Camera body
-    ctx.fillStyle = color
+    ctx.fillStyle = mode === "stale" ? "rgba(120, 130, 145, 0.85)" : color
     ctx.beginPath()
     ctx.roundRect(cx - 8, cy - 5, 16, 11, 2)
     ctx.fill()
@@ -422,8 +430,26 @@ export function applySelectionMethods(GlobeController) {
     ctx.globalAlpha = 1
 
     // Flash / top bump
-    ctx.fillStyle = color
+    ctx.fillStyle = mode === "stale" ? "rgba(120, 130, 145, 0.85)" : color
     ctx.fillRect(cx - 3, cy - 7, 6, 3)
+
+    if (mode === "realtime") {
+      ctx.shadowBlur = 0
+      ctx.fillStyle = "#ff5252"
+      ctx.beginPath()
+      ctx.arc(cx + 8, cy - 8, 3, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = "rgba(255,255,255,0.9)"
+      ctx.stroke()
+    } else if (mode === "live") {
+      ctx.shadowBlur = 0
+      ctx.strokeStyle = "rgba(255,255,255,0.8)"
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.arc(cx, cy, 10.5, 0, Math.PI * 2)
+      ctx.stroke()
+    }
 
     return c.toDataURL()
   }

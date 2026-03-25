@@ -11,6 +11,26 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
   end
 
   test "detects pulse zone from clustered conflict news" do
+    cluster = NewsStoryCluster.create!(
+      cluster_key: "cluster:conflict-pulse",
+      canonical_title: "Fighting escalates",
+      content_scope: "core",
+      event_family: "conflict",
+      event_type: "military_activity",
+      location_name: "Region",
+      latitude: 49.1,
+      longitude: 35.1,
+      geo_precision: "point",
+      first_seen_at: 10.hours.ago,
+      last_seen_at: 1.hour.ago,
+      article_count: 10,
+      source_count: 5,
+      cluster_confidence: 0.82,
+      verification_status: "multi_source",
+      source_reliability: 0.77,
+      geo_confidence: 0.81
+    )
+
     10.times do |i|
       NewsEvent.create!(
         url: "https://example.com/conflict-#{i}",
@@ -21,6 +41,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
         category: "conflict",
         credibility: "tier2/low",
         source: ["reuters", "bbc", "aljazeera", "cnn", "guardian"][i % 5],
+        story_cluster_id: cluster.cluster_key,
         published_at: (i * 2).hours.ago,
         fetched_at: Time.current,
       )
@@ -34,6 +55,7 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     assert_includes %w[surging escalating elevated baseline], zone[:escalation_trend]
     assert zone[:count_24h] > 0
     assert zone[:top_headlines].any?
+    assert_equal cluster.cluster_key, zone.dig(:top_articles, 0, :cluster_id)
     assert zone[:source_count] > 1
   end
 
@@ -152,5 +174,107 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     NewsEvent.delete_all
     second = cache.fetch(ConflictPulseService::CACHE_KEY, expires_in: 10.minutes) { ConflictPulseService.new.compute }
     assert_equal first, second
+  end
+
+  test "promotes a strategic Hormuz marker when named reporting is strong but local pulse cell is absent" do
+    source = NewsSource.create!(canonical_key: "test-source", name: "Test Source", source_kind: "wire")
+
+    iran_cluster = NewsStoryCluster.create!(
+      cluster_key: "cluster:iran-war",
+      canonical_title: "Iran war escalation around Tehran",
+      content_scope: "core",
+      event_family: "conflict",
+      event_type: "military_activity",
+      location_name: "Tehran",
+      latitude: 35.69,
+      longitude: 51.39,
+      geo_precision: "point",
+      first_seen_at: 12.hours.ago,
+      last_seen_at: 1.hour.ago,
+      article_count: 8,
+      source_count: 5,
+      cluster_confidence: 0.84,
+      verification_status: "multi_source",
+      source_reliability: 0.78,
+      geo_confidence: 0.83
+    )
+
+    8.times do |i|
+      NewsEvent.create!(
+        url: "https://example.com/iran-#{i}",
+        title: "Iran escalation update #{i}",
+        latitude: 35.6,
+        longitude: 51.4,
+        tone: -5.5,
+        category: "conflict",
+        credibility: "tier1/low",
+        source: ["reuters", "bbc", "cnn", "ap"][i % 4],
+        story_cluster_id: iran_cluster.cluster_key,
+        published_at: (i + 1).hours.ago,
+        fetched_at: Time.current,
+      )
+    end
+
+    [
+      {
+        key: "cluster:hormuz-1",
+        title: "All eyes on Strait of Hormuz as Iran threatens shipping",
+        lat: 38.91,
+        lng: -77.04,
+        sources: 4,
+      },
+      {
+        key: "cluster:hormuz-2",
+        title: "UAE joins allies demanding Iran halt Strait of Hormuz shipping attacks",
+        lat: 24.45,
+        lng: 54.65,
+        sources: 2,
+      },
+    ].each do |attrs|
+      cluster = NewsStoryCluster.create!(
+        cluster_key: attrs[:key],
+        canonical_title: attrs[:title],
+        content_scope: "core",
+        event_family: "conflict",
+        event_type: "ground_operation",
+        location_name: attrs[:title],
+        latitude: attrs[:lat],
+        longitude: attrs[:lng],
+        geo_precision: "point",
+        first_seen_at: 30.hours.ago,
+        last_seen_at: 2.hours.ago,
+        article_count: attrs[:sources],
+        source_count: attrs[:sources],
+        cluster_confidence: 0.82,
+        verification_status: "multi_source",
+        source_reliability: 0.77,
+        geo_confidence: 0.8
+      )
+      NewsArticle.create!(
+        news_source: source,
+        url: "https://example.com/#{attrs[:key]}",
+        canonical_url: "https://example.com/#{attrs[:key]}",
+        title: attrs[:title],
+        normalization_status: "normalized",
+        content_scope: "core"
+      ).tap do |article|
+        cluster.update!(lead_news_article: article)
+      end
+    end
+
+    data = ConflictPulseService.analyze
+    zones = data[:zones] || []
+    strategic = data[:strategic_situations] || []
+
+    assert zones.any? { |zone| zone[:situation_name] == "Iran Theater" }
+    assert zones.none? { |zone| zone[:situation_name] == "Strait of Hormuz" }
+
+    hormuz = strategic.find { |item| item[:name] == "Strait of Hormuz" }
+    assert hormuz.present?, "Expected a promoted strategic Hormuz marker"
+    assert_equal "Middle East / Iran War", hormuz[:theater]
+    assert_operator hormuz[:direct_cluster_count], :>=, 2
+    assert_operator hormuz[:source_count], :>=, 4
+    assert_equal "chokepoint", hormuz[:kind]
+    assert hormuz[:top_articles].all? { |article| article[:cluster_id].present? }
   end
 end

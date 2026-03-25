@@ -62,4 +62,32 @@ class ChokepointMonitorServiceTest < ActiveSupport::TestCase
     result = ChokepointMonitorService.send(:count_ships_near, 55.7, 12.6, 30)
     assert_operator result[:total], :>=, 1
   end
+
+  test "nearby conflict pulse keeps theater metadata" do
+    conflict_pulse_singleton = class << ConflictPulseService; self; end
+    original_analyze = ConflictPulseService.method(:analyze)
+
+    conflict_pulse_singleton.send(:define_method, :analyze) do
+      {
+        zones: [
+          {
+            lat: 26.7,
+            lng: 56.3,
+            pulse_score: 78,
+            escalation_trend: "active",
+            theater: "Middle East / Iran War",
+            top_headlines: ["Shipping pressure builds around Hormuz"],
+          },
+        ],
+      }
+    end
+
+    begin
+      result = ChokepointMonitorService.send(:nearby_conflict_pulse, 26.56, 56.27)
+      assert_equal "Middle East / Iran War", result.dig(0, :theater)
+      assert_equal "Shipping pressure builds around Hormuz", result.dig(0, :headline)
+    ensure
+      conflict_pulse_singleton.send(:define_method, :analyze, original_analyze)
+    end
+  end
 end

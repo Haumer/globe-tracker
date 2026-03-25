@@ -18,6 +18,7 @@ import { applyWeatherMethods } from "./weather"
 import { applyInsightsMethods } from "./insights"
 import { applyFinancialMethods } from "./financial"
 import { applyRegionMethods } from "./regions"
+import { applyContextMethods } from "./context"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
@@ -40,4 +41,5 @@ export function applyGlobeControllerMixins(GlobeController) {
   applyInsightsMethods(GlobeController)
   applyFinancialMethods(GlobeController)
   applyRegionMethods(GlobeController)
+  applyContextMethods(GlobeController)
 }

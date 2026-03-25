@@ -251,6 +251,7 @@ class MultiNewsService
     NewsClaimRecorder.record_all(new_records)
 
     assign_clusters(new_records)
+    NewsOntologySyncService.enqueue_for_records(new_records)
 
     if new_records.any?
       NewsEvent.upsert_all(new_records, unique_by: :url)

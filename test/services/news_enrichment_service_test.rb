@@ -1,6 +1,34 @@
 require "test_helper"
 
 class NewsEnrichmentServiceTest < ActiveSupport::TestCase
+  test "combined_enrich ignores legacy cluster data while applying location and category" do
+    article = NewsEvent.create!(
+      url: "https://example.com/news/1",
+      title: "Missile strike reported near Baghdad",
+      published_at: Time.current,
+      fetched_at: Time.current,
+      ai_enriched: false
+    )
+
+    payload = '[{"i":1,"city":"Baghdad","country":"Iraq","cat":"conflict","cluster":"legacy-baghdad-cluster"}]'
+    singleton = NewsEnrichmentService.singleton_class
+    original_openai_chat = singleton.instance_method(:openai_chat)
+    singleton.send(:define_method, :openai_chat) { |_api_key, _prompt| payload }
+
+    begin
+      NewsEnrichmentService.send(:combined_enrich, [article], :openai)
+    ensure
+      singleton.send(:define_method, :openai_chat, original_openai_chat)
+    end
+
+    article.reload
+    assert article.ai_enriched?
+    assert_equal "conflict", article.category
+    assert_nil article.story_cluster_id
+    assert_in_delta 33.31, article.latitude, 0.5
+    assert_in_delta 44.37, article.longitude, 0.5
+  end
+
   test "resolve_ai_location finds city coordinates" do
     lat, lng = NewsEnrichmentService.send(:resolve_ai_location, "Baghdad", "Iraq")
     assert_in_delta 33.31, lat, 0.5
@@ -42,6 +70,6 @@ class NewsEnrichmentServiceTest < ActiveSupport::TestCase
   test "constants are defined" do
     assert_equal 50, NewsEnrichmentService::BATCH_SIZE
     assert_equal "gpt-4.1-nano", NewsEnrichmentService::GEOCODE_MODEL
-    assert_includes NewsEnrichmentService::CLUSTER_MODEL, "claude"
+    assert_includes NewsEnrichmentService::CLAUDE_MODEL, "claude"
   end
 end

@@ -921,6 +921,9 @@ export function applySituationalMethods(GlobeController) {
       title: w.title,
       source: w.source || "windy",
       live: w.live || false,
+      realtime: w.realtime || false,
+      mode: w.mode || null,
+      cameraType: w.cameraType || null,
       lat: w.location?.latitude,
       lng: w.location?.longitude,
       city: w.location?.city,
@@ -932,9 +935,106 @@ export function applySituationalMethods(GlobeController) {
       videoId: w.videoId || null,
       channelTitle: w.channelTitle || null,
       lastUpdated: w.lastUpdatedOn,
+      freshnessSeconds: Number.isFinite(w.freshnessSeconds) ? w.freshnessSeconds : null,
       viewCount: w.viewCount,
       stale: !!w.stale,
     }
+  }
+
+  GlobeController.prototype._cameraMode = function(cam) {
+    if (!cam) return "periodic"
+    if (cam.mode) return cam.mode
+    if (cam.stale) return "stale"
+    if (cam.realtime || cam.source === "youtube" || cam.source === "nycdot") return "realtime"
+    if (cam.live) return "live"
+    return "periodic"
+  }
+
+  GlobeController.prototype._cameraFreshnessSeconds = function(cam) {
+    if (Number.isFinite(cam?.freshnessSeconds)) return cam.freshnessSeconds
+    if (!cam?.lastUpdated) return null
+
+    const updatedAt = new Date(cam.lastUpdated).getTime()
+    if (Number.isNaN(updatedAt)) return null
+
+    return Math.max(0, Math.round((Date.now() - updatedAt) / 1000))
+  }
+
+  GlobeController.prototype._cameraFreshnessLabel = function(cam) {
+    if (cam?.stale) return "stale cache"
+
+    const seconds = this._cameraFreshnessSeconds(cam)
+    if (seconds == null) {
+      return this._cameraMode(cam) === "realtime" ? "live now" : "recent"
+    }
+
+    if (seconds < 60) return "updated just now"
+    if (seconds < 3600) return `updated ${Math.round(seconds / 60)}m ago`
+    if (seconds < 86_400) return `updated ${Math.round(seconds / 3600)}h ago`
+    return `updated ${Math.round(seconds / 86_400)}d ago`
+  }
+
+  GlobeController.prototype._cameraSourceLabel = function(cam) {
+    return { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube" }[cam?.source] || (cam?.source || "Camera")
+  }
+
+  GlobeController.prototype._cameraModeBadge = function(cam) {
+    const mode = this._cameraMode(cam)
+    return {
+      realtime: { label: "LIVE NOW", tone: "realtime" },
+      live: { label: "ACTIVE", tone: "live" },
+      periodic: { label: "PERIODIC", tone: "periodic" },
+      stale: { label: "STALE", tone: "stale" },
+    }[mode]
+  }
+
+  GlobeController.prototype._cameraSourceColor = function(cam) {
+    return { youtube: "#ff5252", nycdot: "#ff6d00", windy: "#29b6f6" }[cam?.source] || "#29b6f6"
+  }
+
+  GlobeController.prototype._cameraPriorityScore = function(cam) {
+    const mode = this._cameraMode(cam)
+    const base = { realtime: 4000, live: 3000, periodic: 2000, stale: 1000 }[mode] || 1500
+    const freshness = this._cameraFreshnessSeconds(cam)
+    const freshnessBoost = freshness == null ? 0 : Math.max(0, 900 - freshness / 60)
+    const audienceBoost = cam?.viewCount ? Math.min(250, Math.log10(cam.viewCount + 1) * 60) : 0
+    const visualBoost = cam?.thumbnail ? 35 : 0
+    return base + freshnessBoost + audienceBoost + visualBoost
+  }
+
+  GlobeController.prototype._sortWebcams = function(cams) {
+    return [...cams].sort((a, b) => {
+      const scoreDelta = this._cameraPriorityScore(b) - this._cameraPriorityScore(a)
+      if (scoreDelta !== 0) return scoreDelta
+
+      const freshnessDelta = (this._cameraFreshnessSeconds(a) ?? Number.POSITIVE_INFINITY) -
+        (this._cameraFreshnessSeconds(b) ?? Number.POSITIVE_INFINITY)
+      if (freshnessDelta !== 0) return freshnessDelta
+
+      return (a.title || "").localeCompare(b.title || "")
+    })
+  }
+
+  GlobeController.prototype._cameraThumbUrl = function(cam, options = {}) {
+    const raw = cam?.thumbnail
+    if (!(typeof raw === "string") || !/^https?:\/\//i.test(raw)) return null
+
+    const shouldBustCache = options.cacheBust || cam?.source === "nycdot"
+    if (!shouldBustCache) return raw
+
+    return `${raw}${raw.includes("?") ? "&" : "?"}t=${Date.now()}`
+  }
+
+  GlobeController.prototype._cameraWatchUrl = function(cam) {
+    const rawWatchUrl = cam?.source === "youtube" && cam?.videoId
+      ? `https://www.youtube.com/watch?v=${encodeURIComponent(cam.videoId)}`
+      : cam?.source === "nycdot"
+        ? "https://webcams.nyctmc.org/map"
+        : (typeof cam?.playerLink === "string" && /^https:\/\//i.test(cam.playerLink)
+            ? cam.playerLink
+            : `https://www.windy.com/webcams/${encodeURIComponent(cam?.id || "")}`)
+
+    return this._safeUrl(rawWatchUrl)
   }
 
   GlobeController.prototype.renderWebcams = function() {
@@ -947,20 +1047,35 @@ export function applySituationalMethods(GlobeController) {
       return
     }
     this._webcamEntityMap.clear()
-    const visibleCams = this._webcamData.filter(w => !this.hasActiveFilter() || this.pointPassesFilter(w.lat, w.lng))
+    const visibleCams = this._sortWebcams(
+      this._webcamData.filter(w => !this.hasActiveFilter() || this.pointPassesFilter(w.lat, w.lng))
+    )
+    const highlightedLabels = new Set(
+      visibleCams
+        .filter(cam => {
+          const mode = this._cameraMode(cam)
+          return mode === "realtime" || mode === "live"
+        })
+        .slice(0, 16)
+        .map(cam => cam.id)
+    )
 
     // Default height offset above ground (meters)
     const CAM_HEIGHT_OFFSET = 25
 
     dataSource.entities.suspendEvents()
     visibleCams.forEach(w => {
-      const realtime = w.source === "youtube" || w.source === "nycdot"
-      const icon = realtime
-        ? (this._webcamIconRT || (this._webcamIconRT = this._makeWebcamIcon("#ff4444")))
-        : w.live
-          ? (this._webcamIconLive || (this._webcamIconLive = this._makeWebcamIcon("#4caf50")))
-          : (this._webcamIcon || (this._webcamIcon = this._makeWebcamIcon("#29b6f6")))
-      const labelPrefix = w.source === "nycdot" ? "🚦 " : w.source === "youtube" ? "▶ " : ""
+      const mode = this._cameraMode(w)
+      const icon = mode === "realtime"
+        ? (this._webcamIconRT || (this._webcamIconRT = this._makeWebcamIcon("#ff4444", { mode: "realtime" })))
+        : mode === "live"
+          ? (this._webcamIconLive || (this._webcamIconLive = this._makeWebcamIcon("#4caf50", { mode: "live" })))
+          : mode === "stale"
+            ? (this._webcamIconStale || (this._webcamIconStale = this._makeWebcamIcon("#7f8a99", { mode: "stale" })))
+            : (this._webcamIcon || (this._webcamIcon = this._makeWebcamIcon("#29b6f6", { mode: "periodic" })))
+      const labelPrefix = mode === "realtime" ? "LIVE · " : mode === "live" ? "OBS · " : ""
+      const showLabel = highlightedLabels.has(w.id) || visibleCams.length <= 18
+      const baseScale = mode === "realtime" ? 0.84 : mode === "live" ? 0.76 : mode === "stale" ? 0.62 : 0.68
       const entity = dataSource.entities.add({
         id: `cam-${w.id}`,
         position: Cesium.Cartesian3.fromDegrees(w.lng, w.lat, CAM_HEIGHT_OFFSET),
@@ -969,13 +1084,13 @@ export function applySituationalMethods(GlobeController) {
         },
         billboard: {
           image: icon,
-          scale: 0.7,
+          scale: baseScale,
           scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5e6, 0.4),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           heightReference: Cesium.HeightReference.NONE,
         },
         label: {
-          text: labelPrefix + (w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title),
+          text: showLabel ? labelPrefix + (w.title.length > 25 ? w.title.substring(0, 23) + "…" : w.title) : "",
           font: "12px JetBrains Mono, sans-serif",
           fillColor: Cesium.Color.WHITE.withAlpha(0.9),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
@@ -1021,16 +1136,26 @@ export function applySituationalMethods(GlobeController) {
   GlobeController.prototype._renderCamFeed = function() {
     if (!this.hasCamFeedListTarget) return
     const search = this.hasCamFeedSearchTarget ? this.camFeedSearchTarget.value.toLowerCase().trim() : ""
-    const cams = this._webcamData.filter(w => {
+    const cams = this._sortWebcams(this._webcamData.filter(w => {
       if (search && !(w.title || "").toLowerCase().includes(search) &&
           !(w.city || "").toLowerCase().includes(search) &&
           !(w.country || "").toLowerCase().includes(search)) return false
       return true
-    })
+    }))
+
+    const counts = cams.reduce((memo, cam) => {
+      memo[this._cameraMode(cam)] += 1
+      return memo
+    }, { realtime: 0, live: 0, periodic: 0, stale: 0 })
 
     if (this.hasCamFeedCountTarget) {
       const base = `${cams.length} camera${cams.length !== 1 ? "s" : ""}`
-      const suffix = this._webcamCollectionStatus === "stale" ? " · stale cache" : ""
+      const activeFeeds = counts.realtime + counts.live
+      const suffixParts = []
+      if (activeFeeds > 0) suffixParts.push(`${activeFeeds} active`)
+      if (counts.stale > 0) suffixParts.push(`${counts.stale} stale`)
+      if (this._webcamCollectionStatus === "stale") suffixParts.push("stale cache")
+      const suffix = suffixParts.length ? ` · ${suffixParts.join(" · ")}` : ""
       this.camFeedCountTarget.textContent = `${base}${suffix}`
     }
 
@@ -1040,36 +1165,105 @@ export function applySituationalMethods(GlobeController) {
       return
     }
 
-    const html = cams.map((cam, idx) => {
-      const sourceColors = { youtube: "#ff4444", nycdot: "#ff6d00", windy: "#29b6f6" }
-      const barColor = sourceColors[cam.source] || "#29b6f6"
-      const sourceLabel = { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube" }[cam.source] || cam.source
-      const location = [cam.city, cam.country].filter(Boolean).join(", ")
-      const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
-      const badgeBg = isRealtime ? "#ff4444" : cam.live ? "#4caf50" : "#666"
-      const badgeText = isRealtime ? "LIVE" : cam.live ? "PERIODIC" : "TIMELAPSE"
-      const cacheBadge = cam.stale ? '<span class="cf-card-badge" style="background:#ffb300;color:#111;">STALE</span>' : ""
-      const title = this._escapeHtml((cam.title || "").length > 40 ? cam.title.substring(0, 38) + "…" : (cam.title || "Untitled"))
-      const thumbHtml = cam.thumbnailIcon
-        ? `<img class="cf-card-thumb" src="${cam.thumbnailIcon}" alt="" loading="lazy">`
-        : ""
+    const featured = cams.filter(cam => {
+      const mode = this._cameraMode(cam)
+      return mode === "realtime" || mode === "live"
+    }).slice(0, 3)
+    const featuredIds = new Set(featured.map(cam => cam.id))
+    const remaining = cams.filter(cam => !featuredIds.has(cam.id))
 
-      return `<div class="cf-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${idx}">
-        <div class="cf-card-bar" style="background:${barColor};"></div>
-        <div class="cf-card-body">
-          <div class="cf-card-title">${title}</div>
-          <div class="cf-card-meta">
-            <span class="cf-card-source">${sourceLabel}</span>
-            ${location ? `<span style="color:var(--gt-text-dim);font:500 9px var(--gt-mono);">&middot;</span><span class="cf-card-location">${this._escapeHtml(location)}</span>` : ""}
-            <span class="cf-card-badge" style="background:${badgeBg};color:#fff;">${badgeText}</span>
-            ${cacheBadge}
-          </div>
+    const summaryHtml = `
+      <div class="cam-feed-summary">
+        <span class="cam-summary-chip cam-summary-chip--realtime">${counts.realtime} live now</span>
+        <span class="cam-summary-chip cam-summary-chip--live">${counts.live} active feeds</span>
+        <span class="cam-summary-chip cam-summary-chip--periodic">${counts.periodic} periodic</span>
+        ${counts.stale > 0 ? `<span class="cam-summary-chip cam-summary-chip--stale">${counts.stale} stale</span>` : ""}
+      </div>
+    `
+
+    const featuredHtml = featured.length ? `
+      <div class="cam-live-section">
+        <div class="cam-live-header">Live Observation</div>
+        <div class="cam-live-grid">
+          ${featured.map(cam => this._renderFeaturedCameraCard(cam)).join("")}
         </div>
-        ${thumbHtml}
-      </div>`
-    }).join("")
+      </div>
+    ` : ""
 
-    this.camFeedListTarget.innerHTML = html
+    const listHtml = remaining.length ? `
+      <div class="cam-list-section">
+        <div class="cam-list-header">All Cameras In View</div>
+        ${remaining.map(cam => this._renderCameraListCard(cam)).join("")}
+      </div>
+    ` : ""
+
+    this.camFeedListTarget.innerHTML = summaryHtml + featuredHtml + listHtml
+  }
+
+  GlobeController.prototype._renderFeaturedCameraCard = function(cam) {
+    const originalIdx = this._webcamData.indexOf(cam)
+    const badge = this._cameraModeBadge(cam)
+    const sourceLabel = this._cameraSourceLabel(cam)
+    const location = [cam.city, cam.country].filter(Boolean).join(", ")
+    const thumbUrl = this._cameraThumbUrl(cam)
+    const watchUrl = this._cameraWatchUrl(cam)
+    const freshness = this._cameraFreshnessLabel(cam)
+    const title = this._escapeHtml(cam.title || "Untitled camera")
+    const locationHtml = location ? `<span>${this._escapeHtml(location)}</span>` : ""
+    const viewCount = cam.viewCount ? `<span>${cam.viewCount.toLocaleString()} watching</span>` : ""
+
+    return `<div class="cam-hero-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">
+      <div class="cam-hero-media">
+        ${thumbUrl
+          ? `<img src="${thumbUrl}" alt="${title}" loading="lazy">`
+          : `<div class="cam-hero-placeholder">Live observation unavailable</div>`}
+        <div class="cam-hero-badges">
+          <span class="cam-hero-badge cam-hero-badge--${badge.tone}">${badge.label}</span>
+          <span class="cam-hero-badge cam-hero-badge--source">${this._escapeHtml(sourceLabel)}</span>
+        </div>
+      </div>
+      <div class="cam-hero-body">
+        <div class="cam-hero-title">${title}</div>
+        <div class="cam-hero-meta">
+          ${locationHtml}
+          <span>${this._escapeHtml(freshness)}</span>
+          ${viewCount}
+        </div>
+        <div class="cam-hero-actions">
+          <button class="cam-action-btn cam-action-btn--focus" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">Focus</button>
+          ${watchUrl ? `<button class="cam-action-btn cam-action-btn--watch" data-action="click->globe#openCamStream" data-cam-idx="${originalIdx}">Watch</button>` : ""}
+        </div>
+      </div>
+    </div>`
+  }
+
+  GlobeController.prototype._renderCameraListCard = function(cam) {
+    const originalIdx = this._webcamData.indexOf(cam)
+    const badge = this._cameraModeBadge(cam)
+    const sourceLabel = this._cameraSourceLabel(cam)
+    const sourceColor = this._cameraSourceColor(cam)
+    const location = [cam.city, cam.country].filter(Boolean).join(", ")
+    const thumbUrl = this._cameraThumbUrl(cam)
+    const title = this._escapeHtml(cam.title || "Untitled camera")
+    const freshness = this._cameraFreshnessLabel(cam)
+
+    return `<div class="cf-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">
+      <div class="cf-card-bar" style="background:${sourceColor};"></div>
+      ${thumbUrl
+        ? `<img class="cf-card-thumb" src="${thumbUrl}" alt="${title}" loading="lazy">`
+        : `<div class="cf-card-thumb cf-card-thumb--placeholder">${this._escapeHtml(sourceLabel)}</div>`}
+      <div class="cf-card-body">
+        <div class="cf-card-topline">
+          <span class="cf-card-source">${this._escapeHtml(sourceLabel)}</span>
+          <span class="cf-card-badge cf-card-badge--${badge.tone}">${badge.label}</span>
+        </div>
+        <div class="cf-card-title">${title}</div>
+        <div class="cf-card-meta">
+          ${location ? `<span class="cf-card-location">${this._escapeHtml(location)}</span>` : ""}
+          <span class="cf-card-updated">${this._escapeHtml(freshness)}</span>
+        </div>
+      </div>
+    </div>`
   }
 
   GlobeController.prototype.filterCamFeed = function() {
@@ -1084,6 +1278,7 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype._syncRightPanels = function() {
     // Determine which tabs should be visible based on active layers/data
+    const hasContext = !!this._selectedContext
     const hasEntities = this.flightsVisible || this.shipsVisible || this.satellitesVisible
     const hasNews = this.newsVisible && this._newsData?.length > 0
     const hasThreats = !!this._threatsActive
@@ -1093,6 +1288,7 @@ export function applySituationalMethods(GlobeController) {
     const hasSituations = ((this._conflictPulseZones?.length) || 0) > 0 || !!this._conflictPulseSnapshotStatus
 
     // Show/hide tab buttons
+    if (this.hasRpTabContextTarget) this.rpTabContextTarget.style.display = hasContext ? "" : "none"
     if (this.hasRpTabEntitiesTarget) this.rpTabEntitiesTarget.style.display = hasEntities ? "" : "none"
     if (this.hasRpTabNewsTarget) this.rpTabNewsTarget.style.display = hasNews ? "" : "none"
     if (this.hasRpTabThreatsTarget) this.rpTabThreatsTarget.style.display = hasThreats ? "" : "none"
@@ -1107,7 +1303,7 @@ export function applySituationalMethods(GlobeController) {
       return
     }
 
-    const anyTabVisible = hasEntities || hasNews || hasThreats || hasSituations || hasCameras || hasAlerts || hasInsights
+    const anyTabVisible = hasContext || hasEntities || hasNews || hasThreats || hasSituations || hasCameras || hasAlerts || hasInsights
     if (!anyTabVisible) {
       if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
       this._repositionDetailStack(12)
@@ -1119,7 +1315,8 @@ export function applySituationalMethods(GlobeController) {
     // If current active tab is now hidden, switch to first visible tab
     const activePane = this.hasRightPanelTarget && this.rightPanelTarget.querySelector(".rp-pane--active")
     const activePaneKey = activePane?.dataset.rpPane
-    const activeTabHidden = (activePaneKey === "entities" && !hasEntities) ||
+    const activeTabHidden = (activePaneKey === "context" && !hasContext) ||
+                            (activePaneKey === "entities" && !hasEntities) ||
                             (activePaneKey === "news" && !hasNews) ||
                             (activePaneKey === "threats" && !hasThreats) ||
                             (activePaneKey === "situations" && !hasSituations) ||
@@ -1128,7 +1325,7 @@ export function applySituationalMethods(GlobeController) {
                             (activePaneKey === "insights" && !hasInsights)
 
     if (activeTabHidden || !activePaneKey) {
-      const firstVisible = hasSituations ? "situations" : hasEntities ? "entities" : hasNews ? "news" : hasInsights ? "insights" : hasThreats ? "threats" : hasCameras ? "cameras" : "alerts"
+      const firstVisible = hasContext ? "context" : hasSituations ? "situations" : hasEntities ? "entities" : hasNews ? "news" : hasInsights ? "insights" : hasThreats ? "threats" : hasCameras ? "cameras" : "alerts"
       this._activateRightTab(firstVisible)
     }
 
@@ -1181,10 +1378,23 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype.focusCamFeedItem = function(event) {
+    if (event) event.stopPropagation()
     const idx = parseInt(event.currentTarget.dataset.camIdx)
     const cam = this._webcamData[idx]
     if (!cam) return
     this.showWebcamDetail(cam)
+  }
+
+  GlobeController.prototype.openCamStream = function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const idx = parseInt(event.currentTarget.dataset.camIdx)
+    const cam = this._webcamData[idx]
+    if (!cam) return
+
+    const watchUrl = this._cameraWatchUrl(cam)
+    if (watchUrl) window.open(watchUrl, "_blank", "noopener")
   }
 
   GlobeController.prototype._clearWebcamEntities = function() {
@@ -1208,25 +1418,15 @@ export function applySituationalMethods(GlobeController) {
 
     const updated = cam.lastUpdated ? this._timeAgo(new Date(cam.lastUpdated)) : "—"
     const location = [cam.city, cam.region, cam.country].filter(Boolean).join(", ")
-    const sourceLabel = { windy: "Windy", nycdot: "NYC DOT", youtube: "YouTube Live" }[cam.source] || cam.source
-    const isRealtime = cam.source === "youtube" || cam.source === "nycdot"
+    const sourceLabel = this._cameraSourceLabel(cam)
+    const modeBadge = this._cameraModeBadge(cam)
+    const freshnessLabel = this._cameraFreshnessLabel(cam)
     const cacheMeta = this._cacheMeta(cam.lastUpdated, cam.stale ? cam.lastUpdated : null)
-    const liveBadge = isRealtime
-      ? '<span style="background:#ff4444;color:#fff;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">LIVE</span>'
-      : cam.live
-        ? '<span style="background:#4caf50;color:#fff;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">PERIODIC</span>'
-        : '<span style="background:#666;color:#ccc;font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">TIMELAPSE</span>'
+    const liveBadge = `<span style="background:${modeBadge.tone === "realtime" ? "#ff4444" : modeBadge.tone === "live" ? "#4caf50" : modeBadge.tone === "stale" ? "#ffb300" : "#666"};color:${modeBadge.tone === "stale" ? "#111" : "#fff"};font:700 8px var(--gt-mono);padding:1px 5px;border-radius:2px;letter-spacing:1px;margin-left:6px;">${modeBadge.label}</span>`
 
     // For DOT cameras, add cache-busting timestamp for auto-refresh
-    const rawThumbUrl = cam.thumbnail ? `${cam.thumbnail}${cam.source === "nycdot" ? "?t=" + Date.now() : ""}` : null
-    const thumbUrl = rawThumbUrl && /^https?:\/\//i.test(rawThumbUrl) ? rawThumbUrl : null
-
-    const rawWatchUrl = cam.source === "youtube" && cam.videoId
-      ? `https://www.youtube.com/watch?v=${encodeURIComponent(cam.videoId)}`
-      : cam.source === "nycdot"
-        ? `https://webcams.nyctmc.org/map`
-        : (typeof cam.playerLink === "string" && /^https:\/\//i.test(cam.playerLink) ? cam.playerLink : `https://www.windy.com/webcams/${encodeURIComponent(cam.id)}`)
-    const watchUrl = this._safeUrl(rawWatchUrl)
+    const thumbUrl = this._cameraThumbUrl(cam, { cacheBust: true })
+    const watchUrl = this._cameraWatchUrl(cam)
 
     let thumbHtml
     if (cam.source === "youtube" && cam.videoId) {
@@ -1266,7 +1466,7 @@ export function applySituationalMethods(GlobeController) {
     } else if (thumbUrl) {
       // Show preview image — auto-refreshes for live cameras
       thumbHtml = `<div class="webcam-thumb" style="position:relative;">
-        <img id="webcam-detail-img" src="${thumbUrl}${thumbUrl.includes('?') ? '&' : '?'}t=${Date.now()}" alt="${this._escapeHtml(cam.title)}" style="width:100%;border-radius:4px;transition:opacity 0.3s;">
+        <img id="webcam-detail-img" src="${thumbUrl}" alt="${this._escapeHtml(cam.title)}" style="width:100%;border-radius:4px;transition:opacity 0.3s;">
         <span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.6);color:#ff4444;font:700 9px var(--gt-mono);padding:2px 6px;border-radius:3px;letter-spacing:0.5px;">● LIVE</span>
       </div>`
     } else {
@@ -1282,12 +1482,20 @@ export function applySituationalMethods(GlobeController) {
       ${thumbHtml}
       <div class="detail-grid">
         <div class="detail-field">
+          <span class="detail-label">Observation</span>
+          <span class="detail-value">${modeBadge.label}</span>
+        </div>
+        <div class="detail-field">
           <span class="detail-label">Location</span>
           <span class="detail-value">${this._escapeHtml(location) || "—"}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Updated</span>
           <span class="detail-value">${updated}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Freshness</span>
+          <span class="detail-value">${this._escapeHtml(freshnessLabel)}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">Cache</span>

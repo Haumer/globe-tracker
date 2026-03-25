@@ -79,10 +79,14 @@ class Api::WebcamsControllerTest < ActionDispatch::IntegrationTest
     assert cam.key?("title")
     assert cam.key?("source")
     assert cam.key?("live")
+    assert cam.key?("realtime")
+    assert cam.key?("mode")
+    assert cam.key?("cameraType")
     assert cam.key?("location")
     assert cam["location"].key?("latitude")
     assert cam["location"].key?("longitude")
     assert cam.key?("images")
+    assert cam.key?("freshnessSeconds")
     assert cam.key?("stale")
   end
 
@@ -91,5 +95,21 @@ class Api::WebcamsControllerTest < ActionDispatch::IntegrationTest
     webcams = JSON.parse(response.body)["webcams"]
 
     assert_equal "youtube", webcams.first["source"]
+  end
+
+  test "serializes realtime and stale camera modes" do
+    Camera.find_by!(source: "youtube").update!(expires_at: 1.hour.from_now)
+    Camera.find_by!(source: "windy").update!(expires_at: 1.hour.ago, status: "expired")
+
+    get "/api/webcams", params: { north: 49, south: 47, east: 17, west: 15 }
+    webcams = JSON.parse(response.body)["webcams"]
+
+    youtube = webcams.find { |cam| cam["source"] == "youtube" }
+    windy = webcams.find { |cam| cam["source"] == "windy" }
+
+    assert_equal true, youtube["realtime"]
+    assert_equal "realtime", youtube["mode"]
+    assert_equal false, windy["realtime"]
+    assert_equal "stale", windy["mode"]
   end
 end

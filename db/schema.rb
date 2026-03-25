@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_25_120500) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_25_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -565,6 +565,134 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_120500) do
     t.index ["latitude", "longitude"], name: "index_notams_on_latitude_and_longitude"
   end
 
+  create_table "ontology_entities", force: :cascade do |t|
+    t.string "canonical_key", null: false
+    t.string "entity_type", null: false
+    t.string "canonical_name", null: false
+    t.string "country_code"
+    t.bigint "parent_entity_id"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["canonical_key"], name: "index_ontology_entities_on_canonical_key", unique: true
+    t.index ["country_code"], name: "index_ontology_entities_on_country_code"
+    t.index ["entity_type"], name: "index_ontology_entities_on_entity_type"
+    t.index ["parent_entity_id"], name: "index_ontology_entities_on_parent_entity_id"
+  end
+
+  create_table "ontology_entity_aliases", force: :cascade do |t|
+    t.bigint "ontology_entity_id", null: false
+    t.string "name", null: false
+    t.string "alias_type", default: "common", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["alias_type"], name: "index_ontology_entity_aliases_on_alias_type"
+    t.index ["ontology_entity_id", "name"], name: "idx_ontology_entity_aliases_unique_name", unique: true
+    t.index ["ontology_entity_id"], name: "index_ontology_entity_aliases_on_ontology_entity_id"
+  end
+
+  create_table "ontology_entity_links", force: :cascade do |t|
+    t.bigint "ontology_entity_id", null: false
+    t.string "linkable_type", null: false
+    t.bigint "linkable_id", null: false
+    t.string "role", null: false
+    t.float "confidence", default: 1.0, null: false
+    t.string "method", default: "sync", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["linkable_type", "linkable_id"], name: "idx_ontology_entity_links_linkable"
+    t.index ["ontology_entity_id", "linkable_type", "linkable_id", "role"], name: "idx_ontology_entity_links_unique_role", unique: true
+    t.index ["ontology_entity_id"], name: "index_ontology_entity_links_on_ontology_entity_id"
+  end
+
+  create_table "ontology_event_entities", force: :cascade do |t|
+    t.bigint "ontology_event_id", null: false
+    t.bigint "ontology_entity_id", null: false
+    t.string "role", null: false
+    t.float "confidence", default: 1.0, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ontology_entity_id"], name: "index_ontology_event_entities_on_ontology_entity_id"
+    t.index ["ontology_event_id", "ontology_entity_id", "role"], name: "idx_ontology_event_entities_unique_role", unique: true
+    t.index ["ontology_event_id"], name: "index_ontology_event_entities_on_ontology_event_id"
+  end
+
+  create_table "ontology_events", force: :cascade do |t|
+    t.string "canonical_key", null: false
+    t.string "event_family", null: false
+    t.string "event_type", null: false
+    t.string "status", default: "active", null: false
+    t.bigint "place_entity_id"
+    t.bigint "primary_story_cluster_id"
+    t.string "verification_status", default: "unverified", null: false
+    t.string "geo_precision", default: "unknown", null: false
+    t.float "confidence", default: 0.0, null: false
+    t.float "source_reliability", default: 0.0, null: false
+    t.float "geo_confidence", default: 0.0, null: false
+    t.datetime "started_at"
+    t.datetime "ended_at"
+    t.datetime "first_seen_at"
+    t.datetime "last_seen_at"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["canonical_key"], name: "index_ontology_events_on_canonical_key", unique: true
+    t.index ["event_family", "last_seen_at"], name: "index_ontology_events_on_event_family_and_last_seen_at"
+    t.index ["place_entity_id"], name: "index_ontology_events_on_place_entity_id"
+    t.index ["primary_story_cluster_id"], name: "index_ontology_events_on_primary_story_cluster_id"
+    t.index ["verification_status"], name: "index_ontology_events_on_verification_status"
+  end
+
+  create_table "ontology_evidence_links", force: :cascade do |t|
+    t.bigint "ontology_event_id", null: false
+    t.string "evidence_type", null: false
+    t.bigint "evidence_id", null: false
+    t.string "evidence_role", default: "supporting", null: false
+    t.float "confidence", default: 1.0, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evidence_type", "evidence_id"], name: "idx_ontology_evidence_links_evidence"
+    t.index ["ontology_event_id", "evidence_type", "evidence_id", "evidence_role"], name: "idx_ontology_evidence_links_unique_role", unique: true
+    t.index ["ontology_event_id"], name: "index_ontology_evidence_links_on_ontology_event_id"
+  end
+
+  create_table "ontology_relationship_evidences", force: :cascade do |t|
+    t.bigint "ontology_relationship_id", null: false
+    t.string "evidence_type", null: false
+    t.bigint "evidence_id", null: false
+    t.string "evidence_role", default: "supporting", null: false
+    t.float "confidence", default: 1.0, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evidence_type", "evidence_id"], name: "idx_ontology_relationship_evidences_lookup"
+    t.index ["ontology_relationship_id", "evidence_type", "evidence_id", "evidence_role"], name: "idx_ontology_relationship_evidences_unique_role", unique: true
+    t.index ["ontology_relationship_id"], name: "idx_on_ontology_relationship_id_bffc68baf7"
+  end
+
+  create_table "ontology_relationships", force: :cascade do |t|
+    t.string "source_node_type", null: false
+    t.bigint "source_node_id", null: false
+    t.string "target_node_type", null: false
+    t.bigint "target_node_id", null: false
+    t.string "relation_type", null: false
+    t.float "confidence", default: 0.0, null: false
+    t.datetime "fresh_until"
+    t.string "derived_by", default: "sync", null: false
+    t.text "explanation"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["fresh_until"], name: "index_ontology_relationships_on_fresh_until"
+    t.index ["source_node_type", "source_node_id", "target_node_type", "target_node_id", "relation_type"], name: "idx_ontology_relationships_unique_type", unique: true
+    t.index ["source_node_type", "source_node_id"], name: "idx_ontology_relationships_source"
+    t.index ["target_node_type", "target_node_id"], name: "idx_ontology_relationships_target"
+  end
+
   create_table "pipelines", force: :cascade do |t|
     t.string "pipeline_id"
     t.string "name"
@@ -887,6 +1015,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_120500) do
   add_foreign_key "news_story_clusters", "news_articles", column: "lead_news_article_id"
   add_foreign_key "news_story_memberships", "news_articles"
   add_foreign_key "news_story_memberships", "news_story_clusters"
+  add_foreign_key "ontology_entities", "ontology_entities", column: "parent_entity_id"
+  add_foreign_key "ontology_entity_aliases", "ontology_entities"
+  add_foreign_key "ontology_entity_links", "ontology_entities"
+  add_foreign_key "ontology_event_entities", "ontology_entities"
+  add_foreign_key "ontology_event_entities", "ontology_events"
+  add_foreign_key "ontology_events", "news_story_clusters", column: "primary_story_cluster_id"
+  add_foreign_key "ontology_events", "ontology_entities", column: "place_entity_id"
+  add_foreign_key "ontology_evidence_links", "ontology_events"
+  add_foreign_key "ontology_relationship_evidences", "ontology_relationships"
   add_foreign_key "train_observations", "train_ingests"
   add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"

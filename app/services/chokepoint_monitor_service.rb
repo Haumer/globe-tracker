@@ -1,5 +1,15 @@
 class ChokepointMonitorService
   CACHE_KEY = "chokepoint_status".freeze
+  RELEVANT_COMMODITY_SYMBOLS = {
+    hormuz: %w[OIL_WTI OIL_BRENT LNG GAS_NAT],
+    suez: %w[OIL_BRENT LNG WHEAT],
+    bab_el_mandeb: %w[OIL_BRENT LNG WHEAT],
+    malacca: %w[OIL_WTI OIL_BRENT LNG],
+    bosphorus: %w[WHEAT OIL_BRENT GAS_NAT],
+    panama: %w[OIL_WTI LNG COPPER],
+    taiwan_strait: %w[COPPER IRON],
+    danish_straits: %w[OIL_BRENT GAS_NAT],
+  }.freeze
 
   # Major maritime chokepoints with trade flow data
   # Sources: EIA, UNCTAD, S&P Global, US Naval Institute
@@ -149,6 +159,10 @@ class ChokepointMonitorService
   }.freeze
 
   class << self
+    def relevant_commodity_symbols_for(chokepoint_key)
+      RELEVANT_COMMODITY_SYMBOLS.fetch(chokepoint_key.to_sym, %w[OIL_BRENT])
+    end
+
     def analyze
       Rails.cache.fetch(CACHE_KEY, expires_in: 15.minutes) { compute }
     end
@@ -210,7 +224,14 @@ class ChokepointMonitorService
         dlat = (z[:lat] - lat).abs
         dlng = (z[:lng] - lng).abs
         dlat < 5 && dlng < 5 # within ~500km
-      end.map { |z| { score: z[:pulse_score], trend: z[:escalation_trend] } }
+      end.map do |z|
+        {
+          score: z[:pulse_score],
+          trend: z[:escalation_trend],
+          theater: z[:theater],
+          headline: z[:top_headlines]&.first,
+        }
+      end
     end
 
     def check_commodity_signals(chokepoint_key, cp)
@@ -218,19 +239,7 @@ class ChokepointMonitorService
       commodities = CommodityPrice.where("recorded_at > ?", 24.hours.ago)
         .order(recorded_at: :desc)
 
-      # Map chokepoints to relevant commodities
-      relevant = case chokepoint_key
-        when :hormuz then %w[OIL_WTI OIL_BRENT LNG GAS_NAT]
-        when :suez, :bab_el_mandeb then %w[OIL_BRENT LNG WHEAT]
-        when :malacca then %w[OIL_WTI OIL_BRENT LNG]
-        when :bosphorus then %w[WHEAT OIL_BRENT GAS_NAT]
-        when :panama then %w[OIL_WTI LNG COPPER]
-        when :taiwan_strait then %w[COPPER IRON]
-        when :danish_straits then %w[OIL_BRENT GAS_NAT]
-        else %w[OIL_BRENT]
-      end
-
-      relevant.each do |symbol|
+      self.class.relevant_commodity_symbols_for(chokepoint_key).each do |symbol|
         latest = commodities.find_by(symbol: symbol)
         next unless latest
         signals << {

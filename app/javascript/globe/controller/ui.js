@@ -126,7 +126,7 @@ export function applyUiMethods(GlobeController) {
     if (visible) {
       this.closeRightPanel()
     } else {
-      this._showRightPanel("entities")
+      this._showRightPanel(this._selectedContext ? "context" : "entities")
     }
   }
 

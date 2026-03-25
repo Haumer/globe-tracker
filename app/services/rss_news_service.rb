@@ -21,10 +21,6 @@ class RssNewsService
   # Risk: low / medium / high (propaganda risk)
   SOURCES = {
     # ── TIER 1: Wire Services & Government ─────────────────────
-    { url: "https://feeds.reuters.com/reuters/worldNews", name: "Reuters" } =>
-      { tier: 1, risk: "low", region: "global" },
-    { url: "https://feeds.reuters.com/reuters/topNews", name: "Reuters Top" } =>
-      { tier: 1, risk: "low", region: "global" },
     { url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", name: "NYT World" } =>
       { tier: 1, risk: "low", region: "us" },
     { url: "https://news.un.org/feed/subscribe/en/news/all/rss.xml", name: "UN News" } =>
@@ -470,6 +466,7 @@ class RssNewsService
     NewsClaimRecorder.record_all(new_records)
     RssArticleHydrationService.enqueue_candidates(new_records)
     assign_clusters(new_records)
+    NewsOntologySyncService.enqueue_for_records(new_records)
 
     if new_records.any?
       NewsEvent.upsert_all(new_records, unique_by: :url)

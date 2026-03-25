@@ -42,6 +42,9 @@ module Api
         "title"         => c.title,
         "source"        => c.source,
         "live"          => c.is_live,
+        "realtime"      => realtime_camera?(c),
+        "mode"          => camera_mode(c),
+        "cameraType"    => c.camera_type,
         "location"      => {
           "latitude"  => c.latitude,
           "longitude" => c.longitude,
@@ -61,9 +64,22 @@ module Api
         "videoId"       => c.video_id,
         "channelTitle"  => c.channel_title,
         "lastUpdatedOn" => c.fetched_at&.iso8601,
+        "freshnessSeconds" => c.fetched_at.present? ? (Time.current - c.fetched_at).to_i : nil,
         "viewCount"     => c.view_count,
         "stale"         => c.stale?,
       }
+    end
+
+    def realtime_camera?(camera)
+      %w[youtube nycdot].include?(camera.source)
+    end
+
+    def camera_mode(camera)
+      return "stale" if camera.stale?
+      return "realtime" if realtime_camera?(camera)
+      return "live" if camera.is_live?
+
+      "periodic"
     end
   end
 end

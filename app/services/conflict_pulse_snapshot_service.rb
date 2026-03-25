@@ -32,7 +32,7 @@ class ConflictPulseSnapshotService
     end
 
     def empty_payload
-      { zones: [], strike_arcs: [], hex_cells: [] }
+      { zones: [], strategic_situations: [], strike_arcs: [], hex_cells: [] }
     end
 
     private

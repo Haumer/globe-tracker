@@ -9,6 +9,7 @@ class RssArticleHydrationServiceTest < ActiveSupport::TestCase
     clear_enqueued_jobs
     clear_performed_jobs
     Rails.cache.clear
+    travel_to Time.utc(2026, 3, 25, 11, 0, 0)
   end
 
   teardown do
@@ -16,6 +17,7 @@ class RssArticleHydrationServiceTest < ActiveSupport::TestCase
     clear_performed_jobs
     ActiveJob::Base.queue_adapter = @original_queue_adapter
     Rails.cache.clear
+    travel_back
   end
 
   test "enqueue_candidates queues immediate hydration for thin rss articles" do

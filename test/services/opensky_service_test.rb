@@ -1,6 +1,25 @@
 require "test_helper"
 
 class OpenskyServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
+  setup do
+    @original_queue_adapter = ActiveJob::Base.queue_adapter
+    ActiveJob::Base.queue_adapter = :test
+    clear_enqueued_jobs
+    clear_performed_jobs
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
+  end
+
+  teardown do
+    clear_enqueued_jobs
+    clear_performed_jobs
+    ActiveJob::Base.queue_adapter = @original_queue_adapter
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
+  end
+
   test "upsert_flights with valid state data creates flights" do
     data = {
       "states" => [
@@ -40,5 +59,18 @@ class OpenskyServiceTest < ActiveSupport::TestCase
 
   test "BASE_URL is defined" do
     assert_not_nil OpenskyService::BASE_URL
+  end
+
+  test "upsert_flights enqueues operational ontology sync" do
+    data = {
+      "states" => [
+        ["ontology01", "ONT123 ", "Germany", 1234567890, 1234567890,
+         16.3, 48.2, 10000.0, false, 250.0, 90.0, 5.0, nil, 10000.0, nil, nil, nil]
+      ]
+    }
+
+    assert_enqueued_with(job: OperationalOntologyBatchJob) do
+      OpenskyService.send(:upsert_flights, data)
+    end
   end
 end

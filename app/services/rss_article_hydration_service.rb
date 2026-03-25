@@ -318,7 +318,14 @@ class RssArticleHydrationService
           content_scope: article.content_scope,
         },
       ])
-      NewsStoryClusterer.recluster_article(article)
+      cluster_key = NewsStoryClusterer.recluster_article(article)
+      NewsOntologySyncService.enqueue_for_records([
+        {
+          news_article_id: article.id,
+          news_source_id: article.news_source_id,
+          story_cluster_id: cluster_key,
+        },
+      ])
     end
 
     def can_replace_canonical_url?(article, canonical_url)

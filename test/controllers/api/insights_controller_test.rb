@@ -27,9 +27,23 @@ class Api::InsightsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "ready", data["snapshot_status"]
   end
 
-  test "unauthenticated request is redirected" do
+  test "unauthenticated request still returns insights for the public home page" do
     sign_out @user
+
+    LayerSnapshot.create!(
+      snapshot_type: "insights",
+      scope_key: "global",
+      payload: { insights: [{ title: "Public signal", severity: "low" }] },
+      status: "ready",
+      fetched_at: Time.current,
+      expires_at: 5.minutes.from_now,
+    )
+
     get "/api/insights"
-    assert_response :redirect
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    assert_equal "ready", data["snapshot_status"]
+    assert_equal 1, data["insights"].length
   end
 end

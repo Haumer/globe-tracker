@@ -13,6 +13,7 @@ class InsightSnapshotService
     end
 
     def refresh
+      OntologyRelationshipSyncService.sync_recent
       payload = { insights: CrossLayerAnalyzer.analyze }
       LayerSnapshotStore.persist(
         snapshot_type: SNAPSHOT_TYPE,

@@ -151,6 +151,7 @@ class NewsRefreshService
     NewsClaimRecorder.record_all(records)
 
     assign_clusters(records)
+    NewsOntologySyncService.enqueue_for_records(records)
     NewsEvent.upsert_all(records, unique_by: :url)
     record_timeline_events(
       event_type: "news",

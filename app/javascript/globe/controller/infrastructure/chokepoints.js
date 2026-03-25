@@ -170,6 +170,10 @@ export function applyChokepointsMethods(GlobeController) {
   // ── Click handler detail panel ─────────────────────────────
 
   GlobeController.prototype.showChokepointDetail = function(cp) {
+    if (this._buildChokepointContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildChokepointContext(cp))
+    }
+
     const statusColors = { critical: "#f44336", elevated: "#ff9800", monitoring: "#ffc107", normal: "#4fc3f7" }
     const color = statusColors[cp.status] || "#4fc3f7"
     const snapshotStatus = this._chokepointSnapshotStatus || "pending"
@@ -195,7 +199,7 @@ export function applyChokepointsMethods(GlobeController) {
         const isUp = c.change_pct > 0
         const cColor = isUp ? "#4caf50" : c.change_pct < 0 ? "#f44336" : "#888"
         const changeStr = c.change_pct != null ? `${isUp ? "+" : ""}${c.change_pct}%` : ""
-        return `<span class="detail-chip" style="background:rgba(${isUp ? "76,175,80" : "244,67,54"},0.15);color:${cColor};">${c.symbol} $${c.price} ${changeStr}</span>`
+        return `<button type="button" class="detail-chip" data-action="click->globe#selectContextNode" data-kind="commodity" data-id="${this._escapeHtml(c.symbol)}" data-title="${this._escapeHtml(c.name || c.symbol)}" data-summary="${this._escapeHtml(`${c.symbol} $${c.price} ${changeStr}`.trim())}" style="cursor:pointer;border:0;background:rgba(${isUp ? "76,175,80" : "244,67,54"},0.15);color:${cColor};">${c.symbol} $${c.price} ${changeStr}</button>`
       }).join("")
     }
 
@@ -249,7 +253,14 @@ export function applyChokepointsMethods(GlobeController) {
       ${cp.conflict_pulse?.length ? `
         <div style="margin:10px 0;">
           <div style="font:600 9px var(--gt-mono);color:#888;letter-spacing:1px;margin-bottom:6px;">CONFLICT NEARBY</div>
-          ${cp.conflict_pulse.map(p => `<span class="detail-chip" style="background:rgba(244,67,54,0.15);color:#f44336;">${p.trend} (${p.score})</span>`).join("")}
+          ${cp.conflict_pulse.map(p => {
+            const label = p.theater || `${p.trend} (${p.score})`
+            const summary = [p.trend ? `score ${p.score} · ${p.trend}` : `score ${p.score}`, p.headline].filter(Boolean).join(" · ")
+            if (p.theater) {
+              return `<button type="button" class="detail-chip" data-action="click->globe#selectContextNode" data-kind="theater" data-id="${this._escapeHtml(p.theater)}" data-title="${this._escapeHtml(label)}" data-summary="${this._escapeHtml(summary)}" style="cursor:pointer;border:0;background:rgba(244,67,54,0.15);color:#f44336;">${this._escapeHtml(label)}</button>`
+            }
+            return `<span class="detail-chip" style="background:rgba(244,67,54,0.15);color:#f44336;">${this._escapeHtml(label)}</span>`
+          }).join("")}
         </div>
       ` : ""}
 

@@ -7,6 +7,20 @@ class ConflictPulseService
   MIN_TONE = 1.5       # filter out low-intensity articles (|tone| < 1.5)
   MIN_PULSE_SCORE = 20
   MAX_RESULTS = 25
+  STRATEGIC_STORY_WINDOW = 7.days
+  STRATEGIC_STORY_FRESH_WINDOW = 72.hours
+  MAX_STRATEGIC_SITUATIONS = 10
+  STRATEGIC_CROSS_LAYER_RADIUS_KM = 220
+  STRATEGIC_MIN_DIRECT_CLUSTERS = 2
+  STRATEGIC_MIN_FRESH_CLUSTERS = 3
+  STRATEGIC_MIN_TOTAL_SOURCES = 4
+  CORROBORATED_CLUSTER_STATUSES = %w[multi_source cross_layer_corroborated].freeze
+  DIRECT_STORY_TERMS = %w[
+    shipping ship ships tanker tankers maritime vessel vessels navigation transit
+    blockade blocked blocking reopen reopened closure closed lane lanes
+    freight cargo oil lng gas energy port ports canal strait passage passageway
+    minesweeping mines mine attack attacks threatened threat
+  ].freeze
 
   # Source credibility weights — tier 1 wire services count 3x more than a blog
   TIER_WEIGHTS = { 1 => 3.0, 2 => 2.0, 3 => 1.0, 4 => 0.5 }.freeze
@@ -155,6 +169,45 @@ class ConflictPulseService
   }.freeze
 
   class << self
+    def infer_situation_name(lat:, lng:, text: nil)
+      SITUATION_NAMES.each do |name, bounds|
+        return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+      end
+
+      headlines = text.to_s.downcase
+      best_match = nil
+      best_count = 0
+      StrikeArcExtractor::ACTORS.each do |keyword, info|
+        count = headlines.scan(keyword).size
+        next unless count > best_count
+
+        best_count = count
+        best_match = info[:name]
+      end
+      return "#{best_match} Region" if best_match
+
+      COUNTRY_BOUNDS.each do |name, bounds|
+        return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+      end
+
+      if lat > 60 then "Arctic Region"
+      elsif lat > 30 then "Northern #{lng > 0 ? 'Eastern' : 'Western'} Region"
+      elsif lat > -30 then "Tropical #{lng > 0 ? 'Eastern' : 'Western'} Region"
+      else "Southern #{lng > 0 ? 'Eastern' : 'Western'} Region"
+      end
+    end
+
+    def infer_theater(lat:, lng:, situation_name: nil)
+      named = NAMED_THEATERS[situation_name]
+      return named if named
+
+      THEATER_REGIONS.each do |region, bounds|
+        return region if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
+      end
+
+      "Global"
+    end
+
     def analyze
       Rails.cache.fetch(CACHE_KEY, expires_in: 10.minutes) { new.compute_full }
     end
@@ -203,6 +256,7 @@ class ConflictPulseService
 
     # Tag each hex cell with its nearest zone
     link_hexes_to_zones(hex_cells, zones)
+    strategic_situations = build_strategic_situations(zones)
 
     # Broadcast surging/escalating zones via ActionCable
     begin
@@ -218,10 +272,10 @@ class ConflictPulseService
       Rails.logger.warn("ConflictPulseService broadcast skipped: #{e.message}")
     end
 
-    { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }
+    { zones: zones, strategic_situations: strategic_situations, strike_arcs: strike_arcs, hex_cells: hex_cells }
   rescue => e
     Rails.logger.error("ConflictPulseService compute_full: #{e.message}")
-    { zones: compute, strike_arcs: [], hex_cells: [] }
+    { zones: compute, strategic_situations: [], strike_arcs: [], hex_cells: [] }
   end
 
   # Playback variant — no cross-layer signals (live-only), no ActionCable broadcast
@@ -242,11 +296,12 @@ class ConflictPulseService
     strike_arcs = snap_arcs_to_zones(raw_arcs, zones)
     hex_cells = build_hex_cells
     link_hexes_to_zones(hex_cells, zones)
+    strategic_situations = build_strategic_situations(zones)
 
-    { zones: zones, strike_arcs: strike_arcs, hex_cells: hex_cells }
+    { zones: zones, strategic_situations: strategic_situations, strike_arcs: strike_arcs, hex_cells: hex_cells }
   rescue => e
     Rails.logger.error("ConflictPulseService compute_full_playback: #{e.message}")
-    { zones: [], strike_arcs: [], hex_cells: [] }
+    { zones: [], strategic_situations: [], strike_arcs: [], hex_cells: [] }
   end
 
   def compute
@@ -395,7 +450,7 @@ class ConflictPulseService
         story_count: story_count,
         tier_breakdown: tier_counts,
         top_headlines: top_headlines,
-        top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, publisher: source_names_by_id[a.news_source_id], tone: a.tone&.round(1), published_at: a.published_at&.iso8601 } },
+        top_articles: top_articles.map { |a| { title: a.title, url: a.url, source: a.source, publisher: source_names_by_id[a.news_source_id], tone: a.tone&.round(1), published_at: a.published_at&.iso8601, cluster_id: a.story_cluster_id } },
         categories: categories,
         cross_layer_signals: signals,
         signal_context: signal_descriptions(signals),
@@ -520,6 +575,8 @@ class ConflictPulseService
     internet_outage: "Major internet disruption — possible infrastructure damage or state censorship",
     fire_hotspots: "Satellite-detected fires consistent with airstrikes or burning infrastructure",
     known_conflict_zone: "Historical conflict events from UCDP database — baseline for current escalation",
+    ships_nearby: "Live vessel activity around a strategic corridor",
+    tankers_nearby: "Tanker traffic moving through a strategic energy corridor",
   }.freeze
 
   def signal_descriptions(signals)
@@ -528,8 +585,8 @@ class ConflictPulseService
     end
   end
 
-  def cross_layer_signals(lat, lng)
-    bounds = bbox(lat, lng, 250)
+  def cross_layer_signals(lat, lng, radius_km: 250)
+    bounds = bbox(lat, lng, radius_km)
     signals = {}
 
     mil = Flight.within_bounds(bounds).where(military: true).where("updated_at > ?", @reference_time - 6.hours).count
@@ -559,6 +616,205 @@ class ConflictPulseService
   rescue => e
     Rails.logger.warn("ConflictPulseService cross-layer error: #{e.message}")
     {}
+  end
+
+  def build_strategic_situations(zones)
+    active_theaters = zones.each_with_object({}) do |zone, memo|
+      theater = zone[:theater]
+      next if theater.blank?
+
+      current = memo[theater]
+      memo[theater] = zone if current.blank? || zone[:pulse_score].to_i > current[:pulse_score].to_i
+    end
+    corroborated_clusters = recent_corroborated_story_clusters
+
+    ChokepointMonitorService::CHOKEPOINTS.each_with_object([]) do |(key, config), memo|
+      direct_clusters = corroborated_clusters.select { |cluster| direct_strategic_story_cluster?(cluster, key, config) }
+      next if direct_clusters.empty?
+
+      fresh_clusters = direct_clusters.select { |cluster| cluster.last_seen_at && cluster.last_seen_at >= @reference_time - STRATEGIC_STORY_FRESH_WINDOW }
+      total_sources = direct_clusters.sum { |cluster| cluster.source_count.to_i }
+      theater_name = strategic_theater_name(config, direct_clusters, active_theaters)
+      supporting_zone = theater_name.present? ? active_theaters[theater_name] : nil
+      next unless strategic_situation_qualifies?(direct_clusters, fresh_clusters, total_sources, supporting_zone)
+
+      signals = strategic_cross_layer_signals(config)
+      top_clusters = direct_clusters.sort_by do |cluster|
+        [-cluster.source_count.to_i, -cluster.cluster_confidence.to_f, -cluster.last_seen_at.to_i]
+      end.first(5)
+      score = strategic_situation_score(
+        fresh_clusters: fresh_clusters,
+        total_sources: total_sources,
+        supporting_zone: supporting_zone,
+        signals: signals
+      )
+
+      memo << {
+        id: "strategic:#{key}",
+        kind: "chokepoint",
+        node_id: key.to_s,
+        name: config.fetch(:name),
+        strategic_kind: "chokepoint",
+        theater: theater_name,
+        lat: config.fetch(:lat),
+        lng: config.fetch(:lng),
+        status: strategic_situation_status(score),
+        strategic_score: score,
+        direct_cluster_count: direct_clusters.size,
+        fresh_cluster_count: fresh_clusters.size,
+        source_count: total_sources,
+        top_headlines: top_clusters.map(&:canonical_title),
+        top_articles: top_clusters.map { |cluster| strategic_story_payload(cluster) },
+        cross_layer_signals: signals,
+        signal_context: signal_descriptions(signals),
+        pressure_summary: strategic_pressure_summary(config, theater_name, direct_clusters, supporting_zone),
+        flows: config[:flows],
+        risk_factors: config[:risk_factors],
+        detected_at: @reference_time.iso8601,
+      }
+    end
+      .sort_by { |item| [-item[:strategic_score].to_i, -item[:source_count].to_i, item[:name].to_s] }
+      .first(MAX_STRATEGIC_SITUATIONS)
+  end
+
+  def recent_corroborated_story_clusters
+    NewsStoryCluster.where("last_seen_at >= ?", @reference_time - STRATEGIC_STORY_WINDOW)
+      .where("source_count >= 2 OR verification_status IN (?)", CORROBORATED_CLUSTER_STATUSES)
+      .order(last_seen_at: :desc)
+      .to_a
+  end
+
+  def direct_strategic_story_cluster?(cluster, chokepoint_key, chokepoint)
+    text = [cluster.canonical_title, cluster.location_name].compact.join(" ").downcase
+    return false if text.blank?
+
+    mentions = strategic_terms(chokepoint_key, chokepoint).any? { |term| text.include?(term) }
+    return false unless mentions
+
+    DIRECT_STORY_TERMS.any? { |term| text.include?(term) } || geographically_local_to_strategic_node?(cluster, chokepoint)
+  end
+
+  def strategic_terms(chokepoint_key, chokepoint)
+    [
+      chokepoint.fetch(:name).downcase,
+      chokepoint_key.to_s.tr("_", " "),
+      OntologySyncSupport.slugify(chokepoint.fetch(:name)).tr("-", " "),
+      *chokepoint.fetch(:name).downcase.split(/[^a-z0-9]+/).select { |token| token.length >= 5 },
+    ].uniq
+  end
+
+  def geographically_local_to_strategic_node?(cluster, chokepoint)
+    return false if cluster.latitude.blank? || cluster.longitude.blank?
+
+    haversine_km(cluster.latitude, cluster.longitude, chokepoint[:lat], chokepoint[:lng]) <= [chokepoint[:radius_km].to_f * 4.0, 250.0].max
+  end
+
+  def strategic_theater_name(chokepoint, clusters, active_theaters)
+    named = self.class::NAMED_THEATERS[chokepoint.fetch(:name)]
+    return named if named.present? && active_theaters.key?(named)
+
+    direct_theaters = clusters.filter_map do |cluster|
+      next if cluster.latitude.blank? || cluster.longitude.blank?
+
+      situation_name = self.class.infer_situation_name(
+        lat: cluster.latitude.to_f,
+        lng: cluster.longitude.to_f,
+        text: [cluster.canonical_title, cluster.location_name].compact.join(" ")
+      )
+      self.class.infer_theater(lat: cluster.latitude.to_f, lng: cluster.longitude.to_f, situation_name: situation_name)
+    end.tally
+
+    matching_direct = direct_theaters.keys.find { |theater| active_theaters.key?(theater) }
+    return matching_direct if matching_direct.present?
+
+    nearest = active_theaters.values.min_by do |zone|
+      haversine_km(chokepoint.fetch(:lat), chokepoint.fetch(:lng), zone[:lat], zone[:lng])
+    end
+    return nil if nearest.blank?
+
+    distance = haversine_km(chokepoint.fetch(:lat), chokepoint.fetch(:lng), nearest[:lat], nearest[:lng])
+    distance <= 1800 ? nearest[:theater] : nil
+  end
+
+  def strategic_situation_qualifies?(direct_clusters, fresh_clusters, total_sources, supporting_zone)
+    return false if total_sources < STRATEGIC_MIN_TOTAL_SOURCES
+    return true if supporting_zone.present? && direct_clusters.size >= STRATEGIC_MIN_DIRECT_CLUSTERS
+
+    fresh_clusters.size >= STRATEGIC_MIN_FRESH_CLUSTERS
+  end
+
+  def strategic_cross_layer_signals(chokepoint)
+    signals = cross_layer_signals(chokepoint[:lat], chokepoint[:lng], radius_km: STRATEGIC_CROSS_LAYER_RADIUS_KM)
+    ship_bounds = bbox(chokepoint[:lat], chokepoint[:lng], [chokepoint[:radius_km].to_f * 2.0, 120.0].max)
+    nearby_ships = Ship.where("updated_at > ?", @reference_time - 45.minutes)
+      .where(latitude: ship_bounds[:lamin]..ship_bounds[:lamax], longitude: ship_bounds[:lomin]..ship_bounds[:lomax])
+      .where.not(latitude: nil, longitude: nil)
+
+    ship_count = nearby_ships.count
+    signals[:ships_nearby] = ship_count if ship_count.positive?
+    tankers = nearby_ships.where(ship_type: [70, 80]).count
+    signals[:tankers_nearby] = tankers if tankers.positive?
+    signals
+  rescue => e
+    Rails.logger.warn("ConflictPulseService strategic_cross_layer_signals: #{e.message}")
+    {}
+  end
+
+  def strategic_situation_score(fresh_clusters:, total_sources:, supporting_zone:, signals:)
+    score = 30
+    score += [fresh_clusters.size * 10, 25].min
+    score += [total_sources * 2, 18].min
+    score += [supporting_zone&.dig(:pulse_score).to_i / 4.0, 20].min if supporting_zone.present?
+    score += 8 if signals[:ships_nearby].to_i > 0
+    score += 6 if signals[:tankers_nearby].to_i > 0
+    score += 8 if signals[:gps_jamming].present?
+    score += 6 if signals[:military_flights].to_i > 0
+    [score.round, 100].min
+  end
+
+  def strategic_situation_status(score)
+    return "critical" if score >= 80
+    return "elevated" if score >= 60
+
+    "monitoring"
+  end
+
+  def strategic_story_payload(cluster)
+    article = cluster.lead_news_article
+    {
+      title: cluster.canonical_title,
+      url: article&.url,
+      source: article&.origin_source_name || article&.publisher_name,
+      publisher: article&.publisher_name || article&.origin_source_name,
+      published_at: cluster.last_seen_at&.iso8601,
+      cluster_id: cluster.cluster_key,
+      source_count: cluster.source_count.to_i,
+    }.compact
+  end
+
+  def strategic_pressure_summary(chokepoint, theater_name, direct_clusters, supporting_zone)
+    summary = "#{chokepoint.fetch(:name)} has #{direct_clusters.size} corroborated story cluster"
+    summary << "s"
+    summary << " directly about the corridor"
+    if theater_name.present?
+      summary << ", aligned with #{theater_name}"
+    end
+    if supporting_zone.present?
+      summary << " (pulse #{supporting_zone[:pulse_score]})"
+    end
+    summary
+  end
+
+  def haversine_km(lat1, lng1, lat2, lng2)
+    radians_per_degree = Math::PI / 180.0
+    dlat = (lat2 - lat1) * radians_per_degree
+    dlng = (lng2 - lng1) * radians_per_degree
+    a = Math.sin(dlat / 2)**2 +
+      Math.cos(lat1 * radians_per_degree) *
+      Math.cos(lat2 * radians_per_degree) *
+      Math.sin(dlng / 2)**2
+
+    6371.0 * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
   end
 
   # Build hex cells for theater visualization using a global flat-top hex grid.
@@ -687,53 +943,18 @@ class ConflictPulseService
   end
 
   def resolve_situation_name(zone)
-    lat = zone[:lat]
-    lng = zone[:lng]
-
-    # 1. Check specific situation names first
-    SITUATION_NAMES.each do |name, bounds|
-      return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
-    end
-
-    # 2. Fallback: extract most-mentioned location from top headlines
-    headlines = (zone[:top_headlines] || []).join(" ").downcase
-    best_match = nil
-    best_count = 0
-    StrikeArcExtractor::ACTORS.each do |keyword, info|
-      count = headlines.scan(keyword).size
-      if count > best_count
-        best_count = count
-        best_match = info[:name]
-      end
-    end
-    return "#{best_match} Region" if best_match
-
-    # 3. Country-bounds lookup
-    COUNTRY_BOUNDS.each do |name, bounds|
-      return name if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
-    end
-
-    # 4. Last resort — latitude-based region label
-    if lat > 60 then "Arctic Region"
-    elsif lat > 30 then "Northern #{lng > 0 ? 'Eastern' : 'Western'} Region"
-    elsif lat > -30 then "Tropical #{lng > 0 ? 'Eastern' : 'Western'} Region"
-    else "Southern #{lng > 0 ? 'Eastern' : 'Western'} Region"
-    end
+    self.class.infer_situation_name(
+      lat: zone[:lat],
+      lng: zone[:lng],
+      text: (zone[:top_headlines] || []).join(" ")
+    )
   end
 
   def resolve_theater(zone)
-    # 1. Named theater for known conflict clusters
-    named = NAMED_THEATERS[zone[:situation_name]]
-    return named if named
-
-    # 2. Region-based fallback from coordinates
-    lat = zone[:lat]
-    lng = zone[:lng]
-    THEATER_REGIONS.each do |region, bounds|
-      return region if bounds[:lat].cover?(lat) && bounds[:lng].cover?(lng)
-    end
-
-    # 3. Should never happen, but just in case
-    "Global"
+    self.class.infer_theater(
+      lat: zone[:lat],
+      lng: zone[:lng],
+      situation_name: zone[:situation_name]
+    )
   end
 end

@@ -798,6 +798,9 @@ export function applyNewsMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 2000000),
       duration: 1.0,
     })
+    if (this._buildNewsContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildNewsContext(ev))
+    }
     // Highlight the dot briefly
     const entity = this._newsEntities?.[idx]
     if (entity?.point) {
@@ -942,6 +945,9 @@ export function applyNewsMethods(GlobeController) {
     // Show arcs for this cluster (Option B: on-click arc reveal)
     const locKey = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
     this._showClusterArcs(locKey)
+    if (this._buildNewsContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildNewsContext(ev))
+    }
 
     const categoryColors = {
       conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",

@@ -6,6 +6,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
   GlobeController.prototype._startConflictPulse = function() {
     this._conflictPulseData = []
+    this._strategicSituationData = []
     this._conflictPulseEntities = []
     this._conflictPulsePrev = {}  // track previous state for surge detection
     this._strikeArcsVisible = false
@@ -54,6 +55,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
       this._conflictPulseData = zones
       this._conflictPulseZones = zones
+      this._strategicSituationData = data.strategic_situations || []
       this._strikeArcData = data.strike_arcs || []
       this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
@@ -333,6 +335,62 @@ export function applyConflictPulseMethods(GlobeController) {
       })
       this._conflictPulseEntities.push(point)
     })
+
+    // ── Layer 4: Strategic situations (named strategic nodes under theater pressure) ──
+    ;(this._strategicSituationData || []).forEach((item, idx) => {
+      const statusColors = {
+        critical: "#ff7043",
+        elevated: "#ffca28",
+        monitoring: "#26c6da",
+      }
+      const color = Cesium.Color.fromCssColorString(statusColors[item.status] || "#26c6da")
+      const radius = 70000 + ((item.strategic_score || 0) * 1200)
+      const iconSize = item.status === "critical" ? 34 : 30
+
+      const ring = ds.entities.add({
+        id: `cpulse-strat-ring-${idx}`,
+        position: Cesium.Cartesian3.fromDegrees(item.lng, item.lat),
+        ellipse: {
+          semiMajorAxis: radius,
+          semiMinorAxis: radius,
+          material: color.withAlpha(0.05),
+          outline: true,
+          outlineColor: color.withAlpha(0.5),
+          outlineWidth: 2,
+          height: 5300,
+        },
+      })
+      this._conflictPulseEntities.push(ring)
+
+      const point = ds.entities.add({
+        id: `cpulse-strat-${idx}`,
+        position: Cesium.Cartesian3.fromDegrees(item.lng, item.lat, 5600),
+        billboard: {
+          image: this._makeStrategicSituationIcon(item, statusColors[item.status] || "#26c6da"),
+          width: iconSize,
+          height: iconSize,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.1, 8e6, 0.45),
+        },
+        label: {
+          text: item.name || "Strategic node",
+          font: "bold 12px 'JetBrains Mono', monospace",
+          fillColor: color.withAlpha(0.95),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 4,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 8),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.0, 8e6, 0.4),
+          translucencyByDistance: new Cesium.NearFarScalar(3e5, 1.0, 1e7, 0.0),
+        },
+      })
+      this._conflictPulseEntities.push(point)
+    })
     ds.entities.resumeEvents()
 
     // Start pulse animation if any rings need it
@@ -447,6 +505,39 @@ export function applyConflictPulseMethods(GlobeController) {
     return url
   }
 
+  GlobeController.prototype._makeStrategicSituationIcon = function(item, color) {
+    const key = `strategic-${item.id}-${item.status}-${item.strategic_score}`
+    if (this._iconCache?.[key]) return this._iconCache[key]
+    if (!this._iconCache) this._iconCache = {}
+
+    const size = 40
+    const canvas = document.createElement("canvas")
+    canvas.width = size; canvas.height = size
+    const ctx = canvas.getContext("2d")
+
+    ctx.beginPath()
+    ctx.roundRect(4, 4, size - 8, size - 8, 8)
+    ctx.fillStyle = "rgba(7,10,15,0.92)"
+    ctx.fill()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+
+    ctx.font = "bold 16px 'JetBrains Mono', monospace"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillStyle = color
+    ctx.fillText("S", size / 2, 14)
+
+    ctx.font = "bold 11px 'JetBrains Mono', monospace"
+    ctx.fillStyle = "#fff"
+    ctx.fillText(`${item.strategic_score || 0}`, size / 2, 27)
+
+    const url = canvas.toDataURL()
+    this._iconCache[key] = url
+    return url
+  }
+
   // ── Click handler + detail panel ───────────────────────────
 
   GlobeController.prototype._flyToConflictPulse = function(zone) {
@@ -458,7 +549,20 @@ export function applyConflictPulseMethods(GlobeController) {
     this.showConflictPulseDetail(zone)
   }
 
+  GlobeController.prototype._flyToStrategicSituation = function(item) {
+    const Cesium = window.Cesium
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(item.lng, item.lat, 1400000),
+      duration: 1.5,
+    })
+    this.showStrategicSituationDetail(item)
+  }
+
   GlobeController.prototype.showConflictPulseDetail = function(zone) {
+    if (this._buildTheaterContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildTheaterContext(zone))
+    }
+
     const trendColors = { surging: "#f44336", active: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
     const color = trendColors[zone.escalation_trend] || "#ff9800"
 
@@ -481,9 +585,20 @@ export function applyConflictPulseMethods(GlobeController) {
     const headlinesHtml = articles.length > 0
       ? articles.map(a => {
           const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
-          return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          const itemBody = `
             <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title)}</div>
             <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.publisher || a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
+          `
+          if (a.cluster_id) {
+            return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(a.cluster_id)}" data-title="${this._escapeHtml(a.title || "Story cluster")}" data-summary="${this._escapeHtml((a.publisher || a.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
+                ${itemBody}
+              </button>
+              ${a.url ? `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;padding-top:2px;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
+            </div>`
+          }
+          return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+            ${itemBody}
           </a>`
         }).join("")
       : (zone.top_headlines || []).map(h =>
@@ -574,6 +689,85 @@ export function applyConflictPulseMethods(GlobeController) {
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
 
+  }
+
+  GlobeController.prototype.showStrategicSituationDetail = function(item) {
+    if (item?.kind && item?.node_id && this._focusContextNode) {
+      this._focusContextNode(
+        { kind: item.kind, id: item.node_id },
+        {
+          title: item.name,
+          summary: item.pressure_summary || [item.theater, `${item.direct_cluster_count || 0} corroborated clusters`].filter(Boolean).join(" · "),
+        }
+      )
+    }
+
+    const statusColors = { critical: "#ff7043", elevated: "#ffca28", monitoring: "#26c6da" }
+    const color = statusColors[item.status] || "#26c6da"
+    const signalHtml = Object.entries(item.cross_layer_signals || {}).map(([key, val]) => {
+      const label = key.replace(/_/g, " ")
+      return `<span class="detail-chip" style="background:rgba(38,198,218,0.12);color:${key === "gps_jamming" ? "#ffca28" : color};">${this._escapeHtml(`${label}: ${val}`)}</span>`
+    }).join("")
+    const headlinesHtml = (item.top_articles || []).map(article => {
+      const timeAgo = article.published_at ? this._timeAgo(new Date(article.published_at)) : ""
+      if (article.cluster_id) {
+        return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(article.cluster_id)}" data-title="${this._escapeHtml(article.title || "Story cluster")}" data-summary="${this._escapeHtml((article.publisher || article.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
+            <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(article.title)}</div>
+            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(article.publisher || article.source || "")} · ${timeAgo}</div>
+          </button>
+          ${article.url ? `<a href="${this._safeUrl(article.url)}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;padding-top:2px;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
+        </div>`
+      }
+      return `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(article.title)}</div>`
+    }).join("")
+    const flowRows = Object.entries(item.flows || {}).filter(([, flow]) => flow?.pct).map(([type, flow]) =>
+      `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+        <span style="font:600 11px var(--gt-mono);color:#e0e0e0;text-transform:capitalize;">${this._escapeHtml(type)}</span>
+        <span style="font:700 11px var(--gt-mono);color:${color};">${flow.pct}% of world</span>
+      </div>`
+    ).join("")
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${color};">
+        <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>${this._escapeHtml(item.name || "Strategic situation")}
+      </div>
+      <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
+        ${(item.status || "monitoring").toUpperCase()} — STRATEGIC ${item.strategic_score || 0}
+      </div>
+      <div style="font:400 10px var(--gt-mono,monospace);color:#aaa;margin-bottom:10px;line-height:1.4;">
+        ${this._escapeHtml(item.pressure_summary || "")}
+      </div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Story clusters</span>
+          <span class="detail-value" style="color:${color};">${item.direct_cluster_count || 0}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Sources</span>
+          <span class="detail-value">${item.source_count || 0}</span>
+        </div>
+        ${item.theater ? `<div class="detail-field"><span class="detail-label">Theater</span><span class="detail-value">${this._escapeHtml(item.theater)}</span></div>` : ""}
+      </div>
+      ${signalHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">LIVE SIGNALS</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div></div>` : ""}
+      ${flowRows ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">FLOW EXPOSURE</div>${flowRows}</div>` : ""}
+      ${headlinesHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">DIRECT REPORTING</div>${headlinesHtml}</div>` : ""}
+      ${item.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(item.theater)}">
+        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(item.theater)}
+      </button>` : ""}
+      <button class="detail-track-btn" style="background:rgba(38,198,218,0.15);border-color:rgba(38,198,218,0.3);color:#26c6da;" data-action="click->globe#selectContextNode" data-kind="${this._escapeHtml(item.kind || "entity")}" data-id="${this._escapeHtml(item.node_id || item.name || "")}" data-title="${this._escapeHtml(item.name || "Strategic node")}" data-summary="${this._escapeHtml(item.pressure_summary || "")}">
+        <i class="fa-solid fa-diagram-project" style="margin-right:4px;"></i>Open Graph Context
+      </button>
+      ${this._connectionsPlaceholder()}
+    `
+    this.detailPanelTarget.style.display = ""
+  }
+
+  GlobeController.prototype.showStrategicSituationFromList = function(event) {
+    const idx = parseInt(event.currentTarget.dataset.idx, 10)
+    const item = this._strategicSituationData?.[idx]
+    if (!item) return
+    this._flyToStrategicSituation(item)
   }
 
   // ── Explore area — scoped layer reveal (only layers with signals, viewport-bounded) ──
@@ -923,7 +1117,7 @@ export function applyConflictPulseMethods(GlobeController) {
     // Auto-highlight theater + ripple animation
     if (theater) {
       this._highlightedTheater = null
-      this.highlightTheater({ currentTarget: { dataset: { theater } } })
+      this.highlightTheater({ currentTarget: { dataset: { theater, skipContext: "true" } } })
       this._rippleFromHex(cell)
     }
   }
@@ -1008,7 +1202,7 @@ export function applyConflictPulseMethods(GlobeController) {
     this._flyToConflictPulse(zone)
     // Also highlight the theater
     if (zone.theater) {
-      this.highlightTheater({ currentTarget: { dataset: { theater: zone.theater } } })
+      this.highlightTheater({ currentTarget: { dataset: { theater: zone.theater, skipContext: "true" } } })
     }
   }
 
@@ -1016,6 +1210,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
   GlobeController.prototype.highlightTheater = function(event) {
     const theater = event.currentTarget.dataset.theater
+    const skipContext = event.currentTarget.dataset.skipContext === "true"
     if (!theater || this._highlightedTheater === theater) {
       // Toggle off — reset all to normal and turn hex layer back off if we turned it on
       this._highlightedTheater = null
@@ -1030,6 +1225,7 @@ export function applyConflictPulseMethods(GlobeController) {
       return
     }
     this._highlightedTheater = theater
+    if (!skipContext && this._setTheaterSelectedContext) this._setTheaterSelectedContext(theater)
 
     // Auto-enable hex theater + strike arcs if they're off
     if (!this._hexTheaterVisible) {
@@ -1088,14 +1284,16 @@ export function applyConflictPulseMethods(GlobeController) {
     if (!list) return
 
     const zones = this._conflictPulseZones || []
+    const strategic = this._strategicSituationData || []
     const snapshotStatus = this._conflictPulseSnapshotStatus || "pending"
     if (countEl) {
       const base = `${zones.length} zone${zones.length !== 1 ? "s" : ""}`
+      const strategicSuffix = strategic.length ? ` · ${strategic.length} strategic` : ""
       const suffix = snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(snapshotStatus, "snapshot")}`
-      countEl.textContent = `${base}${suffix}`
+      countEl.textContent = `${base}${strategicSuffix}${suffix}`
     }
 
-    if (!zones.length) {
+    if (!zones.length && !strategic.length) {
       const emptyLabel = {
         pending: "Conflict pulse snapshot pending.",
         stale: "Showing no active zones from the latest stored snapshot.",
@@ -1129,6 +1327,30 @@ export function applyConflictPulseMethods(GlobeController) {
     if (snapshotStatus !== "ready") {
       html += `<div style="padding:0 0 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
     }
+    if (strategic.length) {
+      html += `<div class="sit-theater">`
+      html += `<div class="sit-theater-header"><span class="sit-theater-arrow">▾</span><span class="sit-theater-name">Strategic Situations</span><span class="sit-theater-count">${strategic.length}</span></div>`
+      html += `<div class="sit-theater-body">`
+      strategic.forEach((item, idx) => {
+        const color = { critical: "#ff7043", elevated: "#ffca28", monitoring: "#26c6da" }[item.status] || "#26c6da"
+        const topArticle = (item.top_articles || [])[0]
+        html += `<div class="sit-zone sit-zone--summary" data-zone-key="${this._escapeHtml(item.id || `strategic-${idx}`)}">
+          <div class="sit-zone-header" data-action="click->globe#showStrategicSituationFromList" data-idx="${idx}">
+            <span class="sit-zone-name">${this._escapeHtml(item.name || "Strategic node")}</span>
+            <span class="sit-zone-score" style="color:${color};">${item.strategic_score || 0} <span class="sit-zone-trend">${this._escapeHtml((item.status || "monitoring").toUpperCase())}</span></span>
+          </div>
+          <div class="sit-zone-summary">
+            <div class="sit-zone-headline">${this._escapeHtml(item.pressure_summary || (item.theater || "Strategic pressure"))}</div>
+            <div class="sit-zone-meta">${this._escapeHtml([item.theater, `${item.source_count || 0} sources`, `${item.direct_cluster_count || 0} clusters`].filter(Boolean).join(" · "))}</div>
+            ${topArticle ? `<button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(topArticle.cluster_id || "")}" data-title="${this._escapeHtml(topArticle.title || "Story cluster")}" data-summary="${this._escapeHtml(topArticle.publisher || topArticle.source || "")}" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;margin-top:8px;">
+              <div class="sit-zone-headline">${this._escapeHtml(topArticle.title || "")}</div>
+              <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")}</div>
+            </button>` : ""}
+          </div>
+        </div>`
+      })
+      html += `</div></div>`
+    }
     sorted.forEach(([theater, theaterZones], tIdx) => {
       const maxScore = Math.max(...theaterZones.map(z => z.pulse_score))
       const collapsed = maxScore < 40
@@ -1161,8 +1383,15 @@ export function applyConflictPulseMethods(GlobeController) {
           html += `<div class="sit-zone-summary">`
           if (topArticle) {
             const timeAgo = topArticle.published_at ? this._timeAgo(new Date(topArticle.published_at)) : ""
-            html += `<div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
-              <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>`
+            if (topArticle.cluster_id) {
+              html += `<button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(topArticle.cluster_id)}" data-title="${this._escapeHtml(topArticle.title?.substring(0, 90) || "Story cluster")}" data-summary="${this._escapeHtml((topArticle.publisher || topArticle.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
+                <div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
+                <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>
+              </button>`
+            } else {
+              html += `<div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
+                <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>`
+            }
           }
           // Signal count chips (compact)
           const s = zone.cross_layer_signals || {}
@@ -1191,10 +1420,20 @@ export function applyConflictPulseMethods(GlobeController) {
             html += `<div class="sit-section-label">TOP STORIES</div>`
             articles.forEach(a => {
               const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
-              html += `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" class="sit-article">
-                <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
-                <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
-              </a>`
+              if (a.cluster_id) {
+                html += `<div class="sit-article" style="display:flex;gap:8px;align-items:flex-start;">
+                  <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(a.cluster_id)}" data-title="${this._escapeHtml(a.title || "Story cluster")}" data-summary="${this._escapeHtml((a.publisher || a.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
+                    <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
+                    <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
+                  </button>
+                  ${a.url ? `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="color:rgba(200,210,225,0.45);text-decoration:none;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
+                </div>`
+              } else {
+                html += `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" class="sit-article">
+                  <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
+                  <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
+                </a>`
+              }
             })
             if (zone.count_24h > 5) html += `<div class="sit-more">+${zone.count_24h - 5} more</div>`
           }

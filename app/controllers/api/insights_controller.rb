@@ -1,5 +1,7 @@
 module Api
   class InsightsController < ApplicationController
+    skip_before_action :authenticate_user!
+
     def index
       snapshot = InsightSnapshotService.fetch_or_enqueue
       payload = snapshot&.payload.presence || InsightSnapshotService.empty_payload

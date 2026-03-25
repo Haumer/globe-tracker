@@ -57,6 +57,81 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_empty eq_insights
   end
 
+  test "earthquake infrastructure insight includes corroborating multi-source news cluster" do
+    quake_time = 3.hours.ago
+
+    Earthquake.create!(
+      external_id: "eq-news-1", title: "M6.1 near major city",
+      magnitude: 6.1, latitude: 37.0, longitude: 38.0, depth: 12,
+      event_time: quake_time, fetched_at: Time.current
+    )
+    PowerPlant.create!(
+      gppd_idnr: "PP-NEWS-1", name: "Regional Grid Plant",
+      latitude: 37.1, longitude: 38.1, primary_fuel: "Gas", capacity_mw: 700
+    )
+    NewsStoryCluster.create!(
+      cluster_key: "news-eq-1",
+      canonical_title: "Strong earthquake reported near Gaziantep",
+      content_scope: "adjacent",
+      event_family: "disaster",
+      event_type: "earthquake",
+      location_name: "Gaziantep",
+      latitude: 37.05,
+      longitude: 38.02,
+      geo_precision: "city",
+      first_seen_at: quake_time + 1.hour,
+      last_seen_at: quake_time + 2.hours,
+      article_count: 4,
+      source_count: 3,
+      verification_status: "multi_source"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    eq_insight = insights.find { |i| i[:type] == "earthquake_infrastructure" }
+
+    assert eq_insight
+    assert_includes eq_insight[:title], "Reported"
+    assert_equal "news-eq-1", eq_insight[:entities][:news].first[:cluster_key]
+    assert_includes eq_insight[:description], "corroborated by 1 news cluster"
+  end
+
+  test "single-source earthquake news cluster is not attached to earthquake infrastructure insight" do
+    quake_time = 2.hours.ago
+
+    Earthquake.create!(
+      external_id: "eq-news-2", title: "M5.4 event near coast",
+      magnitude: 5.4, latitude: 42.0, longitude: 27.0, depth: 18,
+      event_time: quake_time, fetched_at: Time.current
+    )
+    PowerPlant.create!(
+      gppd_idnr: "PP-NEWS-2", name: "Coastal Plant",
+      latitude: 42.1, longitude: 27.1, primary_fuel: "Coal", capacity_mw: 500
+    )
+    NewsStoryCluster.create!(
+      cluster_key: "news-eq-single",
+      canonical_title: "Unconfirmed quake reports",
+      content_scope: "adjacent",
+      event_family: "disaster",
+      event_type: "earthquake",
+      location_name: "Black Sea coast",
+      latitude: 42.0,
+      longitude: 27.0,
+      geo_precision: "region",
+      first_seen_at: quake_time + 30.minutes,
+      last_seen_at: quake_time + 1.hour,
+      article_count: 1,
+      source_count: 1,
+      verification_status: "single_source"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    eq_insight = insights.find { |i| i[:type] == "earthquake_infrastructure" }
+
+    assert eq_insight
+    assert_empty eq_insight[:entities][:news]
+    refute_includes eq_insight[:title], "Reported"
+  end
+
   test "earthquake below 4.5 magnitude is excluded" do
     Earthquake.create!(
       external_id: "eq-small-1", title: "M4.2 minor",
@@ -300,6 +375,50 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_includes cable_insights.first[:title], "Japan"
   end
 
+  test "cable outage insight includes traffic degradation and corroborating outage news" do
+    quake_time = 10.hours.ago
+    outage_time = 4.hours.ago
+
+    Earthquake.create!(
+      external_id: "eq-outage-news", title: "M6.0 offshore quake",
+      magnitude: 6.0, latitude: 36.0, longitude: 140.0, depth: 25,
+      event_time: quake_time, fetched_at: Time.current
+    )
+    InternetOutage.create!(
+      external_id: "outage-jp-news", entity_type: "country", entity_code: "JP",
+      entity_name: "Japan", level: "critical", score: 88.0,
+      started_at: outage_time
+    )
+    InternetTrafficSnapshot.create!(
+      country_code: "JP", country_name: "Japan", traffic_pct: 61.5,
+      attack_origin_pct: 0.2, attack_target_pct: 1.4, recorded_at: 30.minutes.ago
+    )
+    NewsStoryCluster.create!(
+      cluster_key: "jp-outage-cluster",
+      canonical_title: "Japan outage reported after offshore quake",
+      content_scope: "adjacent",
+      event_family: "infrastructure",
+      event_type: "outage",
+      location_name: "Japan",
+      latitude: 36.0,
+      longitude: 138.0,
+      geo_precision: "country",
+      first_seen_at: outage_time + 30.minutes,
+      last_seen_at: outage_time + 2.hours,
+      article_count: 5,
+      source_count: 3,
+      verification_status: "multi_source"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    cable_insight = insights.find { |i| i[:type] == "cable_outage" }
+
+    assert cable_insight
+    assert_equal "JP", cable_insight[:entities][:traffic][:country_code]
+    assert_equal "jp-outage-cluster", cable_insight[:entities][:news].first[:cluster_key]
+    assert_includes cable_insight[:description], "traffic at 61.5% of baseline"
+  end
+
   test "internet outage without recent earthquake produces no insight" do
     InternetOutage.create!(
       external_id: "outage-lonely", entity_type: "country", entity_code: "DE",
@@ -503,6 +622,53 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_includes blackout.first[:title], "Sudan"
   end
 
+  test "information blackout insight includes traffic degradation and corroborating news" do
+    outage_time = 3.hours.ago
+
+    2.times do |i|
+      InternetOutage.create!(
+        external_id: "blackout-news-#{i}", entity_type: "country", entity_code: "SD",
+        entity_name: "Sudan", level: "critical", score: 88.0 - i,
+        started_at: outage_time + i.minutes
+      )
+    end
+    InternetTrafficSnapshot.create!(
+      country_code: "SD", country_name: "Sudan", traffic_pct: 42.0,
+      attack_origin_pct: 0.0, attack_target_pct: 0.3, recorded_at: 20.minutes.ago
+    )
+    3.times do |i|
+      ConflictEvent.create!(
+        external_id: 7100 + i, conflict_name: "Khartoum Fighting",
+        latitude: 15.6, longitude: 32.5, date_start: (i + 1).days.ago,
+        country: "Sudan", type_of_violence: 1
+      )
+    end
+    NewsStoryCluster.create!(
+      cluster_key: "sudan-blackout-cluster",
+      canonical_title: "Sudan communications blackout reported during fighting",
+      content_scope: "adjacent",
+      event_family: "infrastructure",
+      event_type: "outage",
+      location_name: "Sudan",
+      latitude: 16.0,
+      longitude: 30.0,
+      geo_precision: "country",
+      first_seen_at: outage_time + 45.minutes,
+      last_seen_at: outage_time + 90.minutes,
+      article_count: 6,
+      source_count: 4,
+      verification_status: "multi_source"
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    blackout = insights.find { |i| i[:type] == "information_blackout" }
+
+    assert blackout
+    assert_equal "SD", blackout[:entities][:traffic][:country_code]
+    assert_equal "sudan-blackout-cluster", blackout[:entities][:news].first[:cluster_key]
+    assert_includes blackout[:description], "traffic at 42.0% of baseline"
+  end
+
   # ── weather_disruption ──────────────────────────────────────
 
   test "severe weather with flights returns weather_disruption" do
@@ -525,6 +691,33 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_equal 1, wx.size
     assert_equal "high", wx.first[:severity] # Extreme = high
     assert_includes wx.first[:title], "Tornado Warning"
+  end
+
+  test "weather disruption includes nearby camera feeds" do
+    WeatherAlert.create!(
+      external_id: "wx-cam-1", event: "Severe Thunderstorm", severity: "Severe",
+      latitude: 47.8, longitude: 18.99, onset: 1.hour.ago,
+      expires: 2.hours.from_now, fetched_at: Time.current
+    )
+    12.times do |i|
+      Flight.create!(
+        icao24: "wx-cam-flt-#{i}", callsign: "CAM#{i}",
+        latitude: 47.75 + i * 0.01, longitude: 19.0, altitude: 31000,
+        origin_country: "Hungary", military: false
+      )
+    end
+    Camera.create!(
+      webcam_id: "cam-wx-1", source: "windy", title: "Visegrad Ridge Cam",
+      latitude: 47.799, longitude: 18.991, status: "active",
+      city: "Visegrad", country: "Hungary", expires_at: 1.day.from_now
+    )
+
+    insights = CrossLayerAnalyzer.analyze
+    wx = insights.find { |i| i[:type] == "weather_disruption" }
+
+    assert wx
+    assert_equal "Visegrad Ridge Cam", wx[:entities][:cameras].first[:title]
+    assert_includes wx[:description], "nearby camera feed"
   end
 
   test "severe weather with fewer than 10 flights produces no insight" do
@@ -581,5 +774,34 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     insights = CrossLayerAnalyzer.analyze
     ship = insights.select { |i| i[:type] == "ship_cable_proximity" }
     assert_empty ship
+  end
+
+  test "chokepoint disruption normalizes corrupted chokepoint names" do
+    corrupted_name = "Suez Canal carries 12% of global oil, making Brent Crude a direct flow dependency benchmark (latest 0.0%)"
+    mocked_payload = [{
+      id: "suez",
+      name: corrupted_name,
+      lat: 30.46,
+      lng: 32.34,
+      status: "elevated",
+      ships_nearby: { total: 0, tankers: 0, cargo: 0 },
+      flows: { oil: { pct: 12, note: "Europe-bound crude & refined products" } },
+      commodity_signals: [],
+      conflict_pulse: [{ score: 61, trend: "escalating" }],
+      checked_at: Time.current.iso8601,
+    }]
+
+    original_analyze = ChokepointMonitorService.method(:analyze)
+    ChokepointMonitorService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "chokepoint_disruption" }
+
+      assert insight
+      assert_equal "Suez Canal: escalating conflict near 12% of world oil", insight[:title]
+      assert_equal "Suez Canal", insight.dig(:entities, :chokepoint, :name)
+    ensure
+      ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
   end
 end

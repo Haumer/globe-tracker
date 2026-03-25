@@ -129,6 +129,7 @@ class OpenskyService
     if records.any?
       Flight.upsert_all(records, unique_by: :icao24)
       record_flight_snapshots(records)
+      OperationalOntologySyncService.enqueue_recent("flights")
     end
 
     # Purge stale flights not updated in the last 5 minutes

@@ -1,6 +1,25 @@
 require "test_helper"
 
 class AdsbServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
+  setup do
+    @original_queue_adapter = ActiveJob::Base.queue_adapter
+    ActiveJob::Base.queue_adapter = :test
+    clear_enqueued_jobs
+    clear_performed_jobs
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
+  end
+
+  teardown do
+    clear_enqueued_jobs
+    clear_performed_jobs
+    ActiveJob::Base.queue_adapter = @original_queue_adapter
+    Rails.cache.clear
+    OperationalOntologySyncService.instance_variable_set(:@recent_enqueue_slots, {})
+  end
+
   test "upsert_flights with valid aircraft data creates flights" do
     data = {
       "ac" => [
@@ -75,5 +94,26 @@ class AdsbServiceTest < ActiveSupport::TestCase
     flight = Flight.find_by(icao24: "conv01")
     # 10000 ft * 0.3048 = 3048.0 m
     assert_in_delta 3048.0, flight.altitude, 1.0
+  end
+
+  test "upsert_flights enqueues operational ontology sync" do
+    data = {
+      "ac" => [
+        {
+          "hex" => "ontadsb",
+          "flight" => "ONT456 ",
+          "lat" => 40.7,
+          "lon" => -73.9,
+          "alt_geom" => 35000,
+          "gs" => 450,
+          "track" => 180,
+          "seen" => 2,
+        }
+      ]
+    }
+
+    assert_enqueued_with(job: OperationalOntologyBatchJob) do
+      AdsbService.send(:upsert_flights, data)
+    end
   end
 end

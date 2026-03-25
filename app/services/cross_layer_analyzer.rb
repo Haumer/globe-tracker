@@ -1,6 +1,7 @@
 class CrossLayerAnalyzer
   PROXIMITY_KM = 200
   CABLE_OUTAGE_RADIUS_KM = 1000
+  CORROBORATED_NEWS_STATUSES = %w[multi_source cross_layer_corroborated].freeze
 
   # Country ISO-2 code -> [lat, lng] centroid for outage geolocation
   COUNTRY_CENTROIDS = {
@@ -82,6 +83,13 @@ class CrossLayerAnalyzer
       cables = cables_in_bounds(bounds)
       plants = PowerPlant.within_bounds(bounds)
       nuclear = plants.where(primary_fuel: "Nuclear")
+      news_clusters = matching_news_clusters(
+        lat: eq.latitude,
+        lng: eq.longitude,
+        occurred_at: eq.event_time,
+        event_types: %w[earthquake],
+        event_families: %w[disaster]
+      )
 
       next if cables.empty? && plants.count == 0
 
@@ -102,17 +110,24 @@ class CrossLayerAnalyzer
         "medium"
       end
 
+      description = eq.title.to_s
+      if news_clusters.any?
+        total_sources = news_clusters.sum(&:source_count)
+        description += " — corroborated by #{news_clusters.size} news cluster#{"s" unless news_clusters.size == 1} from #{total_sources} source#{'s' unless total_sources == 1}"
+      end
+
       insights << {
         type: "earthquake_infrastructure",
         severity: severity,
-        title: "M#{eq.magnitude} earthquake threatens #{detail_parts.join(" and ")}",
-        description: eq.title,
+        title: "#{"Reported " if news_clusters.any?}M#{eq.magnitude} earthquake threatens #{detail_parts.join(" and ")}",
+        description: description,
         lat: eq.latitude,
         lng: eq.longitude,
         entities: {
           earthquake: { id: eq.external_id, magnitude: eq.magnitude },
           cables: cables.map { |c| { name: c.name, id: c.cable_id } }.first(5),
           plants: plants.limit(5).map { |p| { name: p.name, fuel: p.primary_fuel, capacity: p.capacity_mw } },
+          news: serialize_news_clusters(news_clusters),
         },
         detected_at: Time.current.iso8601,
       }
@@ -260,20 +275,24 @@ class CrossLayerAnalyzer
       bounds = bbox(cluster.clat, cluster.clng, 100)
       plants = PowerPlant.within_bounds(bounds)
       nuclear = plants.where(primary_fuel: "Nuclear")
+      cameras = nearby_cameras(cluster.clat, cluster.clng, radius_km: 50)
       next if plants.count == 0
 
       severity = nuclear.any? ? "critical" : (cluster.fire_count.to_i > 20 ? "high" : "medium")
+      description = "Max FRP: #{cluster.max_frp&.round(0)}#{nuclear.any? ? " — NUCLEAR plant at risk" : ""}"
+      description += " — #{cameras.size} nearby camera feed#{"s" unless cameras.size == 1}" if cameras.any?
 
       insights << {
         type: "fire_infrastructure",
         severity: severity,
         title: "#{cluster.fire_count.to_i} fire hotspots near #{plants.count} power plant#{"s" unless plants.count == 1}",
-        description: "Max FRP: #{cluster.max_frp&.round(0)}#{nuclear.any? ? " — NUCLEAR plant at risk" : ""}",
+        description: description,
         lat: cluster.clat,
         lng: cluster.clng,
         entities: {
           fires: { count: cluster.fire_count.to_i, max_frp: cluster.max_frp },
           plants: plants.limit(5).map { |p| { name: p.name, fuel: p.primary_fuel, capacity: p.capacity_mw } },
+          cameras: serialize_cameras(cameras),
         },
         detected_at: Time.current.iso8601,
       }
@@ -301,6 +320,17 @@ class CrossLayerAnalyzer
       next unless centroid
 
       outage_lat, outage_lng = centroid
+      sample_outage = country_outages.first
+      traffic = latest_traffic_snapshot(code)
+      news_clusters = matching_news_clusters(
+        lat: outage_lat,
+        lng: outage_lng,
+        occurred_at: sample_outage.started_at || sample_outage.created_at,
+        event_types: %w[outage],
+        event_families: %w[infrastructure cyber],
+        time_before: 12.hours,
+        time_after: 24.hours
+      )
 
       # Only correlate quakes within CABLE_OUTAGE_RADIUS_KM of the outage country
       nearby_quakes = recent_quakes.select do |eq|
@@ -313,19 +343,26 @@ class CrossLayerAnalyzer
       shallow = nearby_quakes.select { |eq| eq.depth.present? && eq.depth < 70 }
       severity = shallow.any? ? "high" : "medium"
 
-      sample_outage = country_outages.first
       closest = nearby_quakes.min_by { |eq| distance_km(outage_lat, outage_lng, eq.latitude, eq.longitude) }
+      description = "#{country_outages.size} outage event#{"s" unless country_outages.size == 1}, #{nearby_quakes.size} recent M5+ earthquake#{"s" unless nearby_quakes.size == 1} within #{CABLE_OUTAGE_RADIUS_KM}km"
+      description += ", traffic at #{traffic.traffic_pct.round(1)}% of baseline" if traffic&.traffic_pct
+      if news_clusters.any?
+        total_sources = news_clusters.sum(&:source_count)
+        description += ", #{news_clusters.size} corroborating news cluster#{"s" unless news_clusters.size == 1} from #{total_sources} source#{'s' unless total_sources == 1}"
+      end
 
       insights << {
         type: "cable_outage",
         severity: severity,
         title: "Internet outage in #{sample_outage.entity_name} — possible cable damage",
-        description: "#{country_outages.size} outage event#{"s" unless country_outages.size == 1}, #{nearby_quakes.size} recent M5+ earthquake#{"s" unless nearby_quakes.size == 1} within #{CABLE_OUTAGE_RADIUS_KM}km",
+        description: description,
         lat: closest.latitude,
         lng: closest.longitude,
         entities: {
           outages: country_outages.map { |o| { entity: o.entity_name, level: o.level, score: o.score } }.first(3),
           earthquakes: nearby_quakes.map { |q| { title: q.title, magnitude: q.magnitude, depth: q.depth } }.first(3),
+          traffic: serialize_traffic_snapshot(traffic),
+          news: serialize_news_clusters(news_clusters),
         },
         detected_at: Time.current.iso8601,
       }
@@ -483,17 +520,34 @@ class CrossLayerAnalyzer
 
       sample_outage = country_outages.first
       recent_conflicts = conflicts.order(date_start: :desc).limit(5)
+      traffic = latest_traffic_snapshot(code)
+      news_clusters = matching_news_clusters(
+        lat: centroid[0],
+        lng: centroid[1],
+        occurred_at: sample_outage.started_at || sample_outage.created_at,
+        event_families: %w[conflict infrastructure],
+        time_before: 12.hours,
+        time_after: 24.hours
+      )
+      description = "#{country_outages.size} outage events + #{conflicts.count} conflict events — possible information warfare"
+      description += ", traffic at #{traffic.traffic_pct.round(1)}% of baseline" if traffic&.traffic_pct
+      if news_clusters.any?
+        total_sources = news_clusters.sum(&:source_count)
+        description += ", #{news_clusters.size} corroborating news cluster#{"s" unless news_clusters.size == 1} from #{total_sources} source#{'s' unless total_sources == 1}"
+      end
 
       insights << {
         type: "information_blackout",
         severity: country_outages.size > 2 ? "critical" : "high",
         title: "Internet blackout in #{sample_outage.entity_name} during active conflict",
-        description: "#{country_outages.size} outage events + #{conflicts.count} conflict events — possible information warfare",
+        description: description,
         lat: centroid[0],
         lng: centroid[1],
         entities: {
           outages: country_outages.map { |o| { entity: o.entity_name, level: o.level, score: o.score } }.first(3),
           conflicts: recent_conflicts.map { |c| { name: c.conflict_name, type: c.type_of_violence } },
+          traffic: serialize_traffic_snapshot(traffic),
+          news: serialize_news_clusters(news_clusters),
         },
         detected_at: Time.current.iso8601,
       }
@@ -644,17 +698,21 @@ class CrossLayerAnalyzer
 
       events = cluster_alerts.map(&:event).uniq
       severity = cluster_alerts.any? { |a| a.severity == "Extreme" } ? "high" : "medium"
+      cameras = nearby_cameras(avg_lat, avg_lng, radius_km: 75)
+      description = "#{cluster_alerts.size} weather alert#{"s" unless cluster_alerts.size == 1} (#{events.join(", ")}), #{total} aircraft in affected airspace"
+      description += ", #{cameras.size} nearby camera feed#{"s" unless cameras.size == 1}" if cameras.any?
 
       insights << {
         type: "weather_disruption",
         severity: severity,
         title: "#{events.first} affecting #{total} flights",
-        description: "#{cluster_alerts.size} weather alert#{"s" unless cluster_alerts.size == 1} (#{events.join(", ")}), #{total} aircraft in affected airspace",
+        description: description,
         lat: avg_lat,
         lng: avg_lng,
         entities: {
           weather: cluster_alerts.first(3).map { |a| { event: a.event, severity: a.severity, areas: a.areas } },
           flights: { total: total },
+          cameras: serialize_cameras(cameras),
         },
         detected_at: Time.current.iso8601,
       }
@@ -692,6 +750,7 @@ class CrossLayerAnalyzer
         lng: zone[:lng],
         entities: {
           pulse: { score: zone[:pulse_score], trend: zone[:escalation_trend], spike: zone[:spike_ratio] },
+          theater: zone[:theater].present? ? { name: zone[:theater] } : nil,
           news: { count_24h: zone[:count_24h], sources: zone[:source_count], stories: zone[:story_count] },
           cross_layer: signals.presence,
           headlines: zone[:top_headlines]&.first(3),
@@ -713,6 +772,7 @@ class CrossLayerAnalyzer
       next if cp[:status] == "normal"
       next if cp[:conflict_pulse].empty?
 
+      chokepoint_name = normalized_chokepoint_name(cp)
       top_pulse = cp[:conflict_pulse].max_by { |z| z[:score] }
       commodity_parts = cp[:commodity_signals].first(3).filter_map do |c|
         next unless c[:change_pct] && c[:change_pct].abs > 0.5
@@ -736,12 +796,12 @@ class CrossLayerAnalyzer
       {
         type: "chokepoint_disruption",
         severity: severity,
-        title: "#{cp[:name]}: #{top_pulse[:trend]} conflict near #{flow_parts.first || "major shipping lane"}",
+        title: "#{chokepoint_name}: #{top_pulse[:trend]} conflict near #{flow_parts.first || "major shipping lane"}",
         description: desc,
         lat: cp[:lat],
         lng: cp[:lng],
         entities: {
-          chokepoint: { name: cp[:name], status: cp[:status] },
+          chokepoint: { name: chokepoint_name, status: cp[:status] },
           ships: cp[:ships_nearby],
           flows: flows.transform_values { |f| { pct: f[:pct], note: f[:note] } },
           commodities: cp[:commodity_signals].first(3),
@@ -757,10 +817,163 @@ class CrossLayerAnalyzer
 
   # ── Helpers ───────────────────────────────────────────────────
 
+  def normalized_chokepoint_name(chokepoint)
+    canonical_chokepoint_name(chokepoint) || fallback_chokepoint_name(chokepoint)
+  end
+
+  def canonical_chokepoint_name(chokepoint)
+    key = chokepoint[:id].presence&.to_sym
+    if key && ChokepointMonitorService::CHOKEPOINTS.key?(key)
+      return ChokepointMonitorService::CHOKEPOINTS.fetch(key).fetch(:name)
+    end
+
+    raw_name = chokepoint[:name].to_s.squish
+    exact_match = ChokepointMonitorService::CHOKEPOINTS.values.find { |candidate| candidate[:name] == raw_name }
+    return exact_match[:name] if exact_match
+
+    lat = chokepoint[:lat]
+    lng = chokepoint[:lng]
+    return if lat.blank? || lng.blank?
+
+    nearby_match = ChokepointMonitorService::CHOKEPOINTS.values.find do |candidate|
+      distance_km(candidate[:lat], candidate[:lng], lat, lng) <= 80
+    end
+    nearby_match&.fetch(:name)
+  end
+
+  def fallback_chokepoint_name(chokepoint)
+    raw_name = chokepoint[:name].to_s.squish
+    return "Strategic chokepoint" if raw_name.blank?
+
+    return raw_name unless suspicious_chokepoint_name?(raw_name)
+
+    sanitized = raw_name.split(/ carries | is a critical | makes |, making /i).first.to_s.squish
+    sanitized.present? ? sanitized : "Strategic chokepoint"
+  end
+
+  def suspicious_chokepoint_name?(name)
+    lowered = name.to_s.downcase
+    lowered.include?("flow dependency benchmark") ||
+      lowered.include?("world oil") ||
+      lowered.include?("world trade") ||
+      name.length > 120
+  end
+
   def bbox(lat, lng, radius_km)
     dlat = radius_km / 111.0
     dlng = radius_km / (111.0 * Math.cos(lat.to_f * Math::PI / 180)).abs
     { lamin: lat - dlat, lamax: lat + dlat, lomin: lng - dlng, lomax: lng + dlng }
+  end
+
+  def matching_news_clusters(lat:, lng:, occurred_at:, event_types: [], event_families: [], time_before: 6.hours, time_after: 36.hours, limit: 3)
+    relation = NewsStoryCluster
+      .where("last_seen_at > ?", 72.hours.ago)
+      .where.not(latitude: nil, longitude: nil)
+      .where("source_count >= 2 OR verification_status IN (?)", CORROBORATED_NEWS_STATUSES)
+
+    normalized_types = Array(event_types).map { |value| value.to_s.downcase }.uniq
+    normalized_families = Array(event_families).map { |value| value.to_s.downcase }.uniq
+
+    if normalized_types.any? && normalized_families.any?
+      relation = relation.where("LOWER(event_type) IN (?) OR LOWER(event_family) IN (?)", normalized_types, normalized_families)
+    elsif normalized_types.any?
+      relation = relation.where("LOWER(event_type) IN (?)", normalized_types)
+    elsif normalized_families.any?
+      relation = relation.where("LOWER(event_family) IN (?)", normalized_families)
+    end
+
+    relation.select do |cluster|
+      news_cluster_matches?(
+        cluster,
+        lat: lat,
+        lng: lng,
+        occurred_at: occurred_at,
+        time_before: time_before,
+        time_after: time_after
+      )
+    end
+      .sort_by { |cluster| [-cluster.source_count.to_i, -cluster.article_count.to_i, -cluster.cluster_confidence.to_f] }
+      .first(limit)
+  end
+
+  def news_cluster_matches?(cluster, lat:, lng:, occurred_at:, time_before:, time_after:)
+    return false unless lat && lng && occurred_at && cluster.first_seen_at
+
+    time_match = cluster.first_seen_at >= occurred_at - time_before &&
+      cluster.first_seen_at <= occurred_at + time_after
+    geo_match = distance_km(lat, lng, cluster.latitude, cluster.longitude) <= max_distance_for_geo_precision(cluster.geo_precision)
+
+    time_match && geo_match
+  end
+
+  def max_distance_for_geo_precision(geo_precision)
+    case geo_precision.to_s
+    when "precise", "point", "facility"
+      75
+    when "city", "local"
+      150
+    when "region", "state", "province"
+      300
+    when "country"
+      600
+    else
+      250
+    end
+  end
+
+  def latest_traffic_snapshot(country_code)
+    return nil if country_code.blank?
+
+    InternetTrafficSnapshot.latest_batch.find_by(country_code: country_code.to_s.upcase)
+  end
+
+  def nearby_cameras(lat, lng, radius_km:, limit: 3)
+    Camera.alive.fresh
+      .within_bounds(bbox(lat, lng, radius_km))
+      .select(:id, :title, :city, :country, :latitude, :longitude, :source, :player_url, :image_url, :preview_url)
+      .to_a
+      .sort_by { |camera| distance_km(lat, lng, camera.latitude, camera.longitude) }
+      .first(limit)
+  end
+
+  def serialize_news_clusters(clusters)
+    Array(clusters).map do |cluster|
+      {
+        cluster_key: cluster.cluster_key,
+        title: cluster.canonical_title,
+        sources: cluster.source_count,
+        articles: cluster.article_count,
+        verification_status: cluster.verification_status,
+      }
+    end
+  end
+
+  def serialize_traffic_snapshot(snapshot)
+    return nil unless snapshot
+
+    {
+      country_code: snapshot.country_code,
+      country_name: snapshot.country_name,
+      traffic_pct: snapshot.traffic_pct,
+      attack_origin_pct: snapshot.attack_origin_pct,
+      attack_target_pct: snapshot.attack_target_pct,
+      recorded_at: snapshot.recorded_at,
+    }
+  end
+
+  def serialize_cameras(cameras)
+    Array(cameras).map do |camera|
+      {
+        id: camera.id,
+        title: camera.title,
+        city: camera.city,
+        country: camera.country,
+        source: camera.source,
+        player_url: camera.player_url,
+        image_url: camera.image_url,
+        preview_url: camera.preview_url,
+      }.compact
+    end
   end
 
   def cables_in_bounds(bounds)

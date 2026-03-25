@@ -94,6 +94,42 @@ class TrainRefreshServiceTest < ActiveSupport::TestCase
     assert_nil TrainObservation.find_by(external_id: "old-train")
   end
 
+  test "refresh_if_stale delegates to the class refresh implementation" do
+    snapshots = [
+      {
+        operator_key: "oebb",
+        operator_name: "ÖBB",
+        operator_flag: "AT",
+        request_bbox: nil,
+        request_rect: {},
+        fetched_at: Time.current,
+        raw_payload: {},
+        status: "fetched",
+        error_code: nil,
+        trains: [
+          {
+            id: "oebb-rjx-42",
+            name: "RJX 42",
+            category: "RJX",
+            categoryLong: "Railjet Express",
+            operator: "ÖBB",
+            flag: "AT",
+            lat: 48.2,
+            lng: 16.36,
+            direction: "Wien",
+            progress: 10,
+          },
+        ],
+      },
+    ]
+
+    with_stubbed_train_snapshots(snapshots) do
+      assert_difference("TrainObservation.count", 1) do
+        assert_equal 1, TrainRefreshService.refresh_if_stale(force: true)
+      end
+    end
+  end
+
   private
 
   def with_stubbed_train_snapshots(result)

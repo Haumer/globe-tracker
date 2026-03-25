@@ -10,6 +10,8 @@ module Refreshable
 
   def refresh_if_stale(force: false)
     return 0 if !force && !stale?
+    return refresh if respond_to?(:refresh, true)
+
     new.refresh
   end
 

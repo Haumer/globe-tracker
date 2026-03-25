@@ -152,10 +152,10 @@ class AdminController < ApplicationController
     status = PollerRuntimeState.status
     if status[:running] || status[:paused]
       PollerRuntimeState.request_stop!
-      flash[:notice] = "Disabled scheduler-driven polling."
+      flash[:notice] = "Stopped the dedicated poller process."
     else
       PollerRuntimeState.ensure_running!
-      flash[:notice] = "Enabled scheduler-driven polling. Ensure Heroku Scheduler is invoking the polling task."
+      flash[:notice] = "Enabled the dedicated poller process. Ensure the Heroku poller dyno is scaled."
     end
     redirect_to admin_path
   end
@@ -163,17 +163,17 @@ class AdminController < ApplicationController
   def pause_poller
     if PollerRuntimeState.status[:paused]
       PollerRuntimeState.request_resume!
-      flash[:notice] = "Resumed scheduler-driven polling."
+      flash[:notice] = "Resumed dedicated polling."
     else
       PollerRuntimeState.request_pause!
-      flash[:notice] = "Paused scheduler-driven polling."
+      flash[:notice] = "Paused dedicated polling."
     end
     redirect_to admin_path
   end
 
   def stop_poller
     PollerRuntimeState.request_stop!
-    flash[:notice] = "Disabled scheduler-driven polling."
+    flash[:notice] = "Stopped the dedicated poller process."
     redirect_to admin_path
   end
 

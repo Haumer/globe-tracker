@@ -24,6 +24,7 @@ class PollerRuntimeStateTest < ActiveSupport::TestCase
         "poll_count" => 12,
         "ais_mode" => "disabled",
         "ais_running" => false,
+        "scheduler" => "poller",
       }
     )
 
@@ -33,6 +34,7 @@ class PollerRuntimeStateTest < ActiveSupport::TestCase
     assert_equal 12, status[:poll_count]
     assert_equal "disabled", status[:ais_mode]
     assert_equal false, status[:ais_running]
+    assert_equal "poller", status[:scheduler]
   end
 
   test "pause and resume change desired state" do

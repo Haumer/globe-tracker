@@ -1,6 +1,6 @@
 class PollerRuntimeState
   SERVICE_NAME = "poller".freeze
-  HEARTBEAT_TTL = 25.minutes
+  HEARTBEAT_TTL = 90.seconds
 
   class << self
     def status
@@ -20,7 +20,7 @@ class PollerRuntimeState
         stopped: runtime_stopped,
         stale: !runtime_stopped && !heartbeat_fresh,
         externally_managed: true,
-        scheduler: metadata["scheduler"] || "heroku",
+        scheduler: metadata["scheduler"] || "poller",
         started_at: parse_time(metadata["started_at"]),
         last_poll_at: parse_time(metadata["last_poll_at"]),
         last_tick_at: parse_time(metadata["last_tick_at"]) || state.reported_at,

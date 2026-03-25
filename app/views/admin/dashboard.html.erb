@@ -14,11 +14,11 @@
       </a>
     </div>
 
-    <%# ── Polling Scheduler Status ── %>
+    <%# ── Poller Status ── %>
     <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
       <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
         <div>
-          <h2 style="margin: 0 0 8px; font-size: 18px; color: #e0e6ed;">Polling Scheduler</h2>
+          <h2 style="margin: 0 0 8px; font-size: 18px; color: #e0e6ed;">Dedicated Poller</h2>
           <div style="display: flex; gap: 24px; flex-wrap: wrap;">
             <span>
               Status:
@@ -48,7 +48,7 @@
             <span>AIS: <strong><%= @poller_status[:ais_mode] %></strong></span>
           </div>
           <div style="margin-top: 8px; color: #6b7a8d; font-size: 12px;">
-            Managed by Heroku Scheduler. Recommended command: <code>bundle exec rake scheduler:polling_tick</code> every 10 minutes. Sidekiq executes the enqueued jobs. AIS streaming is disabled in this mode.
+            Managed by the <code>poller</code> dyno. Sidekiq executes the enqueued jobs. Live layers run at independent cadences, and AIS streaming is owned by the dedicated poller process when the API key is present.
           </div>
         </div>
         <div style="display: flex; gap: 8px;">

@@ -2,14 +2,16 @@ class HealthController < ActionController::Base
   # No auth — this endpoint is for external monitors / load balancers.
 
   STALENESS_THRESHOLDS = {
-    "opensky"   => 60,
-    "adsb"      => 60,   # matches any adsb-* source
-    "usgs"      => 120,
-    "gdelt"     => 120,
-    "multi-news" => 120,
-    "celestrak" => 300,
-    "firms"     => 120,
-    "ais"       => 120,
+    "opensky"    => 180,
+    "adsb"       => 180,   # matches any adsb-* source
+    "hafas"      => 180,
+    "usgs"       => 600,
+    "gdelt"      => 900,
+    "multi-news" => 900,
+    "rss"        => 900,
+    "firms"      => 1_200,
+    "ais"        => 300,
+    "celestrak"  => 21_600,
   }.freeze
 
   def show

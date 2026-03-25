@@ -1,43 +1,6 @@
 class GlobalPollerService
-  TICK_INTERVAL = 10.minutes
-  HOURLY_INTERVAL = 1.hour
-  ENQUEUE_LOCK_SLACK = 2.minutes
-
-  FAST_JOBS = [
-    PollOpenskyJob,
-    PollAdsbMilitaryJob,
-    RefreshEarthquakesJob,
-    RefreshNewsJob,
-    RefreshMultiNewsJob,
-    RefreshRssNewsJob,
-    RefreshFireHotspotsJob,
-    RefreshNaturalEventsJob,
-    RefreshInternetOutagesJob,
-    RefreshInternetTrafficJob,
-    RefreshWeatherAlertsJob,
-    RefreshNotamsJob,
-    RefreshLiveTrainsJob,
-    EnrichNewsJob,
-    RefreshConflictPulseSnapshotJob,
-    RefreshChokepointsSnapshotJob,
-    RefreshInsightsSnapshotJob,
-  ].freeze
-
-  HOURLY_JOBS = [
-    RefreshConflictEventsJob,
-    RefreshAcledJob,
-    RefreshGpsJammingJob,
-    RefreshCommodityPricesJob,
-    RefreshPipelinesJob,
-    RefreshRailwaysJob,
-    RefreshPowerPlantsJob,
-    RefreshSubmarineCablesJob,
-    RefreshSatellitesJob,
-    RefreshAirportsJob,
-    RefreshMilitaryBasesJob,
-    PurgeStaleDataJob,
-    RecheckStaleCamerasJob,
-  ].freeze
+  LOOP_INTERVAL = 15.seconds
+  ENQUEUE_LOCK_SLACK = 15.seconds
 
   ADSB_REGIONS = [
     { name: "europe", lat: 50, lon: 10 },
@@ -65,6 +28,62 @@ class GlobalPollerService
     { name: "africa", north: 35, south: -35, east: 50, west: -20 },
   ].freeze
 
+  JOB_SCHEDULES = [
+    { job: PollOpenskyJob, every: 1.minute, offset: 0.seconds },
+    { job: PollAdsbMilitaryJob, every: 1.minute, offset: 15.seconds },
+    { job: RefreshLiveTrainsJob, every: 1.minute, offset: 30.seconds },
+    { job: RefreshEarthquakesJob, every: 2.minutes, offset: 0.seconds },
+    { job: PollAdsbRegionJob, every: 2.minutes, offset: 45.seconds, dynamic: :adsb_region },
+    { job: RefreshNewsJob, every: 5.minutes, offset: 0.seconds },
+    { job: RefreshRssNewsJob, every: 5.minutes, offset: 1.minute },
+    { job: RefreshMultiNewsJob, every: 5.minutes, offset: 2.minutes },
+    { job: EnrichNewsJob, every: 5.minutes, offset: 3.minutes },
+    { job: RefreshNaturalEventsJob, every: 5.minutes, offset: 150.seconds },
+    { job: RefreshInternetOutagesJob, every: 5.minutes, offset: 210.seconds },
+    { job: RefreshConflictPulseSnapshotJob, every: 5.minutes, offset: 4.minutes },
+    { job: RefreshCamerasJob, every: 5.minutes, offset: 270.seconds, dynamic: :camera_region },
+    { job: RefreshWeatherAlertsJob, every: 10.minutes, offset: 0.seconds },
+    { job: RefreshNotamsJob, every: 10.minutes, offset: 2.minutes },
+    { job: RefreshFireHotspotsJob, every: 10.minutes, offset: 4.minutes },
+    { job: RefreshChokepointsSnapshotJob, every: 10.minutes, offset: 6.minutes },
+    { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },
+    { job: RefreshInternetTrafficJob, every: 15.minutes, offset: 10.minutes },
+    { job: RefreshGpsJammingJob, every: 15.minutes, offset: 12.minutes },
+    { job: RefreshCommodityPricesJob, every: 1.hour, offset: 0.minutes },
+    { job: PurgeStaleDataJob, every: 1.hour, offset: 10.minutes },
+    { job: RecheckStaleCamerasJob, every: 1.hour, offset: 20.minutes },
+    { job: GenerateBriefJob, every: 1.hour, offset: 50.minutes, conditional: :brief_missing? },
+    { job: RefreshAcledJob, every: 6.hours, offset: 0.minutes },
+    { job: RefreshConflictEventsJob, every: 6.hours, offset: 30.minutes },
+    { job: RefreshSatellitesJob, every: 6.hours, offset: 60.minutes },
+    { job: RefreshAirportsJob, every: 12.hours, offset: 0.minutes },
+    { job: RefreshPowerPlantsJob, every: 12.hours, offset: 90.minutes },
+    { job: RefreshPipelinesJob, every: 12.hours, offset: 3.hours },
+    { job: RefreshRailwaysJob, every: 12.hours, offset: 4.hours },
+    { job: RefreshSubmarineCablesJob, every: 24.hours, offset: 0.minutes },
+    { job: RefreshMilitaryBasesJob, every: 24.hours, offset: 6.hours },
+  ].freeze
+
+  LIVE_LAYER_CADENCES = {
+    flights_global: 1.minute,
+    flights_military: 1.minute,
+    flights_regional_rotation: 2.minutes,
+    trains: 1.minute,
+    ais_stream: :continuous,
+    earthquakes: 2.minutes,
+    fast_news: 5.minutes,
+    news_enrichment: 5.minutes,
+    conflict_pulse: 5.minutes,
+    natural_events: 5.minutes,
+    internet_outages: 5.minutes,
+    cameras_rotation: 5.minutes,
+    weather_alerts: 10.minutes,
+    notams: 10.minutes,
+    fire_hotspots: 10.minutes,
+    insights: 10.minutes,
+    chokepoints: 10.minutes,
+  }.freeze
+
   class << self
     def tick!(now: Time.current)
       desired_state = PollerRuntimeState.desired_state
@@ -77,21 +96,8 @@ class GlobalPollerService
       end
 
       poll_count = PollerRuntimeState.increment_poll_count!(now: now)
-      tick_slot = slot_index_for(now, TICK_INTERVAL)
-      enqueued_jobs = []
-
-      FAST_JOBS.each do |job_class|
-        enqueued_jobs << job_class.name if enqueue_once(job_class, slot_for(now, TICK_INTERVAL), ttl: TICK_INTERVAL + ENQUEUE_LOCK_SLACK)
-      end
-
-      enqueued_jobs << "PollAdsbRegionJob(#{current_adsb_region(tick_slot)[:name]})" if enqueue_adsb_region(now: now, tick_slot: tick_slot)
-      enqueued_jobs << "RefreshCamerasJob(#{current_camera_region(tick_slot)[:name]})" if enqueue_camera_refresh(now: now, tick_slot: tick_slot)
-
-      if hourly_slot_due?(now)
-        HOURLY_JOBS.each do |job_class|
-          enqueued_jobs << job_class.name if enqueue_once(job_class, slot_for(now, HOURLY_INTERVAL), ttl: HOURLY_INTERVAL + ENQUEUE_LOCK_SLACK)
-        end
-        enqueued_jobs << GenerateBriefJob.name if enqueue_brief_generation(now: now)
+      enqueued_jobs = JOB_SCHEDULES.filter_map do |schedule|
+        enqueue_schedule(schedule, now: now)
       end
 
       PollerRuntimeState.heartbeat!(
@@ -146,7 +152,115 @@ class GlobalPollerService
       PollerRuntimeState.request_stop!
     end
 
+    def cadence_plan
+      LIVE_LAYER_CADENCES
+    end
+
     private
+
+    def enqueue_schedule(schedule, now:)
+      return unless schedule_enabled?(schedule)
+      return unless due_now?(schedule, now)
+
+      job = schedule.fetch(:job)
+      interval = schedule.fetch(:every)
+      offset = schedule.fetch(:offset, 0.seconds)
+      slot_key = slot_for(now, interval, offset)
+      label = schedule_label(schedule, now)
+      suffix = schedule_suffix(schedule, now)
+      args = schedule_args(schedule, now)
+
+      return unless enqueue_once(job, slot_key, ttl: interval + ENQUEUE_LOCK_SLACK, key_suffix: suffix, args: args)
+
+      label
+    end
+
+    def schedule_enabled?(schedule)
+      conditional = schedule[:conditional]
+      return true if conditional.blank?
+
+      send(conditional)
+    end
+
+    def schedule_label(schedule, now)
+      case schedule[:dynamic]
+      when :adsb_region
+        "PollAdsbRegionJob(#{current_adsb_region(now, schedule)[:name]})"
+      when :camera_region
+        "RefreshCamerasJob(#{current_camera_region(now, schedule)[:name]})"
+      else
+        schedule.fetch(:job).name
+      end
+    end
+
+    def schedule_suffix(schedule, now)
+      case schedule[:dynamic]
+      when :adsb_region
+        current_adsb_region(now, schedule)[:name]
+      when :camera_region
+        current_camera_region(now, schedule)[:name]
+      else
+        schedule[:key_suffix]
+      end
+    end
+
+    def schedule_args(schedule, now)
+      case schedule[:dynamic]
+      when :adsb_region
+        region = current_adsb_region(now, schedule)
+        [region[:name], region[:lat], region[:lon]]
+      when :camera_region
+        region = current_camera_region(now, schedule)
+        [
+          {
+            north: region[:north],
+            south: region[:south],
+            east: region[:east],
+            west: region[:west],
+          },
+        ]
+      else
+        Array(schedule[:args])
+      end
+    end
+
+    def current_adsb_region(now, schedule)
+      ADSB_REGIONS[slot_index_for(now, schedule.fetch(:every), schedule.fetch(:offset, 0.seconds)) % ADSB_REGIONS.size]
+    end
+
+    def current_camera_region(now, schedule)
+      CAMERA_REGIONS[slot_index_for(now, schedule.fetch(:every), schedule.fetch(:offset, 0.seconds)) % CAMERA_REGIONS.size]
+    end
+
+    def brief_missing?
+      !Rails.cache.read(IntelligenceBriefService::CACHE_KEY)
+    end
+
+    def enqueue_once(job_class, slot_key, ttl:, key_suffix: nil, args: [])
+      cache_key = ["poller", slot_key, job_class.name, key_suffix].compact.join(":")
+      return false if Rails.cache.exist?(cache_key)
+
+      Rails.cache.write(cache_key, "1", expires_in: ttl)
+      job_class.perform_later(*args)
+      true
+    rescue StandardError => e
+      Rails.logger.warn("GlobalPollerService enqueue #{job_class.name}: #{e.message}")
+      false
+    end
+
+    def slot_for(now, interval, offset = 0.seconds)
+      "#{interval.to_i}:#{offset.to_i}:#{slot_index_for(now, interval, offset)}"
+    end
+
+    def slot_index_for(now, interval, offset = 0.seconds)
+      ((now.to_i - offset.to_i) / interval.to_i)
+    end
+
+    def due_now?(schedule, now)
+      interval = schedule.fetch(:every).to_i
+      offset = schedule.fetch(:offset, 0.seconds).to_i
+      ((now.to_i - offset) % interval) < LOOP_INTERVAL.to_i
+    end
 
     def record_skip!(state, now:)
       PollerRuntimeState.heartbeat!(
@@ -166,94 +280,15 @@ class GlobalPollerService
       }
     end
 
-    def enqueue_adsb_region(now:, tick_slot:)
-      region = current_adsb_region(tick_slot)
-      enqueue_once(
-        PollAdsbRegionJob,
-        slot_for(now, TICK_INTERVAL),
-        ttl: TICK_INTERVAL + ENQUEUE_LOCK_SLACK,
-        key_suffix: region[:name],
-        args: [region[:name], region[:lat], region[:lon]]
-      )
-    end
-
-    def enqueue_camera_refresh(now:, tick_slot:)
-      region = current_camera_region(tick_slot)
-      enqueue_once(
-        RefreshCamerasJob,
-        slot_for(now, TICK_INTERVAL),
-        ttl: TICK_INTERVAL + ENQUEUE_LOCK_SLACK,
-        key_suffix: region[:name],
-        args: [
-          {
-            north: region[:north],
-            south: region[:south],
-            east: region[:east],
-            west: region[:west],
-          },
-        ]
-      )
-    rescue StandardError => e
-      Rails.logger.warn("GlobalPollerService camera tick: #{e.message}")
-      false
-    end
-
-    def enqueue_brief_generation(now:)
-      return false if Rails.cache.read(IntelligenceBriefService::CACHE_KEY)
-
-      enqueue_once(
-        GenerateBriefJob,
-        slot_for(now, HOURLY_INTERVAL),
-        ttl: HOURLY_INTERVAL + ENQUEUE_LOCK_SLACK
-      )
-    end
-
-    def enqueue_once(job_class, slot_key, ttl:, key_suffix: nil, args: [])
-      cache_key = [ "scheduler", slot_key, job_class.name, key_suffix ].compact.join(":")
-      return false if Rails.cache.exist?(cache_key)
-
-      Rails.cache.write(cache_key, "1", expires_in: ttl)
-
-      job_class.perform_later(*args)
-      true
-    rescue StandardError => e
-      Rails.logger.warn("GlobalPollerService enqueue #{job_class.name}: #{e.message}")
-      job_class.perform_later(*args)
-      true
-    end
-
-    def current_adsb_region(tick_slot)
-      ADSB_REGIONS[tick_slot.to_i % ADSB_REGIONS.size]
-    end
-
-    def current_camera_region(tick_slot)
-      CAMERA_REGIONS[tick_slot.to_i % CAMERA_REGIONS.size]
-    end
-
-    def slot_for(now, interval)
-      "#{interval.to_i}:#{slot_index_for(now, interval)}"
-    end
-
-    def slot_index_for(now, interval)
-      now.to_i / interval.to_i
-    end
-
-    def hourly_slot_due?(now)
-      current_slot = slot_for(now, HOURLY_INTERVAL)
-      Rails.cache.read("scheduler:last_hourly_slot") != current_slot
-    ensure
-      Rails.cache.write("scheduler:last_hourly_slot", current_slot, expires_in: HOURLY_INTERVAL + ENQUEUE_LOCK_SLACK) if current_slot.present?
-    end
-
     def heartbeat_metadata(now:, poll_count:, enqueued_jobs:, error_message: nil)
       {
         "started_at" => PollerRuntimeState.status[:started_at]&.iso8601 || now.iso8601,
         "last_poll_at" => now.iso8601,
         "last_tick_at" => now.iso8601,
         "poll_count" => poll_count.to_i,
-        "ais_mode" => "disabled",
-        "ais_running" => false,
-        "scheduler" => "heroku",
+        "ais_mode" => ENV["AISSTREAM_API_KEY"].present? ? "stream" : "disabled",
+        "ais_running" => AisStreamService.running?,
+        "scheduler" => "poller",
         "job_names" => enqueued_jobs,
         "last_error" => error_message,
       }.compact

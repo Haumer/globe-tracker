@@ -47,7 +47,7 @@ class PollerRuntime
         "poll_count" => status[:poll_count].to_i,
         "ais_mode" => ais_mode,
         "ais_running" => AisStreamService.running?,
-        "scheduler" => "poller",
+        "scheduler" => runtime_owner,
       }.compact
     end
 
@@ -71,6 +71,13 @@ class PollerRuntime
           PollerRuntimeState.request_stop!
         end
       end
+    end
+
+    def runtime_owner
+      dyno = ENV["DYNO"].to_s
+      return "worker" if dyno.start_with?("worker")
+
+      "poller"
     end
   end
 end

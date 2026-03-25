@@ -288,10 +288,17 @@ class GlobalPollerService
         "poll_count" => poll_count.to_i,
         "ais_mode" => ENV["AISSTREAM_API_KEY"].present? ? "stream" : "disabled",
         "ais_running" => AisStreamService.running?,
-        "scheduler" => "poller",
+        "scheduler" => runtime_owner,
         "job_names" => enqueued_jobs,
         "last_error" => error_message,
       }.compact
+    end
+
+    def runtime_owner
+      dyno = ENV["DYNO"].to_s
+      return "worker" if dyno.start_with?("worker")
+
+      "poller"
     end
   end
 end

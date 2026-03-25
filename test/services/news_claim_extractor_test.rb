@@ -9,6 +9,9 @@ class NewsClaimExtractorTest < ActiveSupport::TestCase
     assert_equal "ground_operation", result[:event_type]
     assert_equal [ "Israel", "Iran" ], result[:actors].map { |actor| actor[:name] }
     assert_equal [ "initiator", "target" ], result[:actors].map { |actor| actor[:role] }
+    assert_operator result[:event_confidence], :>, 0.8
+    assert_operator result[:actor_confidence], :>, 0.8
+    assert_operator result[:extraction_confidence], :>, 0.8
   end
 
   test "extracts participants for diplomacy headlines" do
@@ -19,6 +22,7 @@ class NewsClaimExtractorTest < ActiveSupport::TestCase
     assert_equal "negotiation", result[:event_type]
     assert_equal [ "Iran", "United States", "Oman" ], result[:actors].map { |actor| actor[:name] }
     assert_equal [ "participant", "participant", "host" ], result[:actors].map { |actor| actor[:role] }
+    assert_operator result[:extraction_confidence], :>, 0.7
   end
 
   test "extracts agreements as diplomatic claims" do

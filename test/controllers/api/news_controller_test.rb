@@ -42,6 +42,14 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
       event_type: "military_action",
       claim_text: @news.title,
       confidence: 0.91,
+      extraction_confidence: 0.9,
+      actor_confidence: 0.91,
+      event_confidence: 0.92,
+      geo_confidence: 0.82,
+      source_reliability: 0.92,
+      verification_status: "single_source",
+      geo_precision: "point",
+      provenance: { "canonical_url" => article.canonical_url },
       published_at: @news.published_at
     )
     israel = NewsActor.create!(canonical_key: "state:il", name: "Israel", actor_type: "state", country_code: "IL")
@@ -72,6 +80,8 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "core", event["content_scope"]
     assert_equal "conflict", event["claim_event_family"]
     assert_equal "military_action", event["claim_event_type"]
+    assert_equal "single_source", event["claim_verification_status"]
+    assert_equal "point", event["claim_geo_precision"]
     assert_equal [ "Israel", "Iran" ], event["actors"].map { |actor| actor["name"] }
     assert_equal "conflict", event["category"]
   end

@@ -492,6 +492,7 @@ class RssNewsService
   private
 
   def fetch_feed(url, source_name, meta)
+    now = Time.current
     uri = URI(url)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = uri.scheme == "https"
@@ -504,13 +505,36 @@ class RssNewsService
 
     unless response.is_a?(Net::HTTPSuccess)
       Rails.logger.warn("RssNewsService[#{source_name}]: HTTP #{response.code}")
+      SourceFeedStatusRecorder.record(
+        provider: "rss",
+        display_name: source_name,
+        feed_kind: "rss",
+        endpoint_url: url,
+        status: "error",
+        http_status: response.code.to_i,
+        error_message: "HTTP #{response.code}",
+        metadata: { tier: meta[:tier], region: meta[:region], risk: meta[:risk] }.compact,
+        occurred_at: now
+      )
       return { records: [], ingest_items: [] }
     end
 
     feed = RSS::Parser.parse(response.body, false)
-    return { records: [], ingest_items: [] } unless feed
+    unless feed
+      SourceFeedStatusRecorder.record(
+        provider: "rss",
+        display_name: source_name,
+        feed_kind: "rss",
+        endpoint_url: url,
+        status: "error",
+        http_status: response.code.to_i,
+        error_message: "RSS parse returned nil",
+        metadata: { tier: meta[:tier], region: meta[:region], risk: meta[:risk] }.compact,
+        occurred_at: now
+      )
+      return { records: [], ingest_items: [] }
+    end
 
-    now = Time.current
     records = []
     ingest_items = []
 
@@ -572,9 +596,32 @@ class RssNewsService
         updated_at: now,
       }
     end
+    SourceFeedStatusRecorder.record(
+      provider: "rss",
+      display_name: source_name,
+      feed_kind: "rss",
+      endpoint_url: url,
+      status: "success",
+      records_fetched: Array(feed.items).size,
+      records_stored: records.size,
+      http_status: response.code.to_i,
+      metadata: { tier: meta[:tier], region: meta[:region], risk: meta[:risk] }.compact,
+      occurred_at: now
+    )
+
     { records: records, ingest_items: ingest_items }
   rescue => e
     Rails.logger.warn("RssNewsService[#{source_name}]: #{e.message}")
+    SourceFeedStatusRecorder.record(
+      provider: "rss",
+      display_name: source_name,
+      feed_kind: "rss",
+      endpoint_url: url,
+      status: "error",
+      error_message: e.message,
+      metadata: { tier: meta[:tier], region: meta[:region], risk: meta[:risk] }.compact,
+      occurred_at: now || Time.current
+    )
     { records: [], ingest_items: [] }
   end
 

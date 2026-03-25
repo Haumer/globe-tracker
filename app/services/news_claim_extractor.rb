@@ -292,11 +292,18 @@ class NewsClaimExtractor
     assignments = assign_roles(full_text, actors, rule)
     return nil if assignments.empty?
 
+    event_confidence = claim_confidence(rule, assignments, matched_on)
+    actor_confidence = actor_confidence(assignments)
+    extraction_confidence = extraction_confidence(event_confidence, actor_confidence, matched_on)
+
     {
       event_family: event_family,
       event_type: event_type,
       claim_text: full_text.to_s.scrub("")[0...10_000],
-      confidence: claim_confidence(rule, assignments, matched_on),
+      confidence: extraction_confidence,
+      extraction_confidence: extraction_confidence,
+      actor_confidence: actor_confidence,
+      event_confidence: event_confidence,
       extraction_method: "heuristic",
       extraction_version: "headline_summary_rules_v2",
       metadata: {
@@ -457,6 +464,18 @@ class NewsClaimExtractor
     base -= 0.04 if matched_on == "summary"
 
     base.round(2)
+  end
+
+  def actor_confidence(assignments)
+    return 0.0 if assignments.empty?
+
+    (assignments.sum { |assignment| assignment[:confidence].to_f } / assignments.size.to_f).round(2)
+  end
+
+  def extraction_confidence(event_confidence, actor_confidence, matched_on)
+    score = (event_confidence.to_f * 0.65) + (actor_confidence.to_f * 0.35)
+    score -= 0.03 if matched_on == "summary"
+    [ score.round(2), 0.99 ].min
   end
 
   def string_pattern_regex(pattern)

@@ -208,6 +208,14 @@ class NewsStoryClusterer
         event_family: claim.event_family,
         event_type: claim.event_type,
         claim_confidence: claim.confidence.to_f,
+        extraction_confidence: claim.extraction_confidence.to_f,
+        actor_confidence: claim.actor_confidence.to_f,
+        event_confidence: claim.event_confidence.to_f,
+        source_reliability: claim.source_reliability.to_f,
+        verification_status: claim.verification_status,
+        geo_precision: claim.geo_precision,
+        geo_confidence: claim.geo_confidence.to_f,
+        claim_provenance: claim.provenance || {},
         published_at: published_at,
         fetched_at: fetched_at,
         location_name: location_name,
@@ -312,6 +320,18 @@ class NewsStoryClusterer
 
     def create_cluster_for(payload)
       timestamp = payload[:published_at] || payload[:fetched_at] || Time.current
+      cluster_key = cluster_key_for(payload, timestamp)
+      existing_cluster = NewsStoryCluster.find_by(cluster_key: cluster_key)
+      return existing_cluster if existing_cluster
+
+      attributes = cluster_attributes_for(payload, timestamp)
+
+      NewsStoryCluster.create!(attributes.merge(cluster_key: cluster_key))
+    rescue ActiveRecord::RecordNotUnique
+      NewsStoryCluster.find_by!(cluster_key: cluster_key)
+    end
+
+    def cluster_key_for(payload, timestamp)
       actor_token = payload[:actors].map { |actor| actor[:canonical_key] }.sort.join("-")
       place_token = normalize_location_token(payload[:location_name])
       time_token = timestamp.utc.strftime("%Y%m%d%H")
@@ -324,8 +344,11 @@ class NewsStoryClusterer
         payload[:news_article_id],
       ].compact.join("|")
 
-      NewsStoryCluster.create!(
-        cluster_key: Digest::SHA1.hexdigest(raw_key)[0, 12],
+      Digest::SHA1.hexdigest(raw_key)[0, 12]
+    end
+
+    def cluster_attributes_for(payload, timestamp)
+      {
         canonical_title: payload[:title].to_s.scrub("")[0...500],
         content_scope: payload[:content_scope],
         event_family: payload[:event_family],
@@ -339,13 +362,22 @@ class NewsStoryClusterer
         article_count: 0,
         source_count: 0,
         cluster_confidence: payload[:claim_confidence].presence || 0.5,
-        verification_status: "single_source",
+        source_reliability: payload[:source_reliability].to_f.round(3),
+        geo_confidence: payload[:geo_confidence].to_f.round(3),
+        verification_status: payload[:verification_status].presence || "single_source",
         metadata: {
           "actor_keys" => payload[:actors].map { |actor| actor[:canonical_key] },
           "actor_roles" => payload[:actors].map { |actor| { "key" => actor[:canonical_key], "role" => actor[:role], "name" => actor[:name] } },
           "text_tokens" => payload[:text_tokens].to_a,
         },
-      )
+        provenance: {
+          "lead_article_id" => payload[:news_article_id],
+          "lead_source_id" => payload[:source_id],
+          "source_ids" => Array(payload[:source_id]).compact,
+          "article_ids" => [ payload[:news_article_id] ],
+          "claim_provenance" => payload[:claim_provenance],
+        },
+      }
     end
 
     def apply_assignments(assignments)
@@ -421,13 +453,20 @@ class NewsStoryClusterer
       longitude = coordinates.any? ? coordinates.sum(&:last) / coordinates.size.to_f : nil
       location_name = predominant_location(article_payloads)
       avg_claim_confidence = article_payloads.sum { |payload| payload[:claim_confidence].to_f } / article_payloads.size.to_f
+      avg_source_reliability = article_payloads.sum { |payload| payload[:source_reliability].to_f } / article_payloads.size.to_f
+      avg_geo_confidence = article_payloads.sum { |payload| payload[:geo_confidence].to_f } / article_payloads.size.to_f
       avg_match_score = article_payloads.sum { |payload| payload[:match_score].to_f } / article_payloads.size.to_f
       source_factor = [ source_ids.size, 3 ].min / 3.0
       coverage_factor = [ article_payloads.size, 4 ].min / 4.0
       cluster_confidence = [
-        (avg_claim_confidence * 0.5) + (avg_match_score * 0.3) + (source_factor * 0.1) + (coverage_factor * 0.1),
+        (avg_claim_confidence * 0.45) + (avg_match_score * 0.25) + (avg_source_reliability * 0.15) + (avg_geo_confidence * 0.05) + (source_factor * 0.05) + (coverage_factor * 0.05),
         0.99,
       ].min.round(3)
+      verification_status = if source_ids.size >= 2
+        "multi_source"
+      else
+        lead_payload[:verification_status].presence || "single_source"
+      end
 
       cluster.update!(
         canonical_title: lead_payload[:title].to_s.scrub("")[0...500],
@@ -437,13 +476,15 @@ class NewsStoryClusterer
         location_name: location_name,
         latitude: latitude,
         longitude: longitude,
-        geo_precision: coordinates.any? ? "point" : (location_name.present? ? "named_area" : "unknown"),
+        geo_precision: predominant_value(article_payloads, :geo_precision) || (coordinates.any? ? "point" : (location_name.present? ? "named_area" : "unknown")),
         first_seen_at: timestamps.min,
         last_seen_at: timestamps.max,
         article_count: article_payloads.size,
         source_count: source_ids.size,
         cluster_confidence: cluster_confidence,
-        verification_status: source_ids.size >= 2 ? "multi_source" : "single_source",
+        source_reliability: avg_source_reliability.round(3),
+        geo_confidence: avg_geo_confidence.round(3),
+        verification_status: verification_status,
         lead_news_article_id: lead_payload[:news_article_id],
         metadata: {
           "actor_keys" => actor_keys,
@@ -451,6 +492,14 @@ class NewsStoryClusterer
           "actor_names" => actor_roles.map { |actor| actor[:name] }.uniq,
           "source_ids" => source_ids,
           "text_tokens" => article_payloads.flat_map { |payload| payload[:text_tokens].to_a }.uniq,
+        },
+        provenance: {
+          "lead_article_id" => lead_payload[:news_article_id],
+          "lead_source_id" => lead_payload[:source_id],
+          "article_ids" => article_payloads.map { |payload| payload[:news_article_id] }.uniq,
+          "source_ids" => source_ids,
+          "source_kinds" => article_payloads.map { |payload| payload[:source_kind] }.compact.uniq,
+          "claim_provenance" => article_payloads.map { |payload| payload[:claim_provenance] }.compact,
         },
       )
     end

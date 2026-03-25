@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_25_120500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -367,12 +367,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
     t.datetime "hydration_last_attempted_at"
     t.datetime "hydrated_at"
     t.string "hydration_error"
+    t.string "origin_source_name"
+    t.string "origin_source_kind"
+    t.string "origin_source_domain"
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url", unique: true
     t.index ["content_scope"], name: "index_news_articles_on_content_scope"
     t.index ["hydrated_at"], name: "index_news_articles_on_hydrated_at"
     t.index ["hydration_status"], name: "index_news_articles_on_hydration_status"
     t.index ["news_ingest_id"], name: "index_news_articles_on_news_ingest_id"
     t.index ["news_source_id"], name: "index_news_articles_on_news_source_id"
+    t.index ["origin_source_domain"], name: "index_news_articles_on_origin_source_domain"
+    t.index ["origin_source_kind"], name: "index_news_articles_on_origin_source_kind"
     t.index ["published_at"], name: "index_news_articles_on_published_at"
     t.index ["publisher_domain"], name: "index_news_articles_on_publisher_domain"
   end
@@ -406,10 +411,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "event_family", default: "general", null: false
+    t.float "extraction_confidence", default: 0.0, null: false
+    t.float "actor_confidence", default: 0.0, null: false
+    t.float "event_confidence", default: 0.0, null: false
+    t.float "geo_confidence", default: 0.0, null: false
+    t.float "source_reliability", default: 0.0, null: false
+    t.string "verification_status", default: "unverified", null: false
+    t.string "geo_precision", default: "unknown", null: false
+    t.jsonb "provenance", default: {}, null: false
     t.index ["event_family"], name: "index_news_claims_on_event_family"
     t.index ["event_type"], name: "index_news_claims_on_event_type"
+    t.index ["geo_precision"], name: "index_news_claims_on_geo_precision"
     t.index ["news_article_id"], name: "index_news_claims_on_news_article_id", unique: true
     t.index ["published_at"], name: "index_news_claims_on_published_at"
+    t.index ["verification_status"], name: "index_news_claims_on_verification_status"
   end
 
   create_table "news_events", force: :cascade do |t|
@@ -505,6 +520,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.float "source_reliability", default: 0.0, null: false
+    t.float "geo_confidence", default: 0.0, null: false
+    t.jsonb "provenance", default: {}, null: false
     t.index ["cluster_key"], name: "index_news_story_clusters_on_cluster_key", unique: true
     t.index ["content_scope", "last_seen_at"], name: "index_news_story_clusters_on_content_scope_and_last_seen_at"
     t.index ["event_family", "last_seen_at"], name: "index_news_story_clusters_on_event_family_and_last_seen_at"
@@ -664,6 +682,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
     t.index ["norad_id"], name: "index_satellites_on_norad_id", unique: true
   end
 
+  create_table "service_runtime_states", force: :cascade do |t|
+    t.string "service_name", null: false
+    t.string "desired_state", default: "running", null: false
+    t.string "reported_state", default: "stopped", null: false
+    t.datetime "reported_at"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["service_name"], name: "index_service_runtime_states_on_service_name", unique: true
+  end
+
   create_table "ships", force: :cascade do |t|
     t.string "mmsi"
     t.string "name"
@@ -679,6 +708,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_000000) do
     t.datetime "updated_at", null: false
     t.index ["mmsi"], name: "index_ships_on_mmsi", unique: true
     t.index ["updated_at"], name: "idx_ships_updated_at"
+  end
+
+  create_table "source_feed_statuses", force: :cascade do |t|
+    t.string "feed_key", null: false
+    t.string "provider", null: false
+    t.string "display_name", null: false
+    t.string "feed_kind", null: false
+    t.string "endpoint_url"
+    t.string "status", default: "unknown", null: false
+    t.datetime "last_success_at"
+    t.datetime "last_error_at"
+    t.integer "last_http_status"
+    t.integer "last_records_fetched", default: 0, null: false
+    t.integer "last_records_stored", default: 0, null: false
+    t.string "last_error_message"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["feed_key"], name: "index_source_feed_statuses_on_feed_key", unique: true
+    t.index ["provider"], name: "index_source_feed_statuses_on_provider"
+    t.index ["status"], name: "index_source_feed_statuses_on_status"
   end
 
   create_table "submarine_cables", force: :cascade do |t|

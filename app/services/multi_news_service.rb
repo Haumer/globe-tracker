@@ -282,7 +282,18 @@ class MultiNewsService
     # Check API key requirement
     if config[:env_key]
       key = ENV[config[:env_key]]
-      return empty_fetch_result if key.blank?
+      if key.blank?
+        SourceFeedStatusRecorder.record(
+          provider: "multi-news",
+          display_name: source_name,
+          feed_kind: "api",
+          endpoint_url: config[:base_url],
+          status: "disabled",
+          metadata: { env_key: config[:env_key] },
+          occurred_at: now
+        )
+        return empty_fetch_result
+      end
     end
 
     uri = URI(config[:base_url])
@@ -290,7 +301,20 @@ class MultiNewsService
 
     response = fetch_json(uri)
     articles = config[:articles_path].call(response[:data]) if response
-    return empty_fetch_result unless articles
+    unless articles
+      SourceFeedStatusRecorder.record(
+        provider: "multi-news",
+        display_name: source_name,
+        feed_kind: "api",
+        endpoint_url: config[:base_url],
+        status: "error",
+        http_status: response&.dig(:http_status),
+        error_message: response&.dig(:error_message) || "No article payload returned",
+        metadata: { source_adapter: source_name },
+        occurred_at: now
+      )
+      return empty_fetch_result
+    end
 
     source_label = source_name.split("-").first # "worldnews-au,nz" -> "worldnews"
     records = []
@@ -339,9 +363,32 @@ class MultiNewsService
       )
     end
 
+    SourceFeedStatusRecorder.record(
+      provider: "multi-news",
+      display_name: source_name,
+      feed_kind: "api",
+      endpoint_url: config[:base_url],
+      status: "success",
+      records_fetched: articles.size,
+      records_stored: records.size,
+      http_status: response[:http_status],
+      metadata: { source_adapter: source_name },
+      occurred_at: now
+    )
+
     { records: records, ingest_items: ingest_items }
   rescue => e
     Rails.logger.error("MultiNewsService[#{config[:name]}]: #{e.message}")
+    SourceFeedStatusRecorder.record(
+      provider: "multi-news",
+      display_name: config[:name],
+      feed_kind: "api",
+      endpoint_url: config[:base_url],
+      status: "error",
+      error_message: e.message,
+      metadata: { source_adapter: config[:name] },
+      occurred_at: Time.current
+    )
     empty_fetch_result
   end
 
@@ -354,11 +401,14 @@ class MultiNewsService
     http.read_timeout = 15
     req = Net::HTTP::Get.new(uri)
     res = http.request(req)
-    return nil unless res.is_a?(Net::HTTPSuccess)
+    unless res.is_a?(Net::HTTPSuccess)
+      return { data: nil, http_status: res.code.to_i, error_message: "HTTP #{res.code}" }
+    end
+
     { data: JSON.parse(res.body.force_encoding("UTF-8")), http_status: res.code.to_i }
   rescue => e
     Rails.logger.error("MultiNewsService fetch error (#{uri.host}): #{e.message}")
-    nil
+    { data: nil, http_status: nil, error_message: e.message }
   end
 
   def empty_fetch_result

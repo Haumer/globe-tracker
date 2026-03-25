@@ -91,7 +91,7 @@ class AdminController < ApplicationController
   end
 
   def dashboard
-    @poller_status = GlobalPollerService.status
+    @poller_status = PollerRuntimeState.status
 
     # Recent polling stats grouped by source
     @recent_stats = PollingStat.where("created_at > ?", 1.hour.ago)
@@ -108,6 +108,8 @@ class AdminController < ApplicationController
         "COUNT(CASE WHEN status = 'error' THEN 1 END) as error_count",
         "MAX(created_at) as last_poll_at"
       )
+
+    @feed_statuses = SourceFeedStatus.active_first.limit(24)
 
     # Snapshot counts (use estimated total to avoid slow full-table count)
     estimated_total = ActiveRecord::Base.connection.execute(
@@ -147,25 +149,31 @@ class AdminController < ApplicationController
   end
 
   def toggle_poller
-    if GlobalPollerService.running?
-      GlobalPollerService.stop
+    status = PollerRuntimeState.status
+    if status[:running] || status[:paused]
+      PollerRuntimeState.request_stop!
+      flash[:notice] = "Requested poller stop."
     else
-      GlobalPollerService.start
+      PollerRuntimeState.ensure_running!
+      flash[:notice] = "Requested poller start. Ensure the dedicated poller process is running."
     end
     redirect_to admin_path
   end
 
   def pause_poller
-    if GlobalPollerService.paused?
-      GlobalPollerService.resume
+    if PollerRuntimeState.status[:paused]
+      PollerRuntimeState.request_resume!
+      flash[:notice] = "Requested poller resume."
     else
-      GlobalPollerService.pause
+      PollerRuntimeState.request_pause!
+      flash[:notice] = "Requested poller pause."
     end
     redirect_to admin_path
   end
 
   def stop_poller
-    GlobalPollerService.stop
+    PollerRuntimeState.request_stop!
+    flash[:notice] = "Requested poller stop."
     redirect_to admin_path
   end
 

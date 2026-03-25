@@ -5,6 +5,7 @@ class PagesController < ApplicationController
   end
 
   def sources
+    @sources = SourceCatalog.entries
   end
 
   def about

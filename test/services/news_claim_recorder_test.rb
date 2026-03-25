@@ -18,6 +18,19 @@ class NewsClaimRecorderTest < ActiveSupport::TestCase
       published_at: Time.utc(2026, 3, 24, 12, 0, 0),
       fetched_at: Time.utc(2026, 3, 24, 12, 5, 0)
     )
+    NewsEvent.create!(
+      news_article: article,
+      news_source: source,
+      source: "rss",
+      title: article.title,
+      name: "Isfahan",
+      url: article.url,
+      latitude: 32.65,
+      longitude: 51.67,
+      published_at: article.published_at,
+      fetched_at: article.fetched_at,
+      content_scope: "core"
+    )
 
     mapping = NewsClaimRecorder.record_all([
       {
@@ -33,6 +46,11 @@ class NewsClaimRecorderTest < ActiveSupport::TestCase
     assert_equal claim.id, mapping[article.id]
     assert_equal "conflict", claim.event_family
     assert_equal "ground_operation", claim.event_type
+    assert_equal "single_source", claim.verification_status
+    assert_equal "point", claim.geo_precision
+    assert_operator claim.source_reliability, :>, 0.7
+    assert_operator claim.geo_confidence, :>, 0.7
+    assert claim.provenance["canonical_url"].present?
     assert_equal [ "Israel", "Iran" ], claim_actors.map { |row| row.news_actor.name }
     assert_equal [ "initiator", "target" ], claim_actors.map(&:role)
   end

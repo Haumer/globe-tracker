@@ -28,6 +28,7 @@ module Api
 
     def serialize_event(ev, claim_summary = nil)
       publisher_name = ev.news_source&.name || ev.news_article&.publisher_name
+      origin_source_name = ev.news_article&.origin_source_name || claim_summary&.dig(:origin_source_name)
 
       {
         lat: ev.latitude,
@@ -43,10 +44,16 @@ module Api
         themes: parse_json_field(ev.themes),
         source: ev.source,
         publisher: publisher_name,
+        origin_source: origin_source_name,
+        origin_source_kind: ev.news_article&.origin_source_kind || claim_summary&.dig(:origin_source_kind),
         content_scope: ev.content_scope,
         claim_event_family: claim_summary&.dig(:event_family),
         claim_event_type: claim_summary&.dig(:event_type),
         claim_confidence: claim_summary&.dig(:confidence),
+        claim_verification_status: claim_summary&.dig(:verification_status),
+        claim_source_reliability: claim_summary&.dig(:source_reliability),
+        claim_geo_precision: claim_summary&.dig(:geo_precision),
+        claim_geo_confidence: claim_summary&.dig(:geo_confidence),
         actors: claim_summary&.dig(:actors) || [],
         time: ev.published_at&.iso8601,
         priority: ev[:priority]&.to_f&.round(3),
@@ -68,6 +75,9 @@ module Api
           entry[:cluster_id] = cluster.cluster_key
           entry[:cluster_confidence] = cluster.cluster_confidence
           entry[:verification_status] = cluster.verification_status
+          entry[:cluster_source_reliability] = cluster.source_reliability
+          entry[:cluster_geo_precision] = cluster.geo_precision
+          entry[:cluster_geo_confidence] = cluster.geo_confidence
           entry[:article_count] = cluster.article_count
           entry[:source_count] = cluster.source_count
         end
@@ -96,6 +106,12 @@ module Api
             event_family: claim.event_family,
             event_type: claim.event_type,
             confidence: claim.confidence&.round(2),
+            verification_status: claim.verification_status,
+            source_reliability: claim.source_reliability&.round(2),
+            geo_precision: claim.geo_precision,
+            geo_confidence: claim.geo_confidence&.round(2),
+            origin_source_name: claim.provenance["origin_source_name"],
+            origin_source_kind: claim.provenance["origin_source_kind"],
             actors: claim.news_claim_actors.sort_by(&:position).map do |claim_actor|
               actor = claim_actor.news_actor
               next unless actor

@@ -3,6 +3,7 @@ require "test_helper"
 class MultiNewsServiceTest < ActiveSupport::TestCase
   setup do
     @service = MultiNewsService.new
+    SourceFeedStatus.delete_all
   end
 
   test "sentiment_to_tone converts sentiment to tone scale" do
@@ -63,5 +64,29 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
   test "API_SOURCES is a non-empty array" do
     assert_kind_of Array, MultiNewsService::API_SOURCES
     assert MultiNewsService::API_SOURCES.size > 0
+  end
+
+  test "fetch_source records disabled status when api key is missing" do
+    config = {
+      name: "example-api",
+      env_key: "EXAMPLE_API_KEY",
+      base_url: "https://example.com/news",
+      params: ->(_key) { {} },
+      articles_path: ->(_data) { [] },
+      mapping: ->(_article) { {} },
+    }
+
+    original = ENV.delete("EXAMPLE_API_KEY")
+    begin
+      result = @service.send(:fetch_source, config)
+      assert_equal({ records: [], ingest_items: [] }, result)
+    ensure
+      ENV["EXAMPLE_API_KEY"] = original if original.present?
+    end
+
+    status = SourceFeedStatus.last
+    assert_equal "multi-news", status.provider
+    assert_equal "example-api", status.display_name
+    assert_equal "disabled", status.status
   end
 end

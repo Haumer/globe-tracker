@@ -26,6 +26,8 @@
                 <span style="color: #ffa726; font-weight: 600;">Paused</span>
               <% elsif @poller_status[:running] %>
                 <span style="color: #66bb6a; font-weight: 600;">Running</span>
+              <% elsif @poller_status[:stale] %>
+                <span style="color: #ffb300; font-weight: 600;">No Heartbeat</span>
               <% else %>
                 <span style="color: #ef5350; font-weight: 600;">Stopped</span>
               <% end %>
@@ -36,7 +38,14 @@
             <% if @poller_status[:last_poll_at] %>
               <span>Last poll: <strong><%= @poller_status[:last_poll_at]&.strftime("%H:%M:%S") %></strong></span>
             <% end %>
+            <% if @poller_status[:last_heartbeat_at] %>
+              <span>Last heartbeat: <strong><%= @poller_status[:last_heartbeat_at]&.strftime("%H:%M:%S") %></strong></span>
+            <% end %>
             <span>Polls: <strong><%= @poller_status[:poll_count] %></strong></span>
+            <span>Desired: <strong><%= @poller_status[:desired_state] %></strong></span>
+          </div>
+          <div style="margin-top: 8px; color: #6b7a8d; font-size: 12px;">
+            Managed by the dedicated <code>poller</code> process. Web no longer starts the poller or AIS stream during boot.
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -114,6 +123,56 @@
             <% end %>
             <% if @stats_summary.empty? %>
               <tr><td colspan="8" style="padding: 16px; text-align: center; color: #6b7a8d;">No polling data yet</td></tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <%# ── Feed Health ── %>
+    <div style="background: #141a28; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #1e2a3a;">
+      <h2 style="margin: 0 0 12px; font-size: 18px; color: #e0e6ed;">Feed Health</h2>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #1e2a3a;">
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Feed</th>
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Provider</th>
+              <th style="text-align: center; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Status</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Fetched</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Stored</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">HTTP</th>
+              <th style="text-align: right; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Last Success</th>
+              <th style="text-align: left; padding: 6px 10px; color: #6b7a8d; font-weight: 600;">Last Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @feed_statuses.each do |feed| %>
+              <% badge_bg, badge_color = case feed.status
+                 when "success" then ["#1b3a2a", "#66bb6a"]
+                 when "disabled" then ["#2a2538", "#b39ddb"]
+                 when "error" then ["#3a1b1b", "#ef5350"]
+                 else ["#233044", "#90a4ae"]
+                 end %>
+              <tr style="border-bottom: 1px solid #1e2a3a;">
+                <td style="padding: 6px 10px; font-weight: 600;"><%= feed.display_name %></td>
+                <td style="padding: 6px 10px;"><%= feed.provider %> / <%= feed.feed_kind %></td>
+                <td style="padding: 6px 10px; text-align: center;">
+                  <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: <%= badge_bg %>; color: <%= badge_color %>;">
+                    <%= feed.status %>
+                  </span>
+                </td>
+                <td style="padding: 6px 10px; text-align: right;"><%= number_with_delimiter(feed.last_records_fetched) %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= number_with_delimiter(feed.last_records_stored) %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= feed.last_http_status || "—" %></td>
+                <td style="padding: 6px 10px; text-align: right;"><%= feed.last_success_at&.strftime("%m-%d %H:%M") || "—" %></td>
+                <td style="padding: 6px 10px; color: #ef5350; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= feed.last_error_message %>">
+                  <%= feed.last_error_at ? "#{feed.last_error_at.strftime('%m-%d %H:%M')} · #{feed.last_error_message}" : "—" %>
+                </td>
+              </tr>
+            <% end %>
+            <% if @feed_statuses.empty? %>
+              <tr><td colspan="8" style="padding: 16px; text-align: center; color: #6b7a8d;">No per-feed status yet</td></tr>
             <% end %>
           </tbody>
         </table>

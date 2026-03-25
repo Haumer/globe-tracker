@@ -20,6 +20,7 @@ class NewsClaimRecorder
         {
           news_article_id: article_id,
           published_at: normalize_time(fetch(item, :published_at)) || context[:published_at],
+          context: context,
           claim: claim,
         }
       end
@@ -97,32 +98,69 @@ class NewsClaimRecorder
       article_ids = items.filter_map { |item| fetch(item, :news_article_id) }.uniq
       return {} if article_ids.empty?
 
-      NewsArticle.where(id: article_ids)
-        .pluck(:id, :title, :summary, :content_scope, :published_at)
-        .each_with_object({}) do |(article_id, title, summary, content_scope, published_at), contexts|
-          contexts[article_id] = {
-            title: title,
-            summary: summary,
-            content_scope: content_scope,
-            published_at: published_at,
-          }
-        end
+      NewsArticle.includes(:news_source, :news_events).where(id: article_ids).each_with_object({}) do |article, contexts|
+        event = article.news_events.max_by { |entry| entry.published_at || entry.fetched_at || entry.created_at }
+        contexts[article.id] = {
+          title: article.title,
+          summary: article.summary,
+          content_scope: article.content_scope,
+          published_at: article.published_at,
+          canonical_url: article.canonical_url,
+          publisher_name: article.publisher_name,
+          publisher_domain: article.publisher_domain,
+          source_kind: article.news_source&.source_kind,
+          origin_source_name: article.origin_source_name,
+          origin_source_kind: article.origin_source_kind,
+          origin_source_domain: article.origin_source_domain,
+          location_name: event&.name,
+          latitude: event&.latitude,
+          longitude: event&.longitude,
+          event_id: event&.id,
+          event_title: event&.title,
+        }
+      end
     end
 
     def build_claim_row(entry, now)
       claim = entry[:claim]
+      context = entry[:context] || {}
+      trust = NewsTrustScorer.claim_attributes(
+        source_kind: context[:source_kind],
+        publisher_name: context[:publisher_name],
+        publisher_domain: context[:publisher_domain],
+        origin_source_name: context[:origin_source_name],
+        origin_source_kind: context[:origin_source_kind],
+        origin_source_domain: context[:origin_source_domain],
+        location_name: context[:location_name],
+        latitude: context[:latitude],
+        longitude: context[:longitude],
+        event_id: context[:event_id],
+        event_title: context[:event_title],
+        canonical_url: context[:canonical_url],
+        extraction: claim,
+        claim_text: claim[:claim_text],
+        published_at: entry[:published_at]
+      )
 
       {
         news_article_id: entry[:news_article_id],
         event_family: claim[:event_family],
         event_type: claim[:event_type],
         claim_text: claim[:claim_text],
-        confidence: claim[:confidence],
+        confidence: trust[:confidence],
+        extraction_confidence: claim[:extraction_confidence],
+        actor_confidence: claim[:actor_confidence],
+        event_confidence: claim[:event_confidence],
+        geo_confidence: trust[:geo_confidence],
+        source_reliability: trust[:source_reliability],
+        verification_status: trust[:verification_status],
+        geo_precision: trust[:geo_precision],
         extraction_method: claim[:extraction_method],
         extraction_version: claim[:extraction_version],
         published_at: entry[:published_at],
         primary: true,
         metadata: claim[:metadata],
+        provenance: trust[:provenance],
         created_at: now,
         updated_at: now,
       }

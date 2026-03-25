@@ -59,6 +59,9 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
     assert_equal 2, cluster.article_count
     assert_equal 2, cluster.source_count
     assert_equal "multi_source", cluster.verification_status
+    assert_operator cluster.source_reliability, :>, 0.7
+    assert_operator cluster.geo_confidence, :>, 0.7
+    assert_equal "point", cluster.geo_precision
     assert_includes %w[airstrike missile_attack], cluster.event_type
   end
 
@@ -115,6 +118,28 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
     assert_equal 2, NewsStoryCluster.count
   end
 
+  test "reclustering the same article is idempotent" do
+    article = create_article(
+      suffix: "cluster-recluster",
+      publisher: "Reuters",
+      domain: "reuters.com",
+      title: "Explosions heard in central Iran after suspected Israeli attack",
+      source_kind: "wire",
+      published_at: Time.utc(2026, 3, 24, 13, 0, 0)
+    )
+
+    create_claim(article, family: "conflict", event_type: "missile_attack", claim_text: article.title)
+    create_event(article, title: article.title, location_name: "Isfahan", lat: 32.64, lng: 51.70)
+
+    first_cluster_key = NewsStoryClusterer.recluster_article(article)
+    second_cluster_key = NewsStoryClusterer.recluster_article(article)
+
+    assert_equal first_cluster_key, second_cluster_key
+    assert_equal 1, NewsStoryCluster.count
+    assert_equal 1, NewsStoryMembership.count
+    assert_equal first_cluster_key, article.news_events.first.reload.story_cluster_id
+  end
+
   private
 
   def create_article(suffix:, publisher:, domain:, title:, source_kind:, published_at:)
@@ -165,9 +190,17 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
       event_type: event_type,
       claim_text: claim_text,
       confidence: 0.92,
+      extraction_confidence: 0.91,
+      actor_confidence: 0.92,
+      event_confidence: 0.93,
+      geo_confidence: 0.82,
+      source_reliability: article.news_source.source_kind == "wire" ? 0.92 : 0.74,
+      verification_status: "single_source",
+      geo_precision: "point",
       extraction_method: "heuristic",
       extraction_version: "headline_rules_v2",
-      published_at: article.published_at
+      published_at: article.published_at,
+      provenance: { "canonical_url" => article.canonical_url }
     )
 
     israel = NewsActor.find_or_create_by!(canonical_key: "state:il") do |actor|

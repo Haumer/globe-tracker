@@ -141,6 +141,14 @@
   color: #ef5350;
   background: rgba(239, 83, 80, 0.1);
 }
+.bento-badge--pending {
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+}
+.bento-badge--deprecated {
+  color: #b0bec5;
+  background: rgba(176, 190, 197, 0.12);
+}
 .bento-badge--default {
   color: rgba(200, 210, 225, 0.45);
 }

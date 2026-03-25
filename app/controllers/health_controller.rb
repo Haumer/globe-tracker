@@ -17,7 +17,7 @@ class HealthController < ActionController::Base
     poller  = check_poller
     sources = check_sources
 
-    status = if !db_ok || poller == "stopped"
+    status = if !db_ok || %w[stopped stale].include?(poller)
                "down"
              elsif sources.values.any? { |s| s[:status] != "ok" }
                "degraded"
@@ -45,13 +45,11 @@ class HealthController < ActionController::Base
   end
 
   def check_poller
-    if GlobalPollerService.paused?
-      "paused"
-    elsif GlobalPollerService.running?
-      "running"
-    else
-      "stopped"
-    end
+    runtime_status = PollerRuntimeState.status
+    return "paused" if runtime_status[:paused]
+    return "running" if runtime_status[:running]
+
+    runtime_status[:stale] ? "stale" : "stopped"
   end
 
   def check_sources

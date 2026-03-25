@@ -3,6 +3,7 @@ require "test_helper"
 class RssNewsServiceTest < ActiveSupport::TestCase
   setup do
     @service = RssNewsService.new
+    SourceFeedStatus.delete_all
   end
 
   test "clean_google_url extracts real URL from Google News redirect" do

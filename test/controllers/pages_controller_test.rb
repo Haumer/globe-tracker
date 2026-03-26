@@ -5,7 +5,7 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     get "/"
 
     assert_response :success
-    assert_includes response.body, "SELECTED CONTEXT"
+    assert_includes response.body, "Selected Context"
     assert_includes response.body, "data-rp-pane=\"context\""
   end
 

@@ -365,6 +365,122 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "keeps recent operational activity relationships when live feeds are stale" do
+    travel_to Time.utc(2026, 3, 26, 10, 0, 0) do
+      create_conflict_cluster(
+        key: "cluster:iran-theater",
+        title: "Iran war escalates around Tehran",
+        latitude: 35.69,
+        longitude: 51.39,
+        source_count: 8,
+        last_seen_at: 30.minutes.ago
+      )
+      create_conflict_cluster(
+        key: "cluster:hormuz-shipping",
+        title: "Shipping pressure rises in the Strait of Hormuz",
+        latitude: 26.65,
+        longitude: 56.35,
+        source_count: 3,
+        last_seen_at: 15.minutes.ago
+      )
+
+      Ship.create!(
+        mmsi: "987654321",
+        name: "Delayed Tanker",
+        ship_type: 80,
+        latitude: 26.58,
+        longitude: 56.28,
+        speed: 1.8,
+        destination: "Fujairah",
+        flag: "PA",
+        updated_at: 4.hours.ago
+      )
+      Flight.create!(
+        icao24: "def456",
+        callsign: "RRR901",
+        latitude: 26.30,
+        longitude: 56.30,
+        speed: 410,
+        heading: 118.0,
+        origin_country: "United Kingdom",
+        source: "adsb",
+        aircraft_type: "A400M",
+        military: true,
+        updated_at: 5.hours.ago
+      )
+
+      result = OntologyRelationshipSyncService.sync_recent
+
+      assert_operator result[:operational_activities], :>=, 2
+
+      ship_entity = OntologyEntity.find_by!(canonical_key: "asset:ship:mmsi:987654321")
+      flight_entity = OntologyEntity.find_by!(canonical_key: "asset:flight:icao24:def456")
+      hormuz = OntologyEntity.find_by!(canonical_key: "corridor:chokepoint:hormuz")
+      theater = OntologyEntity.find_by!(canonical_key: "theater:middle-east-iran-war")
+
+      ship_relation = OntologyRelationship.find_by!(
+        source_node: ship_entity,
+        target_node: hormuz,
+        relation_type: "operational_activity"
+      )
+      assert_equal "recent", ship_relation.metadata.fetch("freshness_tier")
+      assert_includes ship_relation.explanation, "recently operated"
+
+      flight_relation = OntologyRelationship.find_by!(
+        source_node: flight_entity,
+        target_node: theater,
+        relation_type: "operational_activity"
+      )
+      assert_equal "recent", flight_relation.metadata.fetch("freshness_tier")
+      assert_equal "recent", flight_relation.ontology_relationship_evidences.find_by!(evidence_role: "tracked_asset").metadata.fetch("freshness_tier")
+    end
+  end
+
+  test "builds local corroboration between weather story events and nearby cameras" do
+    travel_to Time.utc(2026, 3, 26, 10, 0, 0) do
+      cluster = create_story_cluster(
+        key: "cluster:sharjah-flood",
+        title: "Flooded streets in Sharjah after heavy rain hits the United Arab Emirates",
+        family: "weather",
+        event_type: "flood",
+        latitude: 25.35,
+        longitude: 55.39,
+        source_count: 4,
+        last_seen_at: 25.minutes.ago
+      )
+      event = NewsOntologySyncService.sync_story_cluster(cluster)
+      camera = Camera.create!(
+        webcam_id: "windy-sharjah-1",
+        source: "windy",
+        title: "Sharjah Corniche Cam",
+        latitude: 25.37,
+        longitude: 55.40,
+        city: "Sharjah",
+        country: "AE",
+        fetched_at: 20.minutes.ago,
+        expires_at: 2.days.from_now,
+        is_live: true
+      )
+
+      result = OntologyRelationshipSyncService.sync_recent
+
+      assert_operator result[:local_corroborations], :>=, 1
+
+      camera_entity = OntologyEntity.find_by!(canonical_key: "asset:camera:windy:windy-sharjah-1")
+      relation = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: camera_entity,
+        relation_type: "local_corroboration"
+      )
+
+      assert relation.active?
+      assert_equal "camera", relation.metadata.fetch("target_kind")
+      assert_includes relation.explanation, camera.title
+      assert_includes relation.ontology_relationship_evidences.map(&:evidence), camera
+      assert_includes relation.ontology_relationship_evidences.map(&:evidence), cluster
+    end
+  end
+
   private
 
   def create_conflict_cluster(key:, title:, latitude:, longitude:, source_count:, last_seen_at:)

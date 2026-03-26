@@ -276,5 +276,102 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     assert_operator hormuz[:source_count], :>=, 4
     assert_equal "chokepoint", hormuz[:kind]
     assert hormuz[:top_articles].all? { |article| article[:cluster_id].present? }
+    refute strategic.any? { |item| ["Strait of Gibraltar", "Bosphorus Strait", "Strait of Malacca"].include?(item[:name]) },
+      "Generic corridor words should not promote unrelated chokepoints"
+  end
+
+  test "assigns Bosphorus to Russia-Ukraine instead of remote media-capital geocodes" do
+    source = NewsSource.create!(canonical_key: "wire-bosphorus", name: "Wire", source_kind: "wire")
+
+    ukraine_cluster = NewsStoryCluster.create!(
+      cluster_key: "cluster:ukraine-war",
+      canonical_title: "Fighting intensifies in Ukraine",
+      content_scope: "core",
+      event_family: "conflict",
+      event_type: "ground_operation",
+      location_name: "Kyiv",
+      latitude: 50.45,
+      longitude: 30.52,
+      geo_precision: "point",
+      first_seen_at: 18.hours.ago,
+      last_seen_at: 1.hour.ago,
+      article_count: 8,
+      source_count: 5,
+      cluster_confidence: 0.84,
+      verification_status: "multi_source",
+      source_reliability: 0.79,
+      geo_confidence: 0.82
+    )
+
+    8.times do |i|
+      NewsEvent.create!(
+        url: "https://example.com/ukraine-bosphorus-#{i}",
+        title: "Ukraine fighting update #{i}",
+        latitude: 50.4,
+        longitude: 30.5,
+        tone: -5.0,
+        category: "conflict",
+        credibility: "tier1/low",
+        source: ["reuters", "bbc", "cnn", "ap"][i % 4],
+        story_cluster_id: ukraine_cluster.cluster_key,
+        published_at: (i + 1).hours.ago,
+        fetched_at: Time.current,
+      )
+    end
+
+    [
+      {
+        key: "cluster:bosphorus-1",
+        title: "Shipping risk rises in Bosphorus Strait as war pressure grows",
+        lat: 38.91,
+        lng: -77.04,
+        sources: 4,
+      },
+      {
+        key: "cluster:bosphorus-2",
+        title: "Bosphorus shipping disruption feared after Black Sea escalation",
+        lat: 41.01,
+        lng: 28.97,
+        sources: 2,
+      },
+    ].each do |attrs|
+      cluster = NewsStoryCluster.create!(
+        cluster_key: attrs[:key],
+        canonical_title: attrs[:title],
+        content_scope: "core",
+        event_family: "conflict",
+        event_type: "ground_operation",
+        location_name: attrs[:title],
+        latitude: attrs[:lat],
+        longitude: attrs[:lng],
+        geo_precision: "point",
+        first_seen_at: 30.hours.ago,
+        last_seen_at: 2.hours.ago,
+        article_count: attrs[:sources],
+        source_count: attrs[:sources],
+        cluster_confidence: 0.82,
+        verification_status: "multi_source",
+        source_reliability: 0.77,
+        geo_confidence: 0.8
+      )
+      NewsArticle.create!(
+        news_source: source,
+        url: "https://example.com/#{attrs[:key]}",
+        canonical_url: "https://example.com/#{attrs[:key]}",
+        title: attrs[:title],
+        normalization_status: "normalized",
+        content_scope: "core"
+      ).tap do |article|
+        cluster.update!(lead_news_article: article)
+      end
+    end
+
+    data = ConflictPulseService.analyze
+    strategic = data[:strategic_situations] || []
+
+    bosphorus = strategic.find { |item| item[:name] == "Bosphorus Strait" }
+    assert bosphorus.present?, "Expected Bosphorus strategic marker"
+    assert_equal "Russia-Ukraine War", bosphorus[:theater]
+    refute_equal "Americas", bosphorus[:theater]
   end
 end

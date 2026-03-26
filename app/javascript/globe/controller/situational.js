@@ -988,6 +988,15 @@ export function applySituationalMethods(GlobeController) {
     }[mode]
   }
 
+  GlobeController.prototype._cameraModeChipClass = function(cam) {
+    return {
+      realtime: "fire",
+      live: "event",
+      periodic: "eq",
+      stale: "outage",
+    }[this._cameraMode(cam)] || "eq"
+  }
+
   GlobeController.prototype._cameraSourceColor = function(cam) {
     return { youtube: "#ff5252", nycdot: "#ff6d00", windy: "#29b6f6" }[cam?.source] || "#29b6f6"
   }
@@ -1173,11 +1182,11 @@ export function applySituationalMethods(GlobeController) {
     const remaining = cams.filter(cam => !featuredIds.has(cam.id))
 
     const summaryHtml = `
-      <div class="cam-feed-summary">
-        <span class="cam-summary-chip cam-summary-chip--realtime">${counts.realtime} live now</span>
-        <span class="cam-summary-chip cam-summary-chip--live">${counts.live} active feeds</span>
-        <span class="cam-summary-chip cam-summary-chip--periodic">${counts.periodic} periodic</span>
-        ${counts.stale > 0 ? `<span class="cam-summary-chip cam-summary-chip--stale">${counts.stale} stale</span>` : ""}
+      <div class="cam-feed-summary insight-card-chips">
+        <span class="ins-chip ins-chip--fire">${counts.realtime} live now</span>
+        <span class="ins-chip ins-chip--event">${counts.live} active feeds</span>
+        <span class="ins-chip ins-chip--eq">${counts.periodic} periodic</span>
+        ${counts.stale > 0 ? `<span class="ins-chip ins-chip--outage">${counts.stale} stale</span>` : ""}
       </div>
     `
 
@@ -1218,8 +1227,8 @@ export function applySituationalMethods(GlobeController) {
           ? `<img src="${thumbUrl}" alt="${title}" loading="lazy">`
           : `<div class="cam-hero-placeholder">Live observation unavailable</div>`}
         <div class="cam-hero-badges">
-          <span class="cam-hero-badge cam-hero-badge--${badge.tone}">${badge.label}</span>
-          <span class="cam-hero-badge cam-hero-badge--source">${this._escapeHtml(sourceLabel)}</span>
+          <span class="ins-chip ins-chip--${this._cameraModeChipClass(cam)}">${badge.label}</span>
+          <span class="ins-chip ins-chip--news">${this._escapeHtml(sourceLabel)}</span>
         </div>
       </div>
       <div class="cam-hero-body">
@@ -1230,8 +1239,8 @@ export function applySituationalMethods(GlobeController) {
           ${viewCount}
         </div>
         <div class="cam-hero-actions">
-          <button class="cam-action-btn cam-action-btn--focus" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">Focus</button>
-          ${watchUrl ? `<button class="cam-action-btn cam-action-btn--watch" data-action="click->globe#openCamStream" data-cam-idx="${originalIdx}">Watch</button>` : ""}
+          <button class="insight-action-btn" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">Focus</button>
+          ${watchUrl ? `<button class="insight-action-btn" data-action="click->globe#openCamStream" data-cam-idx="${originalIdx}">Watch</button>` : ""}
         </div>
       </div>
     </div>`
@@ -1255,7 +1264,7 @@ export function applySituationalMethods(GlobeController) {
       <div class="cf-card-body">
         <div class="cf-card-topline">
           <span class="cf-card-source">${this._escapeHtml(sourceLabel)}</span>
-          <span class="cf-card-badge cf-card-badge--${badge.tone}">${badge.label}</span>
+          <span class="ins-chip ins-chip--${this._cameraModeChipClass(cam)}">${badge.label}</span>
         </div>
         <div class="cf-card-title">${title}</div>
         <div class="cf-card-meta">

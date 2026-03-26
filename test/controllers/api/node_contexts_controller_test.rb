@@ -12,7 +12,7 @@ class Api::NodeContextsControllerTest < ActionDispatch::IntegrationTest
       canonical_key: "corridor:chokepoint:hormuz",
       entity_type: "corridor",
       canonical_name: "Strait of Hormuz",
-      metadata: { "description" => "Strategic energy corridor" }
+      metadata: { "description" => "Strategic energy corridor", "latitude" => 26.56, "longitude" => 56.27 }
     )
     cluster = create_story_cluster("cluster:hormuz", "Shipping pressure builds around Hormuz")
 
@@ -37,6 +37,8 @@ class Api::NodeContextsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     body = JSON.parse(response.body)
     assert_equal "Strait of Hormuz", body.dig("node", "name")
+    assert_in_delta 26.56, body.dig("node", "latitude"), 0.001
+    assert_in_delta 56.27, body.dig("node", "longitude"), 0.001
     assert_equal "Shipping pressure builds around Hormuz", body.dig("evidence", 0, "label")
     assert_equal "theater_pressure", body.dig("relationships", 0, "relation_type")
     assert_equal "Test Theater", body.dig("relationships", 0, "node", "name")
@@ -137,6 +139,8 @@ class Api::NodeContextsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     body = JSON.parse(response.body)
     assert_equal "Story cluster title", body.dig("node", "name")
+    assert_in_delta 26.7, body.dig("node", "latitude"), 0.001
+    assert_in_delta 56.4, body.dig("node", "longitude"), 0.001
     assert_equal "participant", body.dig("memberships", 0, "role")
     assert_equal "Iran", body.dig("memberships", 0, "node", "name")
     assert_equal ["lead_article", "primary_cluster"], body.fetch("evidence").map { |item| item.fetch("role") }.sort

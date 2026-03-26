@@ -42,10 +42,14 @@ class OntologyRelationshipSyncService
     theater_flight: 6,
     strategic_air_asset_flight: 3,
   }.freeze
-  RECENT_SHIP_WINDOW = 45.minutes
-  RECENT_FLIGHT_WINDOW = 45.minutes
-  RECENT_JAMMING_WINDOW = 90.minutes
-  RECENT_NOTAM_WINDOW = 18.hours
+  LIVE_SHIP_WINDOW = 45.minutes
+  RECENT_SHIP_WINDOW = 12.hours
+  LIVE_FLIGHT_WINDOW = 45.minutes
+  RECENT_FLIGHT_WINDOW = 12.hours
+  LIVE_JAMMING_WINDOW = 90.minutes
+  RECENT_JAMMING_WINDOW = 18.hours
+  LIVE_NOTAM_WINDOW = 18.hours
+  RECENT_NOTAM_WINDOW = 36.hours
   FLIGHT_THEATER_RADIUS_KM = 250.0
   FLIGHT_STRATEGIC_ASSET_RADIUS_KM = 120.0
   CHOKEPOINT_SHIP_DISTANCE_MIN_KM = 120.0
@@ -53,6 +57,12 @@ class OntologyRelationshipSyncService
   SHIP_CABLE_DISTANCE_KM = 10.0
   JAMMING_SIGNAL_DISTANCE_KM = 150.0
   OPERATIONAL_NOTAM_REASONS = ["Security", "TFR", "Military", "VIP Movement"].freeze
+  CAMERA_ENTITY_TYPE = "asset".freeze
+  CAMERA_CORROBORATION_EVENT_TYPES = %w[flood storm wildfire].freeze
+  CAMERA_CORROBORATION_RADIUS_KM = 20.0
+  CAMERA_CORROBORATION_LIMIT = 3
+  CAMERA_CORROBORATION_WINDOW = 72.hours
+  CAMERA_CORROBORATION_MAX_AGE = 24.hours
 
   class << self
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
@@ -95,6 +105,7 @@ class OntologyRelationshipSyncService
           corroborated_story_clusters: corroborated_story_clusters,
           now: now
         ),
+        local_corroborations: sync_local_corroboration_relationships(now: now),
       }
     end
 
@@ -456,6 +467,58 @@ class OntologyRelationshipSyncService
         )
     end
 
+    def sync_local_corroboration_relationships(now:)
+      candidate_events = OntologyEvent.includes(:place_entity, :primary_story_cluster)
+        .where(event_type: CAMERA_CORROBORATION_EVENT_TYPES)
+        .where("last_seen_at >= ?", now - CAMERA_CORROBORATION_WINDOW)
+
+      candidate_events.sum do |event|
+        camera_candidates = nearby_camera_candidates_for_event(event, now: now)
+        desired_target_ids = []
+
+        created_count = camera_candidates.first(CAMERA_CORROBORATION_LIMIT).count do |candidate|
+          camera = candidate.fetch(:record)
+          camera_entity = candidate.fetch(:entity)
+          desired_target_ids << camera_entity.id
+
+          relationship = OntologySyncSupport.upsert_relationship(
+            source_node: event,
+            target_node: camera_entity,
+            relation_type: "local_corroboration",
+            confidence: candidate.fetch(:confidence),
+            fresh_until: (camera.fetched_at || camera.updated_at) + CAMERA_CORROBORATION_MAX_AGE,
+            derived_by: RELATION_DERIVED_BY,
+            explanation: local_corroboration_explanation(event, camera, candidate),
+            metadata: {
+              "source_kind" => "event",
+              "target_kind" => "camera",
+              "distance_km" => candidate.fetch(:distance_km).round(1),
+              "freshness_seconds" => candidate.fetch(:freshness_seconds),
+              "camera_source" => camera.source,
+              "camera_mode" => camera.is_live? ? "live" : "periodic",
+            }.compact
+          )
+
+          sync_relationship_evidences(
+            relationship,
+            local_corroboration_evidence_payloads(event, candidate)
+          )
+          true
+        end
+
+        stale_scope = event.outgoing_ontology_relationships
+          .where(relation_type: "local_corroboration", derived_by: RELATION_DERIVED_BY, target_node_type: "OntologyEntity")
+        stale_scope = if desired_target_ids.any?
+          stale_scope.where.not(target_node_id: desired_target_ids)
+        else
+          stale_scope
+        end
+        stale_scope.delete_all
+
+        created_count
+      end
+    end
+
     def sync_chokepoint_downstream_exposures(chokepoint_entities:, exposures_by_chokepoint:, corroborated_story_clusters:, now:)
       chokepoint_entities.sum do |chokepoint_key, chokepoint_entity|
         chokepoint = ChokepointMonitorService::CHOKEPOINTS.fetch(chokepoint_key)
@@ -580,6 +643,14 @@ class OntologyRelationshipSyncService
         story_evidence = direct_chokepoint_story_clusters(corroborated_story_clusters, chokepoint_key, chokepoint).first(1)
 
         candidates = recent_ships.where(latitude: lat_range, longitude: lng_range).filter_map do |ship|
+          freshness_tier = operational_freshness_tier(
+            ship.updated_at,
+            now: now,
+            live_window: LIVE_SHIP_WINDOW,
+            recent_window: RECENT_SHIP_WINDOW
+          )
+          next if freshness_tier.blank?
+
           distance = haversine_km(ship.latitude, ship.longitude, chokepoint[:lat], chokepoint[:lng])
           next if distance > radius_km
 
@@ -587,7 +658,14 @@ class OntologyRelationshipSyncService
             record: ship,
             entity: OperationalOntologySyncService.sync_ship(ship),
             distance_km: distance,
-            confidence: chokepoint_ship_activity_confidence(ship, distance, radius_km, story_evidence.present?),
+            freshness_tier: freshness_tier,
+            confidence: chokepoint_ship_activity_confidence(
+              ship,
+              distance,
+              radius_km,
+              story_evidence.present?,
+              freshness_tier: freshness_tier
+            ),
           }
         end
 
@@ -601,13 +679,20 @@ class OntologyRelationshipSyncService
               target_node: chokepoint_entity,
               relation_type: "operational_activity",
               confidence: candidate.fetch(:confidence),
-              fresh_until: ship.updated_at + 90.minutes,
+              fresh_until: operational_relationship_fresh_until(
+                ship.updated_at,
+                freshness_tier: candidate.fetch(:freshness_tier),
+                live_window: LIVE_SHIP_WINDOW,
+                recent_window: RECENT_SHIP_WINDOW
+              ),
               derived_by: RELATION_DERIVED_BY,
-              explanation: chokepoint_ship_activity_explanation(ship, chokepoint, candidate.fetch(:distance_km)),
+              explanation: chokepoint_ship_activity_explanation(ship, chokepoint, candidate.fetch(:distance_km), candidate.fetch(:freshness_tier)),
               metadata: {
                 "source_kind" => "ship",
                 "target_kind" => "chokepoint",
                 "distance_km" => candidate.fetch(:distance_km).round(1),
+                "freshness_tier" => candidate.fetch(:freshness_tier),
+                "observed_at" => ship.updated_at&.iso8601,
                 "speed_knots" => ship.speed&.round(1),
                 "heading" => ship.heading&.round(1),
                 "destination" => ship.destination,
@@ -619,7 +704,11 @@ class OntologyRelationshipSyncService
             sync_relationship_evidences(
               relationship,
               [
-                ship_operational_evidence_payload(ship, candidate.fetch(:confidence)),
+                ship_operational_evidence_payload(
+                  ship,
+                  candidate.fetch(:confidence),
+                  freshness_tier: candidate.fetch(:freshness_tier)
+                ),
               ] +
               story_evidence.map do |cluster|
                 {
@@ -643,6 +732,14 @@ class OntologyRelationshipSyncService
         .where.not(latitude: nil, longitude: nil)
 
       candidates = recent_ships.filter_map do |ship|
+        freshness_tier = operational_freshness_tier(
+          ship.updated_at,
+          now: now,
+          live_window: LIVE_SHIP_WINDOW,
+          recent_window: RECENT_SHIP_WINDOW
+        )
+        next if freshness_tier.blank?
+
         closest_cable = SubmarineCable.find_each.filter_map do |cable|
           distance = submarine_cable_distance_km(cable, ship.latitude, ship.longitude)
           next if distance.blank?
@@ -658,7 +755,12 @@ class OntologyRelationshipSyncService
           cable: closest_cable.fetch(:cable),
           cable_entity: sync_submarine_cable_entity(closest_cable.fetch(:cable)),
           distance_km: closest_cable.fetch(:distance_km),
-          confidence: submarine_cable_ship_activity_confidence(ship, closest_cable.fetch(:distance_km)),
+          freshness_tier: freshness_tier,
+          confidence: submarine_cable_ship_activity_confidence(
+            ship,
+            closest_cable.fetch(:distance_km),
+            freshness_tier: freshness_tier
+          ),
         }
       end
 
@@ -673,13 +775,20 @@ class OntologyRelationshipSyncService
             target_node: candidate.fetch(:cable_entity),
             relation_type: "operational_activity",
             confidence: candidate.fetch(:confidence),
-            fresh_until: ship.updated_at + 75.minutes,
+            fresh_until: operational_relationship_fresh_until(
+              ship.updated_at,
+              freshness_tier: candidate.fetch(:freshness_tier),
+              live_window: LIVE_SHIP_WINDOW,
+              recent_window: RECENT_SHIP_WINDOW
+            ),
             derived_by: RELATION_DERIVED_BY,
-            explanation: submarine_cable_ship_activity_explanation(ship, cable, candidate.fetch(:distance_km)),
+            explanation: submarine_cable_ship_activity_explanation(ship, cable, candidate.fetch(:distance_km), candidate.fetch(:freshness_tier)),
             metadata: {
               "source_kind" => "ship",
               "target_kind" => "submarine_cable",
               "distance_km" => candidate.fetch(:distance_km).round(1),
+              "freshness_tier" => candidate.fetch(:freshness_tier),
+              "observed_at" => ship.updated_at&.iso8601,
               "speed_knots" => ship.speed&.round(1),
               "flag" => ship.flag,
               "destination" => ship.destination,
@@ -689,7 +798,11 @@ class OntologyRelationshipSyncService
           sync_relationship_evidences(
             relationship,
             [
-              ship_operational_evidence_payload(ship, candidate.fetch(:confidence)),
+              ship_operational_evidence_payload(
+                ship,
+                candidate.fetch(:confidence),
+                freshness_tier: candidate.fetch(:freshness_tier)
+              ),
             ]
           )
           true
@@ -712,7 +825,12 @@ class OntologyRelationshipSyncService
             target_node: theater_entity,
             relation_type: "operational_activity",
             confidence: candidate.fetch(:confidence),
-            fresh_until: flight.updated_at + 90.minutes,
+            fresh_until: operational_relationship_fresh_until(
+              flight.updated_at,
+              freshness_tier: candidate.fetch(:freshness_tier),
+              live_window: LIVE_FLIGHT_WINDOW,
+              recent_window: RECENT_FLIGHT_WINDOW
+            ),
             derived_by: RELATION_DERIVED_BY,
             explanation: theater_flight_activity_explanation(summary, candidate),
             metadata: {
@@ -720,6 +838,8 @@ class OntologyRelationshipSyncService
               "target_kind" => "theater",
               "theater" => summary.fetch(:name),
               "distance_km" => candidate.fetch(:distance_km).round(1),
+              "freshness_tier" => candidate.fetch(:freshness_tier),
+              "observed_at" => flight.updated_at&.iso8601,
               "military" => flight.military,
               "emergency" => emergency_flight?(flight),
               "jamming_pct" => candidate.dig(:jamming, :percentage)&.round(1),
@@ -744,6 +864,14 @@ class OntologyRelationshipSyncService
           radius_km: FLIGHT_STRATEGIC_ASSET_RADIUS_KM,
           now: now
         ).filter_map do |flight|
+          freshness_tier = operational_freshness_tier(
+            flight.updated_at,
+            now: now,
+            live_window: LIVE_FLIGHT_WINDOW,
+            recent_window: RECENT_FLIGHT_WINDOW
+          )
+          next if freshness_tier.blank?
+
           jamming = nearest_jamming_signal(flight.latitude, flight.longitude, recent_jamming)
           notam = nearest_operational_notam(flight.latitude, flight.longitude, recent_notams)
           next unless heightened_flight_activity?(flight, jamming: jamming, notam: notam)
@@ -754,9 +882,10 @@ class OntologyRelationshipSyncService
             entity: OperationalOntologySyncService.sync_flight(flight),
             target: target,
             distance_km: distance,
+            freshness_tier: freshness_tier,
             jamming: jamming,
             notam: notam,
-            confidence: strategic_air_asset_flight_confidence(flight, distance, jamming, notam),
+            confidence: strategic_air_asset_flight_confidence(flight, distance, jamming, notam, freshness_tier: freshness_tier),
           }
         end
           .sort_by { |candidate| [-candidate.fetch(:confidence), candidate.fetch(:distance_km), candidate.fetch(:record).callsign.to_s] }
@@ -773,13 +902,20 @@ class OntologyRelationshipSyncService
               target_node: target.fetch(:entity),
               relation_type: "operational_activity",
               confidence: candidate.fetch(:confidence),
-              fresh_until: flight.updated_at + 90.minutes,
+              fresh_until: operational_relationship_fresh_until(
+                flight.updated_at,
+                freshness_tier: candidate.fetch(:freshness_tier),
+                live_window: LIVE_FLIGHT_WINDOW,
+                recent_window: RECENT_FLIGHT_WINDOW
+              ),
               derived_by: RELATION_DERIVED_BY,
               explanation: strategic_air_asset_flight_explanation(target, candidate),
               metadata: {
                 "source_kind" => "flight",
                 "target_kind" => target.fetch(:asset_type).to_s,
                 "distance_km" => candidate.fetch(:distance_km).round(1),
+                "freshness_tier" => candidate.fetch(:freshness_tier),
+                "observed_at" => flight.updated_at&.iso8601,
                 "military" => flight.military,
                 "emergency" => emergency_flight?(flight),
                 "jamming_pct" => candidate.dig(:jamming, :percentage)&.round(1),
@@ -999,6 +1135,31 @@ class OntologyRelationshipSyncService
       end
     end
 
+    def sync_camera_entity(camera)
+      OntologySyncSupport.upsert_entity(
+        canonical_key: "asset:camera:#{camera.source}:#{camera.webcam_id}",
+        entity_type: CAMERA_ENTITY_TYPE,
+        canonical_name: camera.title.presence || camera.webcam_id,
+        metadata: {
+          "asset_kind" => "camera",
+          "webcam_id" => camera.webcam_id,
+          "source" => camera.source,
+          "camera_type" => camera.camera_type,
+          "city" => camera.city,
+          "region" => camera.region,
+          "country" => camera.country,
+          "latitude" => camera.latitude,
+          "longitude" => camera.longitude,
+          "is_live" => camera.is_live,
+          "fetched_at" => camera.fetched_at&.iso8601,
+        }.compact
+      ).tap do |entity|
+        OntologySyncSupport.upsert_alias(entity, camera.title, alias_type: "official") if camera.title.present?
+        OntologySyncSupport.upsert_alias(entity, camera.webcam_id, alias_type: "external_id")
+        OntologySyncSupport.upsert_link(entity, camera, role: "observation_camera", method: RELATION_DERIVED_BY)
+      end
+    end
+
     def strategic_asset_confidence(asset_type, distance_km, radius_km, bonus = 0.0)
       base = {
         airport: 0.56,
@@ -1072,7 +1233,7 @@ class OntologyRelationshipSyncService
       Notam.active
         .where(reason: OPERATIONAL_NOTAM_REASONS)
         .where.not(latitude: nil, longitude: nil)
-        .where("effective_start >= ? OR fetched_at >= ?", now - RECENT_NOTAM_WINDOW, now - 6.hours)
+        .where("effective_start >= ? OR fetched_at >= ?", now - RECENT_NOTAM_WINDOW, now - 12.hours)
     end
 
     def chokepoint_ship_radius_km(chokepoint)
@@ -1096,6 +1257,14 @@ class OntologyRelationshipSyncService
         _nearest_point, distance = nearest_point_distance(flight.latitude, flight.longitude, points)
         next if distance > FLIGHT_THEATER_RADIUS_KM
 
+        freshness_tier = operational_freshness_tier(
+          flight.updated_at,
+          now: now,
+          live_window: LIVE_FLIGHT_WINDOW,
+          recent_window: RECENT_FLIGHT_WINDOW
+        )
+        next if freshness_tier.blank?
+
         jamming = nearest_jamming_signal(flight.latitude, flight.longitude, recent_jamming)
         notam = nearest_operational_notam(flight.latitude, flight.longitude, recent_notams)
         next unless heightened_flight_activity?(flight, jamming: jamming, notam: notam)
@@ -1104,9 +1273,10 @@ class OntologyRelationshipSyncService
           record: flight,
           entity: OperationalOntologySyncService.sync_flight(flight),
           distance_km: distance,
+          freshness_tier: freshness_tier,
           jamming: jamming,
           notam: notam,
-          confidence: theater_flight_activity_confidence(flight, distance, jamming, notam),
+          confidence: theater_flight_activity_confidence(flight, distance, jamming, notam, freshness_tier: freshness_tier),
         }
       end
         .sort_by { |candidate| [-candidate.fetch(:confidence), candidate.fetch(:distance_km), candidate.fetch(:record).callsign.to_s] }
@@ -1176,58 +1346,88 @@ class OntologyRelationshipSyncService
         .min_by(&:last)
     end
 
-    def chokepoint_ship_activity_confidence(ship, distance_km, radius_km, supporting_story)
+    def operational_freshness_tier(timestamp, now:, live_window:, recent_window:)
+      return if timestamp.blank?
+
+      return "live" if timestamp >= now - live_window
+      return "recent" if timestamp >= now - recent_window
+
+      nil
+    end
+
+    def operational_relationship_fresh_until(timestamp, freshness_tier:, live_window:, recent_window:)
+      window = freshness_tier == "live" ? live_window : recent_window
+      timestamp + window
+    end
+
+    def freshness_penalty(freshness_tier)
+      freshness_tier == "recent" ? 0.12 : 0.0
+    end
+
+    def operational_verb(freshness_tier)
+      freshness_tier == "recent" ? "recently operated" : "is operating"
+    end
+
+    def operational_freshness_label(freshness_tier)
+      freshness_tier == "recent" ? "recent" : "live"
+    end
+
+    def chokepoint_ship_activity_confidence(ship, distance_km, radius_km, supporting_story, freshness_tier:)
       confidence = 0.52
       confidence += (1.0 - [(distance_km / radius_km), 1.0].min) * 0.2
       confidence += 0.05 if ship.speed.to_f >= 1.0
       confidence += 0.03 if ship.destination.present?
       confidence += 0.05 if supporting_story
+      confidence -= freshness_penalty(freshness_tier)
       [confidence, 0.9].min.round(2)
     end
 
-    def submarine_cable_ship_activity_confidence(ship, distance_km)
+    def submarine_cable_ship_activity_confidence(ship, distance_km, freshness_tier:)
       confidence = 0.58
       confidence += (1.0 - [(distance_km / SHIP_CABLE_DISTANCE_KM), 1.0].min) * 0.22
       confidence += 0.08 if ship.speed.to_f <= 1.0
+      confidence -= freshness_penalty(freshness_tier)
       [confidence, 0.93].min.round(2)
     end
 
-    def theater_flight_activity_confidence(flight, distance_km, jamming, notam)
+    def theater_flight_activity_confidence(flight, distance_km, jamming, notam, freshness_tier:)
       confidence = 0.5
       confidence += (1.0 - [(distance_km / FLIGHT_THEATER_RADIUS_KM), 1.0].min) * 0.16
       confidence += 0.12 if flight.military?
       confidence += 0.1 if emergency_flight?(flight)
       confidence += 0.1 if jamming.present?
       confidence += 0.08 if notam.present?
+      confidence -= freshness_penalty(freshness_tier)
       [confidence, 0.95].min.round(2)
     end
 
-    def strategic_air_asset_flight_confidence(flight, distance_km, jamming, notam)
+    def strategic_air_asset_flight_confidence(flight, distance_km, jamming, notam, freshness_tier:)
       confidence = 0.54
       confidence += (1.0 - [(distance_km / FLIGHT_STRATEGIC_ASSET_RADIUS_KM), 1.0].min) * 0.18
       confidence += 0.12 if flight.military?
       confidence += 0.1 if emergency_flight?(flight)
       confidence += 0.08 if jamming.present?
       confidence += 0.08 if notam.present?
+      confidence -= freshness_penalty(freshness_tier)
       [confidence, 0.95].min.round(2)
     end
 
-    def chokepoint_ship_activity_explanation(ship, chokepoint, distance_km)
-      description = "#{asset_label(ship, fallback: ship.mmsi)} is operating #{distance_km.round}km from #{chokepoint.fetch(:name)}"
+    def chokepoint_ship_activity_explanation(ship, chokepoint, distance_km, freshness_tier)
+      description = "#{asset_label(ship, fallback: ship.mmsi)} #{operational_verb(freshness_tier)} #{distance_km.round}km from #{chokepoint.fetch(:name)}"
       description << " at #{ship.speed.to_f.round(1)}kt" if ship.speed.present?
       description << " toward #{ship.destination}" if ship.destination.present?
       description
     end
 
-    def submarine_cable_ship_activity_explanation(ship, cable, distance_km)
-      description = "#{asset_label(ship, fallback: ship.mmsi)} is loitering #{distance_km.round(1)}km from #{cable.name.presence || cable.cable_id}"
+    def submarine_cable_ship_activity_explanation(ship, cable, distance_km, freshness_tier)
+      description = "#{asset_label(ship, fallback: ship.mmsi)} #{freshness_tier == 'recent' ? 'recently loitered' : 'is loitering'} #{distance_km.round(1)}km from #{cable.name.presence || cable.cable_id}"
       description << " at #{ship.speed.to_f.round(1)}kt" if ship.speed.present?
       description
     end
 
     def theater_flight_activity_explanation(summary, candidate)
       flight = candidate.fetch(:record)
-      description = "#{asset_label(flight, fallback: flight.icao24)} is operating #{candidate.fetch(:distance_km).round}km from #{summary.fetch(:name)} activity"
+      description = "#{asset_label(flight, fallback: flight.icao24)} #{operational_verb(candidate.fetch(:freshness_tier))} #{candidate.fetch(:distance_km).round}km from #{summary.fetch(:name)} activity"
       description << ", with military identification" if flight.military?
       description << ", inside #{candidate.dig(:jamming, :percentage).round}% GPS degradation" if candidate[:jamming].present?
       description << ", near #{candidate.dig(:notam, :reason)} airspace restrictions" if candidate[:notam].present?
@@ -1236,19 +1436,21 @@ class OntologyRelationshipSyncService
 
     def strategic_air_asset_flight_explanation(target, candidate)
       flight = candidate.fetch(:record)
-      description = "#{asset_label(flight, fallback: flight.icao24)} is operating #{candidate.fetch(:distance_km).round}km from #{target.fetch(:entity).canonical_name}"
+      description = "#{asset_label(flight, fallback: flight.icao24)} #{operational_verb(candidate.fetch(:freshness_tier))} #{candidate.fetch(:distance_km).round}km from #{target.fetch(:entity).canonical_name}"
       description << ", with military identification" if flight.military?
       description << ", near #{candidate.dig(:notam, :reason)} airspace restrictions" if candidate[:notam].present?
       description << ", inside #{candidate.dig(:jamming, :percentage).round}% GPS degradation" if candidate[:jamming].present?
       description
     end
 
-    def ship_operational_evidence_payload(ship, confidence)
+    def ship_operational_evidence_payload(ship, confidence, freshness_tier:)
       {
         evidence: ship,
         evidence_role: "tracked_asset",
         confidence: confidence,
         metadata: {
+          "freshness_tier" => freshness_tier,
+          "observed_at" => ship.updated_at&.iso8601,
           "speed_knots" => ship.speed&.round(1),
           "heading" => ship.heading&.round(1),
           "destination" => ship.destination,
@@ -1266,6 +1468,7 @@ class OntologyRelationshipSyncService
           confidence: candidate.fetch(:confidence),
           metadata: {
             "updated_at" => flight.updated_at&.iso8601,
+            "freshness_tier" => candidate.fetch(:freshness_tier),
             "military" => flight.military,
             "squawk" => flight.squawk,
             "origin_country" => flight.origin_country,
@@ -1311,6 +1514,101 @@ class OntologyRelationshipSyncService
             },
           }
         end
+    end
+
+    def nearby_camera_candidates_for_event(event, now:)
+      lat, lng = event_coordinates(event)
+      return [] if lat.blank? || lng.blank?
+
+      lat_range, lng_range = bbox_for_radius(lat, lng, CAMERA_CORROBORATION_RADIUS_KM)
+      Camera.fresh
+        .alive
+        .where(latitude: lat_range, longitude: lng_range)
+        .where("fetched_at >= ?", now - CAMERA_CORROBORATION_MAX_AGE)
+        .filter_map do |camera|
+          distance = haversine_km(camera.latitude, camera.longitude, lat, lng)
+          next if distance > CAMERA_CORROBORATION_RADIUS_KM
+
+          freshness_seconds = [(now - camera.fetched_at).to_i, 0].max if camera.fetched_at.present?
+          {
+            record: camera,
+            entity: sync_camera_entity(camera),
+            distance_km: distance,
+            freshness_seconds: freshness_seconds,
+            confidence: camera_corroboration_confidence(camera, distance, freshness_seconds),
+          }
+        end
+        .sort_by { |candidate| [-candidate.fetch(:confidence), candidate.fetch(:distance_km), candidate.fetch(:record).title.to_s] }
+    end
+
+    def event_coordinates(event)
+      cluster = event.primary_story_cluster
+      if cluster&.latitude.present? && cluster&.longitude.present?
+        return [cluster.latitude.to_f, cluster.longitude.to_f]
+      end
+
+      place = event.place_entity
+      lat = place&.metadata&.dig("latitude")
+      lng = place&.metadata&.dig("longitude")
+      return [lat.to_f, lng.to_f] if lat.present? && lng.present?
+
+      [nil, nil]
+    end
+
+    def camera_corroboration_confidence(camera, distance_km, freshness_seconds)
+      freshness_ratio = if freshness_seconds.present?
+        1.0 - [(freshness_seconds.to_f / CAMERA_CORROBORATION_MAX_AGE), 1.0].min
+      else
+        0.0
+      end
+
+      confidence = 0.52
+      confidence += (1.0 - [(distance_km / CAMERA_CORROBORATION_RADIUS_KM), 1.0].min) * 0.18
+      confidence += freshness_ratio * 0.14
+      confidence += 0.08 if camera.source.in?(%w[youtube nycdot])
+      confidence += 0.05 if camera.is_live?
+      [confidence, 0.92].min.round(2)
+    end
+
+    def local_corroboration_explanation(event, camera, candidate)
+      event_name = event.metadata["canonical_title"].presence || event.primary_story_cluster&.canonical_title || event.canonical_key
+      description = "#{camera.title.presence || camera.webcam_id} is #{candidate.fetch(:distance_km).round(1)}km from #{event_name}"
+      if candidate[:freshness_seconds].present?
+        minutes = (candidate.fetch(:freshness_seconds) / 60.0).round
+        description << " and was refreshed #{minutes}m ago"
+      end
+      description
+    end
+
+    def local_corroboration_evidence_payloads(event, candidate)
+      payloads = [
+        {
+          evidence: candidate.fetch(:record),
+          evidence_role: "observation_camera",
+          confidence: candidate.fetch(:confidence),
+          metadata: {
+            "distance_km" => candidate.fetch(:distance_km).round(1),
+            "freshness_seconds" => candidate.fetch(:freshness_seconds),
+            "source" => candidate.fetch(:record).source,
+            "is_live" => candidate.fetch(:record).is_live,
+          }.compact,
+        },
+      ]
+
+      cluster = event.primary_story_cluster
+      if cluster.present?
+        payloads << {
+          evidence: cluster,
+          evidence_role: "supporting_story",
+          confidence: cluster.cluster_confidence.to_f,
+          metadata: {
+            "source_count" => cluster.source_count.to_i,
+            "last_seen_at" => cluster.last_seen_at&.iso8601,
+          }.compact,
+        }
+      end
+
+      payloads
     end
 
     def asset_label(record, fallback:)

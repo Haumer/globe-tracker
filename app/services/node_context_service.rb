@@ -168,7 +168,7 @@ class NodeContextService
           entity_type: node.entity_type,
           name: display_name_for_entity(node),
           summary: entity_summary(node),
-        }.compact
+        }.merge(node_coordinates(node)).compact
       when OntologyEvent
         {
           node_type: "event",
@@ -179,7 +179,7 @@ class NodeContextService
           name: node.metadata["canonical_title"] || node.primary_story_cluster&.canonical_title || node.canonical_key,
           summary: node.metadata["location_name"],
           verification_status: node.verification_status,
-        }.compact
+        }.merge(node_coordinates(node)).compact
       else
         {
           node_type: node.class.name,
@@ -249,6 +249,14 @@ class NodeContextService
           parts << entity.metadata["flag"] if entity.metadata["flag"].present?
           parts << entity.metadata["destination"] if entity.metadata["destination"].present?
           parts.join(" · ").presence
+        when "camera"
+          parts = []
+          parts << "camera"
+          parts << entity.metadata["source"] if entity.metadata["source"].present?
+          parts << entity.metadata["city"] if entity.metadata["city"].present?
+          parts << entity.metadata["country"] if entity.metadata["country"].present?
+          parts << "live" if entity.metadata["is_live"]
+          parts.join(" · ").presence
         end
       else
         nil
@@ -263,6 +271,26 @@ class NodeContextService
       end
 
       entity.canonical_name
+    end
+
+    def node_coordinates(node)
+      case node
+      when OntologyEntity
+        latitude = node.metadata["latitude"]
+        longitude = node.metadata["longitude"]
+      when OntologyEvent
+        latitude = node.place_entity&.metadata&.[]("latitude") || node.primary_story_cluster&.latitude
+        longitude = node.place_entity&.metadata&.[]("longitude") || node.primary_story_cluster&.longitude
+      else
+        return {}
+      end
+
+      return {} if latitude.blank? || longitude.blank?
+
+      {
+        latitude: latitude.to_f,
+        longitude: longitude.to_f,
+      }
     end
 
     def serialize_evidence_link(link)

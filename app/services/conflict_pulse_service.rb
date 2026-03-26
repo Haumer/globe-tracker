@@ -21,6 +21,26 @@ class ConflictPulseService
     freight cargo oil lng gas energy port ports canal strait passage passageway
     minesweeping mines mine attack attacks threatened threat
   ].freeze
+  STRATEGIC_NODE_ALIASES = {
+    hormuz: ["strait of hormuz", "hormuz strait", "hormuz"],
+    suez: ["suez canal", "suez"],
+    malacca: ["strait of malacca", "malacca strait", "malacca"],
+    bab_el_mandeb: ["bab el mandeb", "bab al mandeb", "bab-el-mandeb", "bab al-mandab"],
+    bosphorus: ["bosphorus strait", "bosphorus"],
+    panama: ["panama canal"],
+    gibraltar: ["strait of gibraltar", "gibraltar strait", "gibraltar"],
+    danish_straits: ["danish straits"],
+    taiwan_strait: ["taiwan strait"],
+    cape: ["cape of good hope"],
+    mozambique: ["mozambique channel"],
+  }.freeze
+  STRATEGIC_NODE_THEATERS = {
+    hormuz: "Middle East / Iran War",
+    suez: "Middle East / Iran War",
+    bab_el_mandeb: "Middle East / Iran War",
+    bosphorus: "Russia-Ukraine War",
+    danish_straits: "Russia-Ukraine War",
+  }.freeze
 
   # Source credibility weights — tier 1 wire services count 3x more than a blog
   TIER_WEIGHTS = { 1 => 3.0, 2 => 2.0, 3 => 1.0, 4 => 0.5 }.freeze
@@ -634,7 +654,7 @@ class ConflictPulseService
 
       fresh_clusters = direct_clusters.select { |cluster| cluster.last_seen_at && cluster.last_seen_at >= @reference_time - STRATEGIC_STORY_FRESH_WINDOW }
       total_sources = direct_clusters.sum { |cluster| cluster.source_count.to_i }
-      theater_name = strategic_theater_name(config, direct_clusters, active_theaters)
+      theater_name = strategic_theater_name(key, config, direct_clusters, active_theaters)
       supporting_zone = theater_name.present? ? active_theaters[theater_name] : nil
       next unless strategic_situation_qualifies?(direct_clusters, fresh_clusters, total_sources, supporting_zone)
 
@@ -685,7 +705,7 @@ class ConflictPulseService
   end
 
   def direct_strategic_story_cluster?(cluster, chokepoint_key, chokepoint)
-    text = [cluster.canonical_title, cluster.location_name].compact.join(" ").downcase
+    text = normalize_strategic_text([cluster.canonical_title, cluster.location_name].compact.join(" "))
     return false if text.blank?
 
     mentions = strategic_terms(chokepoint_key, chokepoint).any? { |term| text.include?(term) }
@@ -695,12 +715,11 @@ class ConflictPulseService
   end
 
   def strategic_terms(chokepoint_key, chokepoint)
-    [
-      chokepoint.fetch(:name).downcase,
-      chokepoint_key.to_s.tr("_", " "),
-      OntologySyncSupport.slugify(chokepoint.fetch(:name)).tr("-", " "),
-      *chokepoint.fetch(:name).downcase.split(/[^a-z0-9]+/).select { |token| token.length >= 5 },
-    ].uniq
+    aliases = STRATEGIC_NODE_ALIASES.fetch(chokepoint_key.to_sym, [])
+    ([chokepoint.fetch(:name)] + aliases)
+      .map { |term| normalize_strategic_text(term) }
+      .reject(&:blank?)
+      .uniq
   end
 
   def geographically_local_to_strategic_node?(cluster, chokepoint)
@@ -709,11 +728,12 @@ class ConflictPulseService
     haversine_km(cluster.latitude, cluster.longitude, chokepoint[:lat], chokepoint[:lng]) <= [chokepoint[:radius_km].to_f * 4.0, 250.0].max
   end
 
-  def strategic_theater_name(chokepoint, clusters, active_theaters)
-    named = self.class::NAMED_THEATERS[chokepoint.fetch(:name)]
+  def strategic_theater_name(chokepoint_key, chokepoint, clusters, active_theaters)
+    named = STRATEGIC_NODE_THEATERS[chokepoint_key.to_sym] || self.class::NAMED_THEATERS[chokepoint.fetch(:name)]
     return named if named.present? && active_theaters.key?(named)
 
     direct_theaters = clusters.filter_map do |cluster|
+      next unless geographically_local_to_strategic_node?(cluster, chokepoint)
       next if cluster.latitude.blank? || cluster.longitude.blank?
 
       situation_name = self.class.infer_situation_name(
@@ -724,7 +744,10 @@ class ConflictPulseService
       self.class.infer_theater(lat: cluster.latitude.to_f, lng: cluster.longitude.to_f, situation_name: situation_name)
     end.tally
 
-    matching_direct = direct_theaters.keys.find { |theater| active_theaters.key?(theater) }
+    matching_direct = direct_theaters
+      .sort_by { |theater, count| [-count, theater.to_s] }
+      .map(&:first)
+      .find { |theater| active_theaters.key?(theater) }
     return matching_direct if matching_direct.present?
 
     nearest = active_theaters.values.min_by do |zone|
@@ -734,6 +757,10 @@ class ConflictPulseService
 
     distance = haversine_km(chokepoint.fetch(:lat), chokepoint.fetch(:lng), nearest[:lat], nearest[:lng])
     distance <= 1800 ? nearest[:theater] : nil
+  end
+
+  def normalize_strategic_text(text)
+    text.to_s.downcase.gsub(/[^a-z0-9]+/, " ").squish
   end
 
   def strategic_situation_qualifies?(direct_clusters, fresh_clusters, total_sources, supporting_zone)

@@ -87,6 +87,7 @@ export function applyFlightMethods(GlobeController) {
         existing.speed = speed
         existing.verticalRate = verticalRate
         existing.onGround = onGround
+        existing.military = flight.military
         existing.originCountry = flight.origin_country
         existing.source = flight.source
         existing.registration = flight.registration
@@ -172,6 +173,7 @@ export function applyFlightMethods(GlobeController) {
           speed,
           verticalRate,
           onGround,
+          military: flight.military,
           originCountry: flight.origin_country,
           lastTimePosition: flight.time_position || 0,
           source: flight.source,
@@ -221,6 +223,51 @@ export function applyFlightMethods(GlobeController) {
     }
 
     this.viewer.scene.requestRender()
+  }
+
+  GlobeController.prototype._serializeLoadedFlight = function(data) {
+    if (!data?.id) return null
+
+    return {
+      icao24: data.id,
+      callsign: data.callsign,
+      latitude: data.currentLat ?? data.latitude,
+      longitude: data.currentLng ?? data.longitude,
+      altitude: data.currentAlt ?? data.altitude,
+      speed: data.speed,
+      heading: data.heading,
+      origin_country: data.originCountry,
+      on_ground: data.onGround,
+      vertical_rate: data.verticalRate,
+      time_position: data.lastTimePosition,
+      source: data.source,
+      military: data.military,
+      squawk: data.squawk,
+      emergency: data.emergency,
+      category: data.category,
+      registration: data.registration,
+      aircraft_type: data.aircraftType,
+      mach: data.mach,
+      true_airspeed: data.trueAirspeed,
+      wind_direction: data.windDirection,
+      wind_speed: data.windSpeed,
+      outside_air_temp: data.outsideAirTemp,
+      nav_altitude_fms: data.navAltitudeFms,
+    }
+  }
+
+  GlobeController.prototype.upsertFlightRecord = function(flight) {
+    if (!flight?.icao24 || flight.latitude == null || flight.longitude == null) return null
+
+    const currentFlights = Array.from(this.flightData.values())
+      .map(data => this._serializeLoadedFlight(data))
+      .filter(Boolean)
+      .filter(data => `${data.icao24}` !== `${flight.icao24}`)
+
+    this.renderFlights([...currentFlights, flight])
+    if (this._ds["flights"]) this._ds["flights"].show = true
+
+    return this.flightData.get(flight.icao24) || null
   }
 
   // Simplify trail by removing redundant straight-line points (Ramer-Douglas-Peucker),

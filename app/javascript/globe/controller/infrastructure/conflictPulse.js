@@ -1,6 +1,9 @@
 import { getDataSource, findCountryAtPoint } from "../../utils"
 
 export function applyConflictPulseMethods(GlobeController) {
+  GlobeController.prototype._conflictPulseEntityKey = function(value, fallback = "unknown") {
+    return encodeURIComponent(String(value ?? fallback))
+  }
 
   // ── Lifecycle ──────────────────────────────────────────────
 
@@ -228,6 +231,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
     // ── Layer 3: Situation nodes (pulse zones with names) ──
     this._conflictPulseData.forEach((zone, idx) => {
+      const zoneKey = this._conflictPulseEntityKey(zone.cell_key || `zone-${idx}`)
       const score = zone.pulse_score
       const t = Math.min((score - 20) / 60, 1)
 
@@ -251,7 +255,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
       // Outer ring
       const ring = ds.entities.add({
-        id: `cpulse-ring-${idx}`,
+        id: `cpulse-ring-${zoneKey}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
         ellipse: {
           semiMajorAxis: radius,
@@ -268,7 +272,7 @@ export function applyConflictPulseMethods(GlobeController) {
       // Pulsing outer ring for surging zones or zones that just increased
       if (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key)) {
         const pulseRing = ds.entities.add({
-          id: `cpulse-pulse-${idx}`,
+          id: `cpulse-pulse-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
           ellipse: {
             semiMajorAxis: radius,
@@ -288,7 +292,7 @@ export function applyConflictPulseMethods(GlobeController) {
       // Inner core (only for active zones 50+)
       if (score >= 50) {
         const core = ds.entities.add({
-          id: `cpulse-core-${idx}`,
+          id: `cpulse-core-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
           ellipse: {
             semiMajorAxis: radius * 0.25,
@@ -307,7 +311,7 @@ export function applyConflictPulseMethods(GlobeController) {
       // Clickable billboard — larger, bolder, always readable
       const iconSize = score >= 70 ? 48 : (score >= 50 ? 44 : 36)
       const point = ds.entities.add({
-        id: `cpulse-${idx}`,
+        id: `cpulse-${zoneKey}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
         billboard: {
           image: this._makePulseIcon(trendArrow, color.toCssColorString(), score),
@@ -338,6 +342,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
     // ── Layer 4: Strategic situations (named strategic nodes under theater pressure) ──
     ;(this._strategicSituationData || []).forEach((item, idx) => {
+      const strategicKey = this._conflictPulseEntityKey(item.id || item.node_id || item.name || `strategic-${idx}`)
       const statusColors = {
         critical: "#ff7043",
         elevated: "#ffca28",
@@ -348,7 +353,7 @@ export function applyConflictPulseMethods(GlobeController) {
       const iconSize = item.status === "critical" ? 34 : 30
 
       const ring = ds.entities.add({
-        id: `cpulse-strat-ring-${idx}`,
+        id: `cpulse-strat-ring-${strategicKey}`,
         position: Cesium.Cartesian3.fromDegrees(item.lng, item.lat),
         ellipse: {
           semiMajorAxis: radius,
@@ -363,7 +368,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._conflictPulseEntities.push(ring)
 
       const point = ds.entities.add({
-        id: `cpulse-strat-${idx}`,
+        id: `cpulse-strat-${strategicKey}`,
         position: Cesium.Cartesian3.fromDegrees(item.lng, item.lat, 5600),
         billboard: {
           image: this._makeStrategicSituationIcon(item, statusColors[item.status] || "#26c6da"),
@@ -392,6 +397,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._conflictPulseEntities.push(point)
     })
     ds.entities.resumeEvents()
+    if (this._updateGlobeOcclusion) this._updateGlobeOcclusion()
 
     // Start pulse animation if any rings need it
     if (this._pulsingRings.length > 0) {
@@ -764,8 +770,10 @@ export function applyConflictPulseMethods(GlobeController) {
   }
 
   GlobeController.prototype.showStrategicSituationFromList = function(event) {
-    const idx = parseInt(event.currentTarget.dataset.idx, 10)
-    const item = this._strategicSituationData?.[idx]
+    const id = event.currentTarget.dataset.id
+    const item = (this._strategicSituationData || []).find(entry =>
+      `${entry.id || entry.node_id || entry.name}` === `${id}`
+    )
     if (!item) return
     this._flyToStrategicSituation(item)
   }
@@ -1256,11 +1264,11 @@ export function applyConflictPulseMethods(GlobeController) {
     // Also dim/brighten situation nodes (points/labels/rings)
     this._conflictPulseEntities.forEach(entity => {
       if (!entity.point && !entity.label && !entity.ellipse) return
-      // Zone entities use IDs like cpulse-0, cpulse-lbl-0, cpulse-ring-0
-      const idMatch = entity.id?.match(/cpulse-(?:lbl-|ring-|core-)?(\d+)/)
-      if (!idMatch) return
-      const idx = parseInt(idMatch[1])
-      const zone = this._conflictPulseData?.[idx]
+      const entityId = `${entity.id || ""}`
+      if (!entityId.startsWith("cpulse-")) return
+      if (entityId.startsWith("cpulse-strat-") || entityId.startsWith("cpulse-arc-") || entityId.startsWith("cpulse-hex-")) return
+      const zoneKey = decodeURIComponent(entityId.replace(/^cpulse-(?:lbl-|ring-|core-|pulse-)?/, ""))
+      const zone = this._conflictPulseData?.find(item => `${item.cell_key}` === zoneKey)
       if (!zone) return
       const isMatch = zone.theater === theater
       if (entity.point) {
@@ -1334,8 +1342,9 @@ export function applyConflictPulseMethods(GlobeController) {
       strategic.forEach((item, idx) => {
         const color = { critical: "#ff7043", elevated: "#ffca28", monitoring: "#26c6da" }[item.status] || "#26c6da"
         const topArticle = (item.top_articles || [])[0]
+        const strategicId = item.id || item.node_id || item.name || `strategic-${idx}`
         html += `<div class="sit-zone sit-zone--summary" data-zone-key="${this._escapeHtml(item.id || `strategic-${idx}`)}">
-          <div class="sit-zone-header" data-action="click->globe#showStrategicSituationFromList" data-idx="${idx}">
+          <div class="sit-zone-header" data-action="click->globe#showStrategicSituationFromList" data-id="${this._escapeHtml(strategicId)}">
             <span class="sit-zone-name">${this._escapeHtml(item.name || "Strategic node")}</span>
             <span class="sit-zone-score" style="color:${color};">${item.strategic_score || 0} <span class="sit-zone-trend">${this._escapeHtml((item.status || "monitoring").toUpperCase())}</span></span>
           </div>

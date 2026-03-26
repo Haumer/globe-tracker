@@ -58,7 +58,11 @@ export function applyContextMethods(GlobeController) {
       `)
       .join("")
 
-    const sections = [...(context.sections || []), ...this._durableContextSections(context)]
+    const sections = [
+      ...(context.sections || []),
+      ...this._dynamicContextSections(context),
+      ...this._durableContextSections(context),
+    ]
       .map(section => this._renderContextSection(section))
       .join("")
 
@@ -92,7 +96,7 @@ export function applyContextMethods(GlobeController) {
       .map(row => `
         <div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
           <span style="font:600 10px var(--gt-mono);color:rgba(200,210,225,0.6);text-transform:uppercase;letter-spacing:0.6px;">${this._escapeHtml(row.label)}</span>
-          <span style="font:500 11px 'DM Sans',sans-serif;color:#f8fafc;text-align:right;">${this._escapeHtml(row.value)}</span>
+          <span style="font:500 11px var(--gt-sans);color:#f8fafc;text-align:right;overflow-wrap:anywhere;word-break:break-word;">${this._escapeHtml(row.value)}</span>
         </div>
       `)
       .join("")
@@ -100,10 +104,7 @@ export function applyContextMethods(GlobeController) {
     const items = (section.items || [])
       .filter(item => item?.label)
       .map(item => {
-        const itemBody = `
-          <div style="font:500 11px 'DM Sans',sans-serif;color:#f8fafc;line-height:1.35;">${this._escapeHtml(item.label)}</div>
-          ${item.meta ? `<div style="font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);margin-top:2px;">${this._escapeHtml(item.meta)}</div>` : ""}
-        `
+        const itemBody = this._renderContextItemBody(item)
 
         if (item.nodeRequest?.kind && item.nodeRequest?.id) {
           return `
@@ -115,6 +116,46 @@ export function applyContextMethods(GlobeController) {
                 data-id="${this._escapeHtml(item.nodeRequest.id)}"
                 data-title="${this._escapeHtml(item.label)}"
                 data-summary="${this._escapeHtml(item.meta || "")}"
+                style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
+              >
+                ${itemBody}
+              </button>
+            </div>
+          `
+        }
+
+        if (item.cameraId) {
+          return `
+            <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <button
+                type="button"
+                data-action="click->globe#openContextCamera"
+                data-camera-id="${this._escapeHtml(item.cameraId)}"
+                style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
+              >
+                ${itemBody}
+              </button>
+            </div>
+          `
+        }
+
+        if (item.layerKey || item.rpTab) {
+          const latAttr = item.lat != null ? ` data-lat="${item.lat}"` : ""
+          const lngAttr = item.lng != null ? ` data-lng="${item.lng}"` : ""
+          const heightAttr = item.height != null ? ` data-height="${item.height}"` : ""
+          const tabAttr = item.rpTab ? ` data-rp-tab="${this._escapeHtml(item.rpTab)}"` : ""
+          const layerAttr = item.layerKey ? ` data-layer-key="${this._escapeHtml(item.layerKey)}"` : ""
+
+          return `
+            <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <button
+                type="button"
+                data-action="click->globe#openContextLayer"
+                ${layerAttr}
+                ${tabAttr}
+                ${latAttr}
+                ${lngAttr}
+                ${heightAttr}
                 style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
               >
                 ${itemBody}
@@ -157,6 +198,22 @@ export function applyContextMethods(GlobeController) {
         ${chips ? `<div class="insight-card-chips">${chips}</div>` : ""}
         ${rows || items ? `<div>${rows || items}</div>` : ""}
         ${section.html || ""}
+      </div>
+    `
+  }
+
+  GlobeController.prototype._renderContextItemBody = function(item) {
+    const label = `
+      <div style="font:500 11px var(--gt-sans);color:#f8fafc;line-height:1.35;overflow-wrap:anywhere;word-break:break-word;">${this._escapeHtml(item.label)}</div>
+      ${item.meta ? `<div style="font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);margin-top:2px;">${this._escapeHtml(item.meta)}</div>` : ""}
+    `
+
+    if (!item.badge) return label
+
+    return `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div style="min-width:0;">${label}</div>
+        <span class="ins-chip ins-chip--${this._escapeHtml(item.badge.variant || "eq")}" style="flex-shrink:0;">${this._escapeHtml(item.badge.label)}</span>
       </div>
     `
   }
@@ -215,9 +272,292 @@ export function applyContextMethods(GlobeController) {
     return sections
   }
 
+  GlobeController.prototype._dynamicContextSections = function(context) {
+    const coords = this._contextCoordinates(context)
+    if (!coords) return []
+
+    return [
+      this._buildObservationContextSection(coords),
+      this._buildLayerDiscoverabilitySection(coords),
+    ].filter(Boolean)
+  }
+
+  GlobeController.prototype._contextCoordinates = function(context) {
+    const direct = context?.coordinates
+    if (Number.isFinite(direct?.lat) && Number.isFinite(direct?.lng)) return direct
+
+    const node = context?.nodeContext?.node
+    if (Number.isFinite(node?.latitude) && Number.isFinite(node?.longitude)) {
+      return {
+        lat: node.latitude,
+        lng: node.longitude,
+        height: direct?.height || 450000,
+      }
+    }
+
+    const focusAction = (context?.actions || []).find(action => Number.isFinite(action?.lat) && Number.isFinite(action?.lng))
+    if (focusAction) {
+      return {
+        lat: focusAction.lat,
+        lng: focusAction.lng,
+        height: focusAction.height || 450000,
+      }
+    }
+
+    return null
+  }
+
+  GlobeController.prototype._buildObservationContextSection = function(coords) {
+    const nearbyCameras = this._nearbyCamerasForContext(coords).slice(0, 4)
+    if (nearbyCameras.length) {
+      return {
+        title: "Nearby observation",
+        items: nearbyCameras.map(cam => {
+          const badge = this._cameraModeBadge(cam)
+          const distance = `${cam.distanceKm.toFixed(cam.distanceKm < 10 ? 1 : 0)} km`
+          return {
+            label: cam.title || "Nearby camera",
+            meta: [
+              this._cameraSourceLabel(cam),
+              this._cameraFreshnessLabel(cam),
+              distance,
+            ].filter(Boolean).join(" · "),
+            badge: {
+              label: badge.label,
+              variant: this._cameraModeChipVariant(cam),
+            },
+            cameraId: cam.id,
+          }
+        }),
+      }
+    }
+
+    if (!this.camerasVisible) {
+      return {
+        title: "Nearby observation",
+        items: [{
+          label: "Enable cameras",
+          meta: "Show nearby live streams and webcam feeds around this location.",
+          badge: { label: "CAM", variant: "news" },
+          layerKey: "cameras",
+          rpTab: "cameras",
+          lat: coords.lat,
+          lng: coords.lng,
+          height: coords.height || 300000,
+        }],
+      }
+    }
+
+    return null
+  }
+
+  GlobeController.prototype._buildLayerDiscoverabilitySection = function(coords) {
+    const items = []
+    const suggestions = []
+
+    const newsCount = this._countNearbyRecords(this._newsData || [], coords, 180, item => ({ lat: item.lat, lng: item.lng }))
+    if (newsCount > 0) {
+      items.push({
+        label: "News reporting",
+        meta: `${newsCount} nearby stor${newsCount === 1 ? "y" : "ies"} in the loaded news layer`,
+        badge: { label: "NEWS", variant: "news" },
+        layerKey: "news",
+        rpTab: "news",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 400000,
+      })
+    } else if (!this.newsVisible) {
+      suggestions.push({
+        label: "News reporting",
+        meta: "Enable the news layer to inspect nearby corroborating reporting.",
+        badge: { label: "NEWS", variant: "news" },
+        layerKey: "news",
+        rpTab: "news",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 400000,
+      })
+    }
+
+    const weatherCount = this._countNearbyRecords(this._weatherAlerts || [], coords, 220, item => ({ lat: item.latitude, lng: item.longitude }))
+    if (weatherCount > 0) {
+      items.push({
+        label: "Weather alerts",
+        meta: `${weatherCount} nearby alert${weatherCount === 1 ? "" : "s"} in the weather layer`,
+        badge: { label: "WX", variant: "event" },
+        layerKey: "weather",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 600000,
+      })
+    } else if (!this.weatherVisible) {
+      suggestions.push({
+        label: "Weather alerts",
+        meta: "Enable weather to check for storm, flood, or wind disruption nearby.",
+        badge: { label: "WX", variant: "event" },
+        layerKey: "weather",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 600000,
+      })
+    }
+
+    const earthquakeCount = this._countNearbyRecords(this._earthquakeData || [], coords, 280, item => ({ lat: item.lat, lng: item.lng }))
+    if (earthquakeCount > 0) {
+      items.push({
+        label: "Earthquakes",
+        meta: `${earthquakeCount} recent event${earthquakeCount === 1 ? "" : "s"} in the earthquake layer`,
+        badge: { label: "EQ", variant: "eq" },
+        layerKey: "earthquakes",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 900000,
+      })
+    } else if (!this.earthquakesVisible) {
+      suggestions.push({
+        label: "Earthquakes",
+        meta: "Enable quakes to check for nearby seismic corroboration.",
+        badge: { label: "EQ", variant: "eq" },
+        layerKey: "earthquakes",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 900000,
+      })
+    }
+
+    const outageCount = this._countNearbyRecords(this._outageData || [], coords, 260, item => ({ lat: item.lat, lng: item.lng }))
+    if (outageCount > 0) {
+      items.push({
+        label: "Internet outages",
+        meta: `${outageCount} nearby outage${outageCount === 1 ? "" : "s"} in the outage layer`,
+        badge: { label: "OUT", variant: "outage" },
+        layerKey: "outages",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 700000,
+      })
+    } else if (!this.outagesVisible) {
+      suggestions.push({
+        label: "Internet outages",
+        meta: "Enable outages to check for communications disruption nearby.",
+        badge: { label: "OUT", variant: "outage" },
+        layerKey: "outages",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 700000,
+      })
+    }
+
+    const situationCount = this._countNearbyRecords(
+      [...(this._conflictPulseZones || []), ...(this._strategicSituationData || [])],
+      coords,
+      260,
+      item => ({ lat: item.lat, lng: item.lng })
+    )
+    if (situationCount > 0) {
+      items.push({
+        label: "Situations",
+        meta: `${situationCount} nearby theater or strategic situation marker${situationCount === 1 ? "" : "s"}`,
+        badge: { label: "SIT", variant: "conf" },
+        rpTab: "situations",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 900000,
+      })
+    }
+
+    const insightCount = this._countNearbyRecords(this._insightsData || [], coords, 260, item => ({ lat: item.lat, lng: item.lng }))
+    if (insightCount > 0) {
+      items.push({
+        label: "Insights",
+        meta: `${insightCount} nearby cross-layer insight${insightCount === 1 ? "" : "s"}`,
+        badge: { label: "INS", variant: "fire" },
+        rpTab: "insights",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 900000,
+      })
+    }
+
+    const flightCount = this._countNearbyRecords(Array.from(this.flightData?.values?.() || []), coords, 180, item => ({ lat: item.lat || item.latitude, lng: item.lng || item.longitude }))
+    if (flightCount > 0) {
+      items.push({
+        label: "Flights",
+        meta: `${flightCount} nearby aircraft in the live flight layer`,
+        badge: { label: "FLT", variant: "flight" },
+        layerKey: "flights",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 550000,
+      })
+    }
+
+    const shipCount = this._countNearbyRecords(Array.from(this.shipData?.values?.() || []), coords, 180, item => ({ lat: item.lat || item.latitude, lng: item.lng || item.longitude }))
+    if (shipCount > 0) {
+      items.push({
+        label: "Ships",
+        meta: `${shipCount} nearby vessel${shipCount === 1 ? "" : "s"} in the AIS layer`,
+        badge: { label: "AIS", variant: "cable" },
+        layerKey: "ships",
+        lat: coords.lat,
+        lng: coords.lng,
+        height: coords.height || 550000,
+      })
+    }
+
+    const renderedItems = items.slice(0, 6)
+    if (suggestions.length && renderedItems.length < 6) {
+      renderedItems.push(...suggestions.slice(0, 6 - renderedItems.length))
+    }
+
+    if (!renderedItems.length) return null
+
+    return {
+      title: "Other layers here",
+      items: renderedItems,
+    }
+  }
+
+  GlobeController.prototype._nearbyCamerasForContext = function(coords, radiusKm = 160) {
+    return this._sortWebcams(this._webcamData || [])
+      .filter(cam => Number.isFinite(cam?.lat) && Number.isFinite(cam?.lng))
+      .map(cam => ({
+        ...cam,
+        distanceKm: this.haversineDistance(coords, { lat: cam.lat, lng: cam.lng }),
+      }))
+      .filter(cam => cam.distanceKm <= radiusKm)
+      .sort((a, b) => {
+        const priorityDelta = this._cameraPriorityScore(b) - this._cameraPriorityScore(a)
+        if (priorityDelta !== 0) return priorityDelta
+        return a.distanceKm - b.distanceKm
+      })
+  }
+
+  GlobeController.prototype._cameraModeChipVariant = function(cam) {
+    return {
+      realtime: "fire",
+      live: "event",
+      periodic: "eq",
+      stale: "outage",
+    }[this._cameraMode(cam)] || "eq"
+  }
+
+  GlobeController.prototype._countNearbyRecords = function(records, coords, radiusKm, extractor) {
+    return (records || []).filter(record => {
+      const point = extractor(record)
+      if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return false
+      return this.haversineDistance(coords, point) <= radiusKm
+    }).length
+  }
+
   GlobeController.prototype._renderContextAction = function(action) {
     if (action.url) {
       return `<a class="insight-action-btn" href="${this._safeUrl(action.url)}" target="_blank" rel="noopener"><i class="fa-solid ${this._escapeHtml(action.icon || "fa-arrow-up-right-from-square")}"></i> ${this._escapeHtml(action.label)}</a>`
+    }
+
+    if (action.handler === "showAffectedInsightEntities" && Number.isInteger(action.insightIdx)) {
+      return `<button class="insight-action-btn" data-action="click->globe#showAffectedInsightEntities" data-insight-idx="${action.insightIdx}"><i class="fa-solid ${this._escapeHtml(action.icon || "fa-crosshairs")}"></i> ${this._escapeHtml(action.label)}</button>`
     }
 
     if (action.lat != null && action.lng != null) {
@@ -238,6 +578,63 @@ export function applyContextMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
       duration: 1.2,
     })
+  }
+
+  GlobeController.prototype.openContextCamera = function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const cameraId = event.currentTarget.dataset.cameraId
+    if (!cameraId) return
+
+    const camera = (this._webcamData || []).find(item => `${item.id}` === `${cameraId}`)
+    if (!camera) return
+
+    this.showWebcamDetail(camera)
+  }
+
+  GlobeController.prototype.openContextLayer = function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const layerKey = event.currentTarget.dataset.layerKey
+    const tabKey = event.currentTarget.dataset.rpTab
+
+    if (layerKey) this._ensureContextLayerVisible(layerKey)
+    if (tabKey) this._showRightPanel(tabKey)
+
+    const lat = event.currentTarget.dataset.lat
+    const lng = event.currentTarget.dataset.lng
+    if (lat != null && lng != null) {
+      this.focusContextLocation({
+        currentTarget: {
+          dataset: {
+            lat,
+            lng,
+            height: event.currentTarget.dataset.height || "500000",
+          },
+        },
+      })
+    }
+  }
+
+  GlobeController.prototype._ensureContextLayerVisible = function(layerKey) {
+    const layerConfig = {
+      cameras: { visibleProp: "camerasVisible", targetProp: "camerasToggleTarget", hasTargetProp: "hasCamerasToggleTarget", method: "toggleCameras" },
+      news: { visibleProp: "newsVisible", targetProp: "newsToggleTarget", hasTargetProp: "hasNewsToggleTarget", method: "toggleNews" },
+      weather: { visibleProp: "weatherVisible", targetProp: "weatherToggleTarget", hasTargetProp: "hasWeatherToggleTarget", method: "toggleWeather" },
+      earthquakes: { visibleProp: "earthquakesVisible", targetProp: "earthquakesToggleTarget", hasTargetProp: "hasEarthquakesToggleTarget", method: "toggleEarthquakes" },
+      outages: { visibleProp: "outagesVisible", targetProp: "outagesToggleTarget", hasTargetProp: "hasOutagesToggleTarget", method: "toggleOutages" },
+      flights: { visibleProp: "flightsVisible", targetProp: "flightsToggleTarget", hasTargetProp: "hasFlightsToggleTarget", method: "toggleFlights" },
+      ships: { visibleProp: "shipsVisible", targetProp: "shipsToggleTarget", hasTargetProp: "hasShipsToggleTarget", method: "toggleShips" },
+    }[layerKey]
+
+    if (!layerConfig) return
+    if (this[layerConfig.visibleProp]) return
+    if (!this[layerConfig.hasTargetProp] || !this[layerConfig.targetProp]) return
+
+    this[layerConfig.targetProp].checked = true
+    if (typeof this[layerConfig.method] === "function") this[layerConfig.method]()
   }
 
   GlobeController.prototype.selectContextNode = function(event) {
@@ -366,6 +763,9 @@ export function applyContextMethods(GlobeController) {
       meta: [],
       actions: [],
       nodeRequest,
+      coordinates: Number.isFinite(fallback.lat) && Number.isFinite(fallback.lng)
+        ? { lat: fallback.lat, lng: fallback.lng, height: fallback.height || 450000 }
+        : null,
       sections: [],
     }
   }
@@ -476,6 +876,9 @@ export function applyContextMethods(GlobeController) {
         ev.cluster_confidence != null ? { label: "Cluster confidence", value: `${Math.round(ev.cluster_confidence * 100)}%` } : null,
         ev.cluster_source_reliability != null ? { label: "Source reliability", value: `${Math.round(ev.cluster_source_reliability * 100)}%` } : null,
       ].filter(Boolean),
+      coordinates: Number.isFinite(ev.lat) && Number.isFinite(ev.lng)
+        ? { lat: ev.lat, lng: ev.lng, height: 300000 }
+        : null,
       actions: [
         { label: "Focus", lat: ev.lat, lng: ev.lng, height: 300000, icon: "fa-location-crosshairs" },
         ev.url ? { label: "Read article", url: ev.url, icon: "fa-arrow-up-right-from-square" } : null,
@@ -502,6 +905,8 @@ export function applyContextMethods(GlobeController) {
     const evidenceRows = []
     const relatedItems = []
     const theaterName = entities.theater?.name || entities.pulse?.theater || null
+    const insightIdx = this._insightIndex ? this._insightIndex(insight) : -1
+    const affectedEntities = this._affectedInsightEntities ? this._affectedInsightEntities(insight) : []
 
     if (entities.earthquake?.magnitude != null) evidenceRows.push({ label: "Earthquake", value: `M${entities.earthquake.magnitude}` })
     if (entities.cables?.length) evidenceRows.push({ label: "Cables", value: `${entities.cables.length}` })
@@ -554,9 +959,24 @@ export function applyContextMethods(GlobeController) {
         insight.detected_at ? { label: "Detected", value: this._timeAgo(new Date(insight.detected_at)) } : null,
         insight.lat != null && insight.lng != null ? { label: "Location", value: `${insight.lat.toFixed(2)}, ${insight.lng.toFixed(2)}` } : null,
       ].filter(Boolean),
-      actions: insight.lat != null && insight.lng != null ? [
-        { label: "Focus", lat: insight.lat, lng: insight.lng, height: 500000, icon: "fa-location-crosshairs" },
-      ] : [],
+      coordinates: Number.isFinite(insight.lat) && Number.isFinite(insight.lng)
+        ? { lat: insight.lat, lng: insight.lng, height: 500000 }
+        : null,
+      actions: [
+        insight.lat != null && insight.lng != null
+          ? { label: "Focus", lat: insight.lat, lng: insight.lng, height: 500000, icon: "fa-location-crosshairs" }
+          : null,
+        insightIdx >= 0 && affectedEntities.length
+          ? {
+              label: this._affectedInsightActionLabel
+                ? this._affectedInsightActionLabel(affectedEntities)
+                : "Show affected entities",
+              icon: "fa-crosshairs",
+              handler: "showAffectedInsightEntities",
+              insightIdx,
+            }
+          : null,
+      ].filter(Boolean),
       nodeRequest: entities.chokepoint?.name
         ? { kind: "chokepoint", id: entities.chokepoint.name }
         : theaterName
@@ -616,6 +1036,9 @@ export function applyContextMethods(GlobeController) {
         zone.story_count ? { label: "Stories", value: `${zone.story_count}` } : null,
         zone.spike_ratio ? { label: "Spike", value: `${zone.spike_ratio}x` } : null,
       ].filter(Boolean),
+      coordinates: Number.isFinite(zone.lat) && Number.isFinite(zone.lng)
+        ? { lat: zone.lat, lng: zone.lng, height: 1200000 }
+        : null,
       actions: zone.lat != null && zone.lng != null ? [
         { label: "Focus", lat: zone.lat, lng: zone.lng, height: 1200000, icon: "fa-location-crosshairs" },
       ] : [],
@@ -664,6 +1087,9 @@ export function applyContextMethods(GlobeController) {
         cp.ships_nearby?.tankers != null ? { label: "Tankers", value: `${cp.ships_nearby.tankers}` } : null,
         this._chokepointSnapshotStatus ? { label: "Snapshot", value: this._statusLabel(this._chokepointSnapshotStatus, "snapshot") } : null,
       ].filter(Boolean),
+      coordinates: Number.isFinite(cp.lat) && Number.isFinite(cp.lng)
+        ? { lat: cp.lat, lng: cp.lng, height: 1000000 }
+        : null,
       actions: cp.lat != null && cp.lng != null ? [
         { label: "Focus", lat: cp.lat, lng: cp.lng, height: 1000000, icon: "fa-location-crosshairs" },
       ] : [],

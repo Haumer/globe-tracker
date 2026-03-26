@@ -305,7 +305,7 @@ export function applyCoreMethods(GlobeController) {
       // Draw mode handled by mouse down/move/up
       if (this.drawMode) return
 
-      const picked = this.viewer.scene.pick(click.position)
+      const picked = this._pickClickableEntity(click.position)
 
       // In country select mode, prioritize country selection over entity clicks
       if (this.countrySelectMode && this.bordersLoaded) {
@@ -478,6 +478,29 @@ export function applyCoreMethods(GlobeController) {
     if (!this._occScratch) this._occScratch = new Cesium.Cartesian3()
     const pointPos = Cesium.Cartesian3.fromDegrees(lng, lat, 0, Cesium.Ellipsoid.WGS84, this._occScratch)
     return Cesium.Cartesian3.dot(this.viewer.camera.positionWC, pointPos) > OCC_R_SQ_FADE
+  }
+
+  GlobeController.prototype._pickClickableEntity = function(screenPos) {
+    if (!this.viewer?.scene || !screenPos) return null
+
+    const scene = this.viewer.scene
+    const picks = scene.drillPick(screenPos, 12) || []
+    if (picks.length === 0) return scene.pick(screenPos)
+
+    return picks.find(pick => this._isPickOnVisibleHemisphere(pick)) || null
+  }
+
+  GlobeController.prototype._isPickOnVisibleHemisphere = function(pick) {
+    const Cesium = window.Cesium
+    const entity = pick?.id
+    if (!entity || entity.show === false || entity._globeOccluded) return false
+
+    let pos = entity.position
+    if (!pos) return true
+    if (typeof pos.getValue === "function") pos = pos.getValue(this.viewer.clock.currentTime)
+    if (!pos) return false
+
+    return Cesium.Cartesian3.dot(this.viewer.camera.positionWC, pos) > OCC_R_SQ
   }
 
   GlobeController.prototype._updateGlobeOcclusion = function() {
@@ -1283,15 +1306,15 @@ export function applyCoreMethods(GlobeController) {
       }},
       // Chokepoint zone/ships → parent chokepoint
       { prefix: "choke-zone-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        const d = this._chokepointData?.find(cp => `${cp.id}` === `${id}`); if (!d) return false
         this.showChokepointDetail(d); return true
       }},
       { prefix: "choke-ships-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        const d = this._chokepointData?.find(cp => `${cp.id}` === `${id}`); if (!d) return false
         this.showChokepointDetail(d); return true
       }},
       { prefix: "choke-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._chokepointData?.[idx]; if (!d) return false
+        const d = this._chokepointData?.find(cp => `${cp.id}` === `${id}`); if (!d) return false
         this.showChokepointDetail(d); return true
       }},
       { prefix: "rw-", skip: [], handler: (id) => {
@@ -1310,32 +1333,44 @@ export function applyCoreMethods(GlobeController) {
         this._showHexDetail(cell); return true
       }},
       { prefix: "cpulse-strat-ring-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key); if (!d) return false
         this.showStrategicSituationDetail(d); return true
       }},
       { prefix: "cpulse-strat-lbl-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key); if (!d) return false
         this.showStrategicSituationDetail(d); return true
       }},
       { prefix: "cpulse-strat-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._strategicSituationData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key); if (!d) return false
         this.showStrategicSituationDetail(d); return true
       }},
       // Conflict pulse decoration (ring, core, lbl) → parent conflict pulse zone
       { prefix: "cpulse-core-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key); if (!d) return false
+        this.showConflictPulseDetail(d); return true
+      }},
+      { prefix: "cpulse-pulse-", skip: [], handler: (id) => {
+        const key = decodeURIComponent(id)
+        const d = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key); if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},
       { prefix: "cpulse-ring-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key); if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},
       { prefix: "cpulse-lbl-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key); if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},
       { prefix: "cpulse-", skip: [], handler: (id) => {
-        const idx = parseInt(id); const d = this._conflictPulseData?.[idx]; if (!d) return false
+        const key = decodeURIComponent(id)
+        const d = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key); if (!d) return false
         this.showConflictPulseDetail(d); return true
       }},
       // Conflict event ring → parent conflict event

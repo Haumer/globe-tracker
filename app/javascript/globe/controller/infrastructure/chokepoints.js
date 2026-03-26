@@ -49,12 +49,13 @@ export function applyChokepointsMethods(GlobeController) {
 
     ds.entities.suspendEvents()
     this._chokepointData.forEach((cp, idx) => {
+      const chokepointId = cp.id || `idx-${idx}`
       const color = Cesium.Color.fromCssColorString(statusColors[cp.status] || "#4fc3f7")
       const radiusM = (cp.radius_km || 30) * 1000
 
       // Shipping lane zone circle
       const zone = ds.entities.add({
-        id: `choke-zone-${idx}`,
+        id: `choke-zone-${chokepointId}`,
         position: Cesium.Cartesian3.fromDegrees(cp.lng, cp.lat),
         ellipse: {
           semiMajorAxis: radiusM,
@@ -71,7 +72,7 @@ export function applyChokepointsMethods(GlobeController) {
       // Clickable billboard
       const iconSize = cp.status === "critical" ? 36 : (cp.status === "normal" ? 28 : 32)
       const point = ds.entities.add({
-        id: `choke-${idx}`,
+        id: `choke-${chokepointId}`,
         position: Cesium.Cartesian3.fromDegrees(cp.lng, cp.lat, 4500),
         billboard: {
           image: this._makeChokepointIcon(cp, statusColors[cp.status] || "#4fc3f7"),
@@ -102,7 +103,7 @@ export function applyChokepointsMethods(GlobeController) {
       // Ship count label (if ships detected)
       if (cp.ships_nearby?.total > 0) {
         const shipLabel = ds.entities.add({
-          id: `choke-ships-${idx}`,
+          id: `choke-ships-${chokepointId}`,
           position: Cesium.Cartesian3.fromDegrees(cp.lng, cp.lat, 4500),
           label: {
             text: `${cp.ships_nearby.total} ships`,
@@ -123,6 +124,7 @@ export function applyChokepointsMethods(GlobeController) {
       }
     })
     ds.entities.resumeEvents()
+    if (this._updateGlobeOcclusion) this._updateGlobeOcclusion()
     this._requestRender()
   }
 

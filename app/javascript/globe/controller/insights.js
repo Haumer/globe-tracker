@@ -21,7 +21,7 @@ export function applyInsightsMethods(GlobeController) {
       const resp = await fetch("/api/insights")
       if (!resp.ok) return
       const data = await resp.json()
-      this._insightsData = data.insights || []
+      this._insightsData = (data.insights || []).map((insight, idx) => ({ ...insight, _idx: idx }))
       this._insightSnapshotStatus = data.snapshot_status || "ready"
       this._renderInsightMarkers()
       this._renderInsightFeed()
@@ -155,6 +155,294 @@ export function applyInsightsMethods(GlobeController) {
     return url
   }
 
+  GlobeController.prototype._insightIndex = function(insight) {
+    if (Number.isInteger(insight?._idx)) return insight._idx
+    return (this._insightsData || []).findIndex(candidate => candidate === insight)
+  }
+
+  GlobeController.prototype._affectedInsightEntities = function(insight) {
+    const entities = insight?.entities || {}
+    const affected = []
+
+    if (entities.flight?.icao24 || entities.flight?.callsign) {
+      const flightLabel = entities.flight.callsign || entities.flight.icao24 || "Affected flight"
+      const squawkLabel = entities.flight.squawk ? ` · ${entities.flight.squawk}` : ""
+      affected.push({
+        kind: "flight",
+        label: `${flightLabel}${squawkLabel}`,
+        icon: "fa-plane",
+      })
+    }
+
+    if (entities.ship?.mmsi) {
+      affected.push({
+        kind: "ship",
+        label: entities.ship.name || entities.ship.mmsi || "Affected ship",
+        icon: "fa-ship",
+      })
+    }
+
+    if (entities.chokepoint?.name) {
+      affected.push({
+        kind: "chokepoint",
+        label: entities.chokepoint.name,
+        icon: "fa-anchor",
+      })
+    }
+
+    return affected
+  }
+
+  GlobeController.prototype._affectedInsightActionLabel = function(affectedEntities) {
+    if (affectedEntities.length !== 1) return "Show affected entities"
+
+    return {
+      flight: "Show affected flight",
+      ship: "Show affected ship",
+      chokepoint: "Show affected node",
+    }[affectedEntities[0].kind] || "Show affected entity"
+  }
+
+  GlobeController.prototype._normalizeInsightFlightDetail = function(flight) {
+    if (!flight?.icao24) return null
+
+    const lat = flight.latitude
+    const lng = flight.longitude
+    const alt = flight.altitude || 0
+
+    return {
+      id: flight.icao24,
+      callsign: (flight.callsign || flight.icao24 || "").trim(),
+      latitude: lat,
+      longitude: lng,
+      altitude: alt,
+      currentLat: lat,
+      currentLng: lng,
+      currentAlt: alt,
+      heading: flight.heading || 0,
+      speed: flight.speed || 0,
+      verticalRate: flight.vertical_rate || 0,
+      onGround: flight.on_ground,
+      military: flight.military,
+      originCountry: flight.origin_country,
+      lastTimePosition: flight.time_position || 0,
+      source: flight.source,
+      registration: flight.registration,
+      aircraftType: flight.aircraft_type,
+      squawk: flight.squawk,
+      emergency: flight.emergency,
+      category: flight.category,
+      mach: flight.mach,
+      trueAirspeed: flight.true_airspeed,
+      windDirection: flight.wind_direction,
+      windSpeed: flight.wind_speed,
+      outsideAirTemp: flight.outside_air_temp,
+      navAltitudeFms: flight.nav_altitude_fms,
+    }
+  }
+
+  GlobeController.prototype._findLoadedFlightByInsightRef = function(flightRef) {
+    if (!flightRef) return null
+
+    if (flightRef.icao24 && this.flightData.has(flightRef.icao24)) {
+      return this.flightData.get(flightRef.icao24)
+    }
+
+    const callsign = (flightRef.callsign || "").trim().toUpperCase()
+    if (!callsign) return null
+
+    for (const flight of this.flightData.values()) {
+      if ((flight.callsign || "").trim().toUpperCase() === callsign) return flight
+    }
+
+    return null
+  }
+
+  GlobeController.prototype._focusInsightFlight = function(flightId, flight) {
+    const resolvedId = flight?.id || flightId
+    const loadedFlight = resolvedId ? this.flightData.get(resolvedId) : null
+    const focusFlight = loadedFlight || flight
+    if (!focusFlight) return false
+
+    if (loadedFlight && !this.selectedFlights.has(resolvedId)) {
+      this.toggleFlightSelection(resolvedId)
+    }
+
+    this._focusedSelection = { type: "flight", id: resolvedId }
+    this._renderSelectionTray()
+
+    const Cesium = window.Cesium
+    const lat = focusFlight.currentLat ?? focusFlight.latitude
+    const lng = focusFlight.currentLng ?? focusFlight.longitude
+    if (Cesium && Number.isFinite(lat) && Number.isFinite(lng)) {
+      this.viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 200000),
+        duration: 1.0,
+      })
+    }
+
+    this.showDetail(resolvedId, focusFlight)
+    return true
+  }
+
+  GlobeController.prototype._focusInsightShip = function(ship) {
+    if (!ship) return false
+
+    const shipId = `${ship.mmsi}`
+    if (!this.selectedShips.has(shipId)) this.toggleShipSelection(shipId)
+
+    this._focusedSelection = { type: "ship", id: shipId }
+    this._renderSelectionTray()
+
+    const Cesium = window.Cesium
+    const lat = ship.currentLat ?? ship.latitude
+    const lng = ship.currentLng ?? ship.longitude
+    if (Cesium && Number.isFinite(lat) && Number.isFinite(lng)) {
+      this.viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 100000),
+        duration: 1.0,
+      })
+    }
+
+    this.showShipDetail(ship)
+    return true
+  }
+
+  GlobeController.prototype._flyToInsightTarget = function(lat, lng, height = 350000, duration = 1.1) {
+    const Cesium = window.Cesium
+    if (!Cesium || !Number.isFinite(lat) || !Number.isFinite(lng)) return Promise.resolve(false)
+
+    return new Promise(resolve => {
+      this.viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
+        duration,
+        complete: () => resolve(true),
+        cancel: () => resolve(false),
+      })
+    })
+  }
+
+  GlobeController.prototype._fetchInsightFlightRecord = async function(identifier) {
+    if (!identifier) return null
+
+    try {
+      const response = await fetch(`/api/flights/${encodeURIComponent(identifier)}`)
+      if (!response.ok) return null
+      const flight = await response.json()
+      return flight?.icao24 ? flight : null
+    } catch (_error) {
+      return null
+    }
+  }
+
+  GlobeController.prototype._revealInsightFlight = async function(insight) {
+    const flightRef = insight?.entities?.flight
+    const flightIdentifier = flightRef?.icao24 || flightRef?.callsign
+    if (!flightIdentifier) return false
+
+    if (this._ensureContextLayerVisible) this._ensureContextLayerVisible("flights")
+
+    let flight = this._findLoadedFlightByInsightRef(flightRef)
+    if (!flight && Number.isFinite(insight?.lat) && Number.isFinite(insight?.lng)) {
+      await this._flyToInsightTarget(insight.lat, insight.lng, 280000, 1.1)
+      if (typeof this.fetchFlights === "function") await this.fetchFlights()
+      flight = this._findLoadedFlightByInsightRef(flightRef)
+    }
+
+    if (flight) return this._focusInsightFlight(flight.id || flight.icao24 || flightIdentifier, flight)
+
+    const fetchedFlight = await this._fetchInsightFlightRecord(flightRef.icao24 || flightRef.callsign)
+    if (fetchedFlight && typeof this.upsertFlightRecord === "function") {
+      const upsertedFlight = this.upsertFlightRecord(fetchedFlight)
+      if (upsertedFlight) return this._focusInsightFlight(upsertedFlight.id, upsertedFlight)
+    }
+
+    const fallbackFlight = this._normalizeInsightFlightDetail(fetchedFlight)
+    if (fallbackFlight) return this._focusInsightFlight(fallbackFlight.id, fallbackFlight)
+
+    this._toast(`Unable to load affected flight ${flightRef.callsign || flightRef.icao24}`, "error")
+    return false
+  }
+
+  GlobeController.prototype._revealInsightShip = async function(insight) {
+    const shipRef = insight?.entities?.ship
+    const shipId = shipRef?.mmsi
+    if (!shipId) return false
+
+    if (this._ensureContextLayerVisible) this._ensureContextLayerVisible("ships")
+
+    let ship = this.shipData.get(`${shipId}`) || this.shipData.get(shipId)
+    if (!ship && Number.isFinite(insight?.lat) && Number.isFinite(insight?.lng)) {
+      await this._flyToInsightTarget(insight.lat, insight.lng, 180000, 1.1)
+      if (typeof this.fetchShips === "function") await this.fetchShips()
+      ship = this.shipData.get(`${shipId}`) || this.shipData.get(shipId)
+    }
+
+    if (!ship) {
+      this._toast(`Unable to load affected ship ${shipRef.name || shipId}`, "error")
+      return false
+    }
+
+    return this._focusInsightShip(ship)
+  }
+
+  GlobeController.prototype._revealAffectedInsightEntity = async function(insight, entityKind) {
+    switch (entityKind) {
+      case "flight":
+        return this._revealInsightFlight(insight)
+      case "ship":
+        return this._revealInsightShip(insight)
+      case "chokepoint": {
+        const chokepointName = insight?.entities?.chokepoint?.name
+        if (!chokepointName) return false
+        const chokepoint = this._findChokepointById?.(chokepointName)
+        if (!chokepoint) {
+          this._focusContextNode?.({ kind: "chokepoint", id: chokepointName }, { title: chokepointName })
+          return false
+        }
+        if (Number.isFinite(chokepoint.lat) && Number.isFinite(chokepoint.lng)) {
+          await this._flyToInsightTarget(chokepoint.lat, chokepoint.lng, 450000, 1.0)
+        }
+        this.showChokepointDetail?.(chokepoint)
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
+  GlobeController.prototype.showAffectedInsightEntities = async function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const idx = Number.parseInt(event.currentTarget.dataset.insightIdx, 10)
+    const insight = this._insightsData?.[idx]
+    if (!insight) return
+
+    this.showInsightDetail(insight)
+
+    const affectedEntities = this._affectedInsightEntities(insight)
+    if (!affectedEntities.length) return
+
+    const revealed = await this._revealAffectedInsightEntity(insight, affectedEntities[0].kind)
+    if (revealed && affectedEntities.length > 1) {
+      this._toast("Showing the first affected entity. Use the detail panel for the rest.")
+    }
+  }
+
+  GlobeController.prototype.focusAffectedInsightEntity = async function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const idx = Number.parseInt(event.currentTarget.dataset.insightIdx, 10)
+    const insight = this._insightsData?.[idx]
+    const entityKind = event.currentTarget.dataset.entityKind
+    if (!insight || !entityKind) return
+
+    this.showInsightDetail(insight)
+    await this._revealAffectedInsightEntity(insight, entityKind)
+  }
+
   GlobeController.prototype._renderInsightFeed = function() {
     if (!this.hasInsightFeedContentTarget) return
     const insights = this._insightsData || []
@@ -206,13 +494,18 @@ export function applyInsightsMethods(GlobeController) {
       ? ""
       : `<div style="margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
 
-    const html = statusBanner + insights
-      .sort((a, b) => (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3))
-      .map((insight, idx) => {
+    const sortedInsights = insights
+      .map((insight, idx) => ({ insight, idx }))
+      .sort((a, b) => (severityOrder[a.insight.severity] || 3) - (severityOrder[b.insight.severity] || 3))
+
+    const html = statusBanner + sortedInsights
+      .map(({ insight, idx }) => {
         const sev = insight.severity || "medium"
         const icon = severityIcons[sev] || "fa-circle-info"
         const typeLabel = typeLabels[insight.type] || insight.type.replace(/_/g, " ").toUpperCase()
         const hasLocation = insight.lat != null && insight.lng != null
+        const affectedEntities = this._affectedInsightEntities(insight)
+        const affectedActionLabel = this._affectedInsightActionLabel(affectedEntities)
 
         // Build entity detail chips
         let chips = ""
@@ -277,6 +570,7 @@ export function applyInsightsMethods(GlobeController) {
             ${chips ? `<div class="insight-card-chips">${chips}</div>` : ""}
             <div class="insight-card-actions">
               ${hasLocation ? `<button class="insight-action-btn" data-action="click->globe#focusInsight" data-insight-idx="${idx}"><i class="fa-solid fa-location-crosshairs"></i> Focus</button>` : ""}
+              ${affectedEntities.length ? `<button class="insight-action-btn" data-action="click->globe#showAffectedInsightEntities" data-insight-idx="${idx}"><i class="fa-solid fa-crosshairs"></i> ${this._escapeHtml(affectedActionLabel)}</button>` : ""}
             </div>
           </div>
         </div>`
@@ -315,6 +609,8 @@ export function applyInsightsMethods(GlobeController) {
     const description = insight.description || ""
     const coordStr = (insight.lat != null && insight.lng != null)
       ? `${insight.lat.toFixed(2)}, ${insight.lng.toFixed(2)}` : "Global"
+    const insightIdx = this._insightIndex(insight)
+    const affectedEntities = this._affectedInsightEntities(insight)
 
     let entitiesHtml = ""
     if (insight.entities) {
@@ -338,6 +634,27 @@ export function applyInsightsMethods(GlobeController) {
       }
     }
 
+    const affectedEntitiesHtml = affectedEntities.length && insightIdx >= 0
+      ? `
+        <div style="margin-top:10px;">
+          <div class="detail-label" style="margin-bottom:6px;">Affected Entities</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${affectedEntities.map(entity => `
+              <button
+                type="button"
+                class="insight-action-btn"
+                data-action="click->globe#focusAffectedInsightEntity"
+                data-insight-idx="${insightIdx}"
+                data-entity-kind="${this._escapeHtml(entity.kind)}"
+              >
+                <i class="fa-solid ${this._escapeHtml(entity.icon)}"></i> ${this._escapeHtml(entity.label)}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+      `
+      : ""
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${sevColor};">
         <i class="fa-solid fa-brain" style="margin-right:6px;"></i>${typeLabel}
@@ -354,6 +671,7 @@ export function applyInsightsMethods(GlobeController) {
         </div>
       </div>
       ${entitiesHtml}
+      ${affectedEntitiesHtml}
     `
     this.detailPanelTarget.style.display = ""
   }

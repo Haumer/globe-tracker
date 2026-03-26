@@ -641,6 +641,34 @@ export function applyCoreMethods(GlobeController) {
 
   GlobeController.prototype.getViewportBounds = function() { return getViewportBounds(this.viewer) }
 
+  GlobeController.prototype._flyToCoordinates = function(lng, lat, height = 500000, options = {}) {
+    const Cesium = window.Cesium
+    if (!this.viewer?.camera || !Cesium) return false
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
+      duration: options.duration ?? 1.0,
+      orientation: options.orientation,
+      complete: options.complete,
+      cancel: options.cancel,
+    })
+
+    return true
+  }
+
+  GlobeController.prototype._flyToCoordinatesAsync = function(lng, lat, height = 500000, duration = 1.0) {
+    return new Promise(resolve => {
+      const started = this._flyToCoordinates(lng, lat, height, {
+        duration,
+        complete: () => resolve(true),
+        cancel: () => resolve(false),
+      })
+
+      if (!started) resolve(false)
+    })
+  }
+
   GlobeController.prototype._followEntity = function(lng, lat) {
     const cam = this.viewer.camera
     const h = this._trackingHeights[this._trackingHeightIdx]
@@ -1495,10 +1523,7 @@ export function applyCoreMethods(GlobeController) {
 
     // Fly to camera position
     if (s.camera) {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(s.camera.lng, s.camera.lat, s.camera.height),
-        duration: 1.5,
-      })
+      this._flyToCoordinates(s.camera.lng, s.camera.lat, s.camera.height, { duration: 1.5 })
     }
 
     // Activate layers

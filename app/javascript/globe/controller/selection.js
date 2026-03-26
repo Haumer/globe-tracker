@@ -283,31 +283,25 @@ export function applySelectionMethods(GlobeController) {
     if (event.target.closest(".sel-chip-remove")) return
     const type = event.currentTarget.dataset.selType
     const id = event.currentTarget.dataset.selId
-    const Cesium = window.Cesium
 
     this._focusedSelection = { type, id }
 
     if (type === "flight") {
       const f = this.flightData.get(id)
       if (f) {
-        this.viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(f.currentLng, f.currentLat, 200000),
-          duration: 1.0,
-        })
+        this._flyToCoordinates?.(f.currentLng, f.currentLat, 200000, { duration: 1.0 })
         this.showDetail(id, f)
         return
       }
     } else if (type === "ship") {
       const s = this.shipData.get(id)
       if (s) {
-        this.viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 100000),
-          duration: 1.0,
-        })
+        this._flyToCoordinates?.(s.longitude, s.latitude, 100000, { duration: 1.0 })
         this.showShipDetail(s)
         return
       }
     } else if (type === "sat") {
+      const Cesium = window.Cesium
       const noradId = parseInt(id)
       const s = this.satelliteData.find(sat => sat.norad_id === noradId)
       if (s) {
@@ -540,10 +534,7 @@ export function applySelectionMethods(GlobeController) {
     this.toggleFlightSelection(id)
     const f = this.flightData.get(id)
     if (f && f.currentLat && f.currentLng) {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(f.currentLng, f.currentLat, 200000),
-        duration: 1.0,
-      })
+      this._flyToCoordinates?.(f.currentLng, f.currentLat, 200000, { duration: 1.0 })
     }
   }
 
@@ -551,10 +542,7 @@ export function applySelectionMethods(GlobeController) {
     const mmsi = event.currentTarget.dataset.mmsi
     const s = this.shipData.get(mmsi)
     if (s && s.latitude && s.longitude) {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 100000),
-        duration: 1.0,
-      })
+      this._flyToCoordinates?.(s.longitude, s.latitude, 100000, { duration: 1.0 })
     }
   }
 

@@ -271,15 +271,9 @@ export function applyInsightsMethods(GlobeController) {
     this._focusedSelection = { type: "flight", id: resolvedId }
     this._renderSelectionTray()
 
-    const Cesium = window.Cesium
     const lat = focusFlight.currentLat ?? focusFlight.latitude
     const lng = focusFlight.currentLng ?? focusFlight.longitude
-    if (Cesium && Number.isFinite(lat) && Number.isFinite(lng)) {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 200000),
-        duration: 1.0,
-      })
-    }
+    this._flyToCoordinates?.(lng, lat, 200000, { duration: 1.0 })
 
     this.showDetail(resolvedId, focusFlight)
     return true
@@ -294,32 +288,18 @@ export function applyInsightsMethods(GlobeController) {
     this._focusedSelection = { type: "ship", id: shipId }
     this._renderSelectionTray()
 
-    const Cesium = window.Cesium
     const lat = ship.currentLat ?? ship.latitude
     const lng = ship.currentLng ?? ship.longitude
-    if (Cesium && Number.isFinite(lat) && Number.isFinite(lng)) {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 100000),
-        duration: 1.0,
-      })
-    }
+    this._flyToCoordinates?.(lng, lat, 100000, { duration: 1.0 })
 
     this.showShipDetail(ship)
     return true
   }
 
   GlobeController.prototype._flyToInsightTarget = function(lat, lng, height = 350000, duration = 1.1) {
-    const Cesium = window.Cesium
-    if (!Cesium || !Number.isFinite(lat) || !Number.isFinite(lng)) return Promise.resolve(false)
-
-    return new Promise(resolve => {
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
-        duration,
-        complete: () => resolve(true),
-        cancel: () => resolve(false),
-      })
-    })
+    return this._flyToCoordinatesAsync
+      ? this._flyToCoordinatesAsync(lng, lat, height, duration)
+      : Promise.resolve(false)
   }
 
   GlobeController.prototype._fetchInsightFlightRecord = async function(identifier) {
@@ -589,11 +569,7 @@ export function applyInsightsMethods(GlobeController) {
 
     // Fly camera if location is available
     if (insight.lat != null && insight.lng != null) {
-      const Cesium = window.Cesium
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(insight.lng, insight.lat, 500000),
-        duration: 1.5,
-      })
+      this._flyToCoordinates?.(insight.lng, insight.lat, 500000, { duration: 1.5 })
     }
   }
 

@@ -573,11 +573,7 @@ export function applyContextMethods(GlobeController) {
     const height = parseFloat(event.currentTarget.dataset.height || "500000")
     if (isNaN(lat) || isNaN(lng)) return
 
-    const Cesium = window.Cesium
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
-      duration: 1.2,
-    })
+    this._flyToCoordinates?.(lng, lat, height, { duration: 1.2 })
   }
 
   GlobeController.prototype.openContextCamera = function(event) {

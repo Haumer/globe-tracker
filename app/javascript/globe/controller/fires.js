@@ -1,5 +1,19 @@
 import { getDataSource, cachedColor } from "../utils"
 
+const FIRE_CLUSTER_HEIGHT_TIERS = [
+  { minHeight: 16_000_000, cellSize: 6.0 },
+  { minHeight: 10_000_000, cellSize: 4.0 },
+  { minHeight: 6_000_000, cellSize: 2.5 },
+  { minHeight: 3_000_000, cellSize: 1.25 },
+]
+
+const FIRE_CLUSTER_MIN_POINTS = 120
+const FIRE_DENSE_CLUSTER_THRESHOLDS = [
+  { minHeight: 2_000_000, minVisible: 180, cellSize: 1.0 },
+  { minHeight: 1_200_000, minVisible: 120, cellSize: 0.7 },
+  { minHeight: 750_000, minVisible: 90, cellSize: 0.45 },
+]
+
 export function applyFiresMethods(GlobeController) {
 
   GlobeController.prototype.getFiresDataSource = function() { return getDataSource(this.viewer, this._ds, "fires") }
@@ -11,6 +25,7 @@ export function applyFiresMethods(GlobeController) {
     } else {
       this._clearFireHotspotEntities()
       this._fireHotspotData = []
+      this._fireHotspotClusterData = []
     }
     this._startFiresRefresh()
     this._updateStats()
@@ -32,7 +47,10 @@ export function applyFiresMethods(GlobeController) {
     this._toast("Loading fire hotspots...")
     try {
       const resp = await fetch("/api/fire_hotspots")
-      if (!resp.ok) return
+      if (!resp.ok) {
+        this._toastHide()
+        return
+      }
       const raw = await resp.json()
       // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time, strike]
       this._fireHotspotData = raw.map(r => ({
@@ -40,6 +58,7 @@ export function applyFiresMethods(GlobeController) {
         confidence: r[4], satellite: r[5], instrument: r[6],
         frp: r[7], daynight: r[8], time: r[9], strike: r[10] === 1,
       }))
+      this._fireHotspotClusterData = []
       this._handleBackgroundRefresh(resp, "fire-hotspots", this._fireHotspotData.length > 0, () => {
         if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
       })
@@ -49,73 +68,39 @@ export function applyFiresMethods(GlobeController) {
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch fire hotspots:", e)
+      this._toastHide()
     }
   }
 
   GlobeController.prototype.renderFireHotspots = function() {
-    const Cesium = window.Cesium
     this._clearFireHotspotEntities()
-    const dataSource = this.getFiresDataSource()
-
+    this._fireHotspotClusterData = []
     const bounds = this.getViewportBounds()
+    const visibleHotspots = []
 
-    dataSource.entities.suspendEvents()
     this._fireHotspotData.forEach(f => {
       if (bounds && (f.lat < bounds.lamin || f.lat > bounds.lamax || f.lng < bounds.lomin || f.lng > bounds.lomax)) return
       if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(f.lat, f.lng)) return
-
-      const frp = f.frp || 1
-      const brightness = f.brightness || 300
-
-      // Strikes get a distinct magenta color; fires use heat scale
-      let color
-      if (f.strike) {
-        color = cachedColor("#e040fb") // magenta — distinct from fire colors
-      } else if (brightness < 320) color = cachedColor("#ffd54f")
-      else if (brightness < 350) color = cachedColor("#ff9800")
-      else if (brightness < 400) color = cachedColor("#ff5722")
-      else color = cachedColor("#d50000")
-
-      const pixelSize = f.strike
-        ? Math.min(8 + Math.sqrt(frp) * 1.0, 20)  // strikes are larger
-        : Math.min(4 + Math.sqrt(frp) * 0.8, 16)
-
-      // Glow ring for high-confidence fires
-      const isHigh = f.confidence === "high" || f.confidence === "h" || parseInt(f.confidence) >= 80
-      if (isHigh && frp > 10) {
-        const ring = dataSource.entities.add({
-          id: `fire-ring-${f.id}`,
-          position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 0),
-          ellipse: {
-            semiMinorAxis: Math.min(2000 + frp * 50, 15000),
-            semiMajorAxis: Math.min(2000 + frp * 50, 15000),
-            material: color.withAlpha(0.08),
-            outline: true,
-            outlineColor: color.withAlpha(0.2),
-            outlineWidth: 1,
-            height: 0,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            classificationType: Cesium.ClassificationType.BOTH,
-          },
-        })
-        this._fireHotspotEntities.push(ring)
-      }
-
-      const entity = dataSource.entities.add({
-        id: `fire-${f.id}`,
-        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 10),
-        point: {
-          pixelSize,
-          color: color.withAlpha(0.9),
-          outlineColor: color.withAlpha(0.3),
-          outlineWidth: 1,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
-          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
-      this._fireHotspotEntities.push(entity)
+      visibleHotspots.push(f)
     })
+
+    if (visibleHotspots.length === 0) {
+      this._requestRender()
+      return
+    }
+
+    const dataSource = this.getFiresDataSource()
+    const clusterCellSize = this._fireClusterCellSize(visibleHotspots.length)
+    const minClusterPoints = clusterCellSize > 0 && clusterCellSize < 1.25 ? 90 : FIRE_CLUSTER_MIN_POINTS
+    const useClusters = clusterCellSize > 0 && visibleHotspots.length >= minClusterPoints
+
+    dataSource.entities.suspendEvents()
+    if (useClusters) {
+      this._fireHotspotClusterData = this._clusterFireHotspots(visibleHotspots, clusterCellSize)
+      this._fireHotspotClusterData.forEach(cluster => this._renderFireCluster(dataSource, cluster))
+    } else {
+      visibleHotspots.forEach(f => this._renderFireHotspot(dataSource, f))
+    }
     dataSource.entities.resumeEvents()
 
     this._requestRender()
@@ -132,6 +117,222 @@ export function applyFiresMethods(GlobeController) {
     this._fireHotspotEntities = []
   }
 
+  GlobeController.prototype._fireClusterCellSize = function(visibleCount = 0) {
+    const height = this.viewer?.camera?.positionCartographic?.height || 0
+    const hasFilter = this.hasActiveFilter && this.hasActiveFilter()
+
+    if (hasFilter) {
+      if (height >= 14_000_000) return 4.0
+      if (height >= 8_000_000) return 2.5
+      if (height >= 4_000_000) return 1.25
+      const denseTier = FIRE_DENSE_CLUSTER_THRESHOLDS.find(entry =>
+        height >= entry.minHeight && visibleCount >= entry.minVisible
+      )
+      return denseTier ? denseTier.cellSize : 0
+    }
+
+    const tier = FIRE_CLUSTER_HEIGHT_TIERS.find(entry => height >= entry.minHeight)
+    if (tier) return tier.cellSize
+
+    const denseTier = FIRE_DENSE_CLUSTER_THRESHOLDS.find(entry =>
+      height >= entry.minHeight && visibleCount >= entry.minVisible
+    )
+    return denseTier ? denseTier.cellSize : 0
+  }
+
+  GlobeController.prototype._renderFireHotspot = function(dataSource, f) {
+    const Cesium = window.Cesium
+    const frp = f.frp || 1
+    const color = this._fireHotspotColor(f)
+    const pixelSize = f.strike
+      ? Math.min(5 + Math.sqrt(frp) * 0.55, 12)
+      : Math.min(2.5 + Math.sqrt(frp) * 0.35, 8)
+
+    if (this._isHighConfidenceFire(f) && frp > 25) {
+      const ring = dataSource.entities.add({
+        id: `fire-ring-${f.id}`,
+        position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 0),
+        ellipse: {
+          semiMinorAxis: Math.min(1200 + frp * 24, 7000),
+          semiMajorAxis: Math.min(1200 + frp * 24, 7000),
+          material: color.withAlpha(0.04),
+          outline: true,
+          outlineColor: color.withAlpha(0.12),
+          outlineWidth: 0.5,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      })
+      this._fireHotspotEntities.push(ring)
+    }
+
+    const entity = dataSource.entities.add({
+      id: `fire-${f.id}`,
+      position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 10),
+      point: {
+        pixelSize,
+        color: color.withAlpha(0.78),
+        outlineColor: color.withAlpha(0.16),
+        outlineWidth: 0.75,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 8e6, 0.22),
+        heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+    this._fireHotspotEntities.push(entity)
+  }
+
+  GlobeController.prototype._renderFireCluster = function(dataSource, cluster) {
+    const Cesium = window.Cesium
+    const lead = cluster.lead || {}
+    const color = this._fireHotspotColor(lead)
+    const pixelSize = Math.min(
+      6 + Math.log2(cluster.count + 1) * 2.8 + Math.sqrt(cluster.maxFrp || 1) * 0.12,
+      cluster.strikeCount > 0 ? 18 : 15
+    )
+    const labelThreshold = cluster.cellSize >= 4 ? 36 : cluster.cellSize >= 2.5 ? 24 : cluster.cellSize >= 1 ? 16 : 12
+    const labelText = cluster.count >= labelThreshold || cluster.strikeCount > 0 ? `${cluster.count}` : ""
+    const ringRadius = Math.min(
+      8_000 + cluster.count * 550 + cluster.cellSize * 8_000 + (cluster.maxFrp || 0) * 30,
+      72_000
+    )
+
+    if (cluster.count >= 10 || cluster.strikeCount > 1 || cluster.maxFrp > 45) {
+      const ring = dataSource.entities.add({
+        id: `fire-cluster-ring-${cluster.id}`,
+        position: Cesium.Cartesian3.fromDegrees(cluster.lng, cluster.lat, 0),
+        ellipse: {
+          semiMinorAxis: ringRadius,
+          semiMajorAxis: ringRadius,
+          material: color.withAlpha(cluster.strikeCount > 0 ? 0.07 : 0.035),
+          outline: true,
+          outlineColor: color.withAlpha(cluster.strikeCount > 0 ? 0.18 : 0.1),
+          outlineWidth: 0.75,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      })
+      this._fireHotspotEntities.push(ring)
+    }
+
+    const entity = dataSource.entities.add({
+      id: `fire-cluster-${cluster.id}`,
+      position: Cesium.Cartesian3.fromDegrees(cluster.lng, cluster.lat, 20),
+      point: {
+        pixelSize,
+        color: color.withAlpha(0.82),
+        outlineColor: color.withAlpha(0.16),
+        outlineWidth: 1.25,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 1.05, 1.2e7, 0.32),
+        heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: labelText ? {
+        text: labelText,
+        font: "11px JetBrains Mono, monospace",
+        fillColor: Cesium.Color.WHITE.withAlpha(0.82),
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -(pixelSize + 8)),
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 0.95, 9e6, 0.25),
+        translucencyByDistance: new Cesium.NearFarScalar(1e5, 0.95, 9e6, 0.0),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      } : undefined,
+    })
+    this._fireHotspotEntities.push(entity)
+  }
+
+  GlobeController.prototype._clusterFireHotspots = function(hotspots, cellSize) {
+    const cells = new Map()
+
+    hotspots.forEach(f => {
+      const row = Math.floor((f.lat + 90) / cellSize)
+      const col = Math.floor((f.lng + 180) / cellSize)
+      const key = `${row}:${col}`
+
+      if (!cells.has(key)) {
+        cells.set(key, {
+          key,
+          latSum: 0,
+          lngSum: 0,
+          count: 0,
+          maxFrp: 0,
+          maxBrightness: 0,
+          strikeCount: 0,
+          highConfidenceCount: 0,
+          latestTime: 0,
+          satellites: new Map(),
+          lead: null,
+        })
+      }
+
+      const cell = cells.get(key)
+      cell.latSum += f.lat
+      cell.lngSum += f.lng
+      cell.count += 1
+      cell.maxFrp = Math.max(cell.maxFrp, f.frp || 0)
+      cell.maxBrightness = Math.max(cell.maxBrightness, f.brightness || 0)
+      cell.latestTime = Math.max(cell.latestTime, f.time || 0)
+      if (f.strike) cell.strikeCount += 1
+      if (this._isHighConfidenceFire(f)) cell.highConfidenceCount += 1
+
+      const sat = f.satellite || "Unknown"
+      cell.satellites.set(sat, (cell.satellites.get(sat) || 0) + 1)
+
+      if (!cell.lead || this._firePriorityScore(f) > this._firePriorityScore(cell.lead)) {
+        cell.lead = f
+      }
+    })
+
+    return [...cells.values()]
+      .map(cell => ({
+        lat: cell.latSum / cell.count,
+        lng: cell.lngSum / cell.count,
+        count: cell.count,
+        maxFrp: cell.maxFrp,
+        maxBrightness: cell.maxBrightness,
+        strikeCount: cell.strikeCount,
+        highConfidenceCount: cell.highConfidenceCount,
+        latestTime: cell.latestTime,
+        lead: cell.lead,
+        cellSize,
+        satellites: [...cell.satellites.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, count]) => ({ name, count })),
+      }))
+      .sort((a, b) => b.count - a.count || (b.maxFrp || 0) - (a.maxFrp || 0))
+      .map((cell, idx) => ({ ...cell, id: idx }))
+  }
+
+  GlobeController.prototype._fireHotspotColor = function(f = {}) {
+    if (f.strike) return cachedColor("#e040fb")
+
+    const brightness = f.brightness || 300
+    if (brightness < 320) return cachedColor("#ffd54f")
+    if (brightness < 350) return cachedColor("#ff9800")
+    if (brightness < 400) return cachedColor("#ff5722")
+    return cachedColor("#d50000")
+  }
+
+  GlobeController.prototype._isHighConfidenceFire = function(f = {}) {
+    const conf = `${f.confidence || ""}`.toLowerCase()
+    const numeric = Number.parseInt(conf, 10)
+    return conf === "high" || conf === "h" || (!Number.isNaN(numeric) && numeric >= 80)
+  }
+
+  GlobeController.prototype._firePriorityScore = function(f = {}) {
+    return (f.strike ? 1_000_000 : 0) +
+      (this._isHighConfidenceFire(f) ? 100_000 : 0) +
+      ((f.frp || 0) * 100) +
+      (f.brightness || 0) +
+      ((f.time || 0) / 1_000_000_000)
+  }
+
   // ── Satellite NORAD IDs for FIRMS satellites ──────────────────
   const SAT_NORAD = {
     "Suomi NPP": 37849,
@@ -142,12 +343,14 @@ export function applyFiresMethods(GlobeController) {
   }
 
   GlobeController.prototype.showFireHotspotDetail = function(f) {
+    this._clearSatFireArc()
     const date = f.time ? new Date(f.time) : null
     const ago = date ? this._timeAgo(date) : "Unknown"
     const timeStr = date ? date.toUTCString().replace("GMT", "UTC") : "Unknown"
 
-    const confColor = (f.confidence === "high" || f.confidence === "h" || parseInt(f.confidence) >= 80) ? "#f44336"
-      : (f.confidence === "nominal" || f.confidence === "n" || (parseInt(f.confidence) >= 30 && parseInt(f.confidence) < 80)) ? "#ff9800"
+    const confValue = Number.parseInt(f.confidence, 10)
+    const confColor = this._isHighConfidenceFire(f) ? "#f44336"
+      : (f.confidence === "nominal" || f.confidence === "n" || (!Number.isNaN(confValue) && confValue >= 30 && confValue < 80)) ? "#ff9800"
       : "#66bb6a"
     const confLabel = f.confidence || "unknown"
 
@@ -212,6 +415,70 @@ export function applyFiresMethods(GlobeController) {
       destination: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 300000),
       duration: 1.5,
     })
+  }
+
+  GlobeController.prototype.showFireClusterDetail = function(cluster) {
+    this._clearSatFireArc()
+    const date = cluster.latestTime ? new Date(cluster.latestTime) : null
+    const ago = date ? this._timeAgo(date) : "Unknown"
+    const timeStr = date ? date.toUTCString().replace("GMT", "UTC") : "Unknown"
+    const satList = cluster.satellites?.length
+      ? cluster.satellites.map(item => `${item.name}${item.count > 1 ? ` (${item.count})` : ""}`).join(", ")
+      : "Unknown"
+
+    let confidenceLabel = "Low-confidence mix"
+    let confidenceColor = "#66bb6a"
+    if (cluster.highConfidenceCount === cluster.count) {
+      confidenceLabel = "All high-confidence"
+      confidenceColor = "#f44336"
+    } else if (cluster.highConfidenceCount > 0) {
+      confidenceLabel = `${cluster.highConfidenceCount}/${cluster.count} high-confidence`
+      confidenceColor = "#ff9800"
+    }
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${cluster.strikeCount > 0 ? "#e040fb" : "#ff7043"};">
+        <i class="fa-solid ${cluster.strikeCount > 0 ? "fa-crosshairs" : "fa-fire"}" style="margin-right:6px;"></i>
+        Fire Cluster
+      </div>
+      <div class="detail-country">${cluster.lat.toFixed(2)}°, ${cluster.lng.toFixed(2)}°</div>
+      <div style="margin:4px 0 10px;padding:6px 8px;background:rgba(255,112,67,0.1);border:1px solid rgba(255,112,67,0.2);border-radius:4px;font:500 9px var(--gt-mono);color:#ffab91;letter-spacing:0.4px;">
+        ${cluster.count} detections grouped into one cell. Zoom closer to inspect individual hotspots.
+      </div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Detections</span>
+          <span class="detail-value">${cluster.count}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Possible strikes</span>
+          <span class="detail-value" style="color:${cluster.strikeCount > 0 ? "#e040fb" : "#9aa4b2"};">${cluster.strikeCount}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Confidence</span>
+          <span class="detail-value" style="color:${confidenceColor};">${this._escapeHtml(confidenceLabel)}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Peak fire power</span>
+          <span class="detail-value">${cluster.maxFrp ? `${cluster.maxFrp.toFixed(1)} MW` : "—"}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Peak brightness</span>
+          <span class="detail-value">${cluster.maxBrightness ? `${cluster.maxBrightness.toFixed(1)} K` : "—"}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Latest detection</span>
+          <span class="detail-value">${ago}</span>
+        </div>
+        <div class="detail-field" style="grid-column:1 / -1;">
+          <span class="detail-label">Satellites</span>
+          <span class="detail-value" style="color:#ce93d8;">${this._escapeHtml(satList)}</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Latest detection: ${this._escapeHtml(timeStr)} · Source: NASA FIRMS (VIIRS/MODIS)</div>
+    `
+    this.detailPanelTarget.style.display = ""
+    this._flyToCoordinates(cluster.lng, cluster.lat, Math.max(700000, cluster.cellSize * 260000), { duration: 1.2 })
   }
 
   // Draw an arc from the detecting satellite's current position to the fire

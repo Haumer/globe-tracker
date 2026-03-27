@@ -72,6 +72,7 @@ export function applyCoreMethods(GlobeController) {
     this._eventsInterval = null
     this.fireHotspotsVisible = false
     this._fireHotspotData = []
+    this._fireHotspotClusterData = []
     this._fireHotspotEntities = []
     this.strikesVisible = false
     this._strikeDetections = []
@@ -297,6 +298,7 @@ export function applyCoreMethods(GlobeController) {
       this.saveCamera()
       this._savePrefs()
       this._updateGlobeOcclusion()
+      if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots?.()
     })
 
     // Click handler for custom detail panel
@@ -1255,6 +1257,14 @@ export function applyCoreMethods(GlobeController) {
         this.showStrikeDetail(d); return true
       }},
       // Fire hotspots
+      { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {
+        const idx = parseInt(id, 10); const d = this._fireHotspotClusterData?.[idx]; if (!d) return false
+        this.showFireClusterDetail(d); return true
+      }},
+      { prefix: "fire-cluster-", skip: [], handler: (id) => {
+        const idx = parseInt(id, 10); const d = this._fireHotspotClusterData?.[idx]; if (!d) return false
+        this.showFireClusterDetail(d); return true
+      }},
       { prefix: "fire-ring-", skip: [], handler: (id) => {
         const d = this._fireHotspotData?.find(f => f.id === id); if (!d) return false
         this.showFireHotspotDetail(d); return true

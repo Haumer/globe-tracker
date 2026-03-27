@@ -104,6 +104,15 @@
         <span class="sb-layer-name">Fire Hotspots</span>
         <span class="sb-layer-dot"></span>
       </div>
+      <div class="arc-controls" data-globe-target="fireHotspotOptions" style="display:none;">
+        <div class="arc-controls-row">
+          <label class="arc-mini-toggle">
+            <input type="checkbox" checked data-globe-target="fireClustersToggle" data-action="change->globe#toggleFireClusters">
+            <span class="arc-mini-track"></span>
+            <span>Dense Clusters</span>
+          </label>
+        </div>
+      </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="weather" data-globe-target="qlWeather">
         <i class="fa-solid fa-cloud-sun-rain sb-layer-icon" style="color: #1e88e5;"></i>
         <span class="sb-layer-name">Weather</span>

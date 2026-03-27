@@ -1,17 +1,25 @@
 import { getDataSource, cachedColor } from "../utils"
 
 const FIRE_CLUSTER_HEIGHT_TIERS = [
-  { minHeight: 16_000_000, cellSize: 6.0 },
-  { minHeight: 10_000_000, cellSize: 4.0 },
-  { minHeight: 6_000_000, cellSize: 2.5 },
-  { minHeight: 3_000_000, cellSize: 1.25 },
+  { minHeight: 16_000_000, cellSize: 7.0 },
+  { minHeight: 10_000_000, cellSize: 5.0 },
+  { minHeight: 6_000_000, cellSize: 3.2 },
+  { minHeight: 3_000_000, cellSize: 1.75 },
 ]
 
-const FIRE_CLUSTER_MIN_POINTS = 120
+const FIRE_CLUSTER_MIN_POINTS = 40
 const FIRE_DENSE_CLUSTER_THRESHOLDS = [
-  { minHeight: 2_000_000, minVisible: 180, cellSize: 1.0 },
-  { minHeight: 1_200_000, minVisible: 120, cellSize: 0.7 },
-  { minHeight: 750_000, minVisible: 90, cellSize: 0.45 },
+  { minHeight: 2_000_000, minVisible: 96, cellSize: 1.1 },
+  { minHeight: 1_200_000, minVisible: 60, cellSize: 0.75 },
+  { minHeight: 750_000, minVisible: 40, cellSize: 0.45 },
+]
+const FIRE_RAW_RENDER_TIERS = [
+  { minHeight: 12_000_000, maxPoints: 70, cellSize: 1.25 },
+  { minHeight: 6_000_000, maxPoints: 90, cellSize: 0.8 },
+  { minHeight: 3_000_000, maxPoints: 110, cellSize: 0.5 },
+  { minHeight: 1_500_000, maxPoints: 130, cellSize: 0.3 },
+  { minHeight: 750_000, maxPoints: 160, cellSize: 0.18 },
+  { minHeight: 0, maxPoints: 220, cellSize: 0.1 },
 ]
 
 export function applyFiresMethods(GlobeController) {
@@ -20,6 +28,7 @@ export function applyFiresMethods(GlobeController) {
 
   GlobeController.prototype.toggleFireHotspots = function() {
     this.fireHotspotsVisible = this.hasFireHotspotsToggleTarget && this.fireHotspotsToggleTarget.checked
+    this.fireClustersVisible = !this.hasFireClustersToggleTarget || this.fireClustersToggleTarget.checked
     if (this.fireHotspotsVisible) {
       this.fetchFireHotspots()
     } else {
@@ -30,6 +39,12 @@ export function applyFiresMethods(GlobeController) {
     this._startFiresRefresh()
     this._updateStats()
     this._syncQuickBar()
+    this._savePrefs()
+  }
+
+  GlobeController.prototype.toggleFireClusters = function() {
+    this.fireClustersVisible = !this.hasFireClustersToggleTarget || this.fireClustersToggleTarget.checked
+    if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots()
     this._savePrefs()
   }
 
@@ -90,16 +105,18 @@ export function applyFiresMethods(GlobeController) {
     }
 
     const dataSource = this.getFiresDataSource()
-    const clusterCellSize = this._fireClusterCellSize(visibleHotspots.length)
-    const minClusterPoints = clusterCellSize > 0 && clusterCellSize < 1.25 ? 90 : FIRE_CLUSTER_MIN_POINTS
-    const useClusters = clusterCellSize > 0 && visibleHotspots.length >= minClusterPoints
+    const clusterCellSize = this.fireClustersVisible ? this._fireClusterCellSize(visibleHotspots.length) : 0
+    const useClusters = clusterCellSize > 0 && visibleHotspots.length >= FIRE_CLUSTER_MIN_POINTS
+    const hotspotsToRender = useClusters
+      ? visibleHotspots
+      : this._selectFireHotspotsForRender(visibleHotspots)
 
     dataSource.entities.suspendEvents()
     if (useClusters) {
       this._fireHotspotClusterData = this._clusterFireHotspots(visibleHotspots, clusterCellSize)
       this._fireHotspotClusterData.forEach(cluster => this._renderFireCluster(dataSource, cluster))
     } else {
-      visibleHotspots.forEach(f => this._renderFireHotspot(dataSource, f))
+      hotspotsToRender.forEach(f => this._renderFireHotspot(dataSource, f))
     }
     dataSource.entities.resumeEvents()
 
@@ -140,24 +157,57 @@ export function applyFiresMethods(GlobeController) {
     return denseTier ? denseTier.cellSize : 0
   }
 
+  GlobeController.prototype._selectFireHotspotsForRender = function(hotspots) {
+    const { cellSize, maxPoints } = this._fireRawRenderConfig()
+    return this._thinFireHotspots(hotspots, cellSize).slice(0, maxPoints)
+  }
+
+  GlobeController.prototype._fireRawRenderConfig = function() {
+    const height = this.viewer?.camera?.positionCartographic?.height || 0
+    const hasFilter = this.hasActiveFilter && this.hasActiveFilter()
+    const tier = FIRE_RAW_RENDER_TIERS.find(entry => height >= entry.minHeight) || FIRE_RAW_RENDER_TIERS[FIRE_RAW_RENDER_TIERS.length - 1]
+
+    if (!hasFilter) return tier
+
+    return {
+      cellSize: Math.max(0.05, tier.cellSize * 0.65),
+      maxPoints: Math.round(tier.maxPoints * 1.35),
+    }
+  }
+
+  GlobeController.prototype._thinFireHotspots = function(hotspots, cellSize) {
+    const ranked = [...hotspots].sort((a, b) => this._firePriorityScore(b) - this._firePriorityScore(a))
+    if (!cellSize || ranked.length <= 1) return ranked
+
+    const cells = new Map()
+    ranked.forEach(f => {
+      const row = Math.floor((f.lat + 90) / cellSize)
+      const col = Math.floor((f.lng + 180) / cellSize)
+      const key = `${row}:${col}`
+      if (!cells.has(key)) cells.set(key, f)
+    })
+
+    return [...cells.values()]
+  }
+
   GlobeController.prototype._renderFireHotspot = function(dataSource, f) {
     const Cesium = window.Cesium
     const frp = f.frp || 1
     const color = this._fireHotspotColor(f)
     const pixelSize = f.strike
-      ? Math.min(5 + Math.sqrt(frp) * 0.55, 12)
-      : Math.min(2.5 + Math.sqrt(frp) * 0.35, 8)
+      ? Math.min(4 + Math.sqrt(frp) * 0.36, 8)
+      : Math.min(1.75 + Math.sqrt(frp) * 0.2, 4.8)
 
-    if (this._isHighConfidenceFire(f) && frp > 25) {
+    if (this._isHighConfidenceFire(f) && frp > 60) {
       const ring = dataSource.entities.add({
         id: `fire-ring-${f.id}`,
         position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 0),
         ellipse: {
-          semiMinorAxis: Math.min(1200 + frp * 24, 7000),
-          semiMajorAxis: Math.min(1200 + frp * 24, 7000),
-          material: color.withAlpha(0.04),
+          semiMinorAxis: Math.min(900 + frp * 14, 3600),
+          semiMajorAxis: Math.min(900 + frp * 14, 3600),
+          material: color.withAlpha(0.025),
           outline: true,
-          outlineColor: color.withAlpha(0.12),
+          outlineColor: color.withAlpha(0.08),
           outlineWidth: 0.5,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -172,9 +222,9 @@ export function applyFiresMethods(GlobeController) {
       position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat, 10),
       point: {
         pixelSize,
-        color: color.withAlpha(0.78),
-        outlineColor: color.withAlpha(0.16),
-        outlineWidth: 0.75,
+        color: color.withAlpha(0.72),
+        outlineColor: color.withAlpha(0.12),
+        outlineWidth: 0.6,
         scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 8e6, 0.22),
         heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -188,27 +238,27 @@ export function applyFiresMethods(GlobeController) {
     const lead = cluster.lead || {}
     const color = this._fireHotspotColor(lead)
     const pixelSize = Math.min(
-      6 + Math.log2(cluster.count + 1) * 2.8 + Math.sqrt(cluster.maxFrp || 1) * 0.12,
-      cluster.strikeCount > 0 ? 18 : 15
+      4.5 + Math.log2(cluster.count + 1) * 2.05 + Math.sqrt(cluster.maxFrp || 1) * 0.08,
+      cluster.strikeCount > 0 ? 13 : 11
     )
-    const labelThreshold = cluster.cellSize >= 4 ? 36 : cluster.cellSize >= 2.5 ? 24 : cluster.cellSize >= 1 ? 16 : 12
+    const labelThreshold = cluster.cellSize >= 4 ? 40 : cluster.cellSize >= 2.5 ? 28 : cluster.cellSize >= 1 ? 18 : 14
     const labelText = cluster.count >= labelThreshold || cluster.strikeCount > 0 ? `${cluster.count}` : ""
     const ringRadius = Math.min(
-      8_000 + cluster.count * 550 + cluster.cellSize * 8_000 + (cluster.maxFrp || 0) * 30,
-      72_000
+      5_000 + cluster.count * 320 + cluster.cellSize * 6_000 + (cluster.maxFrp || 0) * 18,
+      42_000
     )
 
-    if (cluster.count >= 10 || cluster.strikeCount > 1 || cluster.maxFrp > 45) {
+    if (cluster.count >= 14 || cluster.strikeCount > 1 || cluster.maxFrp > 55) {
       const ring = dataSource.entities.add({
         id: `fire-cluster-ring-${cluster.id}`,
         position: Cesium.Cartesian3.fromDegrees(cluster.lng, cluster.lat, 0),
         ellipse: {
           semiMinorAxis: ringRadius,
           semiMajorAxis: ringRadius,
-          material: color.withAlpha(cluster.strikeCount > 0 ? 0.07 : 0.035),
+          material: color.withAlpha(cluster.strikeCount > 0 ? 0.05 : 0.02),
           outline: true,
-          outlineColor: color.withAlpha(cluster.strikeCount > 0 ? 0.18 : 0.1),
-          outlineWidth: 0.75,
+          outlineColor: color.withAlpha(cluster.strikeCount > 0 ? 0.14 : 0.08),
+          outlineWidth: 0.6,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           classificationType: Cesium.ClassificationType.BOTH,
@@ -222,9 +272,9 @@ export function applyFiresMethods(GlobeController) {
       position: Cesium.Cartesian3.fromDegrees(cluster.lng, cluster.lat, 20),
       point: {
         pixelSize,
-        color: color.withAlpha(0.82),
-        outlineColor: color.withAlpha(0.16),
-        outlineWidth: 1.25,
+        color: color.withAlpha(0.8),
+        outlineColor: color.withAlpha(0.14),
+        outlineWidth: 0.9,
         scaleByDistance: new Cesium.NearFarScalar(1e5, 1.05, 1.2e7, 0.32),
         heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -443,7 +493,7 @@ export function applyFiresMethods(GlobeController) {
       </div>
       <div class="detail-country">${cluster.lat.toFixed(2)}°, ${cluster.lng.toFixed(2)}°</div>
       <div style="margin:4px 0 10px;padding:6px 8px;background:rgba(255,112,67,0.1);border:1px solid rgba(255,112,67,0.2);border-radius:4px;font:500 9px var(--gt-mono);color:#ffab91;letter-spacing:0.4px;">
-        ${cluster.count} detections grouped into one cell. Zoom closer to inspect individual hotspots.
+        ${cluster.count} detections grouped into one cell. Zoom closer or disable Dense Clusters to inspect individual hotspots.
       </div>
       <div class="detail-grid">
         <div class="detail-field">

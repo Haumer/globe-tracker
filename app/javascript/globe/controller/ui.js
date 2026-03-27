@@ -173,6 +173,10 @@ export function applyUiMethods(GlobeController) {
       this.flightSubOptionsTarget.style.display = this.flightsVisible ? "" : "none"
     }
 
+    if (this.hasFireHotspotOptionsTarget) {
+      this.fireHotspotOptionsTarget.style.display = this.fireHotspotsVisible ? "" : "none"
+    }
+
     // Show/hide weather panel
     if (this._weatherPanelBuilt) this._showWeatherPanel(this.weatherVisible)
 
@@ -400,7 +404,8 @@ export function applyUiMethods(GlobeController) {
       conflicts: this.conflictsVisible,
       traffic: this.trafficVisible,
       notams: this.notamsVisible,
-      fireHotspots: this.fireHotspotsVisible,
+      fireHotspots: false,
+      fireClusters: this.fireClustersVisible,
       strikes: this.strikesVisible,
       weather: this.weatherVisible,
       financial: this.financialVisible,
@@ -593,9 +598,10 @@ export function applyUiMethods(GlobeController) {
         this.notamsToggleTarget.checked = true
         this.toggleNotams()
       }
-      if (l.fireHotspots && this.hasFireHotspotsToggleTarget) {
-        this.fireHotspotsToggleTarget.checked = true
-        this.toggleFireHotspots()
+      if (this.hasFireClustersToggleTarget) {
+        const fireClustersEnabled = l.fireClusters !== false
+        this.fireClustersToggleTarget.checked = fireClustersEnabled
+        this.fireClustersVisible = fireClustersEnabled
       }
       if (l.strikes && this.hasStrikesToggleTarget) {
         this.strikesToggleTarget.checked = true

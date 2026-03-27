@@ -141,6 +141,8 @@ export const GLOBE_TARGETS = [
   "miniTimeline",
   "miniTimelineDots",
   "fireHotspotsToggle",
+  "fireHotspotOptions",
+  "fireClustersToggle",
   "qlFireHotspots",
   "strikesToggle",
   "qlStrikes",

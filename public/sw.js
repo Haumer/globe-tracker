@@ -1,4 +1,4 @@
-const CACHE_NAME = "gt-v1";
+const CACHE_NAME = "gt-v2";
 const PRECACHE = ["/home", "/sources"];
 
 self.addEventListener("install", (e) => {

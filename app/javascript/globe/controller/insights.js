@@ -1,6 +1,12 @@
 import { getDataSource } from "../utils"
 
 export function applyInsightsMethods(GlobeController) {
+  GlobeController.prototype._shouldRenderInsightMarker = function(insight) {
+    const type = `${insight?.type || ""}`
+    // Keep fire-related insights in the feed/context, but don't paint them on the globe
+    // where they read like a second uncontrolled fire-hotspot layer.
+    return !type.startsWith("fire_")
+  }
 
   GlobeController.prototype._startInsightPolling = function() {
     this._insightsData = []
@@ -73,6 +79,7 @@ export function applyInsightsMethods(GlobeController) {
 
     this._insightsData.forEach((insight, idx) => {
       if (insight.lat == null || insight.lng == null) return
+      if (!this._shouldRenderInsightMarker(insight)) return
       const color = severityColors[insight.severity] || severityColors.medium
       const icon = typeIcons[insight.type] || "\u26A0"
 

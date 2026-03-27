@@ -72,6 +72,7 @@ export function applyCoreMethods(GlobeController) {
     this._eventsInterval = null
     this.fireHotspotsVisible = false
     this.fireClustersVisible = true
+    this._fireHotspotFetchToken = 0
     this._fireHotspotData = []
     this._fireHotspotClusterData = []
     this._fireHotspotEntities = []

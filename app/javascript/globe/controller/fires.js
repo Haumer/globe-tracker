@@ -32,6 +32,7 @@ export function applyFiresMethods(GlobeController) {
     if (this.fireHotspotsVisible) {
       this.fetchFireHotspots()
     } else {
+      this._fireHotspotFetchToken += 1
       this._clearFireHotspotEntities()
       this._fireHotspotData = []
       this._fireHotspotClusterData = []
@@ -59,14 +60,23 @@ export function applyFiresMethods(GlobeController) {
 
   GlobeController.prototype.fetchFireHotspots = async function() {
     if (this._timelineActive) return
+    const fetchToken = ++this._fireHotspotFetchToken
     this._toast("Loading fire hotspots...")
     try {
       const resp = await fetch("/api/fire_hotspots")
+      if (fetchToken !== this._fireHotspotFetchToken || !this.fireHotspotsVisible) {
+        this._toastHide()
+        return
+      }
       if (!resp.ok) {
         this._toastHide()
         return
       }
       const raw = await resp.json()
+      if (fetchToken !== this._fireHotspotFetchToken || !this.fireHotspotsVisible) {
+        this._toastHide()
+        return
+      }
       // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time, strike]
       this._fireHotspotData = raw.map(r => ({
         id: r[0], lat: r[1], lng: r[2], brightness: r[3],
@@ -88,6 +98,11 @@ export function applyFiresMethods(GlobeController) {
   }
 
   GlobeController.prototype.renderFireHotspots = function() {
+    if (!this.fireHotspotsVisible) {
+      this._clearFireHotspotEntities()
+      this._fireHotspotClusterData = []
+      return
+    }
     this._clearFireHotspotEntities()
     this._fireHotspotClusterData = []
     const bounds = this.getViewportBounds()

@@ -1293,8 +1293,8 @@ export function applySituationalMethods(GlobeController) {
     const hasThreats = !!this._threatsActive
     const hasCameras = this.camerasVisible && (((this._webcamData?.length) || 0) > 0 || !!this._webcamCollectionStatus)
     const hasAlerts = this.signedInValue && this._alertData?.length > 0
-    const hasInsights = ((this._insightsData?.length) || 0) > 0 || !!this._insightSnapshotStatus
-    const hasSituations = ((this._conflictPulseZones?.length) || 0) > 0 || !!this._conflictPulseSnapshotStatus
+    const hasInsights = this.insightsVisible && ((((this._insightsData?.length) || 0) > 0) || !!this._insightSnapshotStatus)
+    const hasSituations = this.situationsVisible && ((((this._conflictPulseZones?.length) || 0) > 0) || !!this._conflictPulseSnapshotStatus)
 
     // Show/hide tab buttons
     if (this.hasRpTabContextTarget) this.rpTabContextTarget.style.display = hasContext ? "" : "none"

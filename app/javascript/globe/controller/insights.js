@@ -8,29 +8,65 @@ export function applyInsightsMethods(GlobeController) {
     return !type.startsWith("fire_")
   }
 
+  GlobeController.prototype.toggleInsights = function() {
+    this.insightsVisible = this.hasInsightsToggleTarget && this.insightsToggleTarget.checked
+    if (this.insightsVisible) {
+      this._startInsightPolling()
+    } else {
+      this._stopInsightPolling({ clearData: true })
+    }
+    this._updateStats()
+    this._syncQuickBar()
+    this._savePrefs()
+  }
+
   GlobeController.prototype._startInsightPolling = function() {
-    this._insightsData = []
-    this._insightEntities = []
+    if (this._insightPollInterval) clearInterval(this._insightPollInterval)
+    if (!this.insightsVisible) return
     this._fetchInsights()
     this._insightPollInterval = setInterval(() => this._fetchInsights(), 5 * 60 * 1000)
   }
 
-  GlobeController.prototype._stopInsightPolling = function() {
+  GlobeController.prototype._stopInsightPolling = function({ clearData = false } = {}) {
     if (this._insightPollInterval) {
       clearInterval(this._insightPollInterval)
       this._insightPollInterval = null
     }
+    this._insightFetchToken += 1
+    this._clearInsightEntities()
+    if (clearData) {
+      this._insightsData = []
+      this._insightSnapshotStatus = null
+      this._renderInsightFeed()
+      if (this._syncRightPanels) this._syncRightPanels()
+    }
+  }
+
+  GlobeController.prototype._clearInsightEntities = function() {
+    const ds = this._ds["insights"]
+    if (ds && this._insightEntities?.length) {
+      ds.entities.suspendEvents()
+      this._insightEntities.forEach(e => ds.entities.remove(e))
+      ds.entities.resumeEvents()
+    }
+    this._insightEntities = []
+    this._requestRender()
   }
 
   GlobeController.prototype._fetchInsights = async function() {
+    if (!this.insightsVisible) return
+    const fetchToken = ++this._insightFetchToken
     try {
       const resp = await fetch("/api/insights")
+      if (fetchToken !== this._insightFetchToken || !this.insightsVisible) return
       if (!resp.ok) return
       const data = await resp.json()
+      if (fetchToken !== this._insightFetchToken || !this.insightsVisible) return
       this._insightsData = (data.insights || []).map((insight, idx) => ({ ...insight, _idx: idx }))
       this._insightSnapshotStatus = data.snapshot_status || "ready"
       this._renderInsightMarkers()
       this._renderInsightFeed()
+      this._markFresh("insights")
       // Show insights tab if we have data
       if ((this._insightsData.length > 0 || this._insightSnapshotStatus) && this.hasRpTabInsightsTarget) {
         this.rpTabInsightsTarget.style.display = ""
@@ -42,6 +78,10 @@ export function applyInsightsMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderInsightMarkers = function() {
+    if (!this.insightsVisible) {
+      this._clearInsightEntities()
+      return
+    }
     const Cesium = window.Cesium
     const ds = getDataSource(this.viewer, this._ds, "insights")
 
@@ -432,6 +472,11 @@ export function applyInsightsMethods(GlobeController) {
 
   GlobeController.prototype._renderInsightFeed = function() {
     if (!this.hasInsightFeedContentTarget) return
+    if (!this.insightsVisible) {
+      if (this.hasInsightFeedCountTarget) this.insightFeedCountTarget.textContent = ""
+      this.insightFeedContentTarget.innerHTML = ""
+      return
+    }
     const insights = this._insightsData || []
     const snapshotStatus = this._insightSnapshotStatus || "pending"
 
@@ -660,7 +705,7 @@ export function applyInsightsMethods(GlobeController) {
   }
 
   GlobeController.prototype.toggleInsightsFeed = function() {
-    if (this._insightsData?.length > 0) {
+    if (this.insightsVisible && this._insightsData?.length > 0) {
       this._showRightPanel("insights")
     }
   }

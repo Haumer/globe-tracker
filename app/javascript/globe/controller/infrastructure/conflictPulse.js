@@ -7,32 +7,63 @@ export function applyConflictPulseMethods(GlobeController) {
 
   // ── Lifecycle ──────────────────────────────────────────────
 
-  GlobeController.prototype._startConflictPulse = function() {
-    this._conflictPulseData = []
-    this._strategicSituationData = []
-    this._conflictPulseEntities = []
-    this._conflictPulsePrev = {}  // track previous state for surge detection
-    this._strikeArcsVisible = false
-    this._hexTheaterVisible = false
-    this._fetchConflictPulse()
-    this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000) // 10 min
+  GlobeController.prototype.toggleSituations = function() {
+    this.situationsVisible = this.hasSituationsToggleTarget && this.situationsToggleTarget.checked
+    this._strikeArcsVisible = this.hasStrikeArcsToggleTarget && this.strikeArcsToggleTarget.checked
+    this._hexTheaterVisible = this.hasHexTheaterToggleTarget && this.hexTheaterToggleTarget.checked
+    if (this.situationsVisible) {
+      this._startConflictPulse()
+    } else {
+      this._stopConflictPulse({ clearData: true })
+    }
+    this._updateStats()
+    this._syncQuickBar()
+    this._savePrefs()
   }
 
-  GlobeController.prototype._stopConflictPulse = function() {
+  GlobeController.prototype._startConflictPulse = function() {
+    if (this._conflictPulseInterval) clearInterval(this._conflictPulseInterval)
+    if (!this.situationsVisible) return
+    if (!this._timelineActive) this._fetchConflictPulse()
+    this._conflictPulseInterval = setInterval(() => {
+      if (this.situationsVisible && !this._timelineActive) this._fetchConflictPulse()
+    }, 10 * 60 * 1000)
+  }
+
+  GlobeController.prototype._stopConflictPulse = function({ clearData = false } = {}) {
     if (this._conflictPulseInterval) {
       clearInterval(this._conflictPulseInterval)
       this._conflictPulseInterval = null
     }
+    this._conflictPulseFetchToken += 1
     this._clearConflictPulseEntities()
+    if (clearData) {
+      this._conflictPulseData = []
+      this._conflictPulseZones = []
+      this._strategicSituationData = []
+      this._strikeArcData = []
+      this._hexCellData = []
+      this._conflictPulsePrev = {}
+      this._conflictPulsePrevScores = {}
+      this._conflictPulseSnapshotStatus = null
+      this._highlightedTheater = null
+      this._hexLayerAutoEnabled = false
+      this._renderSituationPanel()
+      if (this._syncRightPanels) this._syncRightPanels()
+    }
   }
 
   // ── Data fetch ─────────────────────────────────────────────
 
   GlobeController.prototype._fetchConflictPulse = async function() {
+    if (!this.situationsVisible || this._timelineActive) return
+    const fetchToken = ++this._conflictPulseFetchToken
     try {
       const resp = await fetch("/api/conflict_pulse")
+      if (fetchToken !== this._conflictPulseFetchToken || !this.situationsVisible || this._timelineActive) return
       if (!resp.ok) return
       const data = await resp.json()
+      if (fetchToken !== this._conflictPulseFetchToken || !this.situationsVisible || this._timelineActive) return
       const zones = data.zones || []
       this._conflictPulseSnapshotStatus = data.snapshot_status || "ready"
 
@@ -63,6 +94,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
       this._renderSituationPanel()
+      this._markFresh("situations")
       if (this._syncRightPanels) this._syncRightPanels()
     } catch (e) {
       console.warn("Conflict pulse fetch failed:", e)
@@ -112,6 +144,10 @@ export function applyConflictPulseMethods(GlobeController) {
   // ── Globe rendering ────────────────────────────────────────
 
   GlobeController.prototype._renderConflictPulse = function() {
+    if (!this.situationsVisible) {
+      this._clearConflictPulseEntities()
+      return
+    }
     this._clearConflictPulseEntities()
     if (this._pulseAnimFrame) { cancelAnimationFrame(this._pulseAnimFrame); this._pulseAnimFrame = null }
 
@@ -1012,12 +1048,14 @@ export function applyConflictPulseMethods(GlobeController) {
 
   GlobeController.prototype.toggleStrikeArcs = function() {
     this._strikeArcsVisible = this.hasStrikeArcsToggleTarget && this.strikeArcsToggleTarget.checked
-    this._renderConflictPulse()
+    if (this.situationsVisible) this._renderConflictPulse()
+    this._savePrefs()
   }
 
   GlobeController.prototype.toggleHexTheater = function() {
     this._hexTheaterVisible = this.hasHexTheaterToggleTarget && this.hexTheaterToggleTarget.checked
-    this._renderConflictPulse()
+    if (this.situationsVisible) this._renderConflictPulse()
+    this._savePrefs()
   }
 
   GlobeController.prototype._timeAgo = function(date) {
@@ -1290,6 +1328,11 @@ export function applyConflictPulseMethods(GlobeController) {
     const list = this.hasSitListTarget ? this.sitListTarget : null
     const countEl = this.hasSitCountTarget ? this.sitCountTarget : null
     if (!list) return
+    if (!this.situationsVisible) {
+      if (countEl) countEl.textContent = ""
+      list.innerHTML = ""
+      return
+    }
 
     const zones = this._conflictPulseZones || []
     const strategic = this._strategicSituationData || []

@@ -195,7 +195,7 @@ export function applyTimelineMethods(GlobeController) {
       this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
     }
     // Restart live conflict pulse
-    if (this._fetchConflictPulse) {
+    if (this.situationsVisible && this._fetchConflictPulse) {
       this._fetchConflictPulse()
       this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000)
     }
@@ -492,7 +492,7 @@ export function applyTimelineMethods(GlobeController) {
 
   // ── Historical conflict pulse for time travel ─────────────
   GlobeController.prototype._timelineUpdateConflictPulse = async function() {
-    if (!this._timelineActive || !this._timelineCursor) return
+    if (!this._timelineActive || !this._timelineCursor || !this.situationsVisible) return
 
     // Bucket cursor to the hour — skip fetch if same bucket as last time
     const cursorMs = this._timelineCursor.getTime()

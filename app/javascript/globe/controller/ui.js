@@ -11,7 +11,9 @@ const LAYER_REGISTRY = [
   { key: "fireHotspots",  toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible",  qlTarget: "qlFireHotspots", section: "events",         pill: { label: "FIRE",  color: "#ff6d00" } },
   { key: "weather",       toggleTarget: "weatherToggle",      method: "toggleWeather",      visibleProp: "weatherVisible",       qlTarget: "qlWeather",      section: "events",         pill: { label: "WX",    color: "#64b5f6" } },
   { key: "conflicts",     toggleTarget: "conflictsToggle",    method: "toggleConflicts",    visibleProp: "conflictsVisible",     qlTarget: "qlConflicts",    section: "events",         pill: { label: "WAR",   color: "#ef5350" } },
+  { key: "situations",    toggleTarget: "situationsToggle",   method: "toggleSituations",   visibleProp: "situationsVisible",    qlTarget: "qlSituations",   section: "events",         pill: { label: "SIT",   color: "#ff7043" } },
   { key: "news",          toggleTarget: "newsToggle",         method: "toggleNews",         visibleProp: "newsVisible",          qlTarget: "qlNews",         section: "events",         pill: { label: "NEWS",  color: "#7c4dff" } },
+  { key: "insights",      toggleTarget: "insightsToggle",     method: "toggleInsights",     visibleProp: "insightsVisible",      qlTarget: "qlInsights",     section: "events",         pill: { label: "INS",   color: "#26c6da" } },
   { key: "militaryFlights", toggleTarget: "militaryToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "_milFlightsActive", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },
   { key: "airbases",      toggleTarget: "airbasesToggle",     method: "toggleAirbases",     visibleProp: "airbasesVisible",      qlTarget: "qlAirbases",     section: "military",       pill: { label: "ABASE", color: "#ff7043" } },
   { key: "militaryBases", toggleTarget: "militaryBasesToggle", method: "toggleMilitaryBases", visibleProp: "militaryBasesVisible", qlTarget: "qlMilitaryBases", section: "military", pill: { label: "BASE", color: "#ff5252" } },
@@ -175,6 +177,10 @@ export function applyUiMethods(GlobeController) {
 
     if (this.hasFireHotspotOptionsTarget) {
       this.fireHotspotOptionsTarget.style.display = this.fireHotspotsVisible ? "" : "none"
+    }
+
+    if (this.hasSituationOptionsTarget) {
+      this.situationOptionsTarget.style.display = this.situationsVisible ? "" : "none"
     }
 
     // Show/hide weather panel
@@ -402,10 +408,14 @@ export function applyUiMethods(GlobeController) {
       outages: this.outagesVisible,
       powerPlants: this.powerPlantsVisible,
       conflicts: this.conflictsVisible,
+      situations: this.situationsVisible,
       traffic: this.trafficVisible,
       notams: this.notamsVisible,
+      insights: this.insightsVisible,
       fireHotspots: false,
       fireClusters: this.fireClustersVisible,
+      strikeArcs: this._strikeArcsVisible,
+      hexTheater: this._hexTheaterVisible,
       strikes: this.strikesVisible,
       weather: this.weatherVisible,
       financial: this.financialVisible,
@@ -590,6 +600,20 @@ export function applyUiMethods(GlobeController) {
         this.conflictsToggleTarget.checked = true
         this.toggleConflicts()
       }
+      if (this.hasStrikeArcsToggleTarget) {
+        const strikeArcsEnabled = l.strikeArcs === true
+        this.strikeArcsToggleTarget.checked = strikeArcsEnabled
+        this._strikeArcsVisible = strikeArcsEnabled
+      }
+      if (this.hasHexTheaterToggleTarget) {
+        const hexTheaterEnabled = l.hexTheater === true
+        this.hexTheaterToggleTarget.checked = hexTheaterEnabled
+        this._hexTheaterVisible = hexTheaterEnabled
+      }
+      if (l.situations && this.hasSituationsToggleTarget) {
+        this.situationsToggleTarget.checked = true
+        this.toggleSituations()
+      }
       if (l.traffic && this.hasTrafficToggleTarget) {
         this.trafficToggleTarget.checked = true
         this.toggleTraffic()
@@ -597,6 +621,10 @@ export function applyUiMethods(GlobeController) {
       if (l.notams && this.hasNotamsToggleTarget) {
         this.notamsToggleTarget.checked = true
         this.toggleNotams()
+      }
+      if (l.insights && this.hasInsightsToggleTarget) {
+        this.insightsToggleTarget.checked = true
+        this.toggleInsights()
       }
       if (this.hasFireClustersToggleTarget) {
         const fireClustersEnabled = l.fireClusters !== false

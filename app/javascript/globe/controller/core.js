@@ -118,16 +118,31 @@ export function applyCoreMethods(GlobeController) {
     this._outageData = []
     this._outageEntities = []
     this._outageInterval = null
+    this.insightsVisible = false
+    this._insightsData = []
+    this._insightEntities = []
+    this._insightPollInterval = null
+    this._insightFetchToken = 0
     this.powerPlantsVisible = false
     this._powerPlantData = []
     this._powerPlantEntities = []
     this.conflictsVisible = false
     this._conflictData = []
     this._conflictEntities = []
+    this.situationsVisible = false
     this._conflictPulseData = []
+    this._conflictPulseZones = []
     this._conflictPulseEntities = []
+    this._conflictPulseInterval = null
+    this._conflictPulseFetchToken = 0
     this._conflictPulsePrev = {}
+    this._conflictPulsePrevScores = {}
     this._conflictPulseSnapshotStatus = null
+    this._strategicSituationData = []
+    this._strikeArcData = []
+    this._hexCellData = []
+    this._strikeArcsVisible = false
+    this._hexTheaterVisible = false
     this.chokepointsVisible = false
     this._chokepointData = []
     this._chokepointEntities = []
@@ -418,8 +433,6 @@ export function applyCoreMethods(GlobeController) {
     this._loadWorkspaceList()
     this._initRegions()
     this._startAlertPolling()
-    this._startInsightPolling()
-    this._startConflictPulse()
     this._startMiniTimeline()
 
     // Listen for real-time breaking events from ActionCable
@@ -428,7 +441,7 @@ export function applyCoreMethods(GlobeController) {
       if (data.type === "earthquake" && this.earthquakesVisible) {
         // Refresh earthquake data immediately
         this.fetchEarthquakes?.()
-      } else if (data.type === "conflict_escalation") {
+      } else if (data.type === "conflict_escalation" && this.situationsVisible) {
         // Refresh conflict pulse
         this._fetchConflictPulse?.()
       }
@@ -580,6 +593,7 @@ export function applyCoreMethods(GlobeController) {
       flights: "qlFlights", ships: "qlShips", earthquakes: "qlEarthquakes",
       naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
       cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
+      situations: "qlSituations", insights: "qlInsights",
       traffic: "qlTraffic", cables: "qlCables", powerPlants: "qlPowerPlants",
       notams: "qlNotams", fireHotspots: "qlFireHotspots", weather: "qlWeather",
       financial: "qlFinancial",

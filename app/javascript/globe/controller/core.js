@@ -294,7 +294,12 @@ export function applyCoreMethods(GlobeController) {
     // Apply deep link from URL hash (takes priority over saved prefs)
     const deepLinkState = decodeHash(window.location.hash)
     if (deepLinkState) {
-      applyDeepLink(this, deepLinkState)
+      try {
+        applyDeepLink(this, deepLinkState)
+      } catch (error) {
+        console.warn("Deep link apply failed; falling back to saved preferences.", error)
+        this._applyRestoredPrefs()
+      }
     } else {
       // Apply DB-saved preferences (camera, layers, sections, countries)
       this._applyRestoredPrefs()

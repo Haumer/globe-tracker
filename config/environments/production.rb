@@ -67,28 +67,33 @@ Rails.application.configure do
   # want to log everything, set the level to "debug".
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
 
-  # Use Redis for caching (conflict pulse, insights, trains, anomalies, etc.)
-  redis_cache_opts = {
-    url: ENV.fetch("REDIS_URL", "redis://localhost:6379/1"),
-    expires_in: 10.minutes,
-    connect_timeout: 2,
-    read_timeout: 1,
-    write_timeout: 1,
-    reconnect_attempts: 1,
-    error_handler: ->(method:, returning:, exception:) {
-      Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
-    },
-  }
-  # Heroku Redis uses self-signed certs with rediss:// URLs.
-  # Use CA cert if available, otherwise accept Heroku's self-signed cert (still TLS-encrypted).
-  if ENV["REDIS_URL"]&.start_with?("rediss://")
-    redis_cache_opts[:ssl_params] = if ENV["REDIS_CA_CERT"]
-      { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: ENV["REDIS_CA_CERT"] }
-    else
-      { verify_mode: OpenSSL::SSL::VERIFY_NONE }
+  cache_backend = ENV.fetch("CACHE_BACKEND", "memory")
+  if cache_backend == "redis"
+    redis_cache_opts = {
+      url: ENV.fetch("REDIS_URL", "redis://localhost:6379/1"),
+      expires_in: 10.minutes,
+      connect_timeout: 2,
+      read_timeout: 1,
+      write_timeout: 1,
+      reconnect_attempts: 1,
+      error_handler: ->(method:, returning:, exception:) {
+        Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
+      },
+    }
+    # Heroku Redis uses self-signed certs with rediss:// URLs.
+    # Use CA cert if available, otherwise accept Heroku's self-signed cert (still TLS-encrypted).
+    if ENV["REDIS_URL"]&.start_with?("rediss://")
+      redis_cache_opts[:ssl_params] = if ENV["REDIS_CA_CERT"]
+        { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: ENV["REDIS_CA_CERT"] }
+      else
+        { verify_mode: OpenSSL::SSL::VERIFY_NONE }
+      end
     end
+    config.cache_store = :redis_cache_store, redis_cache_opts
+  else
+    cache_size_mb = ENV.fetch("MEMORY_CACHE_SIZE_MB", "64").to_i
+    config.cache_store = :memory_store, { size: cache_size_mb.megabytes }
   end
-  config.cache_store = :redis_cache_store, redis_cache_opts
 
   config.active_job.queue_adapter = :sidekiq
 

@@ -24,6 +24,17 @@ const SHORT_TO_LAYER = Object.fromEntries(
   Object.entries(LAYER_SHORT).map(([k, v]) => [v, k])
 )
 
+function invokeDeepLinkStep(label, fn) {
+  try {
+    const result = fn()
+    if (result && typeof result.then === "function") {
+      result.catch(error => console.warn(`Deep link step failed: ${label}`, error))
+    }
+  } catch (error) {
+    console.warn(`Deep link step failed: ${label}`, error)
+  }
+}
+
 export function encodeState(controller) {
   const Cesium = window.Cesium
   if (!Cesium || !controller.viewer?.camera) return null
@@ -188,7 +199,7 @@ export function applyDeepLink(controller, state) {
       if (controller[hasTarget]) {
         controller[targetName].checked = true
       }
-      controller[method]()
+      invokeDeepLinkStep(`layer:${layer}`, () => controller[method]())
     }
   }
 
@@ -200,7 +211,7 @@ export function applyDeepLink(controller, state) {
       const chip = controller.element.querySelector(`.sb-chip[data-category="${cat}"]`)
       if (chip) chip.classList.add("active")
       if (!controller._loadedSatCategories.has(cat)) {
-        controller.fetchSatCategory(cat)
+        invokeDeepLinkStep(`satellite-category:${cat}`, () => controller.fetchSatCategory(cat))
       }
     }
   }
@@ -221,13 +232,13 @@ export function applyDeepLink(controller, state) {
     // If borders aren't on yet, turn them on
     if (!controller.bordersVisible) {
       if (controller.hasBordersToggleTarget) controller.bordersToggleTarget.checked = true
-      controller.toggleBorders()
+      invokeDeepLinkStep("layer:borders", () => controller.toggleBorders())
     }
   }
 
   // Apply region (overrides camera + layers set above)
   if (state.region && controller.enterRegion) {
-    controller.enterRegion(state.region)
+    invokeDeepLinkStep(`region:${state.region}`, () => controller.enterRegion(state.region))
   }
 
   controller._syncQuickBar()

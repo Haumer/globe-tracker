@@ -1,4 +1,11 @@
 import { getDataSource, findCountryAtPoint } from "../../utils"
+import {
+  renderConflictPulseDetailHtml,
+  renderHexDetailHtml,
+  renderSituationPanelHtml,
+  renderStrategicSituationDetailHtml,
+  renderStrikeArcDetailHtml,
+} from "./conflict_pulse_presenters"
 
 export function applyConflictPulseMethods(GlobeController) {
   GlobeController.prototype._conflictPulseEntityKey = function(value, fallback = "unknown") {
@@ -604,130 +611,7 @@ export function applyConflictPulseMethods(GlobeController) {
     if (this._buildTheaterContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildTheaterContext(zone))
     }
-
-    const trendColors = { surging: "#f44336", active: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
-    const color = trendColors[zone.escalation_trend] || "#ff9800"
-
-    // Cross-layer signal chips (clickable — fly to area with relevant layer)
-    let signalHtml = ""
-    const s = zone.cross_layer_signals || {}
-    if (s.military_flights) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(239,83,80,0.15);color:#ef5350;" data-action="click->globe#pulseSignalClick" data-signal="flights" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-jet-fighter"></i> ${s.military_flights} mil flights</span>`
-    if (s.gps_jamming) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(255,193,7,0.15);color:#ffc107;" data-action="click->globe#pulseSignalClick" data-signal="gpsJamming" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-satellite-dish"></i> ${s.gps_jamming}% jamming</span>`
-    if (s.internet_outage) signalHtml += `<span class="detail-chip" style="background:rgba(156,39,176,0.15);color:#ce93d8;"><i class="fa-solid fa-plug"></i> outage: ${s.internet_outage}</span>`
-    if (s.fire_hotspots) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(255,87,34,0.15);color:#ff5722;" data-action="click->globe#pulseSignalClick" data-signal="fires" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-fire"></i> ${s.fire_hotspots} fires</span>`
-    if (s.known_conflict_zone) signalHtml += `<span class="detail-chip" style="cursor:pointer;background:rgba(244,67,54,0.15);color:#f44336;" data-action="click->globe#pulseSignalClick" data-signal="conflicts" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-crosshairs"></i> ${s.known_conflict_zone} historical events</span>`
-
-    // Tier breakdown
-    const tiers = zone.tier_breakdown || {}
-    let tierHtml = Object.entries(tiers).sort((a,b) => a[0].localeCompare(b[0]))
-      .map(([t, n]) => `<span style="color:#888;">${t}:</span>${n}`).join(" ")
-
-    // Headlines with clickable links
-    const articles = zone.top_articles || []
-    const headlinesHtml = articles.length > 0
-      ? articles.map(a => {
-          const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
-          const itemBody = `
-            <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(a.title)}</div>
-            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(a.publisher || a.source || "")} · tone ${a.tone || 0} · ${timeAgo}</div>
-          `
-          if (a.cluster_id) {
-            return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-              <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(a.cluster_id)}" data-title="${this._escapeHtml(a.title || "Story cluster")}" data-summary="${this._escapeHtml((a.publisher || a.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
-                ${itemBody}
-              </button>
-              ${a.url ? `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;padding-top:2px;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
-            </div>`
-          }
-          return `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-            ${itemBody}
-          </a>`
-        }).join("")
-      : (zone.top_headlines || []).map(h =>
-          `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h)}</div>`
-        ).join("")
-
-    // Sparkline bars
-    const spikeBar = Math.min(zone.spike_ratio / 5.0, 1.0) * 100
-    const toneBar = Math.min(Math.abs(zone.avg_tone) / 10.0, 1.0) * 100
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid fa-bolt" style="margin-right:6px;"></i>${zone.situation_name ? this._escapeHtml(zone.situation_name) : "DEVELOPING SITUATION"}
-      </div>
-      <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
-        ${zone.escalation_trend.toUpperCase()} — PULSE ${zone.pulse_score}
-      </div>
-
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Reports (24h)</span>
-          <span class="detail-value" style="color:${color};">${zone.count_24h}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Reports (7d)</span>
-          <span class="detail-value">${zone.count_7d}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Sources</span>
-          <span class="detail-value">${zone.source_count}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Stories</span>
-          <span class="detail-value">${zone.story_count}</span>
-        </div>
-      </div>
-
-      <div style="margin:8px 0;">
-        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">FREQUENCY SPIKE</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
-            <div style="width:${spikeBar}%;height:100%;background:${color};border-radius:3px;"></div>
-          </div>
-          <span style="font:600 11px var(--gt-mono,monospace);color:${color};">${zone.spike_ratio}x</span>
-        </div>
-      </div>
-
-      <div style="margin:8px 0;">
-        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">TONE SEVERITY</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
-            <div style="width:${toneBar}%;height:100%;background:#ef5350;border-radius:3px;"></div>
-          </div>
-          <span style="font:600 11px var(--gt-mono,monospace);color:#ef5350;">${zone.avg_tone}</span>
-        </div>
-      </div>
-
-      ${signalHtml ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">CROSS-LAYER SIGNALS</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div>
-        </div>
-      ` : ""}
-
-      <div style="margin:10px 0;">
-        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">TOP HEADLINES</div>
-        ${headlinesHtml}
-      </div>
-
-      <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:8px;">
-        Sources: ${tierHtml} · Updated ${new Date(zone.detected_at).toLocaleTimeString()}
-      </div>
-
-      ${zone.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(zone.theater)}">
-        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(zone.theater)}
-      </button>` : ""}
-
-      <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${this._escapeHtml(JSON.stringify(s))}">
-        <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area
-      </button>
-
-      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
-        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
-      </button>
-
-      ${this._connectionsPlaceholder()}
-    `
+    this.detailContentTarget.innerHTML = renderConflictPulseDetailHtml(this, zone)
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
 
@@ -743,65 +627,7 @@ export function applyConflictPulseMethods(GlobeController) {
         }
       )
     }
-
-    const statusColors = { critical: "#ff7043", elevated: "#ffca28", monitoring: "#26c6da" }
-    const color = statusColors[item.status] || "#26c6da"
-    const signalHtml = Object.entries(item.cross_layer_signals || {}).map(([key, val]) => {
-      const label = key.replace(/_/g, " ")
-      return `<span class="detail-chip" style="background:rgba(38,198,218,0.12);color:${key === "gps_jamming" ? "#ffca28" : color};">${this._escapeHtml(`${label}: ${val}`)}</span>`
-    }).join("")
-    const headlinesHtml = (item.top_articles || []).map(article => {
-      const timeAgo = article.published_at ? this._timeAgo(new Date(article.published_at)) : ""
-      if (article.cluster_id) {
-        return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-          <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(article.cluster_id)}" data-title="${this._escapeHtml(article.title || "Story cluster")}" data-summary="${this._escapeHtml((article.publisher || article.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
-            <div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.3;">${this._escapeHtml(article.title)}</div>
-            <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:2px;">${this._escapeHtml(article.publisher || article.source || "")} · ${timeAgo}</div>
-          </button>
-          ${article.url ? `<a href="${this._safeUrl(article.url)}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;padding-top:2px;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
-        </div>`
-      }
-      return `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(article.title)}</div>`
-    }).join("")
-    const flowRows = Object.entries(item.flows || {}).filter(([, flow]) => flow?.pct).map(([type, flow]) =>
-      `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-        <span style="font:600 11px var(--gt-mono);color:#e0e0e0;text-transform:capitalize;">${this._escapeHtml(type)}</span>
-        <span style="font:700 11px var(--gt-mono);color:${color};">${flow.pct}% of world</span>
-      </div>`
-    ).join("")
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>${this._escapeHtml(item.name || "Strategic situation")}
-      </div>
-      <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
-        ${(item.status || "monitoring").toUpperCase()} — STRATEGIC ${item.strategic_score || 0}
-      </div>
-      <div style="font:400 10px var(--gt-mono,monospace);color:#aaa;margin-bottom:10px;line-height:1.4;">
-        ${this._escapeHtml(item.pressure_summary || "")}
-      </div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Story clusters</span>
-          <span class="detail-value" style="color:${color};">${item.direct_cluster_count || 0}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Sources</span>
-          <span class="detail-value">${item.source_count || 0}</span>
-        </div>
-        ${item.theater ? `<div class="detail-field"><span class="detail-label">Theater</span><span class="detail-value">${this._escapeHtml(item.theater)}</span></div>` : ""}
-      </div>
-      ${signalHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">LIVE SIGNALS</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div></div>` : ""}
-      ${flowRows ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">FLOW EXPOSURE</div>${flowRows}</div>` : ""}
-      ${headlinesHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">DIRECT REPORTING</div>${headlinesHtml}</div>` : ""}
-      ${item.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(item.theater)}">
-        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(item.theater)}
-      </button>` : ""}
-      <button class="detail-track-btn" style="background:rgba(38,198,218,0.15);border-color:rgba(38,198,218,0.3);color:#26c6da;" data-action="click->globe#selectContextNode" data-kind="${this._escapeHtml(item.kind || "entity")}" data-id="${this._escapeHtml(item.node_id || item.name || "")}" data-title="${this._escapeHtml(item.name || "Strategic node")}" data-summary="${this._escapeHtml(item.pressure_summary || "")}">
-        <i class="fa-solid fa-diagram-project" style="margin-right:4px;"></i>Open Graph Context
-      </button>
-      ${this._connectionsPlaceholder()}
-    `
+    this.detailContentTarget.innerHTML = renderStrategicSituationDetailHtml(this, item)
     this.detailPanelTarget.style.display = ""
   }
 
@@ -915,50 +741,7 @@ export function applyConflictPulseMethods(GlobeController) {
   // ── Strike arc detail panel ────────────────────────────────
 
   GlobeController.prototype.showStrikeArcDetail = function(arc) {
-    const width = Math.min(1.5 + arc.count * 0.2, 5).toFixed(1)
-    const intensity = arc.count >= 15 ? "Very high" : arc.count >= 8 ? "High" : arc.count >= 4 ? "Moderate" : "Low"
-
-    let headlinesHtml = ""
-    const samples = arc.sample_headlines || []
-    if (samples.length) {
-      headlinesHtml = samples.map(h =>
-        `<div style="font:400 11px var(--gt-mono,monospace);color:#e0e0e0;line-height:1.4;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">${this._escapeHtml(h)}</div>`
-      ).join("")
-    }
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:#f44336;">
-        <i class="fa-solid fa-arrows-left-right" style="margin-right:6px;"></i>STRIKE ARC
-      </div>
-      <div style="font:600 14px var(--gt-sans,sans-serif);color:rgba(220,230,245,0.85);margin:4px 0 8px;">
-        ${this._escapeHtml(arc.from_name)} → ${this._escapeHtml(arc.to_name)}
-      </div>
-
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Mentions</span>
-          <span class="detail-value" style="color:#f44336;">${arc.count}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Intensity</span>
-          <span class="detail-value">${intensity}</span>
-        </div>
-      </div>
-
-      <div style="margin:10px 0;">
-        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">ARC THICKNESS</div>
-        <div style="font:400 10px var(--gt-sans,sans-serif);color:rgba(200,210,225,0.4);line-height:1.5;">
-          Width scales with mention count (${width}px). More headlines mentioning this actor pair → thicker arc. Extracted from ${arc.count} headlines that mention both "${this._escapeHtml(arc.from_name)}" and "${this._escapeHtml(arc.to_name)}" with directional attack language.
-        </div>
-      </div>
-
-      ${headlinesHtml ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">SAMPLE HEADLINES</div>
-          ${headlinesHtml}
-        </div>
-      ` : ""}
-    `
+    this.detailContentTarget.innerHTML = renderStrikeArcDetailHtml(this, arc)
     this.detailPanelTarget.style.display = ""
   }
 
@@ -1114,10 +897,6 @@ export function applyConflictPulseMethods(GlobeController) {
       }
     }
 
-    // Trend info from parent zone
-    const trendColors = {surging:"#f44336",active:"#f44336",escalating:"#ff9800",elevated:"#ffc107",baseline:"#66bb6a"}
-    const trendHtml = zone ? `<div style="font:600 10px var(--gt-mono);color:${trendColors[zone.escalation_trend] || "#ff9800"};letter-spacing:0.5px;margin:4px 0;">${(zone.escalation_trend || "").toUpperCase()} — PULSE ${zone.pulse_score}</div>` : ""
-
     // Connection line: "Lebanon → Israel-Palestine → Middle East / Iran War"
     const connectionParts = [localName]
     if (situation && situation !== localName && situation !== "Unlinked area") connectionParts.push(situation)
@@ -1126,38 +905,7 @@ export function applyConflictPulseMethods(GlobeController) {
       ? `<div style="font:400 10px var(--gt-mono,monospace);color:rgba(255,152,0,0.5);margin:4px 0 6px;letter-spacing:0.3px;">${connectionParts.map(p => this._escapeHtml(p)).join(' → ')}</div>`
       : ""
 
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-hexagon-nodes" style="color:#ff9800;margin-right:6px;"></i>${this._escapeHtml(localName)}</div>
-      ${connectionHtml}
-      ${trendHtml}
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Articles</span>
-          <span class="detail-value">${cell.count}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Intensity</span>
-          <span class="detail-value">${(cell.intensity * 100).toFixed(0)}%</span>
-        </div>
-        ${zone ? `<div class="detail-field">
-          <span class="detail-label">Reports (24h)</span>
-          <span class="detail-value">${zone.count_24h || "—"}</span>
-        </div>` : ""}
-        ${zone ? `<div class="detail-field">
-          <span class="detail-label">Sources</span>
-          <span class="detail-value">${zone.source_count || "—"}</span>
-        </div>` : ""}
-      </div>
-      ${headlinesHtml}
-      ${zone ? `<button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;"
-        data-action="click->globe#flyToConflictZone" data-zone-key="${this._escapeHtml(zone.cell_key)}">
-        <i class="fa-solid fa-crosshairs" style="margin-right:4px;"></i>Go to ${this._escapeHtml(situation)}
-      </button>` : ""}
-      ${theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;"
-        data-action="click->globe#highlightTheater" data-theater="${this._escapeHtml(theater)}">
-        <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${this._escapeHtml(theater)}
-      </button>` : ""}
-    `
+    this.detailContentTarget.innerHTML = renderHexDetailHtml(this, cell, zone, localName, connectionHtml, headlinesHtml)
     this.detailPanelTarget.style.display = ""
 
     // Auto-highlight theater + ripple animation
@@ -1337,206 +1085,15 @@ export function applyConflictPulseMethods(GlobeController) {
     const zones = this._conflictPulseZones || []
     const strategic = this._strategicSituationData || []
     const snapshotStatus = this._conflictPulseSnapshotStatus || "pending"
+    if (!this._sitExpanded) this._sitExpanded = {}
+    const rendered = renderSituationPanelHtml(this, zones, strategic, snapshotStatus, this._sitExpanded)
     if (countEl) {
-      const base = `${zones.length} zone${zones.length !== 1 ? "s" : ""}`
-      const strategicSuffix = strategic.length ? ` · ${strategic.length} strategic` : ""
-      const suffix = snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(snapshotStatus, "snapshot")}`
+      const base = `${rendered.countSummary.zones} zone${rendered.countSummary.zones !== 1 ? "s" : ""}`
+      const strategicSuffix = rendered.countSummary.strategic ? ` · ${rendered.countSummary.strategic} strategic` : ""
+      const suffix = rendered.countSummary.snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(rendered.countSummary.snapshotStatus, "snapshot")}`
       countEl.textContent = `${base}${strategicSuffix}${suffix}`
     }
-
-    if (!zones.length && !strategic.length) {
-      const emptyLabel = {
-        pending: "Conflict pulse snapshot pending.",
-        stale: "Showing no active zones from the latest stored snapshot.",
-        error: "Conflict pulse snapshot unavailable.",
-      }[snapshotStatus] || "No active zones."
-      list.innerHTML = `<div style="padding:16px 14px;color:var(--gt-text-dim);font:500 11px var(--gt-mono);">${this._escapeHtml(emptyLabel)}</div>`
-      return
-    }
-
-    // Group by theater
-    const theaters = {}
-    zones.forEach(z => {
-      const t = z.theater || "Other"
-      ;(theaters[t] ||= []).push(z)
-    })
-
-    // Sort theaters by max pulse_score descending
-    const sorted = Object.entries(theaters).sort((a, b) => {
-      const maxA = Math.max(...a[1].map(z => z.pulse_score))
-      const maxB = Math.max(...b[1].map(z => z.pulse_score))
-      return maxB - maxA
-    })
-
-    // Track expanded state
-    if (!this._sitExpanded) this._sitExpanded = {}
-
-    const trendColors = { surging: "#f44336", active: "#f44336", escalating: "#ff9800", elevated: "#ffc107", baseline: "#66bb6a" }
-    const trendArrows = { surging: "▲", escalating: "↗", active: "●", elevated: "→", baseline: "↓" }
-
-    let html = ""
-    if (snapshotStatus !== "ready") {
-      html += `<div style="padding:0 0 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
-    }
-    if (strategic.length) {
-      html += `<div class="sit-theater">`
-      html += `<div class="sit-theater-header"><span class="sit-theater-arrow">▾</span><span class="sit-theater-name">Strategic Situations</span><span class="sit-theater-count">${strategic.length}</span></div>`
-      html += `<div class="sit-theater-body">`
-      strategic.forEach((item, idx) => {
-        const color = { critical: "#ff7043", elevated: "#ffca28", monitoring: "#26c6da" }[item.status] || "#26c6da"
-        const topArticle = (item.top_articles || [])[0]
-        const strategicId = item.id || item.node_id || item.name || `strategic-${idx}`
-        html += `<div class="sit-zone sit-zone--summary" data-zone-key="${this._escapeHtml(item.id || `strategic-${idx}`)}">
-          <div class="sit-zone-header" data-action="click->globe#showStrategicSituationFromList" data-id="${this._escapeHtml(strategicId)}">
-            <span class="sit-zone-name">${this._escapeHtml(item.name || "Strategic node")}</span>
-            <span class="sit-zone-score" style="color:${color};">${item.strategic_score || 0} <span class="sit-zone-trend">${this._escapeHtml((item.status || "monitoring").toUpperCase())}</span></span>
-          </div>
-          <div class="sit-zone-summary">
-            <div class="sit-zone-headline">${this._escapeHtml(item.pressure_summary || (item.theater || "Strategic pressure"))}</div>
-            <div class="sit-zone-meta">${this._escapeHtml([item.theater, `${item.source_count || 0} sources`, `${item.direct_cluster_count || 0} clusters`].filter(Boolean).join(" · "))}</div>
-            ${topArticle ? `<button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(topArticle.cluster_id || "")}" data-title="${this._escapeHtml(topArticle.title || "Story cluster")}" data-summary="${this._escapeHtml(topArticle.publisher || topArticle.source || "")}" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;margin-top:8px;">
-              <div class="sit-zone-headline">${this._escapeHtml(topArticle.title || "")}</div>
-              <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")}</div>
-            </button>` : ""}
-          </div>
-        </div>`
-      })
-      html += `</div></div>`
-    }
-    sorted.forEach(([theater, theaterZones], tIdx) => {
-      const maxScore = Math.max(...theaterZones.map(z => z.pulse_score))
-      const collapsed = maxScore < 40
-
-      html += `<div class="sit-theater${collapsed ? " sit-theater--collapsed" : ""}">`
-      html += `<div class="sit-theater-header" data-action="click->globe#toggleSitTheater" data-idx="${tIdx}">
-        <span class="sit-theater-arrow">${collapsed ? "▸" : "▾"}</span>
-        <span class="sit-theater-name">${this._escapeHtml(theater)}</span>
-        <span class="sit-theater-count">${theaterZones.length}</span>
-      </div>`
-      html += `<div class="sit-theater-body"${collapsed ? ' style="display:none;"' : ""}>`
-
-      theaterZones.sort((a, b) => b.pulse_score - a.pulse_score).forEach(zone => {
-        const color = trendColors[zone.escalation_trend] || "#ff9800"
-        const arrow = trendArrows[zone.escalation_trend] || ""
-        const key = zone.cell_key
-        const state = this._sitExpanded[key] || "collapsed"
-
-        html += `<div class="sit-zone sit-zone--${state}" data-zone-key="${this._escapeHtml(key)}">`
-
-        // Always: compact header line
-        html += `<div class="sit-zone-header" data-action="click->globe#toggleSitZone" data-zone-key="${this._escapeHtml(key)}">
-          <span class="sit-zone-name">${this._escapeHtml(zone.situation_name || "Developing")}</span>
-          <span class="sit-zone-score" style="color:${color};">${zone.pulse_score} ${arrow} <span class="sit-zone-trend">${zone.escalation_trend.toUpperCase()}</span></span>
-        </div>`
-
-        // Summary state: top headline + signal count chips
-        if (state === "summary" || state === "expanded") {
-          const topArticle = (zone.top_articles || [])[0]
-          html += `<div class="sit-zone-summary">`
-          if (topArticle) {
-            const timeAgo = topArticle.published_at ? this._timeAgo(new Date(topArticle.published_at)) : ""
-            if (topArticle.cluster_id) {
-              html += `<button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(topArticle.cluster_id)}" data-title="${this._escapeHtml(topArticle.title?.substring(0, 90) || "Story cluster")}" data-summary="${this._escapeHtml((topArticle.publisher || topArticle.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
-                <div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
-                <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>
-              </button>`
-            } else {
-              html += `<div class="sit-zone-headline">${this._escapeHtml(topArticle.title?.substring(0, 90))}</div>
-                <div class="sit-zone-meta">${this._escapeHtml(topArticle.publisher || topArticle.source || "")} · ${timeAgo}</div>`
-            }
-          }
-          // Signal count chips (compact)
-          const s = zone.cross_layer_signals || {}
-          const chips = []
-          if (s.military_flights) chips.push(`<span class="sit-chip sit-chip--mil">🛩 ${s.military_flights}</span>`)
-          if (s.gps_jamming) chips.push(`<span class="sit-chip sit-chip--jam">📡 ${s.gps_jamming}%</span>`)
-          if (s.fire_hotspots) chips.push(`<span class="sit-chip sit-chip--fire">🔥 ${s.fire_hotspots}</span>`)
-          if (s.known_conflict_zone) chips.push(`<span class="sit-chip sit-chip--hist">📊 ${s.known_conflict_zone}</span>`)
-          if (s.internet_outage) chips.push(`<span class="sit-chip sit-chip--out">⚡ outage</span>`)
-          if (chips.length) html += `<div class="sit-zone-chips">${chips.join("")}</div>`
-          html += `</div>`
-        }
-
-        // Expanded state: full detail
-        if (state === "expanded") {
-          html += `<div class="sit-zone-detail">`
-
-          // Stats
-          html += `<div class="sit-zone-stats">
-            <span>${zone.count_24h} reports today</span> · <span>${zone.source_count} sources</span> · <span>spike ${zone.spike_ratio}x</span>
-          </div>`
-
-          // Top stories
-          const articles = (zone.top_articles || []).slice(0, 5)
-          if (articles.length) {
-            html += `<div class="sit-section-label">TOP STORIES</div>`
-            articles.forEach(a => {
-              const timeAgo = a.published_at ? this._timeAgo(new Date(a.published_at)) : ""
-              if (a.cluster_id) {
-                html += `<div class="sit-article" style="display:flex;gap:8px;align-items:flex-start;">
-                  <button type="button" data-action="click->globe#selectContextNode" data-kind="news_story_cluster" data-id="${this._escapeHtml(a.cluster_id)}" data-title="${this._escapeHtml(a.title || "Story cluster")}" data-summary="${this._escapeHtml((a.publisher || a.source || "") + (timeAgo ? ` · ${timeAgo}` : ""))}" style="flex:1;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
-                    <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
-                    <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
-                  </button>
-                  ${a.url ? `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" style="color:rgba(200,210,225,0.45);text-decoration:none;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
-                </div>`
-              } else {
-                html += `<a href="${this._safeUrl(a.url)}" target="_blank" rel="noopener" class="sit-article">
-                  <div class="sit-article-title">${this._escapeHtml(a.title)}</div>
-                  <div class="sit-article-meta">${this._escapeHtml(a.publisher || a.source || "")} · ${timeAgo}</div>
-                </a>`
-              }
-            })
-            if (zone.count_24h > 5) html += `<div class="sit-more">+${zone.count_24h - 5} more</div>`
-          }
-
-          // Why these layers matter
-          const signals = zone.cross_layer_signals || {}
-          const context = zone.signal_context || {}
-          const signalEntries = Object.entries(signals).filter(([_, v]) => v)
-          if (signalEntries.length) {
-            html += `<div class="sit-section-label">WHY THESE LAYERS MATTER</div>`
-            const signalIcons = {
-              military_flights: "🛩",
-              gps_jamming: "📡",
-              fire_hotspots: "🔥",
-              known_conflict_zone: "📊",
-              internet_outage: "⚡",
-            }
-            const signalLabels = {
-              military_flights: "military flights",
-              gps_jamming: "GPS jamming",
-              fire_hotspots: "fire hotspots",
-              known_conflict_zone: "historical incidents",
-              internet_outage: "internet outage",
-            }
-            signalEntries.forEach(([key, val]) => {
-              const icon = signalIcons[key] || "📎"
-              const label = signalLabels[key] || key.replace(/_/g, " ")
-              const desc = context[key] || ""
-              const valStr = typeof val === "number" ? (key === "gps_jamming" ? `${val}%` : val) : val
-              html += `<div class="sit-signal">
-                <div class="sit-signal-header">${icon} ${valStr} ${this._escapeHtml(label)}</div>
-                ${desc ? `<div class="sit-signal-desc">${this._escapeHtml(desc)}</div>` : ""}
-              </div>`
-            })
-          }
-
-          // Explore button
-          html += `<button class="sit-explore-btn" data-action="click->globe#exploreSituation" data-zone-key="${this._escapeHtml(key)}">
-            Explore this area →
-          </button>`
-
-          html += `</div>`
-        }
-
-        html += `</div>` // .sit-zone
-      })
-
-      html += `</div></div>` // .sit-theater-body, .sit-theater
-    })
-
-    list.innerHTML = html
+    list.innerHTML = rendered.html
   }
 
   // ── Toggle theater group collapse ──────────────────────────

@@ -1,4 +1,12 @@
 import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "../utils"
+import {
+  renderAirportDetailHtml,
+  renderCameraListCard,
+  renderEarthquakeDetailHtml,
+  renderFeaturedCameraCard,
+  renderNaturalEventDetailHtml,
+  renderWebcamDetailHtml,
+} from "./situational_presenters"
 
 export function applySituationalMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }
@@ -85,29 +93,7 @@ export function applySituationalMethods(GlobeController) {
     const ap = this._getAirport(icao)
     if (!ap) return
 
-    const color = ap.military ? "#ef5350" : "#ffd54f"
-    const typeLabel = ap.military ? "Military" : (ap.type || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-plane-departure" style="color: ${color};"></i> ${ap.name}</div>
-      <div class="detail-country">${ap.municipality ? ap.municipality + ", " : ""}${ap.country || ""}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">ICAO</span>
-          <span class="detail-value">${icao}</span>
-        </div>
-        ${ap.iata ? `<div class="detail-field"><span class="detail-label">IATA</span><span class="detail-value">${ap.iata}</span></div>` : ""}
-        <div class="detail-field">
-          <span class="detail-label">Type</span>
-          <span class="detail-value">${typeLabel}</span>
-        </div>
-        ${ap.elevation ? `<div class="detail-field"><span class="detail-label">Elevation</span><span class="detail-value">${ap.elevation.toLocaleString()} ft</span></div>` : ""}
-        <div class="detail-field">
-          <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${ap.lat.toFixed(4)}°, ${ap.lng.toFixed(4)}°</span>
-        </div>
-      </div>
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: OurAirports / FAA</div>
-    `
+    this.detailContentTarget.innerHTML = renderAirportDetailHtml(this, icao, ap)
     this.detailPanelTarget.style.display = ""
 
     const Cesium = window.Cesium
@@ -262,48 +248,7 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype.showEarthquakeDetail = function(eq) {
-    const date = new Date(eq.time)
-    const ago = this._timeAgo(date)
-    const alertBadge = eq.alert ? `<span class="event-alert event-alert-${eq.alert}">${eq.alert.toUpperCase()}</span>` : ""
-    const tsunamiBadge = eq.tsunami ? `<span class="event-alert event-alert-tsunami">TSUNAMI</span>` : ""
-
-    const shakeMapBtn = eq.mag >= 4.0
-      ? `<button class="detail-track-btn" style="background:rgba(255,112,67,0.15);border-color:rgba(255,112,67,0.3);color:#ff7043;" data-action="click->globe#toggleShakeMap" data-eq-lat="${eq.lat}" data-eq-lng="${eq.lng}" data-eq-mag="${eq.mag}" data-eq-depth="${eq.depth}" data-eq-id="${eq.id}">
-          <i class="fa-solid fa-bullseye" style="margin-right:4px;"></i>ShakeMap Intensity
-        </button>`
-      : ""
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign">M${eq.mag.toFixed(1)} Earthquake</div>
-      <div class="detail-country">${this._escapeHtml(eq.title)}</div>
-      <div class="event-badges">${alertBadge}${tsunamiBadge}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Magnitude</span>
-          <span class="detail-value">${eq.mag.toFixed(1)} ${eq.magType}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Depth</span>
-          <span class="detail-value">${eq.depth.toFixed(1)} km</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Time</span>
-          <span class="detail-value">${ago}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${eq.lat.toFixed(2)}°, ${eq.lng.toFixed(2)}°</span>
-        </div>
-      </div>
-      ${shakeMapBtn}
-      ${typeof eq.url === "string" && /^https?:\/\//i.test(eq.url) ? `<a href="${this._safeUrl(eq.url)}" target="_blank" rel="noopener" class="detail-track-btn">View on USGS</a>` : ""}
-      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${eq.lat}" data-lng="${eq.lng}">
-        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
-      </button>
-      ${this._connectionsPlaceholder()}
-      <div class="shakemap-infra" data-globe-shakemap-infra style="display:none;"></div>
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: USGS Earthquake Hazards Program</div>
-    `
+    this.detailContentTarget.innerHTML = renderEarthquakeDetailHtml(this, eq)
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("earthquake", eq.lat, eq.lng)
 
@@ -662,46 +607,7 @@ export function applySituationalMethods(GlobeController) {
 
   GlobeController.prototype.showNaturalEventDetail = function(ev) {
     const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
-    const date = ev.date ? new Date(ev.date) : null
-    const ago = date ? this._timeAgo(date) : "—"
-    const magStr = ev.magnitudeValue ? `${ev.magnitudeValue} ${ev.magnitudeUnit || ""}` : "—"
-    const sourceLinks = (ev.sources || [])
-      .filter(s => typeof s.url === "string" && /^https?:\/\//i.test(s.url))
-      .map(s => `<a href="${this._safeUrl(s.url)}" target="_blank" rel="noopener" class="event-source-link">${this._escapeHtml(s.id)}</a>`)
-      .join(" ")
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-${catInfo.icon}" style="color: ${catInfo.color};"></i> ${this._escapeHtml(ev.categoryTitle)}</div>
-      <div class="detail-country">${this._escapeHtml(ev.title)}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Category</span>
-          <span class="detail-value">${this._escapeHtml(ev.categoryTitle)}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Magnitude</span>
-          <span class="detail-value">${magStr}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Time</span>
-          <span class="detail-value">${ago}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${ev.lat.toFixed(2)}°, ${ev.lng.toFixed(2)}°</span>
-        </div>
-        ${ev.geometryPoints.length > 1 ? `
-        <div class="detail-field">
-          <span class="detail-label">Track Points</span>
-          <span class="detail-value">${ev.geometryPoints.length}</span>
-        </div>` : ""}
-      </div>
-      ${sourceLinks ? `<div class="event-sources">Sources: ${sourceLinks}</div>` : ""}
-      ${typeof ev.link === "string" && /^https?:\/\//i.test(ev.link) ? `<a href="${this._safeUrl(ev.link)}" target="_blank" rel="noopener" class="detail-track-btn">View on NASA EONET</a>` : ""}
-      <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${ev.lat}" data-lng="${ev.lng}">
-        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
-      </button>
-    `
+    this.detailContentTarget.innerHTML = renderNaturalEventDetailHtml(this, ev, catInfo)
     this.detailPanelTarget.style.display = ""
 
     const Cesium = window.Cesium
@@ -1210,69 +1116,11 @@ export function applySituationalMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderFeaturedCameraCard = function(cam) {
-    const originalIdx = this._webcamData.indexOf(cam)
-    const badge = this._cameraModeBadge(cam)
-    const sourceLabel = this._cameraSourceLabel(cam)
-    const location = [cam.city, cam.country].filter(Boolean).join(", ")
-    const thumbUrl = this._cameraThumbUrl(cam)
-    const watchUrl = this._cameraWatchUrl(cam)
-    const freshness = this._cameraFreshnessLabel(cam)
-    const title = this._escapeHtml(cam.title || "Untitled camera")
-    const locationHtml = location ? `<span>${this._escapeHtml(location)}</span>` : ""
-    const viewCount = cam.viewCount ? `<span>${cam.viewCount.toLocaleString()} watching</span>` : ""
-
-    return `<div class="cam-hero-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">
-      <div class="cam-hero-media">
-        ${thumbUrl
-          ? `<img src="${thumbUrl}" alt="${title}" loading="lazy">`
-          : `<div class="cam-hero-placeholder">Live observation unavailable</div>`}
-        <div class="cam-hero-badges">
-          <span class="ins-chip ins-chip--${this._cameraModeChipClass(cam)}">${badge.label}</span>
-          <span class="ins-chip ins-chip--news">${this._escapeHtml(sourceLabel)}</span>
-        </div>
-      </div>
-      <div class="cam-hero-body">
-        <div class="cam-hero-title">${title}</div>
-        <div class="cam-hero-meta">
-          ${locationHtml}
-          <span>${this._escapeHtml(freshness)}</span>
-          ${viewCount}
-        </div>
-        <div class="cam-hero-actions">
-          <button class="insight-action-btn" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">Focus</button>
-          ${watchUrl ? `<button class="insight-action-btn" data-action="click->globe#openCamStream" data-cam-idx="${originalIdx}">Watch</button>` : ""}
-        </div>
-      </div>
-    </div>`
+    return renderFeaturedCameraCard(this, cam, this._webcamData.indexOf(cam))
   }
 
   GlobeController.prototype._renderCameraListCard = function(cam) {
-    const originalIdx = this._webcamData.indexOf(cam)
-    const badge = this._cameraModeBadge(cam)
-    const sourceLabel = this._cameraSourceLabel(cam)
-    const sourceColor = this._cameraSourceColor(cam)
-    const location = [cam.city, cam.country].filter(Boolean).join(", ")
-    const thumbUrl = this._cameraThumbUrl(cam)
-    const title = this._escapeHtml(cam.title || "Untitled camera")
-    const freshness = this._cameraFreshnessLabel(cam)
-
-    return `<div class="cf-card" data-action="click->globe#focusCamFeedItem" data-cam-idx="${originalIdx}">
-      <div class="cf-card-bar" style="background:${sourceColor};"></div>
-      ${thumbUrl
-        ? `<img class="cf-card-thumb" src="${thumbUrl}" alt="${title}" loading="lazy">`
-        : `<div class="cf-card-thumb cf-card-thumb--placeholder">${this._escapeHtml(sourceLabel)}</div>`}
-      <div class="cf-card-body">
-        <div class="cf-card-topline">
-          <span class="cf-card-source">${this._escapeHtml(sourceLabel)}</span>
-          <span class="ins-chip ins-chip--${this._cameraModeChipClass(cam)}">${badge.label}</span>
-        </div>
-        <div class="cf-card-title">${title}</div>
-        <div class="cf-card-meta">
-          ${location ? `<span class="cf-card-location">${this._escapeHtml(location)}</span>` : ""}
-          <span class="cf-card-updated">${this._escapeHtml(freshness)}</span>
-        </div>
-      </div>
-    </div>`
+    return renderCameraListCard(this, cam, this._webcamData.indexOf(cam))
   }
 
   GlobeController.prototype.filterCamFeed = function() {
@@ -1482,50 +1330,15 @@ export function applySituationalMethods(GlobeController) {
       thumbHtml = ""
     }
 
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign"><i class="fa-solid fa-video" style="color: ${cam.live ? '#4caf50' : '#29b6f6'};"></i> ${sourceLabel}${liveBadge}</div>
-      <div class="detail-country">${this._escapeHtml(cam.title)}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px;">
-        ${this._statusChip(cam.stale ? "stale" : "ready", cam.stale ? "stale camera cache" : "cached camera")}
-      </div>
-      ${thumbHtml}
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Observation</span>
-          <span class="detail-value">${modeBadge.label}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Location</span>
-          <span class="detail-value">${this._escapeHtml(location) || "—"}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Updated</span>
-          <span class="detail-value">${updated}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Freshness</span>
-          <span class="detail-value">${this._escapeHtml(freshnessLabel)}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Cache</span>
-          <span class="detail-value">${cam.stale ? "Stale" : "Fresh"}</span>
-        </div>
-        ${cam.channelTitle ? `<div class="detail-field">
-          <span class="detail-label">Channel</span>
-          <span class="detail-value">${this._escapeHtml(cam.channelTitle)}</span>
-        </div>` : ""}
-        ${cam.viewCount ? `<div class="detail-field">
-          <span class="detail-label">Views</span>
-          <span class="detail-value">${cam.viewCount.toLocaleString()}</span>
-        </div>` : ""}
-        <div class="detail-field">
-          <span class="detail-label">Coordinates</span>
-          <span class="detail-value">${cam.lat.toFixed(3)}°, ${cam.lng.toFixed(3)}°</span>
-        </div>
-      </div>
-      <a href="${watchUrl}" target="_blank" rel="noopener" class="detail-track-btn"><i class="fa-solid fa-${cam.playerLink ? 'play' : 'arrow-up-right-from-square'}"></i> ${cam.playerLink ? 'Watch Live' : 'View Source'}</a>
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${this._escapeHtml(sourceLabel)}${cacheMeta ? ` · ${this._escapeHtml(cacheMeta)}` : ""}</div>
-    `
+    this.detailContentTarget.innerHTML = renderWebcamDetailHtml(this, cam, thumbHtml, watchUrl, {
+      cacheMeta,
+      freshnessLabel,
+      liveBadge,
+      location,
+      modeBadge,
+      sourceLabel,
+      updated,
+    })
     this.detailPanelTarget.style.display = ""
 
     // Auto-refresh camera preview images (Windy updates ~30s, DOT ~5s)

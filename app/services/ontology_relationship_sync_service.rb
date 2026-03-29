@@ -1,68 +1,38 @@
 class OntologyRelationshipSyncService
-  DEFAULT_CLUSTER_WINDOW = 72.hours
-  DIRECT_STORY_WINDOW = 7.days
-  RELATION_DERIVED_BY = "ontology_relationship_sync_v1".freeze
-  CHOKEPOINT_ENTITY_TYPE = "corridor".freeze
-  THEATER_ENTITY_TYPE = "theater".freeze
-  COMMODITY_ENTITY_TYPE = "commodity".freeze
-  ASSET_ENTITY_TYPES = {
-    airport: "airport",
-    military_base: "military_base",
-    power_plant: "power_plant",
-    submarine_cable: "submarine_cable",
-  }.freeze
-  CORROBORATED_NEWS_STATUSES = %w[multi_source cross_layer_corroborated].freeze
-  THEATER_PRESSURE_TARGETS = {
-    "Middle East / Iran War" => %i[hormuz bab_el_mandeb suez],
-    "Russia-Ukraine War" => %i[bosphorus danish_straits],
-  }.freeze
-  COMMODITY_FLOW_TYPES = {
-    "OIL_WTI" => :oil,
-    "OIL_BRENT" => :oil,
-    "LNG" => :lng,
-    "GAS_NAT" => :lng,
-    "WHEAT" => :grain,
-    "COPPER" => :trade,
-    "IRON" => :trade,
-  }.freeze
-  DIRECT_STORY_TERMS = %w[
-    shipping ship ships tanker tankers maritime vessel vessels navigation transit
-    blockade blocked blocking reopen reopened closure closed lane lanes
-    freight cargo oil lng gas energy port ports
-  ].freeze
-  DOWNSTREAM_ASSET_LIMITS = {
-    airport: 4,
-    military_base: 4,
-    power_plant: 4,
-    submarine_cable: 4,
-  }.freeze
-  OPERATIONAL_ACTIVITY_LIMITS = {
-    chokepoint_ship: 6,
-    cable_ship: 4,
-    theater_flight: 6,
-    strategic_air_asset_flight: 3,
-  }.freeze
-  LIVE_SHIP_WINDOW = 45.minutes
-  RECENT_SHIP_WINDOW = 12.hours
-  LIVE_FLIGHT_WINDOW = 45.minutes
-  RECENT_FLIGHT_WINDOW = 12.hours
-  LIVE_JAMMING_WINDOW = 90.minutes
-  RECENT_JAMMING_WINDOW = 18.hours
-  LIVE_NOTAM_WINDOW = 18.hours
-  RECENT_NOTAM_WINDOW = 36.hours
-  FLIGHT_THEATER_RADIUS_KM = 250.0
-  FLIGHT_STRATEGIC_ASSET_RADIUS_KM = 120.0
-  CHOKEPOINT_SHIP_DISTANCE_MIN_KM = 120.0
-  CHOKEPOINT_SHIP_DISTANCE_MAX_KM = 280.0
-  SHIP_CABLE_DISTANCE_KM = 10.0
-  JAMMING_SIGNAL_DISTANCE_KM = 150.0
-  OPERATIONAL_NOTAM_REASONS = ["Security", "TFR", "Military", "VIP Movement"].freeze
-  CAMERA_ENTITY_TYPE = "asset".freeze
-  CAMERA_CORROBORATION_EVENT_TYPES = %w[flood storm wildfire].freeze
-  CAMERA_CORROBORATION_RADIUS_KM = 20.0
-  CAMERA_CORROBORATION_LIMIT = 3
-  CAMERA_CORROBORATION_WINDOW = 72.hours
-  CAMERA_CORROBORATION_MAX_AGE = 24.hours
+  DEFAULT_CLUSTER_WINDOW = Definitions::DEFAULT_CLUSTER_WINDOW
+  DIRECT_STORY_WINDOW = Definitions::DIRECT_STORY_WINDOW
+  RELATION_DERIVED_BY = Definitions::RELATION_DERIVED_BY
+  CHOKEPOINT_ENTITY_TYPE = Definitions::CHOKEPOINT_ENTITY_TYPE
+  THEATER_ENTITY_TYPE = Definitions::THEATER_ENTITY_TYPE
+  COMMODITY_ENTITY_TYPE = Definitions::COMMODITY_ENTITY_TYPE
+  ASSET_ENTITY_TYPES = Definitions::ASSET_ENTITY_TYPES
+  CORROBORATED_NEWS_STATUSES = Definitions::CORROBORATED_NEWS_STATUSES
+  THEATER_PRESSURE_TARGETS = Definitions::THEATER_PRESSURE_TARGETS
+  COMMODITY_FLOW_TYPES = Definitions::COMMODITY_FLOW_TYPES
+  DIRECT_STORY_TERMS = Definitions::DIRECT_STORY_TERMS
+  DOWNSTREAM_ASSET_LIMITS = Definitions::DOWNSTREAM_ASSET_LIMITS
+  OPERATIONAL_ACTIVITY_LIMITS = Definitions::OPERATIONAL_ACTIVITY_LIMITS
+  LIVE_SHIP_WINDOW = Definitions::LIVE_SHIP_WINDOW
+  RECENT_SHIP_WINDOW = Definitions::RECENT_SHIP_WINDOW
+  LIVE_FLIGHT_WINDOW = Definitions::LIVE_FLIGHT_WINDOW
+  RECENT_FLIGHT_WINDOW = Definitions::RECENT_FLIGHT_WINDOW
+  LIVE_JAMMING_WINDOW = Definitions::LIVE_JAMMING_WINDOW
+  RECENT_JAMMING_WINDOW = Definitions::RECENT_JAMMING_WINDOW
+  LIVE_NOTAM_WINDOW = Definitions::LIVE_NOTAM_WINDOW
+  RECENT_NOTAM_WINDOW = Definitions::RECENT_NOTAM_WINDOW
+  FLIGHT_THEATER_RADIUS_KM = Definitions::FLIGHT_THEATER_RADIUS_KM
+  FLIGHT_STRATEGIC_ASSET_RADIUS_KM = Definitions::FLIGHT_STRATEGIC_ASSET_RADIUS_KM
+  CHOKEPOINT_SHIP_DISTANCE_MIN_KM = Definitions::CHOKEPOINT_SHIP_DISTANCE_MIN_KM
+  CHOKEPOINT_SHIP_DISTANCE_MAX_KM = Definitions::CHOKEPOINT_SHIP_DISTANCE_MAX_KM
+  SHIP_CABLE_DISTANCE_KM = Definitions::SHIP_CABLE_DISTANCE_KM
+  JAMMING_SIGNAL_DISTANCE_KM = Definitions::JAMMING_SIGNAL_DISTANCE_KM
+  OPERATIONAL_NOTAM_REASONS = Definitions::OPERATIONAL_NOTAM_REASONS
+  CAMERA_ENTITY_TYPE = Definitions::CAMERA_ENTITY_TYPE
+  CAMERA_CORROBORATION_EVENT_TYPES = Definitions::CAMERA_CORROBORATION_EVENT_TYPES
+  CAMERA_CORROBORATION_RADIUS_KM = Definitions::CAMERA_CORROBORATION_RADIUS_KM
+  CAMERA_CORROBORATION_LIMIT = Definitions::CAMERA_CORROBORATION_LIMIT
+  CAMERA_CORROBORATION_WINDOW = Definitions::CAMERA_CORROBORATION_WINDOW
+  CAMERA_CORROBORATION_MAX_AGE = Definitions::CAMERA_CORROBORATION_MAX_AGE
 
   class << self
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)

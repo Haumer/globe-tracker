@@ -41,6 +41,14 @@ class CommodityPriceTest < ActiveSupport::TestCase
     assert_includes cp.errors[:category], "is not included in the list"
   end
 
+  test "supports expanded market quote categories" do
+    rate = CommodityPrice.new(symbol: "US10Y", category: "rate", name: "US 10Y Treasury Yield", recorded_at: Time.current)
+    crypto = CommodityPrice.new(symbol: "BTCUSD", category: "crypto", name: "Bitcoin", recorded_at: Time.current)
+
+    assert rate.valid?
+    assert crypto.valid?
+  end
+
   test "commodities scope returns only commodities" do
     results = CommodityPrice.commodities
     assert_includes results, @gold
@@ -50,6 +58,20 @@ class CommodityPriceTest < ActiveSupport::TestCase
   test "currencies scope returns only currencies" do
     results = CommodityPrice.currencies
     assert_includes results, @eur
+    assert_not_includes results, @gold
+  end
+
+  test "watchlist scope returns non-spatial quotes" do
+    spy = CommodityPrice.create!(
+      symbol: "SPY",
+      category: "index",
+      name: "US Large Caps (SPY)",
+      price: 520.0,
+      recorded_at: Time.current,
+    )
+
+    results = CommodityPrice.watchlist
+    assert_includes results, spy
     assert_not_includes results, @gold
   end
 

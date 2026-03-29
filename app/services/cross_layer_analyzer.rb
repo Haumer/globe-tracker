@@ -2,32 +2,8 @@ class CrossLayerAnalyzer
   PROXIMITY_KM = 200
   CABLE_OUTAGE_RADIUS_KM = 1000
   CORROBORATED_NEWS_STATUSES = %w[multi_source cross_layer_corroborated].freeze
-
-  # Country ISO-2 code -> [lat, lng] centroid for outage geolocation
-  COUNTRY_CENTROIDS = {
-    "AD" => [42.5, 1.5], "AE" => [24, 54], "AF" => [33, 65], "AL" => [41, 20], "AM" => [40, 45],
-    "AO" => [-12.5, 18.5], "AR" => [-34, -64], "AT" => [47.5, 13.5], "AU" => [-25, 135],
-    "AZ" => [40.5, 47.5], "BA" => [44, 18], "BD" => [24, 90], "BE" => [50.8, 4], "BG" => [43, 25],
-    "BH" => [26, 50.6], "BR" => [-10, -55], "BY" => [53, 28], "CA" => [60, -95], "CD" => [-2.5, 23.5],
-    "CH" => [47, 8], "CL" => [-30, -71], "CM" => [6, 12], "CN" => [35, 105], "CO" => [4, -72],
-    "CU" => [22, -80], "CY" => [35, 33], "CZ" => [49.75, 15.5], "DE" => [51, 9], "DK" => [56, 10],
-    "DZ" => [28, 3], "EC" => [-2, -77.5], "EE" => [59, 26], "EG" => [27, 30], "ES" => [40, -4],
-    "ET" => [8, 38], "FI" => [64, 26], "FR" => [46, 2], "GB" => [54, -2], "GE" => [42, 43.5],
-    "GH" => [8, -1.2], "GR" => [39, 22], "HR" => [45.2, 15.5], "HU" => [47, 20], "ID" => [-5, 120],
-    "IE" => [53, -8], "IL" => [31.5, 34.8], "IN" => [20, 77], "IQ" => [33, 44], "IR" => [32, 53],
-    "IS" => [65, -18], "IT" => [42.8, 12.8], "JM" => [18.1, -77.3], "JO" => [31, 36], "JP" => [36, 138],
-    "KE" => [1, 38], "KR" => [37, 128], "KW" => [29.5, 47.8], "KZ" => [48, 68], "LB" => [33.8, 35.8],
-    "LK" => [7, 81], "LT" => [56, 24], "LV" => [57, 25], "LY" => [25, 17], "MA" => [32, -5],
-    "MM" => [22, 98], "MX" => [23, -102], "MY" => [2.5, 112.5], "MZ" => [-18.3, 35], "NG" => [10, 8],
-    "NL" => [52.5, 5.8], "NO" => [62, 10], "NZ" => [-42, 174], "OM" => [21, 57], "PA" => [9, -80],
-    "PE" => [-10, -76], "PH" => [13, 122], "PK" => [30, 70], "PL" => [52, 20], "PT" => [39.5, -8],
-    "QA" => [25.5, 51.3], "RO" => [46, 25], "RS" => [44, 21], "RU" => [60, 100], "SA" => [25, 45],
-    "SD" => [16, 30], "SE" => [62, 15], "SG" => [1.4, 103.8], "SI" => [46.1, 14.8], "SK" => [48.7, 19.5],
-    "SY" => [35, 38], "TH" => [15, 100], "TN" => [34, 9], "TR" => [39, 35], "TW" => [23.5, 121],
-    "TZ" => [-6, 35], "UA" => [49, 32], "UG" => [1, 32], "US" => [38, -97], "UY" => [-33, -56],
-    "VE" => [8, -66], "VN" => [16, 108], "YE" => [15, 48], "ZA" => [-29, 24], "ZM" => [-15, 30],
-    "ZW" => [-20, 30],
-  }.freeze
+  COUNTRY_CURRENCY_MAP = Definitions::COUNTRY_CURRENCY_MAP
+  COUNTRY_CENTROIDS = Definitions::COUNTRY_CENTROIDS
 
   def self.analyze
     new.analyze
@@ -36,21 +12,9 @@ class CrossLayerAnalyzer
   def analyze
     insights = []
 
-    # Hardcoded domain-specific rules (precise, high-confidence)
-    insights.concat(earthquake_infrastructure_threats)
-    insights.concat(jamming_flight_impacts)       # merged: civilian-only → jamming_flights, mil present → electronic_warfare
-    insights.concat(conflict_military_surge)
-    insights.concat(fire_infrastructure_threats)
-    insights.concat(fire_pipeline_threats)
-    insights.concat(cable_outage_correlations)
-    insights.concat(emergency_squawk_correlations)
-    insights.concat(ship_cable_proximity)
-    insights.concat(outage_conflict_blackout)
-    insights.concat(notam_military_correlations)
-    insights.concat(earthquake_pipeline_threats)
-    insights.concat(weather_flight_disruption)
-    insights.concat(conflict_pulse_hotspots)
-    insights.concat(chokepoint_disruptions)
+    Definitions::INSIGHT_RULE_METHODS.each do |rule_method|
+      insights.concat(send(rule_method))
+    end
 
     # General-purpose spatiotemporal convergence detection
     # Finds multi-layer hotspots that hardcoded rules don't cover
@@ -815,7 +779,137 @@ class CrossLayerAnalyzer
     []
   end
 
+  # ── Chokepoint market stress (operational pressure + price move) ─────────
+
+  def chokepoint_market_stress
+    chokepoints = ChokepointMonitorService.analyze rescue []
+    latest_quotes = latest_market_quotes
+
+    chokepoints.filter_map do |cp|
+      market_moves = current_market_moves(cp, latest_quotes)
+      next if market_moves.empty?
+      next if cp[:status] == "normal"
+
+      top_move = market_moves.max_by { |signal| signal[:change_pct].to_f.abs }
+      top_pulse = Array(cp[:conflict_pulse]).max_by { |pulse| pulse[:score].to_f }
+      chokepoint_name = normalized_chokepoint_name(cp)
+      move_label = format_change_pct(top_move[:change_pct])
+      severity = if cp[:status] == "critical" || top_move[:change_pct].to_f.abs >= 2.5
+        "high"
+      else
+        "medium"
+      end
+
+      desc_parts = [
+        "#{top_move[:name] || top_move[:symbol]} #{move_label}",
+        "#{cp.dig(:ships_nearby, :total).to_i} ships nearby",
+      ]
+      desc_parts << "#{cp.dig(:ships_nearby, :tankers).to_i} tankers" if cp.dig(:ships_nearby, :tankers).to_i.positive?
+      desc_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}" if top_pulse
+
+      {
+        type: "chokepoint_market_stress",
+        severity: severity,
+        title: "#{chokepoint_name}: #{top_move[:symbol]} reacting to chokepoint stress",
+        description: desc_parts.join(" — "),
+        lat: cp[:lat],
+        lng: cp[:lng],
+        entities: {
+          chokepoint: { name: chokepoint_name, status: cp[:status] },
+          commodities: market_moves.first(3),
+          conflict: Array(cp[:conflict_pulse]).first(3),
+          ships: cp[:ships_nearby],
+          flows: (cp[:flows] || {}).transform_values { |flow| { pct: flow[:pct], note: flow[:note] } },
+        },
+        detected_at: cp[:checked_at] || Time.current.iso8601,
+      }
+    end
+  rescue => e
+    Rails.logger.error("CrossLayerAnalyzer chokepoint_market_stress: #{e.message}")
+    []
+  end
+
+  # ── Outage + currency stress ──────────────────────────────────────────────
+
+  def outage_currency_stress
+    latest_quotes = latest_market_quotes
+    latest_country_outages.filter_map do |country_code, outage|
+      currency_symbol = COUNTRY_CURRENCY_MAP[country_code]
+      quote = latest_quotes[currency_symbol]
+      next if currency_symbol.blank? || quote.blank?
+      next if quote.change_pct.blank? || quote.change_pct.to_f.abs < 0.5
+
+      lat, lng = COUNTRY_CENTROIDS[country_code] || [nil, nil]
+      traffic = InternetTrafficSnapshot.where(country_code: country_code).order(recorded_at: :desc).first
+      severity = if outage.score.to_f >= 85 || quote.change_pct.to_f.abs >= 1.0
+        "high"
+      else
+        "medium"
+      end
+
+      desc = "#{outage.level} outage"
+      desc += ", traffic at #{traffic.traffic_pct.to_f.round(1)}% of baseline" if traffic
+      desc += ", #{currency_symbol} #{format_change_pct(quote.change_pct)}"
+
+      {
+        type: "outage_currency_stress",
+        severity: severity,
+        title: "#{outage.entity_name}: outage coincides with #{currency_symbol} move",
+        description: desc,
+        lat: lat,
+        lng: lng,
+        entities: {
+          outages: [{ country_code: country_code, level: outage.level, score: outage.score.to_f }],
+          currency: {
+            symbol: currency_symbol,
+            name: quote.name,
+            price: quote.price.to_f,
+            change_pct: quote.change_pct.to_f,
+          },
+          traffic: traffic ? { country_code: traffic.country_code, traffic_pct: traffic.traffic_pct.to_f.round(1) } : nil,
+        }.compact,
+        detected_at: outage.started_at&.iso8601 || Time.current.iso8601,
+      }
+    end
+  rescue => e
+    Rails.logger.error("CrossLayerAnalyzer outage_currency_stress: #{e.message}")
+    []
+  end
+
   # ── Helpers ───────────────────────────────────────────────────
+
+  def latest_market_quotes
+    YahooMarketSignalService.merge_quotes(CommodityPrice.latest.to_a).index_by(&:symbol)
+  end
+
+  def latest_country_outages
+    InternetOutage.where("started_at > ?", 12.hours.ago)
+      .where(entity_type: "country")
+      .group_by(&:entity_code)
+      .transform_values { |outages| outages.max_by { |outage| [outage.score.to_f, outage.started_at.to_i] } }
+  end
+
+  def format_change_pct(value)
+    return "flat" if value.blank?
+
+    numeric = value.to_f.round(2)
+    "#{numeric.positive? ? '+' : ''}#{numeric}%"
+  end
+
+  def current_market_moves(chokepoint, latest_quotes)
+    Array(chokepoint[:commodity_signals]).filter_map do |signal|
+      current_quote = latest_quotes[signal[:symbol]]
+      change_pct = current_quote&.change_pct&.to_f
+      change_pct = signal[:change_pct].to_f if change_pct.blank?
+      next if change_pct.blank? || change_pct.abs < 1.0
+
+      signal.merge(
+        name: current_quote&.name || signal[:name],
+        price: current_quote&.price&.to_f&.round(2) || signal[:price],
+        change_pct: change_pct.round(2)
+      )
+    end
+  end
 
   def normalized_chokepoint_name(chokepoint)
     canonical_chokepoint_name(chokepoint) || fallback_chokepoint_name(chokepoint)

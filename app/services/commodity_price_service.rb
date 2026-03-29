@@ -1,55 +1,125 @@
 require "net/http"
 require "json"
+require "set"
 
 class CommodityPriceService
-  # Alpha Vantage symbol mapping → our internal symbols
-  # Free tier: 25 calls/day — we rotate through commodities + currencies
-  ALPHA_VANTAGE_COMMODITIES = {
-    "OIL_WTI"   => { av_fn: "WTI",           av_interval: "daily",  name: "Crude Oil (WTI)",  unit: "USD/barrel", lat: 29.76, lng: -95.36, region: "North America" },
-    "OIL_BRENT" => { av_fn: "BRENT",          av_interval: "daily",  name: "Brent Crude",      unit: "USD/barrel", lat: 57.48, lng: 1.75,   region: "North Sea" },
-    "GAS_NAT"   => { av_fn: "NATURAL_GAS",    av_interval: "daily",  name: "Natural Gas",      unit: "USD/MMBtu",  lat: 29.95, lng: -90.07, region: "North America" },
-    "GOLD"      => { av_fn: "GOLD",            av_interval: nil,      name: "Gold",             unit: "USD/oz",     lat: -25.75, lng: 28.23, region: "South Africa" },     # uses CURRENCY_EXCHANGE_RATE
-    "SILVER"    => { av_fn: "SILVER",           av_interval: nil,      name: "Silver",           unit: "USD/oz",     lat: 23.63, lng: -102.55, region: "Mexico" },
-    "COPPER"    => { av_fn: "COPPER",           av_interval: "monthly", name: "Copper",          unit: "USD/lb",     lat: -33.45, lng: -70.67, region: "Chile" },
-    "WHEAT"     => { av_fn: "WHEAT",            av_interval: "daily",  name: "Wheat",            unit: "USD/bushel", lat: 41.88, lng: -87.63, region: "North America" },
-    "IRON"      => { av_fn: nil,                av_interval: nil,      name: "Iron Ore",         unit: "USD/ton",    lat: -23.55, lng: -46.63, region: "Brazil" },          # no AV endpoint
-    "LNG"       => { av_fn: nil,                av_interval: nil,      name: "LNG (Asia)",       unit: "USD/MMBtu",  lat: 35.68, lng: 139.69, region: "East Asia" },        # no AV endpoint
-    "URANIUM"   => { av_fn: nil,                av_interval: nil,      name: "Uranium",          unit: "USD/lb",     lat: -25.27, lng: 133.78, region: "Australia" },        # no AV endpoint
+  # Spatially-anchored quotes that belong on the globe.
+  SPATIAL_COMMODITIES = {
+    "OIL_WTI"   => { av_fn: "WTI",          av_interval: "daily",   name: "Crude Oil (WTI)", unit: "USD/barrel", lat: 29.76, lng: -95.36, region: "North America" },
+    "OIL_BRENT" => { av_fn: "BRENT",        av_interval: "daily",   name: "Brent Crude",     unit: "USD/barrel", lat: 57.48, lng: 1.75,   region: "North Sea" },
+    "GAS_NAT"   => { av_fn: "NATURAL_GAS",  av_interval: "daily",   name: "Natural Gas",     unit: "USD/MMBtu",  lat: 29.95, lng: -90.07, region: "North America" },
+    "GOLD"      => { av_fn: "GOLD",         av_interval: nil,       name: "Gold",            unit: "USD/oz",     lat: -25.75, lng: 28.23, region: "South Africa" },
+    "SILVER"    => { av_fn: "SILVER",       av_interval: nil,       name: "Silver",          unit: "USD/oz",     lat: 23.63, lng: -102.55, region: "Mexico" },
+    "COPPER"    => { av_fn: "COPPER",       av_interval: "monthly", name: "Copper",          unit: "USD/lb",     lat: -33.45, lng: -70.67, region: "Chile" },
+    "WHEAT"     => { av_fn: "WHEAT",        av_interval: "daily",   name: "Wheat",           unit: "USD/bushel", lat: 41.88, lng: -87.63, region: "North America" },
+    "IRON"      => { av_fn: nil,            av_interval: nil,       name: "Iron Ore",        unit: "USD/ton",    lat: -23.55, lng: -46.63, region: "Brazil" },
+    "LNG"       => { av_fn: nil,            av_interval: nil,       name: "LNG (Asia)",      unit: "USD/MMBtu",  lat: 35.68, lng: 139.69, region: "East Asia" },
+    "URANIUM"   => { av_fn: nil,            av_interval: nil,       name: "Uranium",         unit: "USD/lb",     lat: -25.27, lng: 133.78, region: "Australia" },
   }.freeze
 
+  # Backward-compatible constant name used by tests.
+  ALPHA_VANTAGE_COMMODITIES = SPATIAL_COMMODITIES
+
   CURRENCY_MAP = {
-    "EUR" => { name: "Euro",              lat: 50.11, lng: 8.68,   region: "Europe" },
-    "GBP" => { name: "British Pound",     lat: 51.51, lng: -0.13,  region: "UK" },
-    "JPY" => { name: "Japanese Yen",      lat: 35.68, lng: 139.69, region: "Japan" },
-    "CNY" => { name: "Chinese Yuan",      lat: 39.91, lng: 116.40, region: "China" },
-    "CHF" => { name: "Swiss Franc",       lat: 46.95, lng: 7.45,   region: "Switzerland" },
+    "EUR" => { name: "Euro",              lat: 50.11, lng: 8.68,    region: "Europe" },
+    "GBP" => { name: "British Pound",     lat: 51.51, lng: -0.13,   region: "UK" },
+    "JPY" => { name: "Japanese Yen",      lat: 35.68, lng: 139.69,  region: "Japan" },
+    "CNY" => { name: "Chinese Yuan",      lat: 39.91, lng: 116.40,  region: "China" },
+    "CHF" => { name: "Swiss Franc",       lat: 46.95, lng: 7.45,    region: "Switzerland" },
     "AUD" => { name: "Australian Dollar", lat: -33.87, lng: 151.21, region: "Australia" },
-    "CAD" => { name: "Canadian Dollar",   lat: 45.42, lng: -75.70, region: "Canada" },
-    "RUB" => { name: "Russian Ruble",     lat: 55.76, lng: 37.62,  region: "Russia" },
-    "INR" => { name: "Indian Rupee",      lat: 28.61, lng: 77.21,  region: "India" },
+    "CAD" => { name: "Canadian Dollar",   lat: 45.42, lng: -75.70,  region: "Canada" },
+    "RUB" => { name: "Russian Ruble",     lat: 55.76, lng: 37.62,   region: "Russia" },
+    "INR" => { name: "Indian Rupee",      lat: 28.61, lng: 77.21,   region: "India" },
     "BRL" => { name: "Brazilian Real",    lat: -23.55, lng: -46.63, region: "Brazil" },
   }.freeze
 
-  # Rotate: each refresh cycle fetches a subset to stay within 25 calls/day
-  # Priority commodities (oil, gold, gas) fetched every cycle, others rotate
-  PRIORITY_SYMBOLS = %w[OIL_WTI OIL_BRENT GAS_NAT GOLD WHEAT].freeze
+  # Non-spatial market watchlist. These quotes should inform insights and
+  # watchlists, not become fake globe markers.
+  MARKET_BENCHMARKS = {
+    "SPY" => {
+      category: "index",
+      av_kind: :global_quote,
+      av_symbol: "SPY",
+      name: "US Large Caps (SPY)",
+      unit: "USD",
+      region: "United States",
+    },
+    "QQQ" => {
+      category: "index",
+      av_kind: :global_quote,
+      av_symbol: "QQQ",
+      name: "Nasdaq 100 (QQQ)",
+      unit: "USD",
+      region: "United States",
+    },
+    "BTCUSD" => {
+      category: "crypto",
+      av_kind: :exchange_rate,
+      from_currency: "BTC",
+      to_currency: "USD",
+      name: "Bitcoin",
+      unit: "USD",
+      region: "Global",
+    },
+    "ETHUSD" => {
+      category: "crypto",
+      av_kind: :exchange_rate,
+      from_currency: "ETH",
+      to_currency: "USD",
+      name: "Ether",
+      unit: "USD",
+      region: "Global",
+    },
+    "US2Y" => {
+      category: "rate",
+      av_kind: :economic_indicator,
+      av_function: "TREASURY_YIELD",
+      interval: "daily",
+      maturity: "2year",
+      name: "US 2Y Treasury Yield",
+      unit: "%",
+      region: "United States",
+    },
+    "US10Y" => {
+      category: "rate",
+      av_kind: :economic_indicator,
+      av_function: "TREASURY_YIELD",
+      interval: "daily",
+      maturity: "10year",
+      name: "US 10Y Treasury Yield",
+      unit: "%",
+      region: "United States",
+    },
+    "FEDFUNDS" => {
+      category: "rate",
+      av_kind: :economic_indicator,
+      av_function: "FEDERAL_FUNDS_RATE",
+      interval: "daily",
+      name: "US Federal Funds Rate",
+      unit: "%",
+      region: "United States",
+    },
+  }.freeze
 
-  def self.refresh
-    new.refresh
-  end
-
-  def self.refresh_if_stale
-    return 0 if !stale?
-    refresh
-  end
-
-  # Alpha Vantage free tier: 25 calls/day. With ~7 priority commodities fetched
-  # per cycle, refresh every 4 hours = 6 cycles × 7 calls = 42 → too many.
-  # Every 6 hours = 4 cycles × 7 = 28 → safe with headroom.
+  WATCHLIST_SYMBOLS = MARKET_BENCHMARKS.keys.freeze
+  PRIORITY_ALPHA_VANTAGE_SYMBOLS = %w[OIL_BRENT GOLD BTCUSD US10Y].freeze
+  DAILY_CALL_LIMIT = 20
   REFRESH_INTERVAL = 6.hours
 
-  def self.stale?
-    CommodityPrice.maximum(:recorded_at).nil? || CommodityPrice.maximum(:recorded_at) < REFRESH_INTERVAL.ago
+  class << self
+    def refresh
+      new.refresh
+    end
+
+    def refresh_if_stale
+      return 0 unless stale?
+      refresh
+    end
+
+    def stale?
+      snapshot_scope = CommodityPrice.where("source IS NULL OR source != ?", "yahoo_finance")
+      snapshot_scope.maximum(:recorded_at).nil? || snapshot_scope.maximum(:recorded_at) < REFRESH_INTERVAL.ago
+    end
   end
 
   def refresh
@@ -57,74 +127,12 @@ class CommodityPriceService
     now = Time.current
     rows = []
 
-    # 1. ECB exchange rates (free, no key, all currencies in one call)
-    rates = fetch_ecb_rates
-    if rates.any?
-      CURRENCY_MAP.each do |code, info|
-        rate = rates[code]
-        next unless rate
-
-        prev = CommodityPrice.where(symbol: code).order(recorded_at: :desc).first
-        price = (1.0 / rate).round(4)
-        change_pct = prev&.price ? ((price - prev.price.to_f) / prev.price.to_f * 100).round(4) : nil
-
-        rows << build_row(code, "currency", "#{info[:name]} (USD/#{code})", price, change_pct, "USD/#{code}", info, now)
-      end
-    end
-
-    # 2. Alpha Vantage commodities (real prices)
-    if api_key.present?
-      # Determine which symbols to fetch this cycle (budget: ~10 calls per hour)
-      cycle = (now.hour % 3) # rotate every 3 hours
-      symbols_this_cycle = PRIORITY_SYMBOLS.dup
-      non_priority = ALPHA_VANTAGE_COMMODITIES.keys - PRIORITY_SYMBOLS
-      symbols_this_cycle.concat(non_priority.select.with_index { |_, i| i % 3 == cycle })
-
-      av_calls_today = Rails.cache.read("av_calls_today") || 0
-      av_call_date = Rails.cache.read("av_call_date")
-      if av_call_date != Date.current.to_s
-        av_calls_today = 0
-        Rails.cache.write("av_call_date", Date.current.to_s, expires_in: 2.days)
-      end
-
-      symbols_this_cycle.each do |symbol|
-        config = ALPHA_VANTAGE_COMMODITIES[symbol]
-        next unless config[:av_fn]
-
-        # Hard stop at 20 calls/day (leave 5 headroom from 25 limit)
-        if av_calls_today >= 20
-          Rails.logger.info("Alpha Vantage: daily limit reached (#{av_calls_today}/20), skipping #{symbol}")
-          next
-        end
-
-        price = fetch_alpha_vantage_commodity(api_key, config)
-        av_calls_today += 1
-        Rails.cache.write("av_calls_today", av_calls_today, expires_in: 2.days)
-        next unless price
-
-        prev = CommodityPrice.where(symbol: symbol).order(recorded_at: :desc).first
-        change_pct = prev&.price ? ((price - prev.price.to_f) / prev.price.to_f * 100).round(4) : nil
-
-        rows << build_row(symbol, "commodity", config[:name], price, change_pct, config[:unit], config, now)
-      end
-    end
-
-    # 3. Fallback for commodities without Alpha Vantage data
-    ALPHA_VANTAGE_COMMODITIES.each do |symbol, config|
-      next if rows.any? { |r| r[:symbol] == symbol }
-
-      prev = CommodityPrice.where(symbol: symbol).order(recorded_at: :desc).first
-      if prev
-        # Keep last known price (no fake jitter)
-        rows << build_row(symbol, "commodity", config[:name], prev.price.to_f, 0.0, config[:unit], config, now)
-      else
-        # First time — use default baseline
-        rows << build_row(symbol, "commodity", config[:name], default_commodity_price(symbol), nil, config[:unit], config, now)
-      end
-    end
+    rows.concat(build_currency_rows(now))
+    rows.concat(build_alpha_vantage_rows(api_key, now)) if api_key.present?
+    rows.concat(build_fallback_rows(now, rows.map { |row| row[:symbol] }.to_set))
 
     CommodityPrice.upsert_all(rows, unique_by: %i[symbol recorded_at]) if rows.any?
-    Rails.logger.info("CommodityPriceService: #{rows.size} prices updated")
+    Rails.logger.info("CommodityPriceService: #{rows.size} quotes updated")
     rows.size
   rescue => e
     Rails.logger.error("CommodityPriceService: #{e.message}")
@@ -133,52 +141,251 @@ class CommodityPriceService
 
   private
 
-  def build_row(symbol, category, name, price, change_pct, unit, info, now)
+  def build_currency_rows(now)
+    rates = fetch_ecb_rates
+    return [] if rates.empty?
+
+    CURRENCY_MAP.each_with_object([]) do |(code, info), rows|
+      rate = rates[code]
+      next unless rate
+
+      prev = latest_record_for(code)
+      price = (1.0 / rate).round(4)
+      change_pct = percent_change(price, prev&.price)
+
+      rows << build_row(code, "currency", "#{info[:name]} (USD/#{code})", price, change_pct, "USD/#{code}", info, now, source: "ecb")
+    end
+  end
+
+  def build_alpha_vantage_rows(api_key, now)
+    av_calls_today = alpha_vantage_calls_today
+
+    alpha_vantage_symbols_for_cycle(now).each_with_object([]) do |symbol, rows|
+      break rows if av_calls_today >= DAILY_CALL_LIMIT
+
+      config = alpha_vantage_registry.fetch(symbol)
+      quote = fetch_alpha_vantage_quote(api_key, config)
+      av_calls_today += 1
+      persist_alpha_vantage_calls_today(av_calls_today)
+      next unless quote&.dig(:price)
+
+      prev = latest_record_for(symbol)
+      change_pct = quote[:change_pct]
+      change_pct = percent_change(quote[:price], prev&.price) if change_pct.nil?
+
+      rows << build_row(
+        symbol,
+        config.fetch(:category),
+        config.fetch(:name),
+        quote.fetch(:price),
+        change_pct,
+        config.fetch(:unit),
+        config,
+        now,
+        source: "alpha_vantage"
+      )
+    end
+  end
+
+  def build_fallback_rows(now, built_symbols)
+    fallback_configs.each_with_object([]) do |(symbol, payload), rows|
+      next if built_symbols.include?(symbol)
+
+      config = payload.fetch(:config)
+      prev = latest_record_for(symbol)
+      if prev
+        rows << build_row(symbol, payload.fetch(:category), config.fetch(:name), prev.price.to_f, 0.0, config.fetch(:unit), config, now, source: "fallback")
+      else
+        rows << build_row(symbol, payload.fetch(:category), config.fetch(:name), payload.fetch(:default_price), nil, config.fetch(:unit), config, now, source: "fallback")
+      end
+    end
+  end
+
+  def fallback_configs
+    commodity_payloads = SPATIAL_COMMODITIES.transform_values do |config|
+      { config: config, category: "commodity", default_price: default_commodity_price(config) }
+    end
+    benchmark_payloads = MARKET_BENCHMARKS.transform_values do |config|
+      { config: config, category: config.fetch(:category), default_price: default_benchmark_price(config) }
+    end
+
+    commodity_payloads.merge(benchmark_payloads)
+  end
+
+  def alpha_vantage_registry
+    @alpha_vantage_registry ||= begin
+      commodity_payload = SPATIAL_COMMODITIES.each_with_object({}) do |(symbol, config), memo|
+        next unless config[:av_fn]
+
+        av_kind = config[:av_interval].present? ? :commodity_series : :exchange_rate
+        memo[symbol] = config.merge(
+          category: "commodity",
+          av_kind: av_kind,
+          from_currency: config[:av_fn],
+          to_currency: "USD",
+        )
+      end
+
+      commodity_payload.merge(MARKET_BENCHMARKS)
+    end
+  end
+
+  def alpha_vantage_symbols_for_cycle(now)
+    all_symbols = alpha_vantage_registry.keys
+    priority = PRIORITY_ALPHA_VANTAGE_SYMBOLS & all_symbols
+    rotating = all_symbols - priority
+    rotating_slots = [(DAILY_CALL_LIMIT / cycles_per_day) - priority.size, 0].max
+    return priority if rotating_slots.zero? || rotating.empty?
+
+    cycle_index = (now.to_i / REFRESH_INTERVAL.to_i).floor
+    start_index = (cycle_index * rotating_slots) % rotating.size
+    rotating_symbols = cycling_slice(rotating, start_index, rotating_slots)
+
+    priority + rotating_symbols
+  end
+
+  def cycles_per_day
+    @cycles_per_day ||= (24.hours.to_i / REFRESH_INTERVAL.to_i)
+  end
+
+  def cycling_slice(items, start_index, size)
+    return [] if size <= 0 || items.empty?
+
+    Array.new(size) { |offset| items[(start_index + offset) % items.length] }
+  end
+
+  def alpha_vantage_calls_today
+    cached_date = Rails.cache.read("av_call_date")
+    if cached_date != Date.current.to_s
+      Rails.cache.write("av_call_date", Date.current.to_s, expires_in: 2.days)
+      Rails.cache.write("av_calls_today", 0, expires_in: 2.days)
+      return 0
+    end
+
+    Rails.cache.read("av_calls_today").to_i
+  end
+
+  def persist_alpha_vantage_calls_today(value)
+    Rails.cache.write("av_call_date", Date.current.to_s, expires_in: 2.days)
+    Rails.cache.write("av_calls_today", value, expires_in: 2.days)
+  end
+
+  def latest_record_for(symbol)
+    CommodityPrice.where(symbol: symbol).order(recorded_at: :desc).first
+  end
+
+  def build_row(symbol, category, name, price, change_pct, unit, info, now, source:)
     {
-      symbol: symbol, category: category, name: name,
-      price: price, change_pct: change_pct, unit: unit,
-      latitude: info[:lat], longitude: info[:lng], region: info[:region],
+      symbol: symbol,
+      category: category,
+      name: name,
+      price: price,
+      change_pct: change_pct,
+      unit: unit,
+      latitude: info[:lat],
+      longitude: info[:lng],
+      region: info[:region],
       recorded_at: now,
+      source: source,
     }
   end
 
-  def fetch_alpha_vantage_commodity(api_key, config)
-    fn = config[:av_fn]
-    interval = config[:av_interval]
+  def percent_change(current_value, previous_value)
+    previous = previous_value.to_f
+    return nil if previous.zero?
 
-    if interval
-      # Commodity data endpoint
-      uri = URI("https://www.alphavantage.co/query?function=#{fn}&interval=#{interval}&apikey=#{api_key}")
-    else
-      # Precious metals use CURRENCY_EXCHANGE_RATE
-      uri = URI("https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=#{fn}&to_currency=USD&apikey=#{api_key}")
+    (((current_value.to_f - previous) / previous) * 100).round(4)
+  end
+
+  def fetch_alpha_vantage_quote(api_key, config)
+    case config[:av_kind]
+    when :commodity_series
+      fetch_alpha_vantage_commodity_series(api_key, config)
+    when :exchange_rate
+      fetch_alpha_vantage_exchange_rate(api_key, config.fetch(:from_currency), config.fetch(:to_currency, "USD"))
+    when :global_quote
+      fetch_alpha_vantage_global_quote(api_key, config.fetch(:av_symbol))
+    when :economic_indicator
+      fetch_alpha_vantage_economic_indicator(api_key, config)
     end
+  rescue => e
+    Rails.logger.warn("CommodityPriceService Alpha Vantage fetch failed for #{config[:name]}: #{e.message}")
+    nil
+  end
 
+  def fetch_alpha_vantage_commodity_series(api_key, config)
+    uri = URI("https://www.alphavantage.co/query?function=#{config[:av_fn]}&interval=#{config[:av_interval]}&apikey=#{api_key}")
+    data = fetch_json(uri)
+    return nil unless data
+    return nil if rate_limited_response?(data)
+
+    latest = Array(data["data"]).first
+    price = latest&.dig("value")&.to_f
+    return nil unless price
+
+    { price: price }
+  end
+
+  def fetch_alpha_vantage_exchange_rate(api_key, from_currency, to_currency)
+    uri = URI("https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=#{from_currency}&to_currency=#{to_currency}&apikey=#{api_key}")
+    data = fetch_json(uri)
+    return nil unless data
+    return nil if rate_limited_response?(data)
+
+    rate = data.dig("Realtime Currency Exchange Rate", "5. Exchange Rate")&.to_f
+    return nil unless rate
+
+    { price: rate }
+  end
+
+  def fetch_alpha_vantage_global_quote(api_key, symbol)
+    uri = URI("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=#{symbol}&apikey=#{api_key}")
+    data = fetch_json(uri)
+    return nil unless data
+    return nil if rate_limited_response?(data)
+
+    quote = data["Global Quote"] || {}
+    price = quote["05. price"]&.to_f
+    change_pct = quote["10. change percent"]&.delete("%")&.to_f
+    return nil unless price
+
+    { price: price, change_pct: change_pct }
+  end
+
+  def fetch_alpha_vantage_economic_indicator(api_key, config)
+    query = {
+      function: config.fetch(:av_function),
+      interval: config.fetch(:interval, "daily"),
+      apikey: api_key,
+    }
+    query[:maturity] = config[:maturity] if config[:maturity].present?
+
+    uri = URI("https://www.alphavantage.co/query?#{URI.encode_www_form(query)}")
+    data = fetch_json(uri)
+    return nil unless data
+    return nil if rate_limited_response?(data)
+
+    latest = Array(data["data"]).find { |row| row["value"].present? && row["value"] != "." }
+    price = latest&.dig("value")&.to_f
+    return nil unless price
+
+    { price: price }
+  end
+
+  def fetch_json(uri)
     resp = Net::HTTP.get_response(uri)
     return nil unless resp.is_a?(Net::HTTPSuccess)
 
-    data = JSON.parse(resp.body)
+    JSON.parse(resp.body)
+  end
 
-    # Check for rate limit
+  def rate_limited_response?(data)
     if data["Note"] || data["Information"]
       Rails.logger.warn("Alpha Vantage rate limit: #{data["Note"] || data["Information"]}")
-      return nil
+      return true
     end
 
-    if interval
-      # Commodity time series: get latest data point
-      series = data["data"]
-      return nil unless series.is_a?(Array) && series.any?
-      latest = series.first
-      latest["value"]&.to_f
-    else
-      # Currency exchange rate
-      rate = data.dig("Realtime Currency Exchange Rate", "5. Exchange Rate")
-      rate&.to_f
-    end
-  rescue => e
-    Rails.logger.warn("Alpha Vantage fetch #{config[:av_fn]}: #{e.message}")
-    nil
+    false
   end
 
   def fetch_ecb_rates
@@ -194,22 +401,43 @@ class CommodityPriceService
     eur_usd = rates["USD"]
     return {} unless eur_usd && eur_usd > 0
 
-    usd_rates = {}
-    rates.each do |code, eur_rate|
+    rates.each_with_object({}) do |(code, eur_rate), usd_rates|
       next if code == "USD"
       usd_rates[code] = eur_rate / eur_usd
     end
-    usd_rates
   rescue => e
     Rails.logger.warn("ECB fetch failed: #{e.message}")
     {}
   end
 
-  def default_commodity_price(symbol)
+  def default_commodity_price(config_or_symbol)
+    config = config_or_symbol.is_a?(Hash) ? config_or_symbol : SPATIAL_COMMODITIES[config_or_symbol]
+    name = config&.fetch(:name, nil)
     {
-      "OIL_WTI" => 72.50, "OIL_BRENT" => 76.80, "GAS_NAT" => 2.85,
-      "GOLD" => 2350.00, "SILVER" => 28.50, "COPPER" => 4.15,
-      "WHEAT" => 5.60, "IRON" => 110.00, "LNG" => 12.50, "URANIUM" => 85.00,
-    }[symbol] || 100.0
+      "Crude Oil (WTI)" => 72.50,
+      "Brent Crude" => 76.80,
+      "Natural Gas" => 2.85,
+      "Gold" => 2350.00,
+      "Silver" => 28.50,
+      "Copper" => 4.15,
+      "Wheat" => 5.60,
+      "Iron Ore" => 110.00,
+      "LNG (Asia)" => 12.50,
+      "Uranium" => 85.00,
+    }[name] || 100.0
+  end
+
+  def default_benchmark_price(config_or_symbol)
+    config = config_or_symbol.is_a?(Hash) ? config_or_symbol : MARKET_BENCHMARKS[config_or_symbol]
+    name = config&.fetch(:name, nil)
+    {
+      "US Large Caps (SPY)" => 520.0,
+      "Nasdaq 100 (QQQ)" => 445.0,
+      "Bitcoin" => 65000.0,
+      "Ether" => 3400.0,
+      "US 2Y Treasury Yield" => 4.35,
+      "US 10Y Treasury Yield" => 4.15,
+      "US Federal Funds Rate" => 5.25,
+    }[name] || 100.0
   end
 end

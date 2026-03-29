@@ -4,7 +4,6 @@ class CrossLayerAnalyzer
       earthquake_infrastructure_threats
       jamming_flight_impacts
       conflict_military_surge
-      fire_pipeline_threats
       cable_outage_correlations
       emergency_squawk_correlations
       ship_cable_proximity

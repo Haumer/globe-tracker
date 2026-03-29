@@ -172,7 +172,14 @@ class GlobalPollerService
       suffix = schedule_suffix(schedule, now)
       args = schedule_args(schedule, now)
 
-      return unless enqueue_once(job, slot_key, ttl: interval + ENQUEUE_LOCK_SLACK, key_suffix: suffix, args: args)
+      return unless enqueue_once(
+        job,
+        slot_key,
+        interval: interval,
+        ttl: interval + ENQUEUE_LOCK_SLACK,
+        key_suffix: suffix,
+        args: args
+      )
 
       label
     end
@@ -238,16 +245,30 @@ class GlobalPollerService
       !Rails.cache.read(IntelligenceBriefService::CACHE_KEY)
     end
 
-    def enqueue_once(job_class, slot_key, ttl:, key_suffix: nil, args: [])
-      cache_key = ["poller", slot_key, job_class.name, key_suffix].compact.join(":")
+    def enqueue_once(job_class, slot_key, interval:, ttl:, key_suffix: nil, args: [])
+      cache_key = dedupe_cache_key(job_class, slot_key, interval: interval, key_suffix: key_suffix)
       return false if Rails.cache.exist?(cache_key)
 
-      Rails.cache.write(cache_key, "1", expires_in: ttl)
+      Rails.cache.write(cache_key, "1", expires_in: dedupe_ttl(interval: interval, default_ttl: ttl))
       job_class.perform_later(*args)
       true
     rescue StandardError => e
       Rails.logger.warn("GlobalPollerService enqueue #{job_class.name}: #{e.message}")
       false
+    end
+
+    def dedupe_cache_key(job_class, slot_key, interval:, key_suffix: nil)
+      if interval >= 1.minute
+        ["poller", "pending", job_class.name, key_suffix].compact.join(":")
+      else
+        ["poller", slot_key, job_class.name, key_suffix].compact.join(":")
+      end
+    end
+
+    def dedupe_ttl(interval:, default_ttl:)
+      return default_ttl if interval < 1.minute
+
+      interval + 1.minute
     end
 
     def slot_for(now, interval, offset = 0.seconds)

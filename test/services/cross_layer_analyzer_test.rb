@@ -278,9 +278,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_empty conflict_insights
   end
 
-  # ── fire_infrastructure_threats ───────────────────────────────
-
-  test "fire cluster near nuclear plant returns critical" do
+  test "analyze excludes fire infrastructure from the derived insight feed" do
     6.times do |i|
       FireHotspot.create!(
         external_id: "fire-nuke-#{i}", latitude: 44.0 + i * 0.01,
@@ -294,63 +292,8 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     )
 
     insights = CrossLayerAnalyzer.analyze
-    fire_insights = insights.select { |i| i[:type] == "fire_infrastructure" }
 
-    assert_equal 1, fire_insights.size
-    assert_equal "critical", fire_insights.first[:severity]
-    assert_includes fire_insights.first[:description], "NUCLEAR"
-  end
-
-  test "large fire cluster near coal plant returns high severity" do
-    25.times do |i|
-      FireHotspot.create!(
-        external_id: "fire-coal-#{i}", latitude: 38.0 + (i % 5) * 0.01,
-        longitude: -95.0 + (i / 5) * 0.01, brightness: 300,
-        confidence: "nominal", frp: 40.0, acq_datetime: 6.hours.ago
-      )
-    end
-    PowerPlant.create!(
-      gppd_idnr: "PP-COAL-FIRE", name: "Prairie Coal Plant",
-      latitude: 38.0, longitude: -95.0, primary_fuel: "Coal", capacity_mw: 600
-    )
-
-    insights = CrossLayerAnalyzer.analyze
-    fire_insights = insights.select { |i| i[:type] == "fire_infrastructure" }
-
-    assert_equal 1, fire_insights.size
-    assert_equal "high", fire_insights.first[:severity]
-  end
-
-  test "fire cluster with no nearby plants produces no insight" do
-    6.times do |i|
-      FireHotspot.create!(
-        external_id: "fire-remote-#{i}", latitude: -30.0,
-        longitude: 25.0, brightness: 400, confidence: "h",
-        frp: 80.0, acq_datetime: 2.hours.ago
-      )
-    end
-
-    insights = CrossLayerAnalyzer.analyze
-    fire_insights = insights.select { |i| i[:type] == "fire_infrastructure" }
-    assert_empty fire_insights
-  end
-
-  test "fewer than 5 fires in cluster is excluded" do
-    4.times do |i|
-      FireHotspot.create!(
-        external_id: "fire-few-#{i}", latitude: 44.0,
-        longitude: -80.0, brightness: 350, confidence: "high",
-        frp: 50.0, acq_datetime: 3.hours.ago
-      )
-    end
-    PowerPlant.create!(
-      gppd_idnr: "PP-FEW-FIRE", name: "Safe Plant",
-      latitude: 44.0, longitude: -80.0, primary_fuel: "Gas", capacity_mw: 300
-    )
-
-    insights = CrossLayerAnalyzer.analyze
-    fire_insights = insights.select { |i| i[:type] == "fire_infrastructure" }
-    assert_empty fire_insights
+    assert_empty insights.select { |i| i[:type] == "fire_infrastructure" }
   end
 
   # ── cable_outage_correlations ─────────────────────────────────

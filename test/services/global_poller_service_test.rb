@@ -98,6 +98,20 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "tick skips minute-level refresh duplicates while one is still pending" do
+    travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
+      result = GlobalPollerService.tick!
+      assert_includes result[:job_names], "RefreshNewsJob"
+    end
+
+    clear_enqueued_jobs
+
+    travel_to Time.zone.parse("2026-03-25 10:05:00 UTC") do
+      result = GlobalPollerService.tick!
+      refute_includes result[:job_names], "RefreshNewsJob"
+    end
+  end
+
   test "tick respects paused state" do
     PollerRuntimeState.request_pause!
 

@@ -804,4 +804,75 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
     end
   end
+
+  test "chokepoint market stress fires when commodity signals move materially" do
+    mocked_payload = [{
+      id: "bab_el_mandeb",
+      name: "Bab el-Mandeb",
+      lat: 12.58,
+      lng: 43.33,
+      status: "elevated",
+      ships_nearby: { total: 18, tankers: 6, cargo: 7 },
+      flows: { oil: { pct: 9, note: "Europe-bound energy flows" } },
+      commodity_signals: [
+        { symbol: "OIL_BRENT", name: "Brent Crude", price: 87.4, change_pct: 2.8 },
+        { symbol: "LNG", name: "LNG (Asia)", price: 13.1, change_pct: 1.2 },
+      ],
+      conflict_pulse: [{ score: 64, trend: "escalating" }],
+      checked_at: Time.current.iso8601,
+    }]
+
+    original_analyze = ChokepointMonitorService.method(:analyze)
+    ChokepointMonitorService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "chokepoint_market_stress" }
+
+      assert insight
+      assert_equal "high", insight[:severity]
+      assert_includes insight[:title], "OIL_BRENT"
+      assert_equal "Bab el-Mandeb", insight.dig(:entities, :chokepoint, :name)
+    ensure
+      ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
+  end
+
+  test "outage currency stress fires when a country outage coincides with an FX move" do
+    CommodityPrice.create!(
+      symbol: "JPY",
+      category: "currency",
+      name: "Japanese Yen (USD/JPY)",
+      price: 0.0068,
+      change_pct: -0.92,
+      unit: "USD/JPY",
+      latitude: 35.68,
+      longitude: 139.69,
+      region: "Japan",
+      recorded_at: Time.current,
+    )
+    InternetOutage.create!(
+      external_id: "jp-fx-outage",
+      entity_type: "country",
+      entity_code: "JP",
+      entity_name: "Japan",
+      level: "critical",
+      score: 86.0,
+      started_at: 2.hours.ago,
+    )
+    InternetTrafficSnapshot.create!(
+      country_code: "JP",
+      country_name: "Japan",
+      traffic_pct: 58.4,
+      attack_origin_pct: 0.0,
+      attack_target_pct: 0.4,
+      recorded_at: 20.minutes.ago,
+    )
+
+    insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "outage_currency_stress" }
+
+    assert insight
+    assert_equal "high", insight[:severity]
+    assert_includes insight[:title], "JPY"
+    assert_equal "JP", insight.dig(:entities, :traffic, :country_code)
+  end
 end

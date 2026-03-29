@@ -1,209 +1,12 @@
 import { getViewportBounds, restoreCamera, saveCamera } from "../camera"
 import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "../utils"
 import { decodeHash, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
+import { initializeCoreState, teardownCore, wireCoreChrome } from "./core_state"
 
 export function applyCoreMethods(GlobeController) {
   GlobeController.prototype.connect = function() {
-    this._airportDb = {}
-    this.flightsVisible = false
-    this.flightInterval = null
-    this.flightData = new Map()
-    this.selectedFlights = new Set()
-    this.selectedShips = new Set()
-    this.selectedSats = new Set()
-    this._selectionBoxEntities = new Map() // key: "flight-id"|"ship-mmsi"|"sat-noradId" → entity
-    this._focusedSelection = null // { type: "flight"|"ship"|"sat", id: string }
-    this._selBoxImgGreen = null
-    this._selBoxImgYellow = null
-    this.animationFrame = null
-    this.lastAnimTime = null
-    this.trailsVisible = false
-    this.trailHistory = new Map()
-    this.trackedFlightId = null
-    this.trackedTrainId = null
-    this._trackingHeights = [5000, 50000, 200000, 800000]
-    this._trackingHeightLabels = ["Street", "Close", "Medium", "Far"]
-    this._trackingHeightIdx = 2 // default Medium
-    this.showCivilian = true
-    this.showMilitary = true
-    this._milFlightsActive = false
-    this._milFlightData = []
-    this._milFlightEntities = []
-    this._milFlightInterval = null
-    this.satelliteData = []
-    this._loadedSatCategories = new Set()
-    this.satelliteEntities = new Map()
-    this.satCategoryVisible = { stations: false, starlink: false, "gps-ops": false, glonass: false, galileo: false, weather: false, resource: false, science: false, military: false, analyst: false, geo: false, iridium: false, oneweb: false, planet: false, spire: false, gnss: false, tdrss: false, radar: false, sbas: false, cubesat: false, amateur: false, sarsat: false, "last-30-days": false, beidou: false, molniya: false, geodetic: false, dmc: false, argos: false, intelsat: false, ses: false, "x-comm": false, globalstar: false }
-    this.satOrbitsVisible = false
-    this.satOrbitEntities = new Map()
-    this.selectedSatNoradId = null
-    this._satFootprintEntities = []
-    this.satHeatmapVisible = false
-    this._heatmapEntities = []
-    this._heatmapGrid = new Map()       // key "row,col" → { lat, lng, hits: [timestamp, ...] }
-    this._heatmapHitLifeSec = 60        // each hit layer lasts 60s
-    this._heatmapLastUpdate = 0         // throttle: timestamp of last computation
-    this._sweepEntities = []             // live satellite footprint hexes on country
-    this._lastSatPositions = []          // cached for sweep rendering between recomputes
-    this._buildHeatmapActive = false     // "Build Heatmap" mode — country hex grid that accumulates
-    this._buildHeatmapBaseEntities = []  // flat hex grid entities covering selected countries
-    this._buildHeatmapGrid = new Map()   // key "row,col" → { lat, lng, hits: 0, entity: null }
-    this.shipsVisible = false
-    this.shipData = new Map()
-    this.shipInterval = null
-    this.bordersVisible = false
-    this.bordersLoaded = false
-    this.selectedCountries = new Set()
-    this._selectedCountriesBbox = null
-    this._borderCountryMap = new Map()
-    this._countryEntities = new Map()
-    this._countryFeatures = []          // raw GeoJSON features for hit testing
-    this.citiesVisible = false
-    this._citiesData = []
-    this._urbanAreas = []
-    this._citiesLoaded = false
-    this._cityEntities = []
-    this.earthquakesVisible = false
-    this._earthquakeData = []
-    this._earthquakeEntities = []
-    this.naturalEventsVisible = false
-    this._naturalEventData = []
-    this._naturalEventEntities = []
-    this._eventsInterval = null
-    this.fireHotspotsVisible = false
-    this.fireClustersVisible = true
-    this._fireHotspotFetchToken = 0
-    this._fireHotspotData = []
-    this._fireHotspotClusterData = []
-    this._fireHotspotEntities = []
-    this.strikesVisible = false
-    this._strikeDetections = []
-    this._strikeEntities = []
-    this.weatherVisible = false
-    this._weatherActiveLayers = {}
-    this._weatherImageryLayers = {}
-    this._weatherAlerts = []
-    this._weatherAlertEntities = []
-    this._weatherOpacity = 0.6
-    this.financialVisible = false
-    this._commodityData = []
-    this._financialEntities = []
-    this.camerasVisible = false
-    this.gpsJammingVisible = false
-    this._gpsJammingEntities = []
-    this._gpsJammingInterval = null
-    this.newsVisible = false
-    this.newsArcsVisible = true
-    this.newsBlobsVisible = true
-    this._newsData = []
-    this._newsEntities = []
-    this._newsArcEntities = []
-    this._newsInterval = null
-    this._newsActiveTab = "articles"
-    this.cablesVisible = false
-    this._cableEntities = []
-    this._landingPointEntities = []
-    this.pipelinesVisible = false
-    this._pipelineEntities = []
-    this._pipelineData = []
-    this.railwaysVisible = false
-    this._railwayEntities = []
-    this._railwayData = []
-    this.trainsVisible = false
-    this._trainEntities = []
-    this._trainData = []
-    this._trainPollTimer = null
-    this._rightPanelUserClosed = false
-    this.outagesVisible = false
-    this._outageData = []
-    this._outageEntities = []
-    this._outageInterval = null
-    this.insightsVisible = false
-    this._insightsData = []
-    this._insightEntities = []
-    this._insightPollInterval = null
-    this._insightFetchToken = 0
-    this.powerPlantsVisible = false
-    this._powerPlantData = []
-    this._powerPlantEntities = []
-    this.conflictsVisible = false
-    this._conflictData = []
-    this._conflictEntities = []
-    this.situationsVisible = false
-    this._conflictPulseData = []
-    this._conflictPulseZones = []
-    this._conflictPulseEntities = []
-    this._conflictPulseInterval = null
-    this._conflictPulseFetchToken = 0
-    this._conflictPulsePrev = {}
-    this._conflictPulsePrevScores = {}
-    this._conflictPulseSnapshotStatus = null
-    this._strategicSituationData = []
-    this._strikeArcData = []
-    this._hexCellData = []
-    this._strikeArcsVisible = false
-    this._hexTheaterVisible = false
-    this.chokepointsVisible = false
-    this._chokepointData = []
-    this._chokepointEntities = []
-    this._chokepointSnapshotStatus = null
-    this.militaryBasesVisible = false
-    this._militaryBaseData = []
-    this._militaryBaseEntities = []
-    this.airbasesVisible = false
-    this._airbaseEntities = []
-    this.navalVesselsVisible = false
-    this._navalVesselEntities = []
-    this.trafficVisible = false
-    this.trafficArcsVisible = true
-    this.trafficBlobsVisible = true
-    this._trafficData = null
-    this._trafficEntities = []
-    this.notamsVisible = false
-    this._notamData = []
-    this._notamEntities = []
-    this._satVisEntities = []
-    this._satVisEventPos = null
-    this.airportsVisible = false
-    this._airportEntities = []
-    this._webcamData = []
-    this._webcamEntities = []
-    this._webcamEntityMap = new Map()
-    this._webcamFetchToken = 0
-    this._webcamLastFetchCenter = null
-    this._webcamCollectionStatus = null
-    this._trainFeedFetchedAt = null
-    this._trainFeedExpiresAt = null
-    this._insightSnapshotStatus = null
-    this.countrySelectMode = false
-    this.drawMode = false
-    this._drawCenter = null
-    this._drawing = false
-    this._drawCircleEntity = null
-    // Satellite footprint country mode
-    this._satFootprintCountryMode = false
-    // Airline filter
-    this._airlineFilter = new Set() // active airline ICAO codes (empty = show all)
-    this._detectedAirlines = new Map() // code → count
-    this._pendingCountryRestore = null
-    this._entityListRequested = false
-    this._alertData = []
-    this._alertUnseenCount = 0
-    this._selectedContext = null
-    this._ds = {} // shared datasource cache for getDataSource()
-    this._backgroundRefreshRetryTimers = {}
-    this._backgroundRefreshRetryCounts = {}
-    // Stats clock
-    this._clockInterval = setInterval(() => this._updateClock(), 1000)
-    this._updateClock()
-    // JS tooltips — position fixed so they escape overflow:hidden containers
-    this._initTooltips()
-    // Stats bar buttons live outside Stimulus scope (in navbar), wire manually
-    const bellBtn = document.getElementById("stat-bell-btn")
-    if (bellBtn) bellBtn.addEventListener("click", () => this.toggleAlertsFeed())
-    const panelBtn = document.getElementById("stat-panel-toggle")
-    if (panelBtn) panelBtn.addEventListener("click", () => this.toggleRightPanel())
-    // Restore saved preferences
+    initializeCoreState(this)
+    wireCoreChrome(this)
     this._restorePrefs()
     this.loadCesium()
   }
@@ -434,18 +237,6 @@ export function applyCoreMethods(GlobeController) {
     this._initRegions()
     this._startAlertPolling()
     this._startMiniTimeline()
-
-    // Listen for real-time breaking events from ActionCable
-    document.addEventListener("globe:breaking-event", (e) => {
-      const data = e.detail
-      if (data.type === "earthquake" && this.earthquakesVisible) {
-        // Refresh earthquake data immediately
-        this.fetchEarthquakes?.()
-      } else if (data.type === "conflict_escalation" && this.situationsVisible) {
-        // Refresh conflict pulse
-        this._fetchConflictPulse?.()
-      }
-    })
 
     // Start animation loop
     this.lastAnimTime = performance.now()
@@ -1583,24 +1374,7 @@ export function applyCoreMethods(GlobeController) {
   // ── Cities Layer ─────────────────────────────────────────
 
   GlobeController.prototype.disconnect = function() {
-    Object.values(this._backgroundRefreshRetryTimers || {}).forEach(timer => clearTimeout(timer))
-    if (this._mediaRecorder) this._stopRecording()
-    if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
-    if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
-    if (this._clockInterval) clearInterval(this._clockInterval)
-    if (this.flightInterval) clearInterval(this.flightInterval)
-    if (this.shipInterval) clearInterval(this.shipInterval)
-    if (this._gpsJammingInterval) clearInterval(this._gpsJammingInterval)
-    if (this._newsInterval) clearInterval(this._newsInterval)
-    if (this._eventsInterval) clearInterval(this._eventsInterval)
-    if (this._outageInterval) clearInterval(this._outageInterval)
-    if (this._trainPollTimer) clearInterval(this._trainPollTimer)
-    if (this._strikesInterval) clearInterval(this._strikesInterval)
-    if (this._milFlightInterval) clearInterval(this._milFlightInterval)
-    if (this.animationFrame) cancelAnimationFrame(this.animationFrame)
-    this._stopInsightPolling()
-    if (this._handler) this._handler.destroy()
-    if (this.viewer) this.viewer.destroy()
+    teardownCore(this)
   }
 
 }

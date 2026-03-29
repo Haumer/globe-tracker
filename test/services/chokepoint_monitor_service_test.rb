@@ -63,6 +63,26 @@ class ChokepointMonitorServiceTest < ActiveSupport::TestCase
     assert_operator result[:total], :>=, 1
   end
 
+  test "count_ships_near classifies cargo and tankers using AIS ship type codes" do
+    Ship.create!(
+      mmsi: "test-ship-cargo", name: "Cargo Vessel",
+      ship_type: 70,
+      latitude: 55.7, longitude: 12.6,
+      speed: 8, heading: 90,
+    )
+    Ship.create!(
+      mmsi: "test-ship-tanker", name: "Tanker Vessel",
+      ship_type: 80,
+      latitude: 55.71, longitude: 12.61,
+      speed: 9, heading: 95,
+    )
+
+    result = ChokepointMonitorService.send(:count_ships_near, 55.7, 12.6, 30)
+
+    assert_operator result[:cargo], :>=, 1
+    assert_operator result[:tankers], :>=, 1
+  end
+
   test "nearby conflict pulse keeps theater metadata" do
     conflict_pulse_singleton = class << ConflictPulseService; self; end
     original_analyze = ConflictPulseService.method(:analyze)

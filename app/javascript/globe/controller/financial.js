@@ -6,7 +6,11 @@ export function applyFinancialMethods(GlobeController) {
     this.financialVisible = !this.financialVisible
     if (this.financialVisible) {
       this.fetchCommodities()
+      if (this._financialInterval) clearInterval(this._financialInterval)
+      this._financialInterval = setInterval(() => this.fetchCommodities(), 60000)
     } else {
+      if (this._financialInterval) clearInterval(this._financialInterval)
+      this._financialInterval = null
       this._clearFinancialEntities()
     }
     this._syncQuickBar()
@@ -19,6 +23,7 @@ export function applyFinancialMethods(GlobeController) {
       if (!resp.ok) return
       const data = await resp.json()
       this._commodityData = data.prices || []
+      this._marketBenchmarkData = data.benchmarks || []
       this._renderCommodities()
       this._markFresh("financial")
     } catch (e) {
@@ -162,7 +167,7 @@ export function applyFinancialMethods(GlobeController) {
           <span class="detail-value">${item.category}</span>
         </div>
       </div>
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Alpha Vantage / ECB</div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${item.live_signal ? "Yahoo Finance signal" : "Alpha Vantage / ECB snapshot"}</div>
     `
     this.detailPanelTarget.style.display = ""
   }

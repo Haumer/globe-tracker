@@ -49,7 +49,7 @@ class IntelligenceBriefService
         fires: gather_fire_count,
         gps_jamming: gather_jamming,
         top_news: gather_news,
-        commodities: gather_commodities,
+        markets: gather_markets,
         military_flights: gather_military_flights,
       }
     end
@@ -109,11 +109,16 @@ class IntelligenceBriefService
                .map { |t, tone, cat, src| { title: t, tone: tone, category: cat, source: src } }
     end
 
-    def gather_commodities
-      CommodityPrice.select("DISTINCT ON (symbol) *")
-                    .order(:symbol, recorded_at: :desc)
-                    .limit(10)
-                    .map { |p| { symbol: p.symbol, name: p.name, price: p.price.to_f, change: p.change_pct&.to_f } }
+    def gather_markets
+      order_map = (YahooMarketSignalService.order_symbols + CommodityPriceService::WATCHLIST_SYMBOLS + CommodityPriceService::SPATIAL_COMMODITIES.keys).uniq.each_with_index.to_h
+
+      YahooMarketSignalService.merge_quotes(
+        CommodityPrice.select("DISTINCT ON (symbol) *")
+                      .order(:symbol, recorded_at: :desc)
+                      .to_a
+      ).sort_by { |quote| [order_map.fetch(quote.symbol, 999), quote.symbol.to_s] }
+       .first(10)
+       .map { |p| { symbol: p.symbol, name: p.name, price: p.price.to_f, change: p.change_pct&.to_f, unit: p.unit } }
     end
 
     def gather_military_flights
@@ -158,8 +163,8 @@ class IntelligenceBriefService
 
         MILITARY FLIGHTS: #{ctx[:military_flights]} currently airborne
 
-        COMMODITY PRICES:
-        #{ctx[:commodities].map { |c| "- #{c[:name]}: $#{c[:price].round(2)}#{c[:change] ? " (#{c[:change] > 0 ? '+' : ''}#{c[:change].round(1)}%)" : ''}" }.join("\n")}
+        MARKET SIGNALS:
+        #{ctx[:markets].map { |c| "- #{c[:name]}: #{c[:unit] == '%' ? "#{c[:price].round(2)}%" : "$#{c[:price].round(2)}"}#{c[:change] ? " (#{c[:change] > 0 ? '+' : ''}#{c[:change].round(1)}%)" : ''}" }.join("\n")}
 
         HIGH-IMPACT NEWS (tone ≤-4 or ≥+4):
         #{ctx[:top_news].map { |n| "- [#{n[:category]}/#{n[:source]}] #{n[:title]} (tone: #{n[:tone]})" }.join("\n")}

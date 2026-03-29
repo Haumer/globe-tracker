@@ -1,5 +1,7 @@
 class ChokepointMonitorService
   CACHE_KEY = "chokepoint_status".freeze
+  CARGO_SHIP_TYPES = (70...80).to_a.freeze
+  TANKER_SHIP_TYPES = (80...90).to_a.freeze
   RELEVANT_COMMODITY_SYMBOLS = {
     hormuz: %w[OIL_WTI OIL_BRENT LNG GAS_NAT],
     suez: %w[OIL_BRENT LNG WHEAT],
@@ -208,8 +210,8 @@ class ChokepointMonitorService
 
       ships = Ship.where("updated_at > ?", 6.hours.ago).within_bounds(bounds)
       total = ships.count
-      tankers = ships.where("ship_type ILIKE '%tanker%' OR ship_type ILIKE '%crude%' OR ship_type ILIKE '%oil%' OR ship_type ILIKE '%gas%' OR ship_type ILIKE '%lng%'").count rescue 0
-      cargo = ships.where("ship_type ILIKE '%cargo%' OR ship_type ILIKE '%container%' OR ship_type ILIKE '%bulk%'").count rescue 0
+      tankers = ships.where(ship_type: TANKER_SHIP_TYPES).count
+      cargo = ships.where(ship_type: CARGO_SHIP_TYPES).count
 
       { total: total, tankers: tankers, cargo: cargo }
     rescue => e

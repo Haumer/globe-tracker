@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_25_180000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_29_143000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -98,8 +98,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_25_180000) do
     t.datetime "recorded_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "source"
     t.index ["category"], name: "index_commodity_prices_on_category"
     t.index ["recorded_at"], name: "index_commodity_prices_on_recorded_at"
+    t.index ["source"], name: "index_commodity_prices_on_source"
     t.index ["symbol", "recorded_at"], name: "index_commodity_prices_on_symbol_and_recorded_at", unique: true
   end
 

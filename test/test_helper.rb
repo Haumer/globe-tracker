@@ -5,6 +5,12 @@ require "webmock/minitest"
 
 # Block all external HTTP requests in tests — forces proper stubbing
 WebMock.disable_net_connect!(allow_localhost: true)
+WebMock.stub_request(:get, %r{\Ahttps://query1\.finance\.yahoo\.com/v8/finance/chart/})
+  .to_return(
+    status: 200,
+    body: { chart: { result: [], error: nil } }.to_json,
+    headers: { "Content-Type" => "application/json" }
+  )
 
 module Rails
   module LineFiltering

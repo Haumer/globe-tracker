@@ -1,4 +1,5 @@
 import { getDataSource } from "../utils"
+import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, renderInsightFeedHtml } from "./insight_presenters"
 
 export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._shouldRenderInsightMarker = function(insight) {
@@ -91,37 +92,18 @@ export function applyInsightsMethods(GlobeController) {
 
     if (!this._insightsData.length) return
 
-    const severityColors = {
-      critical: Cesium.Color.fromCssColorString("#f44336"),
-      high: Cesium.Color.fromCssColorString("#ff9800"),
-      medium: Cesium.Color.fromCssColorString("#ffc107"),
-      low: Cesium.Color.fromCssColorString("#4caf50"),
-    }
-
-    const typeIcons = {
-      earthquake_infrastructure: "\u26A0",
-      earthquake_pipeline: "\u26A0",
-      jamming_flights: "\u{1F4E1}",
-      electronic_warfare: "\u{1F4E1}",
-      conflict_military: "\u2694",
-      fire_infrastructure: "\u{1F525}",
-      fire_pipeline: "\u{1F525}",
-      cable_outage: "\u{1F50C}",
-      emergency_squawk: "\u{1F6A8}",
-      ship_cable_proximity: "\u2693",
-      information_blackout: "\u{1F50C}",
-      airspace_clearing: "\u{2708}",
-      weather_disruption: "\u26C8",
-      conflict_pulse: "\u{1F4A5}",
-      chokepoint_disruption: "\u2693",
-      convergence: "\u{1F310}",
-    }
+    const severityColors = Object.fromEntries(
+      Object.entries(INSIGHT_SEVERITY_COLORS).map(([severity, color]) => [
+        severity,
+        Cesium.Color.fromCssColorString(color),
+      ])
+    )
 
     this._insightsData.forEach((insight, idx) => {
       if (insight.lat == null || insight.lng == null) return
       if (!this._shouldRenderInsightMarker(insight)) return
       const color = severityColors[insight.severity] || severityColors.medium
-      const icon = typeIcons[insight.type] || "\u26A0"
+      const icon = INSIGHT_TYPE_ICONS[insight.type] || "\u26A0"
 
       // Pulsing ring
       const ring = ds.entities.add({
@@ -496,119 +478,7 @@ export function applyInsightsMethods(GlobeController) {
       return
     }
 
-    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
-    const severityIcons = {
-      critical: "fa-circle-exclamation",
-      high: "fa-triangle-exclamation",
-      medium: "fa-circle-info",
-      low: "fa-circle-check",
-    }
-    const typeLabels = {
-      earthquake_infrastructure: "QUAKE + INFRA",
-      earthquake_pipeline: "QUAKE + PIPELINE",
-      jamming_flights: "JAMMING + AIR",
-      electronic_warfare: "ELECTRONIC WARFARE",
-      conflict_military: "CONFLICT + MIL",
-      fire_infrastructure: "FIRE + INFRA",
-      fire_pipeline: "FIRE + PIPELINE",
-      cable_outage: "OUTAGE + CABLE",
-      emergency_squawk: "EMERGENCY SQUAWK",
-      ship_cable_proximity: "SHIP + CABLE",
-      information_blackout: "INFO BLACKOUT",
-      airspace_clearing: "AIRSPACE + MIL",
-      weather_disruption: "WEATHER + AIR",
-      conflict_pulse: "DEVELOPING",
-      chokepoint_disruption: "CHOKEPOINT",
-      convergence: "CONVERGENCE",
-    }
-
-    const statusBanner = snapshotStatus === "ready"
-      ? ""
-      : `<div style="margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}</div>`
-
-    const sortedInsights = insights
-      .map((insight, idx) => ({ insight, idx }))
-      .sort((a, b) => (severityOrder[a.insight.severity] || 3) - (severityOrder[b.insight.severity] || 3))
-
-    const html = statusBanner + sortedInsights
-      .map(({ insight, idx }) => {
-        const sev = insight.severity || "medium"
-        const icon = severityIcons[sev] || "fa-circle-info"
-        const typeLabel = typeLabels[insight.type] || insight.type.replace(/_/g, " ").toUpperCase()
-        const hasLocation = insight.lat != null && insight.lng != null
-        const affectedEntities = this._affectedInsightEntities(insight)
-        const affectedActionLabel = this._affectedInsightActionLabel(affectedEntities)
-
-        // Build entity detail chips
-        let chips = ""
-        if (insight.type === "convergence" && insight.layers) {
-          // Convergence insight — show layer chips
-          const layerChipColors = {
-            earthquake: "eq", fire: "fire", conflict: "conf",
-            military_flight: "flight", jamming: "jam", natural_event: "event",
-            news: "news", nuclear_plant: "plant", submarine_cable: "cable",
-          }
-          insight.layers.forEach(layer => {
-            const cls = layerChipColors[layer] || "eq"
-            const label = layer.replace(/_/g, " ")
-            const ents = insight.entities?.[layer]
-            const count = ents?.count || (Array.isArray(ents) ? ents.length : "")
-            chips += `<span class="ins-chip ins-chip--${cls}">${count ? count + " " : ""}${label}</span>`
-          })
-          if (insight.layer_count) {
-            chips = `<span class="ins-chip ins-chip--conf">${insight.layer_count} layers</span>` + chips
-          }
-        } else if (insight.entities) {
-          const ents = insight.entities
-          if (ents.earthquake) chips += `<span class="ins-chip ins-chip--eq">M${ents.earthquake.magnitude}</span>`
-          if (ents.cables?.length) chips += `<span class="ins-chip ins-chip--cable">${ents.cables.length} cable${ents.cables.length > 1 ? "s" : ""}</span>`
-          if (ents.plants?.length) chips += `<span class="ins-chip ins-chip--plant">${ents.plants.length} plant${ents.plants.length > 1 ? "s" : ""}</span>`
-          if (ents.flights) chips += `<span class="ins-chip ins-chip--flight">${ents.flights.total || ents.flights.military || 0} flights</span>`
-          if (ents.jamming) chips += `<span class="ins-chip ins-chip--jam">${ents.jamming.percentage?.toFixed(0)}% jam</span>`
-          if (ents.fires) chips += `<span class="ins-chip ins-chip--fire">${ents.fires.count} fires</span>`
-          if (ents.outages?.length) chips += `<span class="ins-chip ins-chip--outage">${ents.outages.length} outage${ents.outages.length > 1 ? "s" : ""}</span>`
-          if (ents.conflict) chips += `<span class="ins-chip ins-chip--conf">${ents.conflict.count || ents.conflict.events} events</span>`
-          if (ents.flight) chips += `<span class="ins-chip ins-chip--flight">${ents.flight.squawk || "EMG"} ${ents.flight.callsign || ents.flight.icao24}</span>`
-          if (ents.ship) chips += `<span class="ins-chip ins-chip--cable">${ents.ship.name || ents.ship.mmsi}</span>`
-          if (ents.cable && !ents.cables) chips += `<span class="ins-chip ins-chip--cable">${ents.cable.name} (${ents.cable.distance_km}km)</span>`
-          if (ents.nordo) chips += `<span class="ins-chip ins-chip--jam">${ents.nordo.count} NORDO</span>`
-          if (ents.notams?.length) chips += `<span class="ins-chip ins-chip--flight">${ents.notams.length} NOTAMs</span>`
-          if (ents.pipelines?.length) chips += `<span class="ins-chip ins-chip--cable">${ents.pipelines.length} pipeline${ents.pipelines.length > 1 ? "s" : ""}</span>`
-          if (ents.satellite) chips += `<span class="ins-chip ins-chip--plant">${ents.satellite.name}</span>`
-          if (ents.hotspot) chips += `<span class="ins-chip ins-chip--conf">${ents.hotspot.label}</span>`
-          if (ents.weather) chips += `<span class="ins-chip ins-chip--outage">${ents.weather.event}</span>`
-          if (ents.conflicts?.length) chips += `<span class="ins-chip ins-chip--conf">${ents.conflicts.length} conflicts</span>`
-          if (ents.pulse) chips += `<span class="ins-chip ins-chip--conf">${ents.pulse.score} pulse · ${ents.pulse.trend}</span>`
-          if (ents.news?.count_24h) chips += `<span class="ins-chip ins-chip--fire">${ents.news.count_24h} reports · ${ents.news.sources} sources</span>`
-          if (ents.headlines?.length) chips += ents.headlines.map(h => `<span class="ins-chip ins-chip--eq" style="white-space:normal;text-align:left;font-size:8px;line-height:1.2;">${h.slice(0,60)}</span>`).join("")
-          if (ents.cross_layer?.military_flights) chips += `<span class="ins-chip ins-chip--flight">${ents.cross_layer.military_flights} mil flights</span>`
-          if (ents.cross_layer?.gps_jamming) chips += `<span class="ins-chip ins-chip--jam">${ents.cross_layer.gps_jamming}% jamming</span>`
-          if (ents.cross_layer?.internet_outage) chips += `<span class="ins-chip ins-chip--outage">outage: ${ents.cross_layer.internet_outage}</span>`
-          if (ents.cross_layer?.fire_hotspots) chips += `<span class="ins-chip ins-chip--fire">${ents.cross_layer.fire_hotspots} fires</span>`
-          if (ents.chokepoint) chips += `<span class="ins-chip ins-chip--cable">${ents.chokepoint.name} (${ents.chokepoint.status})</span>`
-          if (ents.ships?.total) chips += `<span class="ins-chip ins-chip--cable">${ents.ships.total} ships (${ents.ships.tankers || 0} tankers)</span>`
-          if (ents.flows) Object.entries(ents.flows).forEach(([k, v]) => { if (v.pct) chips += `<span class="ins-chip ins-chip--outage">${v.pct}% world ${k}</span>` })
-          if (ents.commodities?.length) ents.commodities.forEach(c => { if (c.change_pct) chips += `<span class="ins-chip ins-chip--${c.change_pct > 0 ? "fire" : "eq"}">${c.symbol} ${c.change_pct > 0 ? "+" : ""}${c.change_pct}%</span>` })
-        }
-
-        return `<div class="insight-card insight-card--${sev}" data-insight-idx="${idx}">
-          <div class="insight-card-severity">
-            <i class="fa-solid ${icon}"></i>
-          </div>
-          <div class="insight-card-body">
-            <div class="insight-card-type">${typeLabel}</div>
-            <div class="insight-card-title">${this._escapeHtml(insight.title)}</div>
-            <div class="insight-card-desc">${this._escapeHtml(insight.description)}</div>
-            ${chips ? `<div class="insight-card-chips">${chips}</div>` : ""}
-            <div class="insight-card-actions">
-              ${hasLocation ? `<button class="insight-action-btn" data-action="click->globe#focusInsight" data-insight-idx="${idx}"><i class="fa-solid fa-location-crosshairs"></i> Focus</button>` : ""}
-              ${affectedEntities.length ? `<button class="insight-action-btn" data-action="click->globe#showAffectedInsightEntities" data-insight-idx="${idx}"><i class="fa-solid fa-crosshairs"></i> ${this._escapeHtml(affectedActionLabel)}</button>` : ""}
-            </div>
-          </div>
-        </div>`
-      }).join("")
-
-    this.insightFeedContentTarget.innerHTML = html
+    this.insightFeedContentTarget.innerHTML = renderInsightFeedHtml(this, insights, snapshotStatus)
   }
 
   GlobeController.prototype.focusInsight = function(event) {
@@ -630,77 +500,7 @@ export function applyInsightsMethods(GlobeController) {
       this._setSelectedContext(this._buildInsightContext(insight))
     }
 
-    const severityColors = { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }
-    const sev = insight.severity || "medium"
-    const sevColor = severityColors[sev] || "#ffc107"
-    const typeLabel = (insight.type || "insight").replace(/_/g, " ").toUpperCase()
-    const description = insight.description || ""
-    const coordStr = (insight.lat != null && insight.lng != null)
-      ? `${insight.lat.toFixed(2)}, ${insight.lng.toFixed(2)}` : "Global"
-    const insightIdx = this._insightIndex(insight)
-    const affectedEntities = this._affectedInsightEntities(insight)
-
-    let entitiesHtml = ""
-    if (insight.entities) {
-      const ents = insight.entities
-      const items = []
-      if (ents.earthquakes?.count) items.push(`${ents.earthquakes.count} earthquakes (max M${ents.earthquakes.max_mag || "?"})`)
-      if (ents.fires) items.push(`${ents.fires.count} fire hotspots`)
-      if (ents.conflict) items.push(`${ents.conflict.count || ents.conflict.events || ""} conflict events`)
-      if (ents.outages?.length) items.push(`${ents.outages.length} internet outages`)
-      if (ents.flight) items.push(`Flight ${ents.flight.callsign || ents.flight.icao24} (${ents.flight.squawk || "EMG"})`)
-      if (ents.ship) items.push(`Ship: ${ents.ship.name || ents.ship.mmsi}`)
-      if (ents.cable) items.push(`Cable: ${ents.cable.name}`)
-      if (ents.nordo) items.push(`${ents.nordo.count} NORDO aircraft`)
-      if (ents.notams?.length) items.push(`${ents.notams.length} NOTAMs`)
-      if (ents.pipelines?.length) items.push(`${ents.pipelines.length} pipelines`)
-      if (ents.satellite) items.push(`Satellite: ${ents.satellite.name}`)
-      if (ents.weather) items.push(`Weather: ${ents.weather.event}`)
-      if (ents.chokepoint) items.push(`Chokepoint: ${ents.chokepoint.name} (${ents.chokepoint.status})`)
-      if (items.length) {
-        entitiesHtml = `<div style="margin-top:6px;font-size:11px;color:var(--gt-text-sec);">${items.map(i => `<div style="padding:2px 0;">- ${this._escapeHtml(i)}</div>`).join("")}</div>`
-      }
-    }
-
-    const affectedEntitiesHtml = affectedEntities.length && insightIdx >= 0
-      ? `
-        <div style="margin-top:10px;">
-          <div class="detail-label" style="margin-bottom:6px;">Affected Entities</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            ${affectedEntities.map(entity => `
-              <button
-                type="button"
-                class="insight-action-btn"
-                data-action="click->globe#focusAffectedInsightEntity"
-                data-insight-idx="${insightIdx}"
-                data-entity-kind="${this._escapeHtml(entity.kind)}"
-              >
-                <i class="fa-solid ${this._escapeHtml(entity.icon)}"></i> ${this._escapeHtml(entity.label)}
-              </button>
-            `).join("")}
-          </div>
-        </div>
-      `
-      : ""
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${sevColor};">
-        <i class="fa-solid fa-brain" style="margin-right:6px;"></i>${typeLabel}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
-        <span style="font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;">${sev}</span>
-      </div>
-      <div class="detail-country">${this._escapeHtml(insight.title)}</div>
-      <div style="font-size:12px;line-height:1.4;color:var(--gt-text-sec);margin:6px 0;">${this._escapeHtml(description)}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Location</span>
-          <span class="detail-value">${coordStr}</span>
-        </div>
-      </div>
-      ${entitiesHtml}
-      ${affectedEntitiesHtml}
-    `
+    this.detailContentTarget.innerHTML = renderInsightDetailHtml(this, insight)
     this.detailPanelTarget.style.display = ""
   }
 

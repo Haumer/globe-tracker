@@ -875,7 +875,7 @@ export function applyCoreMethods(GlobeController) {
         camera: { lat: 48, lng: 10, height: 5000000 },
       },
       events: {
-        layers: ["earthquakes", "naturalEvents", "news", "conflicts", "borders"],
+        layers: ["earthquakes", "naturalEvents", "news", "conflicts", "situations", "borders"],
         camera: { lat: 20, lng: 30, height: 15000000 },
       },
       space: {

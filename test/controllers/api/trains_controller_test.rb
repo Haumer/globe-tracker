@@ -15,6 +15,10 @@ class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
       longitude: 16.37,
       direction: "Wien",
       progress: 42,
+      snapped_latitude: 48.2099,
+      snapped_longitude: 16.3701,
+      snap_distance_m: 12.4,
+      snap_confidence: "high",
       raw_payload: {},
       fetched_at: Time.current,
       expires_at: 90.seconds.from_now,
@@ -28,6 +32,8 @@ class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, data.size
     assert_equal "ICE 123", data.first["name"]
     assert_equal "ÖBB", data.first["operator"]
+    assert_equal 48.2099, data.first["snappedLat"]
+    assert_equal "high", data.first["snapConfidence"]
   end
 
   test "GET /api/trains excludes stale observations and filters by bbox" do

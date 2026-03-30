@@ -16,8 +16,8 @@ class RailwayImportService
 
       props = feat["properties"] || {}
 
-      # Simplify: round to 3 decimals, skip duplicates
-      simplified = coords.map { |c| [c[0].round(3), c[1].round(3)] }
+      # Preserve source precision so train snapping can align to the imported rail geometry.
+      simplified = coords.map { |c| [c[0].to_f, c[1].to_f] }
       simplified = simplified.chunk_while { |a, b| a == b }.map(&:first)
       next if simplified.size < 2
 

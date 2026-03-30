@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_30_130500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -965,10 +965,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.datetime "expires_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "matched_railway_id"
+    t.float "snapped_latitude"
+    t.float "snapped_longitude"
+    t.float "snap_distance_m"
+    t.string "snap_confidence"
     t.index ["expires_at"], name: "index_train_observations_on_expires_at"
     t.index ["external_id"], name: "index_train_observations_on_external_id", unique: true
     t.index ["fetched_at"], name: "index_train_observations_on_fetched_at"
+    t.index ["matched_railway_id"], name: "index_train_observations_on_matched_railway_id"
     t.index ["operator_key"], name: "index_train_observations_on_operator_key"
+    t.index ["snap_confidence"], name: "index_train_observations_on_snap_confidence"
     t.index ["train_ingest_id"], name: "index_train_observations_on_train_ingest_id"
   end
 
@@ -1075,6 +1082,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
   add_foreign_key "ontology_events", "ontology_entities", column: "place_entity_id"
   add_foreign_key "ontology_evidence_links", "ontology_events"
   add_foreign_key "ontology_relationship_evidences", "ontology_relationships"
+  add_foreign_key "train_observations", "railways", column: "matched_railway_id"
   add_foreign_key "train_observations", "train_ingests"
   add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"

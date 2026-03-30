@@ -5,6 +5,8 @@ module Api
     LIST_COLUMNS = %i[
       external_id name category category_long operator_name flag
       latitude longitude direction progress fetched_at expires_at
+      matched_railway_id snapped_latitude snapped_longitude
+      snap_distance_m snap_confidence
     ].freeze
 
     def index
@@ -25,6 +27,11 @@ module Api
           lng: train.longitude,
           direction: train.direction,
           progress: train.progress,
+          matchedRailwayId: train.matched_railway_id,
+          snappedLat: train.snapped_latitude,
+          snappedLng: train.snapped_longitude,
+          snapDistanceM: train.snap_distance_m,
+          snapConfidence: train.snap_confidence,
           fetchedAt: train.fetched_at&.iso8601,
           expiresAt: train.expires_at&.iso8601,
         }

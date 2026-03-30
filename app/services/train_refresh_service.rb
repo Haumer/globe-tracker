@@ -47,9 +47,18 @@ class TrainRefreshService
 
     def build_records(snapshot, ingest_id)
       now = Time.current
+      external_ids = snapshot[:trains].map { |train| train[:id] }
+      previous_matches = TrainObservation.where(external_id: external_ids)
+        .select(:external_id, :matched_railway_id)
+        .index_by(&:external_id)
+      snapped_positions = TrainSnapService.snap_all(
+        snapshot[:trains],
+        previous_matches_by_external_id: previous_matches
+      )
 
       snapshot[:trains].filter_map do |train|
         next if train[:lat].blank? || train[:lng].blank?
+        snapped = snapped_positions[train[:id]] || {}
 
         {
           external_id: train[:id],
@@ -65,6 +74,11 @@ class TrainRefreshService
           longitude: train[:lng],
           direction: train[:direction],
           progress: normalize_progress(train[:progress]),
+          matched_railway_id: snapped[:matched_railway_id],
+          snapped_latitude: snapped[:snapped_latitude],
+          snapped_longitude: snapped[:snapped_longitude],
+          snap_distance_m: snapped[:snap_distance_m],
+          snap_confidence: snapped[:snap_confidence],
           raw_payload: train.as_json,
           fetched_at: snapshot[:fetched_at],
           expires_at: snapshot[:fetched_at] + EXPIRY_WINDOW,

@@ -19,6 +19,8 @@ function trainColor(category) {
 
 const DEFAULT_LERP_DURATION = 10000 // ms — fallback for first movement
 const LATENCY_BUFFER = 1.2 // run 20% slower to absorb network jitter
+const POSITION_EPSILON = 0.00001
+const MOVEMENT_SIGNAL_WINDOW = 90000 // ms — tolerate repeated coarse positions before declaring stopped
 
 export function applyTrainsMethods(GlobeController) {
   GlobeController.prototype.getTrainsDataSource = function() {
@@ -86,26 +88,35 @@ export function applyTrainsMethods(GlobeController) {
 
       if (prev) {
         // Train existed before — set up animation from current rendered pos to new pos
-        const hasMoved = Math.abs(prev.targetLat - t.lat) > 0.00001 ||
-                         Math.abs(prev.targetLng - t.lng) > 0.00001
+        const previousTargetLat = prev.targetLat
+        const previousTargetLng = prev.targetLng
+        const previousProgress = prev.progress
+        const hasMoved = Math.abs(previousTargetLat - t.lat) > POSITION_EPSILON ||
+                         Math.abs(previousTargetLng - t.lng) > POSITION_EPSILON
+        const progressChanged = t.progress != null && previousProgress != null
+          ? t.progress !== previousProgress
+          : t.progress != null && previousProgress == null
         prev.fromLat = prev.currentLat
         prev.fromLng = prev.currentLng
         prev.targetLat = t.lat
         prev.targetLng = t.lng
         if (hasMoved) {
           // Measure actual time between position changes for lerp duration
-          const dt = prev.lastMovedAt ? (now - prev.lastMovedAt) : DEFAULT_LERP_DURATION
+          const dt = prev.lastMovedAt ? Math.max(now - prev.lastMovedAt, 1000) : DEFAULT_LERP_DURATION
           prev.lerpDuration = dt * LATENCY_BUFFER
           // Estimate speed: haversine distance / time
-          const dLat = t.lat - prev.targetLat
-          const dLng = t.lng - prev.targetLng
+          const dLat = t.lat - previousTargetLat
+          const dLng = t.lng - previousTargetLng
           const distKm = Math.sqrt(dLat * dLat + dLng * dLng * Math.cos(t.lat * Math.PI / 180) ** 2) * 111.32
           prev.speedKmh = Math.round(distKm / (dt / 3600000))
           prev.lastMovedAt = now
         }
+        if (progressChanged) prev.lastProgressAt = now
+        prev.progress = t.progress
         prev.startTime = now
-        // Only mark stopped after 30s of no position change
-        prev.moving = (now - (prev.lastMovedAt || 0)) < 30000
+        // HAFAS often repeats coarse coordinates; keep trains moving while progress is still advancing.
+        const lastSignalAt = Math.max(prev.lastMovedAt || 0, prev.lastProgressAt || 0)
+        prev.moving = !lastSignalAt || (now - lastSignalAt) < MOVEMENT_SIGNAL_WINDOW
       } else {
         // New train — assume moving until proven otherwise
         this._trainPositions.set(t.id, {
@@ -114,8 +125,11 @@ export function applyTrainsMethods(GlobeController) {
           currentLat: t.lat, currentLng: t.lng,
           startTime: now,
           lastMovedAt: now,
+          lastProgressAt: now,
           lerpDuration: DEFAULT_LERP_DURATION,
           moving: true,
+          progress: t.progress,
+          speedKmh: null,
         })
       }
     }

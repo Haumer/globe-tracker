@@ -3,7 +3,7 @@ class TrainRefreshService
 
   EXPIRY_WINDOW = 90.seconds
 
-  refreshes model: TrainObservation, interval: 1.minute
+  refreshes model: TrainObservation, interval: 30.seconds
 
   class << self
     def refresh

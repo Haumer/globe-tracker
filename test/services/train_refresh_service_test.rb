@@ -130,6 +130,44 @@ class TrainRefreshServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "stale? matches the 30 second live cadence" do
+    TrainObservation.create!(
+      external_id: "fresh-train",
+      source: "hafas",
+      operator_key: "oebb",
+      operator_name: "ÖBB",
+      name: "RJX 101",
+      category: "RJX",
+      category_long: "Railjet Express",
+      latitude: 48.21,
+      longitude: 16.37,
+      raw_payload: {},
+      fetched_at: 29.seconds.ago,
+      expires_at: 90.seconds.from_now,
+    )
+
+    assert_not TrainRefreshService.stale?
+
+    TrainObservation.delete_all
+
+    TrainObservation.create!(
+      external_id: "stale-train",
+      source: "hafas",
+      operator_key: "oebb",
+      operator_name: "ÖBB",
+      name: "RJX 102",
+      category: "RJX",
+      category_long: "Railjet Express",
+      latitude: 48.21,
+      longitude: 16.37,
+      raw_payload: {},
+      fetched_at: 31.seconds.ago,
+      expires_at: 90.seconds.from_now,
+    )
+
+    assert TrainRefreshService.stale?
+  end
+
   private
 
   def with_stubbed_train_snapshots(result)

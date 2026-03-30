@@ -1,11 +1,4 @@
 class AreaBriefService
-  SOURCE_WEIGHTS = {
-    "wire" => 1.0,
-    "publisher" => 0.78,
-    "aggregator" => 0.42,
-    "platform" => 0.25,
-  }.freeze
-
   STATE_LABELS = {
     closed: "Closed / Denied Transit",
     restricted_selective: "Restricted / Selective Passage",
@@ -24,56 +17,13 @@ class AreaBriefService
     live_monitor: "low",
   }.freeze
 
-  PASSAGE_PATTERNS = {
-    closed: [
-      /no ship is allowed to pass/i,
-      /not allowed to pass/i,
-      /\b(?:blockade|blocked|blocking)\b/i,
-      /\b(?:closed|closure)\b/i,
-      /effective closure/i,
-      /near halt/i,
-      /\bmined?\b/i,
-    ],
-    restricted_selective: [
-      /\btransit fees?\b/i,
-      /\btolls?\b/i,
-      /\bmonetiz(?:e|es|ed|ing)\b/i,
-      /\bpermission\b/i,
-      /\ballow(?:ed|s)? \d+ (?:more )?(?:ships?|tankers?|vessels?)\b/i,
-      /\bselective(?:ly)?\b/i,
-      /\bcalling the shots\b/i,
-    ],
-    restricted: [
-      /\brerout(?:e|ed|ing)\b/i,
-      /\bnorth(?:ern)? corridor\b/i,
-      /\bcongestion\b/i,
-      /\bcrowding\b/i,
-      /\bwar lev(?:y|ies)\b/i,
-      /insurance cover cuts?/i,
-      /\bdisrupt(?:ed|ion|ing)\b/i,
-      /\brestricted\b/i,
-      /\bcontrol of the strait\b/i,
-    ],
-    reopening: [
-      /\breopen(?:ed|ing)?\b/i,
-      /\bresume(?:d|s|ing)?\b/i,
-      /\bquestion of time\b/i,
-      /\bone way or another\b/i,
-    ],
-    open: [
-      /\bclear(?:ed)? .* safely\b/i,
-      /\bpassed safely\b/i,
-      /\bsafely transited\b/i,
-      /\bopen\b/i,
-    ],
-  }.freeze
-
-  TERM_ALIASES = {
-    /hormuz/i => ["hormuz", "strait of hormuz"],
-    /bab el[- ]mandeb|bab al[- ]mandab/i => ["bab el-mandeb", "bab al-mandab", "red sea chokepoint"],
-    /bosporus/i => ["bosporus", "bosphorus"],
-    /suez/i => ["suez canal", "suez"],
-    /malacca/i => ["strait of malacca", "malacca"],
+  STATE_PRIORITY = {
+    restricted_selective: 0,
+    closed: 1,
+    restricted: 2,
+    reopening: 3,
+    open: 4,
+    live_monitor: 5,
   }.freeze
 
   def initialize(area_workspace, bounds:)
@@ -90,6 +40,8 @@ class AreaBriefService
   private
 
   def maritime_brief
+    area_article_candidates.enqueue_hydration!
+
     evidence = maritime_evidence
     return generic_brief if evidence.empty?
 
@@ -118,29 +70,31 @@ class AreaBriefService
   end
 
   def maritime_evidence
-    candidate_events.filter_map do |event|
-      text = clean_text([event.title, event.news_article&.summary].compact.join(" "))
-      next if text.blank?
-
-      state = classify_passage_state(text)
+    area_article_candidates.call.filter_map do |candidate|
+      event = candidate[:event]
+      signal = maritime_signal_for(event)
+      state = signal&.fetch(:state, nil)
       next unless state
 
       {
         title: event.title.presence || event.name,
-        publisher: event.news_source&.name.presence || event.source.presence || event.name,
+        publisher: publisher_for(event),
         published_at: event.published_at,
         url: event.url,
-        summary: excerpt_for(text),
+        summary: signal[:excerpt].presence || excerpt_for(candidate[:text]),
         source_kind: event.news_source&.source_kind.to_s,
         state: state,
-        score: score_for(event, state),
+        signals: signal[:signals],
+        score: maritime_score_for(candidate, state),
       }
     end.sort_by { |item| [state_rank(item[:state]), -item[:score], -(item[:published_at]&.to_i || 0)] }
   end
 
   def selected_state_for(evidence)
     grouped = evidence.group_by { |item| item[:state] }
-    recent_selective = grouped.fetch(:restricted_selective, []).any? { |item| item[:published_at].present? && item[:published_at] > 24.hours.ago }
+    recent_selective = grouped.fetch(:restricted_selective, []).any? do |item|
+      item[:published_at].present? && item[:published_at] > 24.hours.ago
+    end
 
     return :restricted_selective if recent_selective
     return :closed if grouped[:closed].to_a.sum { |item| item[:score] } >= 1.6
@@ -172,7 +126,7 @@ class AreaBriefService
   end
 
   def generic_summary
-    signals = scoped_news_scope.limit(6)
+    signals = area_article_candidates.call.first(6)
     return "This area is saved and live, but it does not yet have enough structured signal to support a higher-confidence assessment." if signals.empty?
 
     "This area has live reporting and movement data, but the page still needs stronger ranking and change analysis before it can support a high-trust operational readout."
@@ -197,10 +151,11 @@ class AreaBriefService
   end
 
   def generic_evidence
-    scoped_news_scope.limit(4).map do |event|
+    area_article_candidates.call.first(4).map do |candidate|
+      event = candidate[:event]
       {
         title: event.title.presence || event.name,
-        publisher: event.news_source&.name.presence || event.source.presence || event.name,
+        publisher: publisher_for(event),
         published_at: event.published_at,
         url: event.url,
       }
@@ -225,96 +180,57 @@ class AreaBriefService
     ]
   end
 
-  def candidate_events
-    @candidate_events ||= begin
-      merged = {}
-      scoped_news_scope.each { |event| merged[event.id] = event }
-      named_news_scope.each { |event| merged[event.id] = event }
-      merged.values.sort_by { |event| -(event.published_at&.to_i || 0) }
-    end
-  end
-
-  def scoped_news_scope
-    @scoped_news_scope ||= NewsEvent
-      .within_bounds(@bounds)
-      .where("published_at > ?", 36.hours.ago)
-      .where.not(content_scope: "out_of_scope")
-      .includes(:news_article, :news_source)
-      .order(published_at: :desc)
-      .limit(24)
-  end
-
-  def named_news_scope
-    return NewsEvent.none if area_terms.empty?
-
-    fragments = []
-    bindings = {}
-    area_terms.each_with_index do |term, index|
-      key = :"term_#{index}"
-      bindings[key] = "%#{term.downcase}%"
-      fragments << "(lower(news_events.title) LIKE :#{key} OR lower(coalesce(news_articles.summary, '')) LIKE :#{key})"
-    end
-
-    NewsEvent
-      .left_outer_joins(:news_article)
-      .where("news_events.published_at > ?", 48.hours.ago)
-      .where.not(content_scope: "out_of_scope")
-      .where(fragments.join(" OR "), bindings)
-      .includes(:news_article, :news_source)
-      .order(published_at: :desc)
-      .limit(24)
-  end
-
-  def area_terms
-    @area_terms ||= begin
-      base_terms = [@area_workspace.name, @area_workspace.region_name].compact.map { |value| clean_text(value).downcase }.reject(&:blank?)
-      alias_terms = TERM_ALIASES.each_with_object([]) do |(matcher, terms), memo|
-        memo.concat(terms) if base_terms.any? { |value| value.match?(matcher) }
-      end
-
-      (base_terms + alias_terms).uniq
-    end
+  def area_article_candidates
+    @area_article_candidates ||= AreaArticleCandidateService.new(@area_workspace, bounds: @bounds)
   end
 
   def maritime_area?
-    @area_workspace.profile == "maritime" || area_terms.any? { |term| term.include?("hormuz") || term.include?("mandeb") || term.include?("suez") }
+    @area_workspace.profile == "maritime" ||
+      area_article_candidates.area_terms.any? { |term| term.include?("hormuz") || term.include?("mandeb") || term.include?("suez") }
   end
 
-  def classify_passage_state(text)
-    PASSAGE_PATTERNS.each do |state, patterns|
-      return state if patterns.any? { |pattern| text.match?(pattern) }
-    end
+  def maritime_signal_for(event)
+    article = event.news_article
+    persisted_signal = normalize_signal(article&.metadata.to_h["maritime_passage_signal"])
+    return persisted_signal if persisted_signal.present?
 
-    nil
+    normalize_signal(
+      MaritimePassageSignalExtractor.extract(
+        title: event.title.presence || article&.title,
+        summary: article&.summary
+      )
+    )
   end
 
-  def score_for(event, state)
-    recency_bonus = if event.published_at.present?
-      if event.published_at > 6.hours.ago
-        0.4
-      elsif event.published_at > 24.hours.ago
-        0.2
-      else
-        0.0
-      end
-    else
-      0.0
-    end
+  def normalize_signal(signal)
+    return nil unless signal.respond_to?(:[])
 
-    hydration_bonus = event.news_article&.hydration_status == "hydrated" ? 0.15 : 0.0
-    source_weight = SOURCE_WEIGHTS.fetch(event.news_source&.source_kind.to_s, 0.5)
-    source_weight + recency_bonus + hydration_bonus + (0.1 * (5 - state_rank(state)))
+    state = value_for(signal, :state).presence
+    return nil if state.blank?
+
+    {
+      state: state.to_sym,
+      signals: Array(value_for(signal, :signals)).map(&:to_s),
+      excerpt: clean_text(value_for(signal, :excerpt)).presence,
+    }
+  end
+
+  def maritime_score_for(candidate, state)
+    candidate[:score].to_f + (0.1 * (5 - state_rank(state)))
   end
 
   def state_rank(state)
-    case state
-    when :closed then 0
-    when :restricted_selective then 1
-    when :restricted then 2
-    when :reopening then 3
-    when :open then 4
-    else 5
-    end
+    STATE_PRIORITY.fetch(state, 99)
+  end
+
+  def publisher_for(event)
+    event.news_source&.name.presence || event.source.presence || event.name
+  end
+
+  def value_for(obj, key)
+    return unless obj.respond_to?(:[])
+
+    obj[key] || obj[key.to_s]
   end
 
   def clean_text(value)

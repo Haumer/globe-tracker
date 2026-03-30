@@ -5,6 +5,7 @@ class RssArticleHydrationService
   MAX_ATTEMPTS = 3
   FETCH_TIMEOUT = 8
   MAX_BODY_CHARS = 20_000
+  FORCE_REASON_KEY = "force_hydration_reason"
 
   class << self
     def enqueue_candidates(records, now: Time.current)
@@ -37,6 +38,13 @@ class RssArticleHydrationService
       queued
     end
 
+    def enqueue_area_candidates(events, reason:, now: Time.current)
+      Array(events)
+        .filter_map(&:news_article)
+        .uniq(&:id)
+        .count { |article| queue_forced(article, reason: reason, now: now) }
+    end
+
     def hydrate(news_article_id)
       article = NewsArticle.find_by(id: news_article_id)
       return false unless article
@@ -62,12 +70,14 @@ class RssArticleHydrationService
     end
 
     def hydrate_decision(article, claim_summary = nil, record = nil)
-      return skip("not_rss") unless rss_article?(article)
+      forced_reason = force_hydration_reason(article)
+      return skip("not_rss") unless rss_article?(article) || forced_reason.present?
       return skip("out_of_scope") if article.content_scope == "out_of_scope"
       return skip("too_old") if stale_article?(article)
       return skip("blocked_domain") if blocked_domain?(article.publisher_domain)
       return skip("too_many_attempts") if article.hydration_attempts.to_i >= MAX_ATTEMPTS
       return skip("already_hydrated") if article.hydration_status == "hydrated"
+      return decision(:immediate, forced_reason) if forced_reason.present?
 
       if article.content_scope == "core"
         return decision(:immediate, "core_scope")
@@ -139,12 +149,39 @@ class RssArticleHydrationService
       decision[:priority] != :skip
     end
 
-    def mark_queued(article, reason, now)
-      return false if %w[queued hydrating hydrated].include?(article.hydration_status)
+    def queue_forced(article, reason:, now:)
+      return false unless article
+      return false if %w[queued hydrating].include?(article.hydration_status)
+      return false if article.hydration_status == "hydrated" && usable_summary?(article.summary)
+      return false if article.hydration_attempts.to_i >= MAX_ATTEMPTS && article.hydration_status == "failed"
+
+      metadata = article.metadata.to_h.merge(
+        FORCE_REASON_KEY => reason,
+        "force_hydration_requested_at" => now.iso8601
+      )
 
       article.update_columns(
         hydration_status: "queued",
         hydration_error: reason,
+        metadata: metadata,
+        updated_at: now
+      )
+
+      RssArticleHydrationJob.set(wait: 10.seconds).perform_later(article.id)
+      true
+    end
+
+    def mark_queued(article, reason, now)
+      return false if %w[queued hydrating hydrated].include?(article.hydration_status)
+
+      metadata = article.metadata.to_h
+      forced_reason = force_hydration_reason(article)
+      metadata[FORCE_REASON_KEY] = forced_reason if forced_reason.present?
+
+      article.update_columns(
+        hydration_status: "queued",
+        hydration_error: reason,
+        metadata: metadata,
         updated_at: now
       )
     end
@@ -268,6 +305,7 @@ class RssArticleHydrationService
     def apply_hydration(article, extracted)
       now = Time.current
       previous_summary = article.summary
+      hydrated_canonical_url = extracted[:canonical_url]
 
       updates = {
         title: preferred_text(article.title, extracted[:title]),
@@ -280,19 +318,31 @@ class RssArticleHydrationService
         updated_at: now,
       }
 
-      hydrated_canonical_url = extracted[:canonical_url]
       if hydrated_canonical_url.present? && can_replace_canonical_url?(article, hydrated_canonical_url)
         updates[:canonical_url] = hydrated_canonical_url
       end
 
+      metadata = article.metadata.to_h.merge(
+        "hydrated_summary_present" => updates[:summary].present?,
+        "hydrated_language" => updates[:language],
+        "hydrated_canonical_url" => hydrated_canonical_url,
+        "hydration_source" => "article_page"
+      )
+      metadata.except!(FORCE_REASON_KEY, "force_hydration_requested_at")
+
+      signal = MaritimePassageSignalExtractor.extract(
+        title: updates[:title],
+        summary: updates[:summary]
+      )
+      if signal.present?
+        metadata["maritime_passage_signal"] = signal.merge("analyzed_at" => now.iso8601)
+      else
+        metadata.delete("maritime_passage_signal")
+      end
+
       article.update_columns(
         **updates,
-        metadata: article.metadata.to_h.merge(
-          "hydrated_summary_present" => updates[:summary].present?,
-          "hydrated_language" => updates[:language],
-          "hydrated_canonical_url" => hydrated_canonical_url,
-          "hydration_source" => "article_page"
-        )
+        metadata: metadata
       )
 
       clear_domain_failure(article.publisher_domain) if article.publisher_domain.present?
@@ -343,6 +393,14 @@ class RssArticleHydrationService
 
     def preferred_text(current_value, new_value)
       current_value.present? ? current_value : new_value
+    end
+
+    def usable_summary?(summary)
+      text = normalize_text(summary, MAX_BODY_CHARS)
+      return false if text.blank?
+      return false if text.start_with?("http")
+
+      text.length >= 140
     end
 
     def first_content(document, *selectors)
@@ -400,6 +458,10 @@ class RssArticleHydrationService
       URI.join(base_uri.to_s, value.to_s).to_s
     rescue URI::InvalidURIError
       nil
+    end
+
+    def force_hydration_reason(article)
+      article.metadata.to_h[FORCE_REASON_KEY].presence
     end
 
     def hydration_delay_for(priority)

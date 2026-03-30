@@ -13,6 +13,7 @@ class AreaSummaryService
 
   def call
     {
+      brief: AreaBriefService.new(@area_workspace, bounds: @bounds).call,
       overview: overview_counts,
       signals: {
         headlines: headline_items,

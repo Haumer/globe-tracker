@@ -152,10 +152,84 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_includes response.body, "Gulf monitor"
+    assert_includes response.body, "Assessment"
     assert_includes response.body, "Port disruption near the gulf corridor"
     assert_includes response.body, "Flight surge"
     assert_includes response.body, "Hormuz pressure"
     assert_includes response.body, "/#25.2500,55.2500,300000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
+  end
+
+  test "maritime area summary renders restricted selective brief when reporting is mixed" do
+    area = @user.area_workspaces.create!(
+      name: "Strait of Hormuz",
+      scope_type: "preset_region",
+      profile: "maritime",
+      bounds: { lamin: 24.0, lamax: 28.0, lomin: 54.0, lomax: 58.5 },
+      scope_metadata: {
+        region_key: "strait-of-hormuz",
+        region_name: "Strait of Hormuz",
+      },
+      default_layers: ["ships", "chokepoints", "news"]
+    )
+
+    wire = NewsSource.create!(canonical_key: "wire-hormuz", name: "Wire Source", source_kind: "wire")
+
+    toll_article = NewsArticle.create!(
+      news_source: wire,
+      url: "https://example.com/hormuz-tolls",
+      canonical_url: "https://example.com/hormuz-tolls",
+      title: "Iran considers levying transit fees on ships in Hormuz",
+      summary: "Recent reporting describes Tehran monetizing passage and requiring selective permission for some vessels.",
+      published_at: 2.hours.ago,
+      content_scope: "core",
+      hydration_status: "hydrated"
+    )
+    NewsEvent.create!(
+      news_source: wire,
+      news_article: toll_article,
+      url: toll_article.url,
+      title: toll_article.title,
+      name: wire.name,
+      source: "rss",
+      latitude: 26.2,
+      longitude: 56.4,
+      published_at: toll_article.published_at,
+      fetched_at: toll_article.published_at,
+      content_scope: "core"
+    )
+
+    safe_article = NewsArticle.create!(
+      news_source: wire,
+      url: "https://example.com/hormuz-safe",
+      canonical_url: "https://example.com/hormuz-safe",
+      title: "Two tankers clear Strait of Hormuz safely",
+      summary: "Two ships safely transited the route.",
+      published_at: 70.minutes.ago,
+      content_scope: "adjacent",
+      hydration_status: "hydrated"
+    )
+    NewsEvent.create!(
+      news_source: wire,
+      news_article: safe_article,
+      url: safe_article.url,
+      title: safe_article.title,
+      name: wire.name,
+      source: "rss",
+      latitude: 26.3,
+      longitude: 56.1,
+      published_at: safe_article.published_at,
+      fetched_at: safe_article.published_at,
+      content_scope: "adjacent"
+    )
+
+    with_empty_area_snapshots do
+      get area_path(area)
+    end
+
+    assert_response :success
+    assert_includes response.body, "Restricted / Selective Passage"
+    assert_includes response.body, "does not look fully open"
+    assert_includes response.body, "Watch Next"
   end
 
   test "preset region area emits a region globe deeplink" do

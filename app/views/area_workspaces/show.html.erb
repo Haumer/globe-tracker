@@ -1,3 +1,4 @@
+<% brief = @summary[:brief] %>
 <% overview = @summary[:overview] %>
 <% signals = @summary[:signals] %>
 <% movement = @summary[:movement] %>
@@ -64,6 +65,52 @@
   </section>
 
   <div class="case-grid area-grid">
+    <section class="case-card area-brief-card">
+      <div class="case-card-head">
+        <h2><%= brief[:title] %></h2>
+        <span class="case-badge case-badge--brief"><%= brief[:status_label] %></span>
+      </div>
+      <p class="area-brief-summary"><%= brief[:summary] %></p>
+      <div class="area-chip-list">
+        <span class="area-chip area-chip--status area-chip--ready">Confidence: <%= brief[:confidence] %></span>
+      </div>
+
+      <div class="area-brief-grid">
+        <div>
+          <div class="area-section-kicker">Evidence</div>
+          <% if brief[:evidence].any? %>
+            <div class="area-list">
+              <% brief[:evidence].each do |item| %>
+                <article class="area-list-item">
+                  <h3>
+                    <% if item[:url].present? %>
+                      <%= link_to item[:title], item[:url], target: "_blank", rel: "noopener", class: "area-list-link" %>
+                    <% else %>
+                      <%= item[:title] %>
+                    <% end %>
+                  </h3>
+                  <p><%= [item[:publisher], item[:published_at]&.strftime("%Y-%m-%d %H:%M UTC")].compact.join(" · ") %></p>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No supporting evidence surfaced for this assessment yet.</div>
+          <% end %>
+        </div>
+
+        <div>
+          <div class="area-section-kicker">Watch Next</div>
+          <div class="area-list">
+            <% brief[:watch_items].each do |item| %>
+              <article class="area-list-item">
+                <p class="area-list-copy"><%= item %></p>
+              </article>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="case-card">
       <div class="case-card-head">
         <h2>Overview</h2>

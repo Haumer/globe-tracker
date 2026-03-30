@@ -17,6 +17,25 @@
   margin-top: 24px;
 }
 
+.area-brief-card {
+  grid-column: 1 / -1;
+}
+
+.area-brief-summary {
+  margin: 0;
+  max-width: 72ch;
+  font: 500 1.02rem "DM Sans", sans-serif;
+  line-height: 1.7;
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.area-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
 .area-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

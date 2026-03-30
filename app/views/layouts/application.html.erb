@@ -53,13 +53,9 @@
     <%= javascript_importmap_tags %>
     <script>
       if ("serviceWorker" in navigator) {
-        <% if Rails.env.production? %>
-          navigator.serviceWorker.register("/sw.js");
-        <% else %>
-          navigator.serviceWorker.getRegistrations().then((registrations) => {
-            registrations.forEach((registration) => registration.unregister());
-          });
-        <% end %>
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((registration) => registration.unregister());
+        });
       }
     </script>
   </head>

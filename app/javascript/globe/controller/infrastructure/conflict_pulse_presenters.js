@@ -23,6 +23,7 @@ const STRATEGIC_STATUS_COLORS = {
 export function renderConflictPulseDetailHtml(controller, zone) {
   const color = TREND_COLORS[zone.escalation_trend] || "#ff9800"
   const crossLayerSignals = zone.cross_layer_signals || {}
+  const casePath = controller._caseIntakePathForPayload?.(controller._caseSourcePayloadForTheater?.(zone))
   const signalHtml = buildConflictSignalHtml(controller, zone, crossLayerSignals)
   const tierHtml = Object.entries(zone.tier_breakdown || {})
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -105,6 +106,10 @@ export function renderConflictPulseDetailHtml(controller, zone) {
     ${zone.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${controller._escapeHtml(zone.theater)}">
       <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${controller._escapeHtml(zone.theater)}
     </button>` : ""}
+
+    ${casePath ? `<a class="detail-track-btn" style="background:rgba(56,189,248,0.16);border-color:rgba(56,189,248,0.3);color:#7dd3fc;font-weight:700;text-decoration:none;" href="${controller._safeUrl(casePath)}">
+      <i class="fa-solid fa-folder-plus" style="margin-right:4px;"></i>Create Case
+    </a>` : ""}
 
     <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${controller._escapeHtml(JSON.stringify(crossLayerSignals))}">
       <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area

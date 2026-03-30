@@ -27,6 +27,7 @@
           <div class="case-list-meta">
             <span><%= pluralize(investigation_case.case_objects.size, "object") %></span>
             <span><%= pluralize(investigation_case.case_notes.size, "note") %></span>
+            <span>Assigned <%= investigation_case.assignee_email %></span>
             <span>Updated <%= time_ago_in_words(investigation_case.updated_at) %> ago</span>
           </div>
         </article>

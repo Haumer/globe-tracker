@@ -7,6 +7,10 @@ module InvestigationCasesHelper
     InvestigationCase::SEVERITIES.map { |severity| [severity.titleize, severity] }
   end
 
+  def investigation_case_note_kind_options
+    InvestigationCaseNote::NOTE_KINDS.map { |kind| [kind.titleize, kind] }
+  end
+
   def investigation_case_status_label(value)
     value.to_s.tr("_", " ").titleize
   end
@@ -23,8 +27,16 @@ module InvestigationCasesHelper
     "case-badge--#{value.to_s.parameterize}"
   end
 
+  def investigation_case_note_kind_class(value)
+    "case-badge--#{value.to_s.parameterize}"
+  end
+
   def investigation_case_object_view_href(case_object)
     object_view_path(kind: case_object.object_kind, id: case_object.object_identifier)
+  end
+
+  def investigation_case_object_viewable?(case_object)
+    %w[chokepoint theater news_story_cluster commodity entity].include?(case_object.object_kind.to_s)
   end
 
   def investigation_case_object_globe_href(case_object)
@@ -45,5 +57,29 @@ module InvestigationCasesHelper
     end
 
     root_path(options)
+  end
+
+  def investigation_case_source_hidden_fields(source_object)
+    return "".html_safe if source_object.blank?
+
+    tags = []
+    source_object.except(:source_context).each do |key, value|
+      next if value.blank?
+
+      tags << hidden_field_tag("source_object[#{key}]", value)
+    end
+    source_object.fetch(:source_context, {}).each do |key, value|
+      next if value.blank?
+
+      tags << hidden_field_tag("source_object[source_context][#{key}]", value)
+    end
+    safe_join(tags)
+  end
+
+  def investigation_case_assignable_user_options(assignable_users, selected_id = nil)
+    options_for_select(
+      [["Unassigned", nil]] + assignable_users.map { |user| [user.email, user.id] },
+      selected_id
+    )
   end
 end

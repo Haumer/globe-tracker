@@ -25,6 +25,10 @@
           <span class="case-meta-value"><%= @investigation_case.user.email %></span>
         </div>
         <div class="case-meta-card">
+          <span class="case-meta-label">Assignee</span>
+          <span class="case-meta-value"><%= @investigation_case.assignee_email %></span>
+        </div>
+        <div class="case-meta-card">
           <span class="case-meta-label">Last Updated</span>
           <span class="case-meta-value"><%= @investigation_case.updated_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
         </div>
@@ -51,6 +55,35 @@
   </section>
 
   <div class="case-grid">
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Workflow</h2>
+      </div>
+      <%= form_with model: @investigation_case, url: case_path(@investigation_case), method: :patch, class: "case-note-form" do |form| %>
+        <div class="case-form-grid">
+          <div class="case-intake-field">
+            <%= form.label :status, "Status" %>
+            <%= form.select :status, options_for_select(investigation_case_status_options, @investigation_case.status) %>
+          </div>
+          <div class="case-intake-field">
+            <%= form.label :severity, "Severity" %>
+            <%= form.select :severity, options_for_select(investigation_case_severity_options, @investigation_case.severity) %>
+          </div>
+          <div class="case-intake-field">
+            <%= form.label :assignee_id, "Assignee" %>
+            <%= form.select :assignee_id, investigation_case_assignable_user_options(@assignable_users, @investigation_case.assignee_id) %>
+          </div>
+        </div>
+        <div class="case-intake-field">
+          <%= form.label :summary, "Working summary" %>
+          <%= form.text_area :summary, rows: 4 %>
+        </div>
+        <div class="case-note-actions">
+          <%= form.submit "Update Case", class: "case-action case-action--primary" %>
+        </div>
+      <% end %>
+    </section>
+
     <section class="case-card">
       <div class="case-card-head">
         <h2>Pinned Objects</h2>
@@ -82,7 +115,9 @@
                 <% end %>
               </div>
               <div class="case-inline-actions">
-                <%= link_to "Object View", investigation_case_object_view_href(case_object), class: "case-inline-action" %>
+                <% if investigation_case_object_viewable?(case_object) %>
+                  <%= link_to "Object View", investigation_case_object_view_href(case_object), class: "case-inline-action" %>
+                <% end %>
                 <%= link_to "Open On Globe", investigation_case_object_globe_href(case_object), class: "case-inline-action case-inline-action--primary" %>
               </div>
             </article>
@@ -100,7 +135,10 @@
       </div>
 
       <%= form_with model: @case_note, url: case_notes_path(@investigation_case), class: "case-note-form" do |form| %>
-        <%= form.hidden_field :kind, value: "note" %>
+        <div class="case-intake-field">
+          <%= form.label :kind, "Note type" %>
+          <%= form.select :kind, options_for_select(investigation_case_note_kind_options, "note") %>
+        </div>
         <%= form.text_area :body, rows: 5, placeholder: "Capture analyst context, next steps, or what changed in this situation." %>
         <div class="case-note-actions">
           <%= form.submit "Add Note", class: "case-action case-action--primary" %>
@@ -113,6 +151,7 @@
             <article class="case-note-item">
               <div class="case-note-top">
                 <span class="case-note-author"><%= case_note.user.email %></span>
+                <span class="case-badge <%= investigation_case_note_kind_class(case_note.kind) %>"><%= case_note.kind.titleize %></span>
                 <span class="case-note-time"><%= case_note.created_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
               </div>
               <p><%= simple_format(case_note.body, {}, wrapper_tag: "span") %></p>

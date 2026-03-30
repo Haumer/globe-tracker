@@ -5,7 +5,30 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @user = User.create!(email: "cases@example.com", password: "password123")
+    @other_user = User.create!(email: "analyst@example.com", password: "password123")
     sign_in @user
+  end
+
+  test "GET /cases/new preloads source object intake" do
+    get new_case_path, params: {
+      source_object: {
+        object_kind: "theater",
+        object_identifier: "Iran Theater",
+        title: "Iran Theater",
+        summary: "Regional pressure and corroborating signals",
+        object_type: "theater",
+        source_context: {
+          severity: "high",
+          pulse_score: "73",
+        }
+      }
+    }
+
+    assert_response :success
+    assert_includes response.body, "Start a working case"
+    assert_includes response.body, "Iran Theater"
+    assert_includes response.body, "Create New Case"
+    assert_includes response.body, "Add To Existing Case"
   end
 
   test "POST /cases creates a case with a pinned source object" do
@@ -15,6 +38,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
         summary: "Track pressure on the corridor and supporting evidence.",
         status: "open",
         severity: "high",
+        assignee_id: @other_user.id,
       },
       source_object: {
         object_kind: "chokepoint",
@@ -36,6 +60,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to case_path(investigation_case)
     assert_equal "Hormuz monitoring", investigation_case.title
     assert_equal "high", investigation_case.severity
+    assert_equal @other_user, investigation_case.assignee
     assert_equal 1, investigation_case.case_objects.count
     assert_equal "Strait of Hormuz", investigation_case.case_objects.first.title
   end
@@ -64,5 +89,30 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Iran Theater"
     assert_includes response.body, "Start with Hormuz, Bahrain, and Suez."
     assert_includes response.body, "Add Note"
+  end
+
+  test "PATCH /cases/:id updates status severity and assignee" do
+    investigation_case = @user.investigation_cases.create!(
+      title: "Iran theater watch",
+      status: "open",
+      severity: "medium",
+      assignee: @user
+    )
+
+    patch case_path(investigation_case), params: {
+      investigation_case: {
+        status: "escalated",
+        severity: "critical",
+        assignee_id: @other_user.id,
+        summary: "Move to active escalation tracking."
+      }
+    }
+
+    assert_redirected_to case_path(investigation_case)
+    investigation_case.reload
+    assert_equal "escalated", investigation_case.status
+    assert_equal "critical", investigation_case.severity
+    assert_equal @other_user, investigation_case.assignee
+    assert_equal "Move to active escalation tracking.", investigation_case.summary
   end
 end

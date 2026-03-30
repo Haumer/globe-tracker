@@ -1,5 +1,5 @@
 class InvestigationCaseNote < ApplicationRecord
-  NOTE_KINDS = %w[note update brief].freeze
+  NOTE_KINDS = %w[note update decision brief].freeze
 
   belongs_to :investigation_case, touch: true, inverse_of: :case_notes
   belongs_to :user

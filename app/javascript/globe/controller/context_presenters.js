@@ -30,6 +30,16 @@ export function renderSelectedContext(controller, context) {
   ].map(section => renderContextSection(controller, section)).join("")
 
   const actionsList = [...(context.actions || [])]
+  if (context.casePayload && controller._caseIntakePathForPayload) {
+    const casePath = controller._caseIntakePathForPayload(context.casePayload)
+    if (casePath) {
+      actionsList.unshift({
+        path: casePath,
+        icon: "fa-folder-plus",
+        label: "Create case",
+      })
+    }
+  }
   if (context.nodeRequest?.kind && context.nodeRequest?.id) {
     actionsList.unshift({
       path: objectViewUrlForNodeRequest(context.nodeRequest),

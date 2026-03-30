@@ -1,0 +1,97 @@
+<div class="case-shell">
+  <section class="case-hero case-hero--detail">
+    <div class="case-hero-main">
+      <div class="case-kicker">
+        <span>Case Intake</span>
+        <% if @source_object[:title].present? %>
+          <span class="case-kicker-sep"></span>
+          <span><%= @source_object[:object_kind].to_s.tr("_", " ").titleize %></span>
+        <% end %>
+      </div>
+      <h1 class="case-title">Start a working case</h1>
+      <p class="case-summary">
+        <% if @source_object[:title].present? %>
+          Create a case from <strong><%= @source_object[:title] %></strong> or attach it to an existing case.
+        <% else %>
+          Create a case and preserve the current operating picture.
+        <% end %>
+      </p>
+
+      <div class="case-actions">
+        <%= link_to "All Cases", cases_path, class: "case-action" %>
+        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+      </div>
+    </div>
+
+    <aside class="case-hero-side">
+      <div class="case-side-block">
+        <div class="case-side-label">Source Object</div>
+        <div class="case-side-stat"><%= @source_object[:title].presence || "Manual" %></div>
+        <div class="case-side-meta"><%= @source_object[:object_type].presence || @source_object[:object_kind].presence || "No pinned context" %></div>
+      </div>
+    </aside>
+  </section>
+
+  <div class="case-grid">
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Create New Case</h2>
+      </div>
+      <%= form_with model: @investigation_case, url: cases_path, class: "case-note-form" do |form| %>
+        <div class="case-form-grid">
+          <div class="case-intake-field">
+            <%= form.label :title, "Case title" %>
+            <%= form.text_field :title, required: true %>
+          </div>
+          <div class="case-intake-field">
+            <%= form.label :status, "Status" %>
+            <%= form.select :status, options_for_select(investigation_case_status_options, @investigation_case.status) %>
+          </div>
+          <div class="case-intake-field">
+            <%= form.label :severity, "Severity" %>
+            <%= form.select :severity, options_for_select(investigation_case_severity_options, @investigation_case.severity) %>
+          </div>
+          <div class="case-intake-field">
+            <%= form.label :assignee_id, "Assignee" %>
+            <%= form.select :assignee_id, investigation_case_assignable_user_options(@assignable_users, @investigation_case.assignee_id) %>
+          </div>
+        </div>
+        <div class="case-intake-field">
+          <%= form.label :summary, "Working summary" %>
+          <%= form.text_area :summary, rows: 4, placeholder: "Why does this matter, what changed, and what should be tracked next?" %>
+        </div>
+        <%= investigation_case_source_hidden_fields(@source_object) %>
+        <div class="case-note-actions">
+          <%= form.submit "Create Case", class: "case-action case-action--primary" %>
+        </div>
+      <% end %>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Add To Existing Case</h2>
+      </div>
+      <% if @available_cases.any? && @source_object[:title].present? %>
+        <%= form_with url: case_objects_path, method: :post, class: "case-note-form" do %>
+          <div class="case-intake-field">
+            <label for="case_object_investigation_case_id">Case</label>
+            <%= select_tag "case_object[investigation_case_id]", options_from_collection_for_select(@available_cases, :id, :title) %>
+          </div>
+          <% @source_object.except(:source_context).each do |key, value| %>
+            <%= hidden_field_tag "case_object[#{key}]", value if value.present? %>
+          <% end %>
+          <% @source_object.fetch(:source_context, {}).each do |key, value| %>
+            <%= hidden_field_tag "case_object[source_context][#{key}]", value if value.present? %>
+          <% end %>
+          <div class="case-note-actions">
+            <%= submit_tag "Add Object To Case", class: "case-action" %>
+          </div>
+        <% end %>
+      <% elsif @available_cases.any? %>
+        <div class="case-empty case-empty--inline">No source object is attached to this intake. Start from an object, insight, or theater context to pin something automatically.</div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No existing cases yet.</div>
+      <% end %>
+    </section>
+  </div>
+</div>

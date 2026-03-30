@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_30_103000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -316,6 +316,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_103000) do
     t.string "severity", default: "medium", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "assignee_id"
+    t.index ["assignee_id"], name: "index_investigation_cases_on_assignee_id"
     t.index ["user_id", "status"], name: "index_investigation_cases_on_user_id_and_status"
     t.index ["user_id", "updated_at"], name: "index_investigation_cases_on_user_id_and_updated_at"
     t.index ["user_id"], name: "index_investigation_cases_on_user_id"
@@ -1052,6 +1054,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_103000) do
   add_foreign_key "investigation_case_notes", "users"
   add_foreign_key "investigation_case_objects", "investigation_cases"
   add_foreign_key "investigation_cases", "users"
+  add_foreign_key "investigation_cases", "users", column: "assignee_id"
   add_foreign_key "news_articles", "news_ingests"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_claim_actors", "news_actors"

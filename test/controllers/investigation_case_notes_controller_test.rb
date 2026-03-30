@@ -13,12 +13,13 @@ class InvestigationCaseNotesControllerTest < ActionDispatch::IntegrationTest
     post case_notes_path(@investigation_case), params: {
       investigation_case_note: {
         body: "Monitor Brent, LNG, and Red Sea exposure.",
-        kind: "note",
+        kind: "decision",
       }
     }
 
     assert_redirected_to case_path(@investigation_case)
     assert_equal 1, @investigation_case.case_notes.count
     assert_equal "Monitor Brent, LNG, and Red Sea exposure.", @investigation_case.case_notes.first.body
+    assert_equal "decision", @investigation_case.case_notes.first.kind
   end
 end

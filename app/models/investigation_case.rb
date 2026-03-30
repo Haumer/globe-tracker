@@ -3,6 +3,7 @@ class InvestigationCase < ApplicationRecord
   SEVERITIES = %w[low medium high critical].freeze
 
   belongs_to :user
+  belongs_to :assignee, class_name: "User", optional: true
 
   has_many :case_objects,
     -> { order(created_at: :asc) },
@@ -26,5 +27,9 @@ class InvestigationCase < ApplicationRecord
     return "DRAFT" unless persisted?
 
     "CASE-#{id.to_s.rjust(5, "0")}"
+  end
+
+  def assignee_email
+    assignee&.email || "Unassigned"
   end
 end

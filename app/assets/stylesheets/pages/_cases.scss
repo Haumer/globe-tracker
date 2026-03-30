@@ -259,6 +259,26 @@
   color: #fca5a5;
 }
 
+.case-badge--note {
+  background: rgba(96, 165, 250, 0.16);
+  color: #93c5fd;
+}
+
+.case-badge--update {
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+}
+
+.case-badge--decision {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+}
+
+.case-badge--brief {
+  background: rgba(192, 132, 252, 0.16);
+  color: #d8b4fe;
+}
+
 .case-list-meta,
 .case-object-metrics {
   display: flex;
@@ -272,6 +292,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 20px;
+}
+
+.case-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 
 .case-empty {

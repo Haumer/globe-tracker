@@ -135,6 +135,17 @@ export function renderInsightDetailHtml(controller, insight) {
     `
     : ""
 
+  const casePath = controller._caseIntakePathForPayload?.(controller._caseSourcePayloadForInsight?.(insight))
+  const caseActionHtml = casePath
+    ? `
+      <div style="margin-top:10px;">
+        <a class="insight-action-btn" href="${controller._safeUrl(casePath)}">
+          <i class="fa-solid fa-folder-plus"></i> Create case
+        </a>
+      </div>
+    `
+    : ""
+
   return `
     <div class="detail-callsign" style="color:${sevColor};">
       <i class="fa-solid fa-brain" style="margin-right:6px;"></i>${typeLabel}
@@ -151,6 +162,7 @@ export function renderInsightDetailHtml(controller, insight) {
       </div>
     </div>
     ${entitiesHtml}
+    ${caseActionHtml}
     ${affectedEntitiesHtml}
   `
 }
@@ -163,6 +175,7 @@ function renderInsightFeedCard(controller, insight, idx) {
   const affectedEntities = controller._affectedInsightEntities(insight)
   const affectedActionLabel = controller._affectedInsightActionLabel(affectedEntities)
   const chips = buildInsightChips(controller, insight)
+  const casePath = controller._caseIntakePathForPayload?.(controller._caseSourcePayloadForInsight?.(insight))
 
   return `<div class="insight-card insight-card--${sev}" data-insight-idx="${idx}">
     <div class="insight-card-severity">
@@ -176,6 +189,7 @@ function renderInsightFeedCard(controller, insight, idx) {
       <div class="insight-card-actions">
         ${hasLocation ? `<button class="insight-action-btn" data-action="click->globe#focusInsight" data-insight-idx="${idx}"><i class="fa-solid fa-location-crosshairs"></i> Focus</button>` : ""}
         ${affectedEntities.length ? `<button class="insight-action-btn" data-action="click->globe#showAffectedInsightEntities" data-insight-idx="${idx}"><i class="fa-solid fa-crosshairs"></i> ${controller._escapeHtml(affectedActionLabel)}</button>` : ""}
+        ${casePath ? `<a class="insight-action-btn" href="${controller._safeUrl(casePath)}"><i class="fa-solid fa-folder-plus"></i> Create case</a>` : ""}
       </div>
     </div>
   </div>`

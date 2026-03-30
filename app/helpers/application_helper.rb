@@ -86,6 +86,12 @@ module ApplicationHelper
     end
   end
 
+  def globe_map_href
+    return area_workspace_globe_href(@area_workspace) if defined?(@area_workspace) && @area_workspace.present? && respond_to?(:area_workspace_globe_href)
+
+    root_path
+  end
+
   private
 
   def absolute_public_url(path)

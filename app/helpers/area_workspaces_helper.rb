@@ -67,13 +67,25 @@ module AreaWorkspacesHelper
     metadata = area_workspace.scope_metadata.with_indifferent_access
     camera = metadata[:camera].with_indifferent_access if metadata[:camera].respond_to?(:with_indifferent_access)
 
-    lat = camera&.[](:lat).presence || area_bounds_center(area_workspace)[:lat]
-    lng = camera&.[](:lng).presence || area_bounds_center(area_workspace)[:lng]
-    height = camera&.[](:height).presence || area_workspace_camera_height(area_workspace)
+    center = area_workspace_camera_center(area_workspace, camera)
+    lat = center[:lat]
+    lng = center[:lng]
+    height = area_workspace_camera_height(area_workspace, camera)
     heading = camera&.[](:heading).presence || 0
     pitch = camera&.[](:pitch).presence || -1.12
 
     format("%.4f,%.4f,%d,%.3f,%.3f", lat.to_f, lng.to_f, height.to_i, heading.to_f, pitch.to_f)
+  end
+
+  def area_workspace_camera_center(area_workspace, camera = nil)
+    metadata = area_workspace.scope_metadata.with_indifferent_access
+    explicit_center = metadata[:center].with_indifferent_access if metadata[:center].respond_to?(:with_indifferent_access)
+    bounds_center = area_bounds_center(area_workspace)
+
+    {
+      lat: explicit_center&.[](:lat).presence || camera&.[](:lat).presence || bounds_center[:lat],
+      lng: explicit_center&.[](:lng).presence || camera&.[](:lng).presence || bounds_center[:lng],
+    }
   end
 
   def area_bounds_center(area_workspace)
@@ -84,7 +96,7 @@ module AreaWorkspacesHelper
     }
   end
 
-  def area_workspace_camera_height(area_workspace)
+  def area_workspace_camera_height(area_workspace, camera = nil)
     metadata = area_workspace.scope_metadata.with_indifferent_access
     radius_km = metadata[:radius_km].to_f
     return [(radius_km * 2200).round, 300_000].max if radius_km.positive?
@@ -93,6 +105,7 @@ module AreaWorkspacesHelper
     center = area_bounds_center(area_workspace)
     lat_span_km = (bounds[:lamax].to_f - bounds[:lamin].to_f).abs * 111.0
     lng_span_km = (bounds[:lomax].to_f - bounds[:lomin].to_f).abs * 111.0 * Math.cos(center[:lat].to_f * Math::PI / 180).abs
-    [[lat_span_km, lng_span_km].max.round * 1000, 300_000].max.clamp(300_000, 12_000_000)
+    derived_height = ((([lat_span_km, lng_span_km].max * 1250.0) / 10_000.0).round) * 10_000
+    [[camera&.[](:height).to_i, derived_height, 300_000].max, 12_000_000].min
   end
 end

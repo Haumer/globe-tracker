@@ -42,6 +42,34 @@ class AreaWorkspacesFlowTest < ApplicationSystemTestCase
     assert_includes fragment, "l:sh,cp,nw"
   end
 
+  test "area page map nav returns to a scoped globe view" do
+    user = User.create!(email: "area-map-nav@example.com", password: "password123")
+    area = user.area_workspaces.create!(
+      name: "Gulf States",
+      scope_type: "preset_region",
+      profile: "maritime",
+      bounds: { lamin: 21.0, lamax: 32.0, lomin: 44.0, lomax: 57.0 },
+      scope_metadata: {
+        region_key: "gulf-states",
+        region_name: "Gulf States",
+        camera: { lat: 27.0, lng: 50.0, height: 1_500_000, heading: 0, pitch: -0.85 },
+      },
+      default_layers: ["ships", "chokepoints", "news"]
+    )
+
+    login_as user, scope: :user
+
+    visit area_path(area)
+    click_link "Map"
+
+    assert_current_path root_path, ignore_query: true
+    assert_selector "#globe-container", wait: 10
+
+    fragment = URI.parse(page.current_url).fragment
+    assert_includes fragment, "27.0000,50.0000,1610000"
+    assert_includes fragment, "r:gulf-states"
+  end
+
   test "region deeplink can be tracked into an area workspace" do
     user = User.create!(email: "area-track@example.com", password: "password123")
     login_as user, scope: :user

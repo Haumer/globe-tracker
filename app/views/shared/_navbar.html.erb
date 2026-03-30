@@ -1,6 +1,6 @@
 <nav class="globe-nav">
   <div class="globe-nav-brand">
-    <%= link_to root_path do %>
+    <%= link_to globe_map_href do %>
       <span class="globe-nav-logo">GT</span>
       <span class="globe-nav-title">GlobeTracker</span>
     <% end %>
@@ -10,6 +10,7 @@
 
   <div class="globe-nav-links">
     <%= link_to "Home", landing_path, class: "globe-nav-link" %>
+    <%= link_to "Map", globe_map_href, class: "globe-nav-link" %>
     <%= link_to "Data Sources", sources_path, class: "globe-nav-link" %>
     <% if user_signed_in? %>
       <%= link_to "Areas", areas_path, class: "globe-nav-link" %>

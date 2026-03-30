@@ -156,7 +156,7 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Port disruption near the gulf corridor"
     assert_includes response.body, "Flight surge"
     assert_includes response.body, "Hormuz pressure"
-    assert_includes response.body, "/#25.2500,55.2500,300000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
+    assert_includes response.body, "/#25.2500,55.2500,350000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
   end
 
   test "maritime area summary renders restricted selective brief when reporting is mixed" do
@@ -251,7 +251,7 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
-    assert_includes response.body, "/#27.0000,50.0000,1500000,0.000,-0.850;l:sh,cp,nw;r:gulf-states"
+    assert_includes response.body, "/#27.0000,50.0000,1610000,0.000,-0.850;l:sh,cp,nw;r:gulf-states"
   end
 
   test "custom bbox area emits a circle deeplink" do

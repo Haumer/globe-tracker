@@ -38,6 +38,14 @@ class RailwayImportService
       }
     end
 
+    TrainObservation.where.not(matched_railway_id: nil).update_all(
+      matched_railway_id: nil,
+      snapped_latitude: nil,
+      snapped_longitude: nil,
+      snap_distance_m: nil,
+      snap_confidence: nil,
+      updated_at: Time.current
+    )
     Railway.delete_all
     Railway.insert_all(records)
     Rails.logger.info "[RailwayImport] Imported #{records.size} railway segments"

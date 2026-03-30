@@ -6,7 +6,8 @@ import "bootstrap"
 import { connectAlertsChannel } from "channels/alerts_channel"
 import { connectEventsChannel } from "channels/events_channel"
 
-const APP_VERSION_CHECK_MS = 60_000
+const APP_VERSION_CHECK_MS = 15_000
+const INITIAL_APP_VERSION_CHECK_MS = 3_000
 
 // Only connect ActionCable on the globe page (avoid wasting Puma threads on static pages)
 function connectIfGlobe() {
@@ -46,8 +47,10 @@ function startAppVersionWatcher() {
   if (appVersionWatcherStarted) return
   appVersionWatcherStarted = true
 
+  window.setTimeout(checkForAppUpdate, INITIAL_APP_VERSION_CHECK_MS)
   window.setInterval(checkForAppUpdate, APP_VERSION_CHECK_MS)
   window.addEventListener("focus", checkForAppUpdate)
+  window.addEventListener("pageshow", checkForAppUpdate)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") checkForAppUpdate()
   })

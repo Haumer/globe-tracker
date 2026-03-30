@@ -6,28 +6,38 @@ export function applyAlertsMethods(GlobeController) {
     this._alertPollInterval = setInterval(() => this._pollAlerts(), 60000)
 
     // Listen for ActionCable push notifications (instant update)
-    document.addEventListener("globe:new-alert", (e) => {
+    this._onNewAlert = () => {
       // Immediately refresh from server to get full alert data
       this._pollAlerts()
-    })
+    }
+    document.addEventListener("globe:new-alert", this._onNewAlert)
 
     // Listen for fly-to events from toast clicks
-    document.addEventListener("globe:fly-to", (e) => {
+    this._onAlertFlyTo = (e) => {
       const { lat, lng, height } = e.detail
-      if (lat && lng) {
+      if (lat && lng && this.viewer?.camera) {
         const Cesium = window.Cesium
         this.viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(lng, lat, height || 500000),
           duration: 1.5,
         })
       }
-    })
+    }
+    document.addEventListener("globe:fly-to", this._onAlertFlyTo)
   }
 
   GlobeController.prototype._stopAlertPolling = function() {
     if (this._alertPollInterval) {
       clearInterval(this._alertPollInterval)
       this._alertPollInterval = null
+    }
+    if (this._onNewAlert) {
+      document.removeEventListener("globe:new-alert", this._onNewAlert)
+      this._onNewAlert = null
+    }
+    if (this._onAlertFlyTo) {
+      document.removeEventListener("globe:fly-to", this._onAlertFlyTo)
+      this._onAlertFlyTo = null
     }
   }
 

@@ -1,10 +1,30 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>GlobeTracker</title>
+    <title><%= meta_title %></title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="<%= meta_description %>">
+    <link rel="canonical" href="<%= meta_url %>">
+
+    <meta property="og:site_name" content="<%= meta_tags[:site_name] %>">
+    <meta property="og:type" content="<%= meta_tags[:type] %>">
+    <meta property="og:title" content="<%= meta_title %>">
+    <meta property="og:description" content="<%= meta_description %>">
+    <meta property="og:url" content="<%= meta_url %>">
+    <meta property="og:image" content="<%= meta_image_url %>">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="<%= meta_tags[:image_alt] %>">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<%= meta_title %>">
+    <meta name="twitter:description" content="<%= meta_description %>">
+    <meta name="twitter:image" content="<%= meta_image_url %>">
+    <meta name="twitter:image:alt" content="<%= meta_tags[:image_alt] %>">
+
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+    <meta name="app-revision" content="<%= app_revision %>">
     <% if user_signed_in? %>
       <meta name="owm-api-key" content="<%= ENV['OPENWEATHERMAP_API_KEY'] %>">
     <% end %>
@@ -14,6 +34,9 @@
     <% end %>
 
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <meta name="theme-color" content="#0a0c10">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -31,18 +54,14 @@
     <%= javascript_importmap_tags %>
     <script>
       if ("serviceWorker" in navigator) {
-        <% if Rails.env.production? %>
-          navigator.serviceWorker.register("/sw.js");
-        <% else %>
-          navigator.serviceWorker.getRegistrations().then((registrations) => {
-            registrations.forEach((registration) => registration.unregister());
-          });
-        <% end %>
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((registration) => registration.unregister());
+        });
       }
     </script>
   </head>
 
-  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %><%= 'about-page' if controller_name == 'pages' && action_name == 'about' %><%= 'landing-page' if controller_name == 'pages' && action_name == 'landing' %>">
+  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %><%= 'about-page' if controller_name == 'pages' && action_name == 'about' %><%= 'landing-page' if controller_name == 'pages' && action_name == 'landing' %><%= ' object-view-page' if controller_name == 'objects' %><%= ' case-view-page' if controller_name == 'investigation_cases' %>">
     <%= render "shared/navbar" %>
     <%= render "shared/flashes" %>
     <%= yield %>

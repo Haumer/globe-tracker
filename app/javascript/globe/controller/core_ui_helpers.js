@@ -165,6 +165,13 @@ export function applyCoreUiHelpers(GlobeController) {
   GlobeController.prototype._safeUrl = function(url) {
     if (!url) return "#"
     const value = String(url).trim()
+
+    // Allow normal in-app navigation while still rejecting protocol-relative
+    // and script-like URLs.
+    if (/^\/(?!\/)/.test(value) || value.startsWith("?") || value.startsWith("#")) {
+      return this._escapeHtml(value)
+    }
+
     if (/^https?:\/\//i.test(value)) return this._escapeHtml(value)
     return "#"
   }

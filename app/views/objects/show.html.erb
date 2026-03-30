@@ -1,0 +1,259 @@
+<div class="object-shell">
+  <% if @object_error.present? %>
+    <section class="object-hero object-hero--error">
+      <div class="object-hero-main">
+        <div class="object-kicker">Object View</div>
+        <h1 class="object-title">Durable context unavailable</h1>
+        <p class="object-summary"><%= @object_error %></p>
+        <div class="object-actions">
+          <%= link_to "Return To Globe", root_path, class: "object-action object-action--primary" %>
+        </div>
+      </div>
+    </section>
+  <% else %>
+    <% request = @object_request.symbolize_keys %>
+    <% node = @object_node %>
+    <% relationships = @object_context[:relationships] || [] %>
+    <% evidence = @object_context[:evidence] || [] %>
+    <% memberships = @object_context[:memberships] || [] %>
+    <% source_payload = case_source_payload_for(request, @object_context) %>
+
+    <section class="object-hero">
+      <div class="object-hero-main">
+        <div class="object-kicker">
+          <span>Object View</span>
+          <span class="object-kicker-sep"></span>
+          <span><%= object_relation_label(node[:entity_type] || node[:event_family] || node[:node_type]) %></span>
+        </div>
+        <h1 class="object-title"><%= node[:name] %></h1>
+        <% if node[:summary].present? %>
+          <p class="object-summary"><%= node[:summary] %></p>
+        <% end %>
+
+        <div class="object-meta-grid">
+          <div class="object-meta-card">
+            <span class="object-meta-label">Node Type</span>
+            <span class="object-meta-value"><%= node[:entity_type] || node[:event_type] || node[:node_type] %></span>
+          </div>
+          <% if node[:verification_status].present? %>
+            <div class="object-meta-card">
+              <span class="object-meta-label">Verification</span>
+              <span class="object-meta-value"><%= object_relation_label(node[:verification_status]) %></span>
+            </div>
+          <% end %>
+          <% if node[:canonical_key].present? %>
+            <div class="object-meta-card">
+              <span class="object-meta-label">Canonical Key</span>
+              <span class="object-meta-value object-meta-value--mono"><%= node[:canonical_key] %></span>
+            </div>
+          <% end %>
+          <% if node[:latitude].present? && node[:longitude].present? %>
+            <div class="object-meta-card">
+              <span class="object-meta-label">Coordinates</span>
+              <span class="object-meta-value object-meta-value--mono"><%= format("%.3f, %.3f", node[:latitude], node[:longitude]) %></span>
+            </div>
+          <% end %>
+        </div>
+
+        <div class="object-actions">
+          <%= link_to "Open On Globe", object_globe_href_for(request, @object_context), class: "object-action object-action--primary" %>
+          <%= link_to "Durable JSON", api_node_context_path(kind: request[:kind], id: request[:id]), class: "object-action", target: "_blank", rel: "noopener" %>
+        </div>
+      </div>
+
+      <aside class="object-hero-side">
+        <div class="object-side-block">
+          <div class="object-side-label">Graph Snapshot</div>
+          <div class="object-side-stat"><%= relationships.size %></div>
+          <div class="object-side-meta">active relationships</div>
+        </div>
+        <div class="object-side-block">
+          <div class="object-side-label">Evidence</div>
+          <div class="object-side-stat"><%= evidence.size %></div>
+          <div class="object-side-meta">durable supporting records</div>
+        </div>
+        <div class="object-side-block">
+          <div class="object-side-label">Memberships</div>
+          <div class="object-side-stat"><%= memberships.size %></div>
+          <div class="object-side-meta">linked nodes in this object</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="case-intake-panel">
+      <div class="case-intake-copy">
+        <div class="object-kicker">
+          <span>Case Intake</span>
+          <span class="object-kicker-sep"></span>
+          <span>Workflow</span>
+        </div>
+        <h2 class="case-intake-title">Turn this object into a working case</h2>
+        <p class="case-intake-summary">Pin the current object, preserve its graph snapshot, and start analyst notes from a durable case page.</p>
+      </div>
+
+      <% if user_signed_in? %>
+        <div class="case-intake-forms">
+          <%= form_with url: cases_path, method: :post, class: "case-intake-form" do |form| %>
+            <div class="case-intake-form-grid">
+              <div class="case-intake-field">
+                <%= form.label :title, "Case title" %>
+                <%= form.text_field :title, name: "investigation_case[title]", value: default_case_title_for(@object_context), required: true %>
+              </div>
+              <div class="case-intake-field">
+                <%= form.label :status, "Status" %>
+                <%= form.select :status, options_for_select(investigation_case_status_options, "open"), {}, name: "investigation_case[status]" %>
+              </div>
+              <div class="case-intake-field">
+                <%= form.label :severity, "Severity" %>
+                <%= form.select :severity, options_for_select(investigation_case_severity_options, "medium"), {}, name: "investigation_case[severity]" %>
+              </div>
+            </div>
+            <div class="case-intake-field">
+              <%= form.label :summary, "Working summary" %>
+              <%= form.text_area :summary, name: "investigation_case[summary]", rows: 3, placeholder: "What makes this object operationally important right now?" %>
+            </div>
+            <% source_payload.except(:source_context).each do |key, value| %>
+              <%= hidden_field_tag "source_object[#{key}]", value if value.present? %>
+            <% end %>
+            <% source_payload.fetch(:source_context, {}).each do |key, value| %>
+              <%= hidden_field_tag "source_object[source_context][#{key}]", value %>
+            <% end %>
+            <div class="case-intake-actions">
+              <%= form.submit "Create Case From Object", class: "object-action object-action--primary" %>
+            </div>
+          <% end %>
+
+          <% if @available_cases.any? %>
+            <%= form_with url: case_objects_path, method: :post, class: "case-intake-form case-intake-form--compact" do |form| %>
+              <div class="case-intake-field">
+                <%= form.label :investigation_case_id, "Add to existing case" %>
+                <%= form.select :investigation_case_id,
+                  options_from_collection_for_select(@available_cases, :id, :title),
+                  {},
+                  name: "case_object[investigation_case_id]" %>
+              </div>
+              <% source_payload.except(:source_context).each do |key, value| %>
+                <%= hidden_field_tag "case_object[#{key}]", value if value.present? %>
+              <% end %>
+              <% source_payload.fetch(:source_context, {}).each do |key, value| %>
+                <%= hidden_field_tag "case_object[source_context][#{key}]", value %>
+              <% end %>
+              <div class="case-intake-actions">
+                <%= form.submit "Add To Existing Case", class: "object-action" %>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-intake-login">
+          <p>Sign in to start a case from this object and keep working context beyond the globe view.</p>
+          <%= link_to "Sign In", new_user_session_path, class: "object-action object-action--primary" %>
+        </div>
+      <% end %>
+    </section>
+
+    <div class="object-grid">
+      <section class="object-card">
+        <div class="object-card-head">
+          <h2>Relationships</h2>
+          <span><%= relationships.size %></span>
+        </div>
+        <% if relationships.any? %>
+          <div class="object-list">
+            <% relationships.each do |relationship| %>
+              <% related_request = object_view_request_for_node(relationship[:node]) %>
+              <article class="object-list-item">
+                <div class="object-list-top">
+                  <span class="object-pill"><%= object_relation_label(relationship[:relation_type]) %></span>
+                  <span class="object-confidence"><%= object_confidence_label(relationship[:confidence]) %></span>
+                </div>
+                <% if related_request.present? %>
+                  <%= link_to relationship.dig(:node, :name), object_view_href_for(related_request), class: "object-link" %>
+                <% else %>
+                  <div class="object-link object-link--static"><%= relationship.dig(:node, :name) %></div>
+                <% end %>
+                <% if relationship[:explanation].present? %>
+                  <p class="object-copy"><%= relationship[:explanation] %></p>
+                <% end %>
+                <% if relationship[:evidence].present? %>
+                  <div class="object-tags">
+                    <% relationship[:evidence].each do |item| %>
+                      <span class="object-tag">
+                        <strong><%= object_role_label(item[:role]) %></strong>
+                        <span><%= item[:label] %></span>
+                      </span>
+                    <% end %>
+                  </div>
+                <% end %>
+              </article>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="object-empty">No active graph relationships are attached to this node yet.</div>
+        <% end %>
+      </section>
+
+      <section class="object-card">
+        <div class="object-card-head">
+          <h2>Evidence</h2>
+          <span><%= evidence.size %></span>
+        </div>
+        <% if evidence.any? %>
+          <div class="object-list">
+            <% evidence.each do |item| %>
+              <% evidence_request = object_view_request_for_evidence(item) %>
+              <article class="object-list-item">
+                <div class="object-list-top">
+                  <span class="object-pill"><%= object_role_label(item[:role]) %></span>
+                  <span class="object-confidence"><%= object_confidence_label(item[:confidence]) %></span>
+                </div>
+                <% if evidence_request.present? %>
+                  <%= link_to item[:label], object_view_href_for(evidence_request), class: "object-link" %>
+                <% elsif item[:url].present? %>
+                  <%= link_to item[:label], item[:url], class: "object-link", target: "_blank", rel: "noopener" %>
+                <% else %>
+                  <div class="object-link object-link--static"><%= item[:label] %></div>
+                <% end %>
+                <% if item[:meta].present? %>
+                  <p class="object-copy object-copy--meta"><%= item[:meta] %></p>
+                <% end %>
+              </article>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="object-empty">No durable evidence has been attached to this node yet.</div>
+        <% end %>
+      </section>
+
+      <section class="object-card">
+        <div class="object-card-head">
+          <h2>Memberships</h2>
+          <span><%= memberships.size %></span>
+        </div>
+        <% if memberships.any? %>
+          <div class="object-list">
+            <% memberships.each do |membership| %>
+              <% member_request = object_view_request_for_node(membership[:node]) %>
+              <article class="object-list-item">
+                <div class="object-list-top">
+                  <span class="object-pill"><%= object_role_label(membership[:role]) %></span>
+                  <span class="object-confidence"><%= object_confidence_label(membership[:confidence]) %></span>
+                </div>
+                <% if member_request.present? %>
+                  <%= link_to membership.dig(:node, :name), object_view_href_for(member_request), class: "object-link" %>
+                <% else %>
+                  <div class="object-link object-link--static"><%= membership.dig(:node, :name) %></div>
+                <% end %>
+                <% if membership.dig(:node, :summary).present? %>
+                  <p class="object-copy"><%= membership.dig(:node, :summary) %></p>
+                <% end %>
+              </article>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="object-empty">This object does not expose membership edges.</div>
+        <% end %>
+      </section>
+    </div>
+  <% end %>
+</div>

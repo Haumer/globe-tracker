@@ -306,7 +306,7 @@ export function getDataSource(viewer, cache, name) {
   if (!cache[name]) {
     const Cesium = C()
     cache[name] = new Cesium.CustomDataSource(name)
-    viewer.dataSources.add(cache[name])
+    viewer?.dataSources?.add?.(cache[name])
   }
   return cache[name]
 }

@@ -575,7 +575,7 @@ export function applyNewsRenderingMethods(GlobeController) {
         if (fc) entity.label.fillColor = new Cesium.Color(fc.red, fc.green, fc.blue, alpha)
       }
     }
-    this.viewer.scene.requestRender()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearNewsEntities = function() {

@@ -4,7 +4,7 @@ let consumer = null
 
 export function getConsumer() {
   if (!consumer) {
-    // Use the action-cable-url meta tag (set by AnyCable to point at the Go server)
+    // Use the Rails Action Cable meta tag so dev and prod share the same connection path.
     const meta = document.querySelector('meta[name="action-cable-url"]')
     const url = meta ? meta.content : "/cable"
     consumer = createConsumer(url)

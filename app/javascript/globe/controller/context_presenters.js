@@ -29,7 +29,26 @@ export function renderSelectedContext(controller, context) {
     ...controller._durableContextSections(context),
   ].map(section => renderContextSection(controller, section)).join("")
 
-  const actions = (context.actions || [])
+  const actionsList = [...(context.actions || [])]
+  if (context.casePayload && controller._caseIntakePathForPayload) {
+    const casePath = controller._caseIntakePathForPayload(context.casePayload)
+    if (casePath) {
+      actionsList.unshift({
+        path: casePath,
+        icon: "fa-folder-plus",
+        label: "Create case",
+      })
+    }
+  }
+  if (context.nodeRequest?.kind && context.nodeRequest?.id) {
+    actionsList.unshift({
+      path: objectViewUrlForNodeRequest(context.nodeRequest),
+      icon: "fa-table-cells-large",
+      label: "Open object view",
+    })
+  }
+
+  const actions = actionsList
     .map(action => renderContextAction(controller, action))
     .join("")
 
@@ -106,6 +125,10 @@ export function renderContextItemBody(controller, item) {
 }
 
 export function renderContextAction(controller, action) {
+  if (action.path) {
+    return `<a class="insight-action-btn" href="${controller._safeUrl(action.path)}"><i class="fa-solid ${controller._escapeHtml(action.icon || "fa-arrow-up-right-from-square")}"></i> ${controller._escapeHtml(action.label)}</a>`
+  }
+
   if (action.url) {
     return `<a class="insight-action-btn" href="${controller._safeUrl(action.url)}" target="_blank" rel="noopener"><i class="fa-solid ${controller._escapeHtml(action.icon || "fa-arrow-up-right-from-square")}"></i> ${controller._escapeHtml(action.label)}</a>`
   }
@@ -119,6 +142,10 @@ export function renderContextAction(controller, action) {
   }
 
   return ""
+}
+
+function objectViewUrlForNodeRequest(nodeRequest) {
+  return `/objects/${encodeURIComponent(nodeRequest.kind)}/${encodeURIComponent(nodeRequest.id)}`
 }
 
 function renderContextItem(controller, item) {

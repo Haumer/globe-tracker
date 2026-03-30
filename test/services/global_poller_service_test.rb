@@ -98,6 +98,15 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "tick enqueues ontology relationship refresh on its offset" do
+    travel_to Time.zone.parse("2026-03-25 10:07:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_includes result[:job_names], "RefreshOntologyRelationshipsJob"
+      refute_includes result[:job_names], "RefreshInsightsSnapshotJob"
+    end
+  end
+
   test "tick skips minute-level refresh duplicates while one is still pending" do
     travel_to Time.zone.parse("2026-03-25 10:00:00 UTC") do
       result = GlobalPollerService.tick!

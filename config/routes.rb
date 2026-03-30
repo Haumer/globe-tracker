@@ -4,6 +4,11 @@ Rails.application.routes.draw do
   get "home", to: "pages#landing", as: :landing
   get "sources", to: "pages#sources"
   get "about", to: "pages#about"
+  get "objects/:kind/:id", to: "objects#show", as: :object_view
+  resources :cases, controller: "investigation_cases", only: [:index, :show, :new, :create, :update] do
+    resources :notes, controller: "investigation_case_notes", only: [:create]
+  end
+  resources :case_objects, controller: "investigation_case_objects", only: [:create]
 
   get "admin", to: "admin#dashboard", as: :admin
   get "admin/api_health", to: "admin#api_health", as: :admin_api_health
@@ -72,6 +77,7 @@ Rails.application.routes.draw do
   end
 
   get "health" => "health#show"
+  get "version" => "version#show"
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.

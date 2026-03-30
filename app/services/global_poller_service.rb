@@ -46,6 +46,7 @@ class GlobalPollerService
     { job: RefreshNotamsJob, every: 10.minutes, offset: 2.minutes },
     { job: RefreshFireHotspotsJob, every: 10.minutes, offset: 4.minutes },
     { job: RefreshChokepointsSnapshotJob, every: 10.minutes, offset: 6.minutes },
+    { job: RefreshOntologyRelationshipsJob, every: 10.minutes, offset: 7.minutes },
     { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },
     { job: RefreshInternetTrafficJob, every: 15.minutes, offset: 10.minutes },
     { job: RefreshGpsJammingJob, every: 15.minutes, offset: 12.minutes },
@@ -82,6 +83,7 @@ class GlobalPollerService
     weather_alerts: 10.minutes,
     notams: 10.minutes,
     fire_hotspots: 10.minutes,
+    ontology_relationships: 10.minutes,
     insights: 10.minutes,
     chokepoints: 10.minutes,
   }.freeze

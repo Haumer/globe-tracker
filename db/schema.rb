@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_29_143000) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -277,6 +277,50 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_29_143000) do
     t.datetime "updated_at", null: false
     t.index ["country_code", "recorded_at"], name: "idx_on_country_code_recorded_at_4ce32fcec1"
     t.index ["recorded_at"], name: "index_internet_traffic_snapshots_on_recorded_at"
+  end
+
+  create_table "investigation_case_notes", force: :cascade do |t|
+    t.bigint "investigation_case_id", null: false
+    t.bigint "user_id", null: false
+    t.text "body", null: false
+    t.string "kind", default: "note", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["investigation_case_id", "created_at"], name: "idx_case_notes_case_created_at"
+    t.index ["investigation_case_id"], name: "index_investigation_case_notes_on_investigation_case_id"
+    t.index ["user_id"], name: "index_investigation_case_notes_on_user_id"
+  end
+
+  create_table "investigation_case_objects", force: :cascade do |t|
+    t.bigint "investigation_case_id", null: false
+    t.string "object_kind", null: false
+    t.string "object_identifier", null: false
+    t.string "title", null: false
+    t.text "summary"
+    t.string "object_type"
+    t.float "latitude"
+    t.float "longitude"
+    t.jsonb "source_context", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["investigation_case_id", "created_at"], name: "idx_case_objects_case_created_at"
+    t.index ["investigation_case_id", "object_kind", "object_identifier"], name: "idx_case_objects_unique_object", unique: true
+    t.index ["investigation_case_id"], name: "index_investigation_case_objects_on_investigation_case_id"
+  end
+
+  create_table "investigation_cases", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "title", null: false
+    t.text "summary"
+    t.string "status", default: "open", null: false
+    t.string "severity", default: "medium", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "assignee_id"
+    t.index ["assignee_id"], name: "index_investigation_cases_on_assignee_id"
+    t.index ["user_id", "status"], name: "index_investigation_cases_on_user_id_and_status"
+    t.index ["user_id", "updated_at"], name: "index_investigation_cases_on_user_id_and_updated_at"
+    t.index ["user_id"], name: "index_investigation_cases_on_user_id"
   end
 
   create_table "layer_snapshots", force: :cascade do |t|
@@ -1006,6 +1050,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_29_143000) do
 
   add_foreign_key "alerts", "users"
   add_foreign_key "alerts", "watches"
+  add_foreign_key "investigation_case_notes", "investigation_cases"
+  add_foreign_key "investigation_case_notes", "users"
+  add_foreign_key "investigation_case_objects", "investigation_cases"
+  add_foreign_key "investigation_cases", "users"
+  add_foreign_key "investigation_cases", "users", column: "assignee_id"
   add_foreign_key "news_articles", "news_ingests"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_claim_actors", "news_actors"

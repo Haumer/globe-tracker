@@ -15,7 +15,7 @@
       <i class="fa-solid fa-shield-halved" aria-hidden="true"></i> <span class="rp-tab-label">Threats</span>
     </button>
     <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="situations" data-globe-target="rpTabSituations" style="display:none;" role="tab" aria-selected="false">
-      <i class="fa-solid fa-crosshairs" aria-hidden="true"></i> <span class="rp-tab-label">Situations</span>
+      <i class="fa-solid fa-crosshairs" aria-hidden="true"></i> <span class="rp-tab-label">Theaters</span>
     </button>
     <button class="rp-tab" data-action="click->globe#switchRightTab" data-rp-tab="insights" data-globe-target="rpTabInsights" role="tab" aria-selected="false">
       <i class="fa-solid fa-brain" aria-hidden="true"></i> <span class="rp-tab-label">Insights</span>
@@ -126,14 +126,14 @@
   </div>
 
   <%# ── Situations pane ── %>
-  <div class="rp-pane" data-rp-pane="situations" role="region" aria-label="Conflict situations">
+  <div class="rp-pane" data-rp-pane="situations" role="region" aria-label="Conflict theaters">
     <div class="sit-header">
-      <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> SITUATIONS <span style="font:600 9px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.7);letter-spacing:0.8px;">DERIVED</span></span>
-      <span class="sit-count" data-globe-target="sitCount">0 zones</span>
+      <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> CONFLICT THEATERS <span style="font:600 9px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.7);letter-spacing:0.8px;">DERIVED</span></span>
+      <span class="sit-count" data-globe-target="sitCount">0 theaters</span>
     </div>
-    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">Situations are computed from recent reporting and supporting signals, not direct ground-truth conflict records.</div>
+    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">Conflict theaters are derived from recent reporting and supporting signals. They are broader theater bubbles, not direct ground-truth incident records.</div>
     <span class="rp-loading" data-globe-target="sitLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">No active situations detected.</p>
+    <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">No active conflict theaters detected.</p>
     <div class="sit-list" data-globe-target="sitList"></div>
   </div>
 

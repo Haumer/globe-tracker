@@ -457,7 +457,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
     if (!this._sitExpanded) this._sitExpanded = {}
     const rendered = renderSituationPanelHtml(this, zones, strategic, snapshotStatus, this._sitExpanded)
     if (countEl) {
-      const base = `${rendered.countSummary.zones} zone${rendered.countSummary.zones !== 1 ? "s" : ""}`
+      const base = `${rendered.countSummary.zones} theater${rendered.countSummary.zones !== 1 ? "s" : ""}`
       const strategicSuffix = rendered.countSummary.strategic ? ` · ${rendered.countSummary.strategic} strategic` : ""
       const suffix = rendered.countSummary.snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(rendered.countSummary.snapshotStatus, "snapshot")}`
       countEl.textContent = `${base}${strategicSuffix}${suffix}`

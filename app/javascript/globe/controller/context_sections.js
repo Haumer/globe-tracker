@@ -238,9 +238,9 @@ export function applyContextSectionMethods(GlobeController) {
     )
     if (situationCount > 0) {
       items.push({
-        label: "Situations",
-        meta: `${situationCount} nearby theater or strategic situation marker${situationCount === 1 ? "" : "s"}`,
-        badge: { label: "SIT", variant: "conf" },
+        label: "Conflict Theaters",
+        meta: `${situationCount} nearby theater bubble or strategic situation marker${situationCount === 1 ? "" : "s"}`,
+        badge: { label: "THE", variant: "conf" },
         rpTab: "situations",
         lat: coords.lat,
         lng: coords.lng,

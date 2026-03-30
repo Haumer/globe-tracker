@@ -8,7 +8,7 @@ export const LAYER_REGISTRY = [
   { key: "fireHotspots", toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible", qlTarget: "qlFireHotspots", section: "events", pill: { label: "FIRE", color: "#ff6d00" } },
   { key: "weather", toggleTarget: "weatherToggle", method: "toggleWeather", visibleProp: "weatherVisible", qlTarget: "qlWeather", section: "events", pill: { label: "WX", color: "#64b5f6" } },
   { key: "conflicts", toggleTarget: "conflictsToggle", method: "toggleConflicts", visibleProp: "conflictsVisible", qlTarget: "qlConflicts", section: "events", pill: { label: "WAR", color: "#ef5350" } },
-  { key: "situations", toggleTarget: "situationsToggle", method: "toggleSituations", visibleProp: "situationsVisible", qlTarget: "qlSituations", section: "events", pill: { label: "SIT", color: "#ff7043" } },
+  { key: "situations", toggleTarget: "situationsToggle", method: "toggleSituations", visibleProp: "situationsVisible", qlTarget: "qlSituations", section: "events", pill: { label: "THE", color: "#ff7043" } },
   { key: "news", toggleTarget: "newsToggle", method: "toggleNews", visibleProp: "newsVisible", qlTarget: "qlNews", section: "events", pill: { label: "NEWS", color: "#7c4dff" } },
   { key: "insights", toggleTarget: "insightsToggle", method: "toggleInsights", visibleProp: "insightsVisible", qlTarget: "qlInsights", section: "events", pill: { label: "INS", color: "#26c6da" } },
   { key: "militaryFlights", toggleTarget: "militaryToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "_milFlightsActive", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },

@@ -6,6 +6,7 @@ class User < ApplicationRecord
          :lockable, :timeoutable
 
   has_many :workspaces, dependent: :destroy
+  has_many :area_workspaces, dependent: :destroy
   has_many :watches, dependent: :destroy
   has_many :alerts, dependent: :destroy
   has_many :investigation_cases, dependent: :destroy

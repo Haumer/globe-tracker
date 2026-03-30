@@ -171,6 +171,7 @@ export function applyRegionMethods(GlobeController) {
         `<div class="region-active-bar">` +
           `<span class="region-badge">${this._activeRegion.name}</span>` +
           `<span class="region-desc">${this._activeRegion.description}</span>` +
+          `${this.signedInValue ? `<button class="region-track-btn" data-action="click->globe#trackCurrentArea" title="Track area">Track Area</button>` : `<a class="region-track-btn" href="/users/sign_in">Sign In</a>`}` +
           `<button class="region-exit-btn" data-action="click->globe#exitRegion" title="Exit region">&times;</button>` +
         `</div>`
       indicator.style.display = ""

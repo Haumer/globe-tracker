@@ -1,4 +1,27 @@
 export function applyGeographyCaptureMethods(GlobeController) {
+  const AREA_LAYER_KEYS = [
+    ["flights", "flightsVisible"],
+    ["ships", "shipsVisible"],
+    ["trains", "trainsVisible"],
+    ["railways", "railwaysVisible"],
+    ["cameras", "camerasVisible"],
+    ["insights", "insightsVisible"],
+    ["situations", "situationsVisible"],
+    ["news", "newsVisible"],
+    ["conflicts", "conflictsVisible"],
+    ["notams", "notamsVisible"],
+    ["gpsJamming", "gpsJammingVisible"],
+    ["chokepoints", "chokepointsVisible"],
+    ["powerPlants", "powerPlantsVisible"],
+    ["pipelines", "pipelinesVisible"],
+    ["cables", "cablesVisible"],
+    ["outages", "outagesVisible"],
+    ["weather", "weatherVisible"],
+    ["fireHotspots", "fireHotspotsVisible"],
+    ["militaryBases", "militaryBasesVisible"],
+    ["airbases", "airbasesVisible"],
+  ]
+
   GlobeController.prototype.toggleRecording = function() {
     if (this._mediaRecorder && this._mediaRecorder.state === "recording") this._stopRecording()
     else this._startRecording()
@@ -78,10 +101,6 @@ export function applyGeographyCaptureMethods(GlobeController) {
       link.click()
       URL.revokeObjectURL(url)
     }, "image/png")
-  }
-
-  GlobeController.prototype.toggleTrains = function() {
-    // Placeholder.
   }
 
   GlobeController.prototype._generateAreaReport = async function() {
@@ -203,5 +222,132 @@ export function applyGeographyCaptureMethods(GlobeController) {
       </div>
       ${filtered.map(item => `<div style="font:400 10px monospace;color:#aaa;padding:1px 0;">${item}</div>`).join("")}
     </div>`
+  }
+
+  GlobeController.prototype.trackCurrentArea = async function() {
+    if (!this.signedInValue) {
+      window.location.href = "/users/sign_in"
+      return
+    }
+
+    const payload = this._buildAreaWorkspacePayload()
+    if (!payload) {
+      this._toast("Select a region or area first", "error")
+      return
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    this._toast("Saving area workspace...")
+
+    try {
+      const response = await fetch("/areas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ area_workspace: payload }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        this._toast(data.errors?.[0] || "Failed to save area workspace", "error")
+        return
+      }
+
+      window.location.href = data.path || "/areas"
+    } catch (_error) {
+      this._toast("Failed to save area workspace", "error")
+    }
+  }
+
+  GlobeController.prototype._buildAreaWorkspacePayload = function() {
+    const region = this._activeRegion
+    const bounds = this.getFilterBounds()
+    if (!bounds) return null
+
+    const defaultLayers = this._activeAreaLayers(region)
+
+    if (region) {
+      return {
+        name: region.name,
+        scope_type: "preset_region",
+        profile: this._inferAreaProfile(defaultLayers),
+        bounds,
+        default_layers: defaultLayers,
+        scope_metadata: {
+          region_key: region.key,
+          region_name: region.name,
+          region_group: region.group,
+          description: region.description,
+          camera: region.camera,
+        },
+      }
+    }
+
+    if (this._activeCircle) {
+      const countries = [...(this.selectedCountries || [])].sort()
+      return {
+        name: this._areaWorkspaceNameForCircle(countries),
+        scope_type: "bbox",
+        profile: this._inferAreaProfile(defaultLayers),
+        bounds,
+        default_layers: defaultLayers,
+        scope_metadata: {
+          countries,
+          center: this._activeCircle.center,
+          radius_km: Math.round((this._activeCircle.radius || 0) / 1000),
+        },
+      }
+    }
+
+    if (this.selectedCountries?.size > 0) {
+      const countries = [...this.selectedCountries].sort()
+      return {
+        name: this._areaWorkspaceNameForCountries(countries),
+        scope_type: "country_set",
+        profile: this._inferAreaProfile(defaultLayers),
+        bounds,
+        default_layers: defaultLayers,
+        scope_metadata: {
+          countries,
+        },
+      }
+    }
+
+    return null
+  }
+
+  GlobeController.prototype._activeAreaLayers = function(region = null) {
+    if (region?.layers?.length) return [...region.layers]
+
+    return AREA_LAYER_KEYS
+      .filter(([, visibleKey]) => this[visibleKey])
+      .map(([layer]) => layer)
+  }
+
+  GlobeController.prototype._inferAreaProfile = function(layers) {
+    const layerSet = new Set(layers)
+
+    if (layerSet.has("ships") || layerSet.has("chokepoints") || layerSet.has("cables")) return "maritime"
+    if (layerSet.has("notams") || layerSet.has("flights")) return "airspace"
+    if (layerSet.has("gpsJamming") || layerSet.has("outages")) return "cyber"
+    if (layerSet.has("powerPlants") || layerSet.has("pipelines")) return "infrastructure"
+    if (layerSet.has("conflicts") || layerSet.has("situations") || layerSet.has("insights")) return "land_conflict"
+
+    return "general"
+  }
+
+  GlobeController.prototype._areaWorkspaceNameForCountries = function(countries) {
+    if (countries.length === 1) return countries[0]
+    if (countries.length === 2) return countries.join(" / ")
+    return `${countries[0]} + ${countries.length - 1} more`
+  }
+
+  GlobeController.prototype._areaWorkspaceNameForCircle = function(countries) {
+    if (countries.length === 1) return `${countries[0]} Focus Area`
+    if (countries.length > 1) return `${countries[0]} Cluster`
+    return "Custom Focus Area"
   }
 }

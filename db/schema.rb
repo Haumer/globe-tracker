@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_30_130500) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_30_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -51,6 +51,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_130500) do
     t.index ["user_id", "seen", "created_at"], name: "index_alerts_on_user_id_and_seen_and_created_at"
     t.index ["user_id"], name: "index_alerts_on_user_id"
     t.index ["watch_id"], name: "index_alerts_on_watch_id"
+  end
+
+  create_table "area_workspaces", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.string "scope_type", null: false
+    t.jsonb "bounds", default: {}, null: false
+    t.jsonb "scope_metadata", default: {}, null: false
+    t.string "profile", default: "general", null: false
+    t.jsonb "default_layers", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["profile"], name: "index_area_workspaces_on_profile"
+    t.index ["scope_type"], name: "index_area_workspaces_on_scope_type"
+    t.index ["user_id", "updated_at"], name: "index_area_workspaces_on_user_id_and_updated_at"
+    t.index ["user_id"], name: "index_area_workspaces_on_user_id"
   end
 
   create_table "cameras", force: :cascade do |t|
@@ -1057,6 +1073,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_130500) do
 
   add_foreign_key "alerts", "users"
   add_foreign_key "alerts", "watches"
+  add_foreign_key "area_workspaces", "users"
   add_foreign_key "investigation_case_notes", "investigation_cases"
   add_foreign_key "investigation_case_notes", "users"
   add_foreign_key "investigation_case_objects", "investigation_cases"

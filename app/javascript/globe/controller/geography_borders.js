@@ -137,6 +137,13 @@ export function applyGeographyBorderMethods(GlobeController) {
       <div class="detail-country">${this.selectedCountries.size} countries</div>
       <div class="detail-country-list">${countryList}</div>
       <div class="detail-border-actions">
+        ${this.signedInValue ? `
+        <button class="detail-track-btn" id="track-area-btn" style="background:rgba(76,175,80,0.14);border-color:rgba(76,175,80,0.28);color:#81c784;">
+          <i class="fa-solid fa-layer-group"></i> Track Area
+        </button>` : `
+        <a class="detail-track-btn" href="/users/sign_in" style="background:rgba(76,175,80,0.14);border-color:rgba(76,175,80,0.28);color:#81c784;text-decoration:none;">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In To Track
+        </a>`}
         <button class="detail-track-btn" id="draw-circle-btn">
           <i class="fa-solid fa-circle-dot"></i> Draw Circle
         </button>
@@ -148,6 +155,7 @@ export function applyGeographyBorderMethods(GlobeController) {
       <div id="area-report-content"></div>
     `
 
+    document.getElementById("track-area-btn")?.addEventListener("click", () => this.trackCurrentArea())
     document.getElementById("draw-circle-btn")?.addEventListener("click", () => this.enterDrawMode())
     document.getElementById("clear-selection-btn")?.addEventListener("click", () => this.clearCountrySelection())
     document.getElementById("area-report-btn")?.addEventListener("click", () => this._generateAreaReport())
@@ -216,6 +224,25 @@ export function applyGeographyBorderMethods(GlobeController) {
     }
   }
 
+  GlobeController.prototype.applyCircleFilter = function(center, radius, options = {}) {
+    ensureBordersVisible.call(this)
+
+    if (!options.keepCountries) {
+      this.selectedCountries.clear()
+      this._selectedCountriesBbox = null
+      this._selectedCountriesHull = null
+      this.updateBorderColors()
+      this._updateDeselectBtn()
+    }
+
+    this._activeCircle = { center, radius }
+    this.showDrawPreview(center, radius)
+    refreshSelectionScopedLayers.call(this, !!options.forceEntityList)
+    this._savePrefs()
+
+    if (options.showDetail) this.showBorderDetail()
+  }
+
   GlobeController.prototype.selectCountriesInCircle = function(center, radius) {
     for (const feature of this._countryFeatures) {
       const geom = feature.geometry
@@ -243,11 +270,9 @@ export function applyGeographyBorderMethods(GlobeController) {
       if (intersects && this._countryEntities.has(name)) this.selectedCountries.add(name)
     }
 
-    this._activeCircle = { center, radius }
     this._updateSelectedCountriesBbox()
     this.updateBorderColors()
-    this.showBorderDetail()
-    refreshSelectionScopedLayers.call(this, true)
+    this.applyCircleFilter(center, radius, { showDetail: true, keepCountries: true, forceEntityList: true })
   }
 
   GlobeController.prototype.getBordersDataSource = function() {

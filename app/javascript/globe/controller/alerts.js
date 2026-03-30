@@ -215,42 +215,6 @@ export function applyAlertsMethods(GlobeController) {
     }
   }
 
-  GlobeController.prototype.createAreaWatch = function() {
-    if (!this.signedInValue) return
-    // Build watch from current selection (countries or circle)
-    const conditions = { entity_types: [], filters: {} }
-
-    if (this._activeCircle) {
-      const center = this._activeCircle.center
-      const r = this._activeCircle.radius / 111000 // rough degrees
-      conditions.bounds = [
-        center.lat - r, center.lng - r,
-        center.lat + r, center.lng + r,
-      ]
-    } else if (this.selectedCountries?.size > 0) {
-      // Use rough country bounds — the server will filter
-      conditions.countries = [...this.selectedCountries]
-    } else {
-      this._toast("Select a country or draw a circle first")
-      setTimeout(() => this._toastHide(), 3000)
-      return
-    }
-
-    if (this.flightsVisible) conditions.entity_types.push("flight")
-    if (this.shipsVisible) conditions.entity_types.push("ship")
-    if (conditions.entity_types.length === 0) conditions.entity_types.push("flight")
-
-    const name = this._activeCircle
-      ? "Circle area watch"
-      : `${[...this.selectedCountries].join(", ")} watch`
-
-    const btn = document.createElement("button")
-    btn.dataset.watchType = "area"
-    btn.dataset.watchConditions = JSON.stringify(conditions)
-    btn.dataset.watchName = name
-    this.createWatch({ currentTarget: btn })
-  }
-
   GlobeController.prototype._csrfToken = function() {
     return document.querySelector('meta[name="csrf-token"]')?.content || ""
   }

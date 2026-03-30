@@ -3,7 +3,12 @@ export function applyContextNodeMethods(GlobeController) {
     if (!nodeRequest?.kind || !nodeRequest?.id) return
 
     if (nodeRequest.kind === "theater") {
-      this._setTheaterSelectedContext(nodeRequest.id)
+      const zone = this._findConflictZoneForTheater(nodeRequest.id)
+      if (zone) {
+        this._setTheaterSelectedContext(nodeRequest.id, zone)
+      } else {
+        this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      }
       return
     }
 
@@ -13,6 +18,8 @@ export function applyContextNodeMethods(GlobeController) {
         this._setSelectedContext(this._buildChokepointContext(chokepoint))
         return
       }
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      return
     }
 
     if (nodeRequest.kind === "news_story_cluster") {
@@ -21,6 +28,8 @@ export function applyContextNodeMethods(GlobeController) {
         this._setSelectedContext(this._buildNewsContext(story))
         return
       }
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      return
     }
 
     if (nodeRequest.kind === "commodity") {

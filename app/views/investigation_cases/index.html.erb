@@ -1,0 +1,42 @@
+<div class="case-shell">
+  <section class="case-hero">
+    <div class="case-hero-main">
+      <div class="case-kicker">Case Workspace</div>
+      <h1 class="case-title">Active investigations</h1>
+      <p class="case-summary">Move from map scanning to working a situation. Cases preserve pinned objects, notes, and the current operational context.</p>
+    </div>
+  </section>
+
+  <% if @investigation_cases.any? %>
+    <div class="case-list">
+      <% @investigation_cases.each do |investigation_case| %>
+        <article class="case-list-item">
+          <div class="case-list-top">
+            <div>
+              <div class="case-code"><%= investigation_case.case_code %></div>
+              <h2><%= link_to investigation_case.title, case_path(investigation_case), class: "case-link" %></h2>
+            </div>
+            <div class="case-badges">
+              <span class="case-badge <%= investigation_case_status_class(investigation_case.status) %>"><%= investigation_case_status_label(investigation_case.status) %></span>
+              <span class="case-badge <%= investigation_case_severity_class(investigation_case.severity) %>"><%= investigation_case_severity_label(investigation_case.severity) %></span>
+            </div>
+          </div>
+          <% if investigation_case.summary.present? %>
+            <p class="case-copy"><%= investigation_case.summary %></p>
+          <% end %>
+          <div class="case-list-meta">
+            <span><%= pluralize(investigation_case.case_objects.size, "object") %></span>
+            <span><%= pluralize(investigation_case.case_notes.size, "note") %></span>
+            <span>Updated <%= time_ago_in_words(investigation_case.updated_at) %> ago</span>
+          </div>
+        </article>
+      <% end %>
+    </div>
+  <% else %>
+    <section class="case-empty">
+      <h2>No cases yet</h2>
+      <p>Create your first case from an object page to start pinning theaters, chokepoints, and supporting evidence.</p>
+      <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+    </section>
+  <% end %>
+</div>

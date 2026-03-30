@@ -1,0 +1,127 @@
+<div class="case-shell">
+  <section class="case-hero case-hero--detail">
+    <div class="case-hero-main">
+      <div class="case-kicker">
+        <span><%= @investigation_case.case_code %></span>
+        <span class="case-kicker-sep"></span>
+        <span><%= pluralize(@case_objects.size, "pinned object") %></span>
+      </div>
+      <h1 class="case-title"><%= @investigation_case.title %></h1>
+      <% if @investigation_case.summary.present? %>
+        <p class="case-summary"><%= @investigation_case.summary %></p>
+      <% end %>
+
+      <div class="case-meta-grid">
+        <div class="case-meta-card">
+          <span class="case-meta-label">Status</span>
+          <span class="case-meta-value"><%= investigation_case_status_label(@investigation_case.status) %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Severity</span>
+          <span class="case-meta-value"><%= investigation_case_severity_label(@investigation_case.severity) %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Owner</span>
+          <span class="case-meta-value"><%= @investigation_case.user.email %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Last Updated</span>
+          <span class="case-meta-value"><%= @investigation_case.updated_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
+        </div>
+      </div>
+
+      <div class="case-actions">
+        <%= link_to "All Cases", cases_path, class: "case-action" %>
+        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+      </div>
+    </div>
+
+    <aside class="case-hero-side">
+      <div class="case-side-block">
+        <div class="case-side-label">Pinned Objects</div>
+        <div class="case-side-stat"><%= @case_objects.size %></div>
+        <div class="case-side-meta">durable linked nodes</div>
+      </div>
+      <div class="case-side-block">
+        <div class="case-side-label">Notes</div>
+        <div class="case-side-stat"><%= @case_notes.size %></div>
+        <div class="case-side-meta">analyst updates and observations</div>
+      </div>
+    </aside>
+  </section>
+
+  <div class="case-grid">
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Pinned Objects</h2>
+        <span><%= @case_objects.size %></span>
+      </div>
+      <% if @case_objects.any? %>
+        <div class="case-object-list">
+          <% @case_objects.each do |case_object| %>
+            <article class="case-object-item">
+              <div class="case-object-top">
+                <span class="case-object-pill"><%= case_object.object_kind.to_s.tr("_", " ").titleize %></span>
+                <% if case_object.object_type.present? %>
+                  <span class="case-object-pill case-object-pill--muted"><%= case_object.object_type.to_s.tr("_", " ").titleize %></span>
+                <% end %>
+              </div>
+              <h3><%= case_object.title %></h3>
+              <% if case_object.summary.present? %>
+                <p class="case-copy"><%= case_object.summary %></p>
+              <% end %>
+              <div class="case-object-metrics">
+                <% if case_object.relationship_count.positive? %>
+                  <span><%= pluralize(case_object.relationship_count, "relationship") %></span>
+                <% end %>
+                <% if case_object.evidence_count.positive? %>
+                  <span><%= pluralize(case_object.evidence_count, "evidence item") %></span>
+                <% end %>
+                <% if case_object.membership_count.positive? %>
+                  <span><%= pluralize(case_object.membership_count, "membership") %></span>
+                <% end %>
+              </div>
+              <div class="case-inline-actions">
+                <%= link_to "Object View", investigation_case_object_view_href(case_object), class: "case-inline-action" %>
+                <%= link_to "Open On Globe", investigation_case_object_globe_href(case_object), class: "case-inline-action case-inline-action--primary" %>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No objects pinned yet.</div>
+      <% end %>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Notes</h2>
+        <span><%= @case_notes.size %></span>
+      </div>
+
+      <%= form_with model: @case_note, url: case_notes_path(@investigation_case), class: "case-note-form" do |form| %>
+        <%= form.hidden_field :kind, value: "note" %>
+        <%= form.text_area :body, rows: 5, placeholder: "Capture analyst context, next steps, or what changed in this situation." %>
+        <div class="case-note-actions">
+          <%= form.submit "Add Note", class: "case-action case-action--primary" %>
+        </div>
+      <% end %>
+
+      <% if @case_notes.any? %>
+        <div class="case-note-list">
+          <% @case_notes.each do |case_note| %>
+            <article class="case-note-item">
+              <div class="case-note-top">
+                <span class="case-note-author"><%= case_note.user.email %></span>
+                <span class="case-note-time"><%= case_note.created_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
+              </div>
+              <p><%= simple_format(case_note.body, {}, wrapper_tag: "span") %></p>
+            </article>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No notes yet. Start documenting the operating picture here.</div>
+      <% end %>
+    </section>
+  </div>
+</div>

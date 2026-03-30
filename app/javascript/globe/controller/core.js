@@ -1,6 +1,6 @@
 import { getViewportBounds, restoreCamera, saveCamera } from "../camera"
 import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "../utils"
-import { decodeHash, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
+import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
 import { applyCoreEntityClickMethods } from "./core_entity_clicks"
 import { initializeCoreState, teardownCore, wireCoreChrome } from "./core_state"
 import { applyCoreUiHelpers } from "./core_ui_helpers"
@@ -247,6 +247,17 @@ export function applyCoreMethods(GlobeController) {
     this._initRegions()
     this._startAlertPolling()
     this._startMiniTimeline()
+
+    const focusState = decodeFocusParams(window.location.search)
+    if (focusState) {
+      this._focusContextNode?.(focusState, {
+        eyebrow: "OBJECT VIEW",
+        title: focusState.title || focusState.id,
+        summary: "Loading durable graph context for this object.",
+        icon: "fa-table-cells-large",
+        accentColor: "#4fc3f7",
+      })
+    }
 
     // Start animation loop
     this.lastAnimTime = performance.now()

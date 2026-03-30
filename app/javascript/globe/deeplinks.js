@@ -141,6 +141,22 @@ export function decodeHash(hash) {
   return result
 }
 
+export function decodeFocusParams(search) {
+  const raw = search || ""
+  if (!raw) return null
+
+  const params = new URLSearchParams(raw.startsWith("?") ? raw.slice(1) : raw)
+  const kind = params.get("focus_kind")
+  const id = params.get("focus_id")
+  if (!kind || !id) return null
+
+  return {
+    kind,
+    id,
+    title: params.get("focus_title"),
+  }
+}
+
 export function applyDeepLink(controller, state) {
   const Cesium = window.Cesium
   if (!Cesium || !controller.viewer) return

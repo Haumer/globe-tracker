@@ -1,27 +1,37 @@
-<h2>Change your password</h2>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Credential Recovery",
+           title: "Choose a new password",
+           subtitle: "Set a fresh password for this operator account and return to GlobeTracker immediately.",
+           signal: {
+             label: "Recovery token",
+             value: "TOKEN",
+             detail: "A valid reset link is required before the workspace accepts new credentials."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put, class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
+    <%= f.input :reset_password_token, as: :hidden %>
 
-<%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put }) do |f| %>
-  <%= f.error_notification %>
+    <% if resource.errors[:reset_password_token].present? %>
+      <div class="auth-token-error"><%= resource.errors.full_messages_for(:reset_password_token).to_sentence %></div>
+    <% end %>
 
-  <%= f.input :reset_password_token, as: :hidden %>
-  <%= f.full_error :reset_password_token %>
+    <div class="auth-form-grid">
+      <%= f.input :password,
+                  label: "New password",
+                  required: true,
+                  autofocus: true,
+                  hint: ("#{@minimum_password_length} characters minimum" if @minimum_password_length),
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :password_confirmation,
+                  label: "Confirm new password",
+                  required: true,
+                  input_html: { autocomplete: "new-password" } %>
+    </div>
 
-  <div class="form-inputs">
-    <%= f.input :password,
-                label: "New password",
-                required: true,
-                autofocus: true,
-                hint: ("#{@minimum_password_length} characters minimum" if @minimum_password_length),
-                input_html: { autocomplete: "new-password" } %>
-    <%= f.input :password_confirmation,
-                label: "Confirm your new password",
-                required: true,
-                input_html: { autocomplete: "new-password" } %>
-  </div>
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Change password", class: "auth-submit" %>
+    </div>
+  <% end %>
 
-  <div class="form-actions">
-    <%= f.button :submit, "Change my password" %>
-  </div>
+  <%= render "devise/shared/links" %>
 <% end %>
-
-<%= render "devise/shared/links" %>

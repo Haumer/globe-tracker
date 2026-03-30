@@ -1,35 +1,54 @@
-<h2>Edit <%= resource_name.to_s.humanize %></h2>
-
-<%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put }) do |f| %>
-  <%= f.error_notification %>
-
-  <div class="form-inputs">
-    <%= f.input :email, required: true, autofocus: true %>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Account Settings",
+           title: "Update operator profile",
+           subtitle: "Rotate credentials, change your email, and keep your GlobeTracker session posture current.",
+           signal: {
+             label: "Profile state",
+             value: "EDIT",
+             detail: "Changes to identity and credentials are applied against the same analyst account that owns watches and cases."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
     <% if devise_mapping.confirmable? && resource.pending_reconfirmation? %>
-      <p>Currently waiting confirmation for: <%= resource.unconfirmed_email %></p>
+      <div class="auth-inline-note">
+        Pending confirmation for <strong><%= resource.unconfirmed_email %></strong>
+      </div>
     <% end %>
 
-    <%= f.input :password,
-                hint: "leave it blank if you don't want to change it",
-                required: false,
-                input_html: { autocomplete: "new-password" } %>
-    <%= f.input :password_confirmation,
-                required: false,
-                input_html: { autocomplete: "new-password" } %>
-    <%= f.input :current_password,
-                hint: "we need your current password to confirm your changes",
-                required: true,
-                input_html: { autocomplete: "current-password" } %>
+    <div class="auth-form-grid">
+      <%= f.input :email, required: true, autofocus: true, input_html: { autocomplete: "email" } %>
+      <%= f.input :password,
+                  hint: "Leave blank to keep the current password",
+                  required: false,
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :password_confirmation,
+                  required: false,
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :current_password,
+                  hint: "Current password is required to confirm the change",
+                  required: true,
+                  input_html: { autocomplete: "current-password" } %>
+    </div>
+
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Save changes", class: "auth-submit" %>
+    </div>
+  <% end %>
+
+  <div class="auth-inline-links">
+    <%= link_to "Return to cases", cases_path, class: "auth-link-chip" %>
+    <%= link_to "Open live globe", root_path, class: "auth-link-chip auth-link-chip--ghost" %>
   </div>
 
-  <div class="form-actions">
-    <%= f.button :submit, "Update" %>
-  </div>
+  <section class="auth-danger-zone">
+    <p class="auth-danger-eyebrow">Danger zone</p>
+    <h3>Cancel this account</h3>
+    <p>This removes access to your analyst workspace and signs out the current operator session.</p>
+    <%= button_to "Cancel my account",
+                  registration_path(resource_name),
+                  data: { confirm: "Are you sure?", turbo_confirm: "Are you sure?" },
+                  method: :delete,
+                  class: "auth-danger-button" %>
+  </section>
 <% end %>
-
-<h3>Cancel my account</h3>
-
-<div>Unhappy? <%= button_to "Cancel my account", registration_path(resource_name), data: { confirm: "Are you sure?", turbo_confirm: "Are you sure?" }, method: :delete %></div>
-
-<%= link_to "Back", :back %>

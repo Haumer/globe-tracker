@@ -1,18 +1,26 @@
-<h2>Forgot your password?</h2>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Credential Recovery",
+           title: "Reset access",
+           subtitle: "Send a reset link to the operator email on file and re-enter the workspace without manual intervention.",
+           signal: {
+             label: "Recovery",
+             value: "RESET",
+             detail: "Password resets preserve your analyst account, watchlists, alerts, and case ownership."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
-<%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post }) do |f| %>
-  <%= f.error_notification %>
+    <div class="auth-form-grid">
+      <%= f.input :email,
+                  required: true,
+                  autofocus: true,
+                  input_html: { autocomplete: "email" } %>
+    </div>
 
-  <div class="form-inputs">
-    <%= f.input :email,
-                required: true,
-                autofocus: true,
-                input_html: { autocomplete: "email" } %>
-  </div>
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Send reset instructions", class: "auth-submit" %>
+    </div>
+  <% end %>
 
-  <div class="form-actions">
-    <%= f.button :submit, "Send me password reset instructions" %>
-  </div>
+  <%= render "devise/shared/links" %>
 <% end %>
-
-<%= render "devise/shared/links" %>

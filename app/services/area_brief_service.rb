@@ -181,8 +181,9 @@ class AreaBriefService
   def evidence_for_display(evidence, selected_state)
     preferred = evidence.select { |item| item[:state] == selected_state }
     fallback = evidence.reject { |item| item[:state] == selected_state }
+    ordered = preferred.size >= 2 ? preferred : (preferred + fallback)
 
-    (preferred + fallback)
+    ordered
       .uniq { |item| item[:url].presence || [item[:title], item[:publisher], item[:published_at]] }
       .first(4)
       .map do |item|

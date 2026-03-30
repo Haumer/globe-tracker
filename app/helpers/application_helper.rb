@@ -42,6 +42,11 @@ module ApplicationHelper
           title: "About | GlobeTracker",
           description: "Learn how GlobeTracker fuses live events, infrastructure, tracking, and intelligence signals into one operational globe.",
         }
+      when [ "objects", "show" ]
+        {
+          title: [ @meta_title.presence, "GlobeTracker" ].compact.join(" | "),
+          description: @meta_description.presence || "Inspect linked evidence, relationships, and geographic context for this GlobeTracker object.",
+        }
       else
         {}
       end

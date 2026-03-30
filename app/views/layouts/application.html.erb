@@ -24,6 +24,7 @@
 
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+    <meta name="app-revision" content="<%= app_revision %>">
     <% if user_signed_in? %>
       <meta name="owm-api-key" content="<%= ENV['OPENWEATHERMAP_API_KEY'] %>">
     <% end %>

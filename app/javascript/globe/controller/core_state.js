@@ -35,6 +35,7 @@ const DEFAULT_SAT_CATEGORY_VISIBILITY = {
 
 const INTERVAL_PROPS = [
   "_clockInterval",
+  "_alertPollInterval",
   "flightInterval",
   "shipInterval",
   "_gpsJammingInterval",
@@ -46,18 +47,137 @@ const INTERVAL_PROPS = [
   "_milFlightInterval",
   "_financialInterval",
   "_conflictPulseInterval",
+  "_firesInterval",
+  "_miniTimelineInterval",
+  "_anomalyInterval",
+  "_recordingTimerInterval",
+  "_webcamRefreshInterval",
 ]
 
 const TIMEOUT_PROPS = [
+  "_savePrefsDebounce",
+  "_searchDebounce",
+  "_rwDebounce",
   "_timelineEventTimer",
+  "_timelineLayerReloadTimer",
   "_polyHighlightTimer",
+  "_toastTimer",
+]
+
+const RAF_PROPS = [
+  "animationFrame",
+  "_timelineRaf",
+  "_pulseAnimFrame",
+  "_rippleFrame",
+  "_syncQBTimer",
+]
+
+const CAMERA_MOVE_END_CALLBACK_PROPS = [
+  "_onCameraMoveEnd",
+  "_webcamMoveHandler",
+  "_flightCameraCb",
+  "_shipCameraCb",
+  "_rwCameraCb",
+  "_airbaseCameraCb",
+  "_milBaseCameraCb",
+  "_notamCameraCb",
+  "_navalCameraCb",
+  "_ppCameraCb",
 ]
 
 function satCategoryVisibility() {
   return { ...DEFAULT_SAT_CATEGORY_VISIBILITY }
 }
 
+function detachCameraMoveEndCallbacks(controller, viewer) {
+  const moveEnd = viewer?.camera?.moveEnd
+  if (!moveEnd?.removeEventListener) return
+
+  CAMERA_MOVE_END_CALLBACK_PROPS.forEach(prop => {
+    if (!controller[prop]) return
+    try {
+      moveEnd.removeEventListener(controller[prop])
+    } catch {}
+    controller[prop] = null
+  })
+}
+
+function installDeadViewerShim(viewer) {
+  if (!viewer) return null
+
+  const noop = () => {}
+  const defineValue = (key, value) => {
+    try {
+      Object.defineProperty(viewer, key, {
+        value,
+        configurable: true,
+        writable: true,
+      })
+    } catch {
+      try {
+        viewer[key] = value
+      } catch {}
+    }
+  }
+  const deadMoveEnd = {
+    addEventListener: noop,
+    removeEventListener: noop,
+  }
+  const deadCamera = {
+    moveEnd: deadMoveEnd,
+    flyTo: noop,
+    setView: noop,
+    getPickRay: () => null,
+    position: { x: 0, y: 0, z: 0 },
+    positionWC: { x: 0, y: 0, z: 0 },
+    positionCartographic: { longitude: 0, latitude: 0, height: 0 },
+    heading: 0,
+    pitch: 0,
+    roll: 0,
+  }
+  const deadScene = {
+    camera: deadCamera,
+    canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
+    globe: {
+      pick: () => null,
+      show: false,
+      enableLighting: false,
+      showGroundAtmosphere: false,
+      maximumScreenSpaceError: 0,
+    },
+    fog: { enabled: false },
+    skyAtmosphere: { show: false },
+    skyBox: { show: false },
+    primitives: {
+      add: noop,
+      remove: noop,
+      removeAll: noop,
+    },
+    screenSpaceCameraController: { enableRotate: true },
+    requestRender: noop,
+    render: noop,
+    setTerrain: noop,
+    sampleHeightMostDetailed: () => Promise.resolve([]),
+    drillPick: () => [],
+    pick: () => null,
+    verticalExaggeration: 1,
+    backgroundColor: null,
+    fxaa: false,
+  }
+
+  defineValue("_cesiumWidget", { scene: deadScene })
+  defineValue("dataSources", {
+    add: noop,
+    remove: noop,
+    removeAll: noop,
+  })
+  defineValue("clock", { currentTime: null })
+
+  return viewer
+}
+
 export function initializeCoreState(controller) {
+  controller._destroyed = false
   controller._airportDb = {}
   controller.flightsVisible = false
   controller.flightInterval = null
@@ -279,6 +399,7 @@ export function wireCoreChrome(controller) {
 }
 
 export function teardownCore(controller) {
+  controller._destroyed = true
   Object.values(controller._backgroundRefreshRetryTimers || {}).forEach(timer => clearTimeout(timer))
   TIMEOUT_PROPS.forEach(prop => {
     if (controller[prop]) clearTimeout(controller[prop])
@@ -286,10 +407,17 @@ export function teardownCore(controller) {
   INTERVAL_PROPS.forEach(prop => {
     if (controller[prop]) clearInterval(controller[prop])
   })
+  RAF_PROPS.forEach(prop => {
+    if (controller[prop]) cancelAnimationFrame(controller[prop])
+  })
 
   if (controller._mediaRecorder) controller._stopRecording?.()
-  if (controller._timelineRaf) cancelAnimationFrame(controller._timelineRaf)
-  if (controller.animationFrame) cancelAnimationFrame(controller.animationFrame)
+  controller._stopMiniTimeline?.()
+  controller._stopAlertPolling?.()
+  controller._stopInsightPolling?.()
+  controller._stopConflictPulse?.()
+  controller._stopTrafficBlobAnim?.()
+  controller._stopNewsArcBlobAnim?.()
 
   if (controller._statBellButton && controller._onAlertsFeedToggle) {
     controller._statBellButton.removeEventListener("click", controller._onAlertsFeedToggle)
@@ -301,8 +429,22 @@ export function teardownCore(controller) {
     document.removeEventListener("globe:breaking-event", controller._onBreakingEvent)
   }
 
-  controller._stopInsightPolling?.()
-
   if (controller._handler) controller._handler.destroy()
-  if (controller.viewer) controller.viewer.destroy()
+  if (controller._ytMessageCleanup) {
+    controller._ytMessageCleanup()
+    controller._ytMessageCleanup = null
+  }
+
+  const viewer = controller.viewer
+  detachCameraMoveEndCallbacks(controller, viewer)
+
+  if (viewer) {
+    try {
+      viewer.destroy()
+    } finally {
+      controller.viewer = installDeadViewerShim(viewer)
+    }
+  } else {
+    controller.viewer = null
+  }
 }

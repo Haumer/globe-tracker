@@ -13,6 +13,10 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     get "/"
 
     assert_response :success
+    assert_equal "no-store", response.headers["Cache-Control"]
+    assert_equal "no-cache", response.headers["Pragma"]
+    assert_equal "0", response.headers["Expires"]
+    assert_match(/name="app-revision" content="[a-f0-9]+"/, response.body)
     assert_match(/property="og:title" content="GlobeTracker \| Live Global Tracking"/, response.body)
     assert_match(/property="og:image" content="http:\/\/www\.example\.com\/og-card\.png"/, response.body)
     assert_match(/name="twitter:card" content="summary_large_image"/, response.body)

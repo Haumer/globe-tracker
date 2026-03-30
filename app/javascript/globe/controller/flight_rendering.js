@@ -210,7 +210,7 @@ export function applyFlightRenderingMethods(GlobeController) {
       this.updateEntityList()
     }
 
-    this.viewer.scene.requestRender()
+    this._requestRender()
   }
 
   GlobeController.prototype._serializeLoadedFlight = function(data) {

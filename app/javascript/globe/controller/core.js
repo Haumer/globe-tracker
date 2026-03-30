@@ -10,6 +10,7 @@ export function applyCoreMethods(GlobeController) {
   applyCoreEntityClickMethods(GlobeController)
 
   GlobeController.prototype.connect = function() {
+    this._destroyed = false
     initializeCoreState(this)
     wireCoreChrome(this)
     this._restorePrefs()
@@ -124,12 +125,14 @@ export function applyCoreMethods(GlobeController) {
     }
 
     // Save camera position on move (sessionStorage + DB)
-    this.viewer.camera.moveEnd.addEventListener(() => {
+    this._onCameraMoveEnd = () => {
+      if (this._destroyed || !this.viewer?.camera) return
       this.saveCamera()
       this._savePrefs()
       this._updateGlobeOcclusion()
       if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots?.()
-    })
+    }
+    this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd)
 
     // Click handler for custom detail panel
     const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas)
@@ -264,7 +267,10 @@ export function applyCoreMethods(GlobeController) {
     this.animate()
   }
 
-  GlobeController.prototype._requestRender = function() { if (this.viewer) this.viewer.scene.requestRender() }
+  GlobeController.prototype._requestRender = function() {
+    if (this._destroyed || !this.viewer?.scene) return
+    this.viewer.scene.requestRender()
+  }
 
   // ── Globe occlusion culling ────────────────────────────────
   // Hide entities on the far side of the globe (not visible to camera).
@@ -302,7 +308,7 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype._isPointVisibleOnGlobe = function(lat, lng) {
-    if (!this.viewer) return true
+    if (!this.viewer?.camera) return true
     const Cesium = window.Cesium
     if (!this._occScratch) this._occScratch = new Cesium.Cartesian3()
     const pointPos = Cesium.Cartesian3.fromDegrees(lng, lat, 0, Cesium.Ellipsoid.WGS84, this._occScratch)
@@ -333,7 +339,7 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype._updateGlobeOcclusion = function() {
-    if (!this.viewer) return
+    if (!this.viewer?.camera) return
     const cx = this.viewer.camera.positionWC.x
     const cy = this.viewer.camera.positionWC.y
     const cz = this.viewer.camera.positionWC.z
@@ -682,6 +688,11 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype.animate = function() {
+    if (this._destroyed || !this.viewer?.scene) {
+      this.animationFrame = null
+      return
+    }
+
     const Cesium = window.Cesium
     const now = performance.now()
 

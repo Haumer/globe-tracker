@@ -9,6 +9,18 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "data-rp-pane=\"context\""
   end
 
+  test "home page includes social metadata and favicon links" do
+    get "/"
+
+    assert_response :success
+    assert_match(/property="og:title" content="GlobeTracker \| Live Global Tracking"/, response.body)
+    assert_match(/property="og:image" content="http:\/\/www\.example\.com\/og-card\.png"/, response.body)
+    assert_match(/name="twitter:card" content="summary_large_image"/, response.body)
+    assert_match(/rel="icon" href="\/favicon\.ico" sizes="any"/, response.body)
+    assert_match(/href="\/favicon-32x32\.png"/, response.body)
+    assert_match(/href="\/favicon-16x16\.png"/, response.body)
+  end
+
   test "sources page lists active source inventory entries without removed placeholders" do
     get "/sources"
 

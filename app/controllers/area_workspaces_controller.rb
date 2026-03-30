@@ -17,13 +17,21 @@ class AreaWorkspacesController < ApplicationController
     @area_workspace = current_user.area_workspaces.build(area_workspace_params)
 
     if @area_workspace.save
-      render json: {
-        id: @area_workspace.id,
-        name: @area_workspace.name,
-        path: area_path(@area_workspace),
-      }, status: :created
+      respond_to do |format|
+        format.html { redirect_to area_path(@area_workspace), notice: "Area saved." }
+        format.json do
+          render json: {
+            id: @area_workspace.id,
+            name: @area_workspace.name,
+            path: area_path(@area_workspace),
+          }, status: :created
+        end
+      end
     else
-      render json: { errors: @area_workspace.errors.full_messages }, status: :unprocessable_entity
+      respond_to do |format|
+        format.html { redirect_to root_path, alert: @area_workspace.errors.full_messages.to_sentence.presence || "Failed to save area workspace" }
+        format.json { render json: { errors: @area_workspace.errors.full_messages }, status: :unprocessable_entity }
+      end
     end
   end
 

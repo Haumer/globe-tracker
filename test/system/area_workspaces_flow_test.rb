@@ -41,4 +41,23 @@ class AreaWorkspacesFlowTest < ApplicationSystemTestCase
     assert_includes fragment, "r:gulf-states"
     assert_includes fragment, "l:sh,cp,nw"
   end
+
+  test "region deeplink can be tracked into an area workspace" do
+    user = User.create!(email: "area-track@example.com", password: "password123")
+    login_as user, scope: :user
+
+    visit "/#25.0000,52.0000,3000000,0.000,-1.120;r:gulf-states"
+
+    assert_selector "#region-indicator .region-badge", text: "GULF STATES", wait: 30
+    assert_selector "#region-indicator .region-track-btn", text: "Track Area", wait: 30
+
+    assert_difference("AreaWorkspace.count", 1) do
+      click_button "Track Area"
+      assert_current_path(/\/areas\/\d+/, wait: 30)
+    end
+
+    assert_text "Gulf States"
+    assert_text "Preset Region"
+    assert_selector "a", text: "Open On Globe"
+  end
 end

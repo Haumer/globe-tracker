@@ -70,6 +70,28 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_equal area_path(AreaWorkspace.order(:id).last), data["path"]
   end
 
+  test "POST /areas redirects to the area page for html form submissions" do
+    assert_difference("AreaWorkspace.count", 1) do
+      post areas_path, params: {
+        area_workspace: {
+          name: "Hormuz Monitor",
+          scope_type: "preset_region",
+          profile: "maritime",
+          bounds: { lamin: 23.0, lamax: 28.0, lomin: 54.0, lomax: 60.0 },
+          default_layers: ["ships", "chokepoints", "news"],
+          scope_metadata: {
+            region_key: "strait-of-hormuz",
+            region_name: "Strait of Hormuz",
+            description: "Tracked from the globe region bar",
+            camera: { lat: 26.2, lng: 56.5, height: 500_000, heading: 0, pitch: -0.8 },
+          },
+        },
+      }
+    end
+
+    assert_redirected_to area_path(AreaWorkspace.order(:id).last)
+  end
+
   test "GET /areas/:id renders an area summary" do
     area = @user.area_workspaces.create!(
       name: "Gulf monitor",

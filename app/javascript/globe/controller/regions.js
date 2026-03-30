@@ -167,13 +167,50 @@ export function applyRegionMethods(GlobeController) {
     if (!indicator) return
 
     if (this._activeRegion) {
-      indicator.innerHTML =
-        `<div class="region-active-bar">` +
-          `<span class="region-badge">${this._activeRegion.name}</span>` +
-          `<span class="region-desc">${this._activeRegion.description}</span>` +
-          `${this.signedInValue ? `<button class="region-track-btn" data-action="click->globe#trackCurrentArea" title="Track area">Track Area</button>` : `<a class="region-track-btn" href="/users/sign_in">Sign In</a>`}` +
-          `<button class="region-exit-btn" data-action="click->globe#exitRegion" title="Exit region">&times;</button>` +
-        `</div>`
+      const bar = document.createElement("div")
+      bar.className = "region-active-bar"
+
+      const badge = document.createElement("span")
+      badge.className = "region-badge"
+      badge.textContent = this._activeRegion.name
+      bar.appendChild(badge)
+
+      const desc = document.createElement("span")
+      desc.className = "region-desc"
+      desc.textContent = this._activeRegion.description
+      bar.appendChild(desc)
+
+      if (this.signedInValue) {
+        const payload = this._buildAreaWorkspacePayload()
+        if (payload && this._buildAreaWorkspaceForm) {
+          bar.appendChild(this._buildAreaWorkspaceForm(payload, {
+            formClass: "region-track-form",
+            submitClass: "region-track-btn",
+            submitLabel: "Track Area",
+            submitTitle: "Track area",
+          }))
+        }
+      } else {
+        const link = document.createElement("a")
+        link.className = "region-track-btn"
+        link.href = "/users/sign_in"
+        link.textContent = "Sign In"
+        bar.appendChild(link)
+      }
+
+      const exitBtn = document.createElement("button")
+      exitBtn.type = "button"
+      exitBtn.className = "region-exit-btn"
+      exitBtn.title = "Exit region"
+      exitBtn.textContent = "\u00d7"
+      exitBtn.addEventListener("click", event => {
+        event.preventDefault()
+        this.exitRegion()
+      })
+      bar.appendChild(exitBtn)
+
+      indicator.replaceChildren(bar)
+
       indicator.style.display = ""
     } else {
       indicator.innerHTML = ""

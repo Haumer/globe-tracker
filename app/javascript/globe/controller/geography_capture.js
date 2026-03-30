@@ -224,7 +224,7 @@ export function applyGeographyCaptureMethods(GlobeController) {
     </div>`
   }
 
-  GlobeController.prototype.trackCurrentArea = async function() {
+  GlobeController.prototype.trackCurrentArea = function() {
     if (!this.signedInValue) {
       window.location.href = "/users/sign_in"
       return
@@ -236,30 +236,49 @@ export function applyGeographyCaptureMethods(GlobeController) {
       return
     }
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
     this._toast("Saving area workspace...")
+    this._submitAreaWorkspace(payload)
+  }
 
-    try {
-      const response = await fetch("/areas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ area_workspace: payload }),
-      })
+  GlobeController.prototype._submitAreaWorkspace = function(payload) {
+    const form = this._buildAreaWorkspaceForm(payload, { hidden: true })
+    document.body.appendChild(form)
 
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        this._toast(data.errors?.[0] || "Failed to save area workspace", "error")
-        return
-      }
-
-      window.location.href = data.path || "/areas"
-    } catch (_error) {
-      this._toast("Failed to save area workspace", "error")
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit()
+    } else {
+      form.submit()
     }
+  }
+
+  GlobeController.prototype._buildAreaWorkspaceForm = function(payload, options = {}) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    const form = document.createElement("form")
+    form.method = "post"
+    form.action = "/areas"
+    form.className = options.formClass || ""
+    if (options.hidden) form.style.display = "none"
+
+    if (csrfToken) {
+      const tokenInput = document.createElement("input")
+      tokenInput.type = "hidden"
+      tokenInput.name = "authenticity_token"
+      tokenInput.value = csrfToken
+      form.appendChild(tokenInput)
+    }
+
+    appendAreaWorkspaceFields(form, "area_workspace", payload)
+
+    if (options.submitLabel) {
+      const submit = document.createElement("button")
+      submit.type = "submit"
+      submit.className = options.submitClass || ""
+      submit.title = options.submitTitle || options.submitLabel
+      submit.textContent = options.submitLabel
+      form.appendChild(submit)
+    }
+
+    return form
   }
 
   GlobeController.prototype._buildAreaWorkspacePayload = function() {
@@ -351,3 +370,24 @@ export function applyGeographyCaptureMethods(GlobeController) {
     return "Custom Focus Area"
   }
 }
+  function appendAreaWorkspaceFields(form, prefix, value) {
+    if (value == null) return
+
+    if (Array.isArray(value)) {
+      value.forEach(item => appendAreaWorkspaceFields(form, `${prefix}[]`, item))
+      return
+    }
+
+    if (typeof value === "object") {
+      Object.entries(value).forEach(([key, nestedValue]) => {
+        appendAreaWorkspaceFields(form, `${prefix}[${key}]`, nestedValue)
+      })
+      return
+    }
+
+    const input = document.createElement("input")
+    input.type = "hidden"
+    input.name = prefix
+    input.value = String(value)
+    form.appendChild(input)
+  }

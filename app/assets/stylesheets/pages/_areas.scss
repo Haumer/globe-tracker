@@ -21,6 +21,10 @@
   grid-column: 1 / -1;
 }
 
+.area-impact-card {
+  grid-column: 1 / -1;
+}
+
 .area-brief-summary {
   margin: 0;
   max-width: 72ch;
@@ -40,6 +44,32 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
+}
+
+.area-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.area-impact-item {
+  border-top: 2px solid rgba(79, 195, 247, 0.28);
+}
+
+.area-impact-item--critical {
+  border-top-color: rgba(239, 83, 80, 0.72);
+}
+
+.area-impact-item--high {
+  border-top-color: rgba(255, 167, 38, 0.72);
+}
+
+.area-impact-item--medium {
+  border-top-color: rgba(79, 195, 247, 0.72);
+}
+
+.area-impact-item--low {
+  border-top-color: rgba(129, 199, 132, 0.72);
 }
 
 .area-stat-card,
@@ -138,6 +168,11 @@
 
 .area-meta-stack {
   margin-top: 18px;
+}
+
+.area-impact-links,
+.area-impact-metrics {
+  margin-top: 14px;
 }
 
 .area-meta-line {

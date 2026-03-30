@@ -4,6 +4,7 @@
 <% movement = @summary[:movement] %>
 <% assets = @summary[:assets] %>
 <% infrastructure = @summary[:infrastructure] %>
+<% impacts = @summary[:impacts] %>
 <% snapshots = @summary[:snapshots] %>
 
 <div class="case-shell area-shell">
@@ -109,6 +110,60 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="case-card area-impact-card">
+      <div class="case-card-head">
+        <h2>Impact Assessments</h2>
+      </div>
+
+      <% if impacts.any? %>
+        <div class="area-impact-grid">
+          <% impacts.each do |impact| %>
+            <article class="area-list-item area-impact-item area-impact-item--<%= impact[:severity] %>">
+              <div class="case-list-top">
+                <h3><%= impact[:title] %></h3>
+                <span class="case-badge"><%= impact[:severity].to_s.titleize %></span>
+              </div>
+              <p class="area-list-copy"><%= impact[:summary] %></p>
+
+              <% if impact[:linked_domains].any? %>
+                <div class="area-chip-list area-impact-links">
+                  <% impact[:linked_domains].each do |domain| %>
+                    <span class="area-chip"><%= domain %></span>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <div class="area-meta-stack area-impact-metrics">
+                <% impact[:metrics].each do |metric| %>
+                  <div class="area-meta-line"><%= metric[:label] %>: <strong><%= metric[:value] %></strong></div>
+                <% end %>
+              </div>
+
+              <% if impact[:evidence].any? %>
+                <div class="area-section-kicker">Evidence</div>
+                <div class="area-list">
+                  <% impact[:evidence].each do |item| %>
+                    <article class="area-list-item">
+                      <h3>
+                        <% if item[:url].present? %>
+                          <%= link_to item[:title], item[:url], target: "_blank", rel: "noopener", class: "area-list-link" %>
+                        <% else %>
+                          <%= item[:title] %>
+                        <% end %>
+                      </h3>
+                      <p><%= [item[:publisher], item[:published_at]&.strftime("%Y-%m-%d %H:%M UTC")].compact.join(" · ") %></p>
+                    </article>
+                  <% end %>
+                </div>
+              <% end %>
+            </article>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No cross-domain impact assessments have resolved for this area yet.</div>
+      <% end %>
     </section>
 
     <section class="case-card">

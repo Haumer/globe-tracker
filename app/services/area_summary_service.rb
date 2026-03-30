@@ -12,6 +12,12 @@ class AreaSummaryService
   end
 
   def call
+    movement = movement_summary
+    assets = asset_summary
+    chokepoints = filtered_chokepoints
+    situations = filtered_situations
+    insights = filtered_insights
+
     {
       brief: AreaBriefService.new(@area_workspace, bounds: @bounds).call,
       overview: overview_counts,
@@ -20,9 +26,18 @@ class AreaSummaryService
         insights: insight_items,
         situations: situation_items,
       },
-      movement: movement_summary,
-      assets: asset_summary,
-      infrastructure: infrastructure_summary,
+      movement: movement,
+      assets: assets,
+      infrastructure: infrastructure_summary(chokepoints),
+      impacts: AreaImpactAssessmentService.new(
+        @area_workspace,
+        bounds: @bounds,
+        movement: movement,
+        assets: assets,
+        chokepoints: chokepoints,
+        situations: situations,
+        insights: insights
+      ).call,
       snapshots: snapshot_statuses,
     }
   end
@@ -68,9 +83,9 @@ class AreaSummaryService
     }
   end
 
-  def infrastructure_summary
+  def infrastructure_summary(chokepoints = filtered_chokepoints)
     {
-      chokepoints: filtered_chokepoints.first(4).map do |item|
+      chokepoints: chokepoints.first(4).map do |item|
         {
           name: value_for(item, :name),
           status: value_for(item, :status),

@@ -80,7 +80,7 @@ class AreaArticleCandidateService
       .within_bounds(@bounds)
       .where("published_at > ?", 36.hours.ago)
       .where.not(content_scope: "out_of_scope")
-      .includes(:news_article, :news_source)
+      .includes(:news_source, news_article: :news_claims)
       .order(published_at: :desc)
       .limit(40)
   end
@@ -101,7 +101,7 @@ class AreaArticleCandidateService
       .where("news_events.published_at > ?", 48.hours.ago)
       .where.not(content_scope: "out_of_scope")
       .where(fragments.join(" OR "), bindings)
-      .includes(:news_article, :news_source)
+      .includes(:news_source, news_article: :news_claims)
       .order(published_at: :desc)
       .limit(40)
   end

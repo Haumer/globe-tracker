@@ -159,6 +159,124 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "/#25.2500,55.2500,350000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
   end
 
+  test "area page renders linked impact assessments for military and market spillover" do
+    area = @user.area_workspaces.create!(
+      name: "Gulf States",
+      scope_type: "preset_region",
+      profile: "maritime",
+      bounds: { lamin: 21.0, lamax: 32.0, lomin: 44.0, lomax: 58.5 },
+      scope_metadata: {
+        region_key: "gulf-states",
+        region_name: "Gulf States",
+      },
+      default_layers: ["ships", "chokepoints", "news", "militaryFlights"]
+    )
+
+    source = NewsSource.create!(canonical_key: "wire-gulf-impacts", name: "Wire Source", source_kind: "wire")
+    article = NewsArticle.create!(
+      news_source: source,
+      url: "https://example.com/gulf-buildup",
+      canonical_url: "https://example.com/gulf-buildup",
+      title: "US deploys more troops to Gulf staging bases as Iran tensions rise",
+      summary: "The deployment raises concern around shipping lanes, export terminals, and oil flows through nearby chokepoints.",
+      published_at: 75.minutes.ago,
+      content_scope: "core",
+      hydration_status: "hydrated"
+    )
+    NewsClaim.create!(
+      news_article: article,
+      event_family: "conflict",
+      event_type: "ground_operation",
+      claim_text: article.title,
+      confidence: 0.9,
+      extraction_confidence: 0.9,
+      actor_confidence: 0.8,
+      event_confidence: 0.92,
+      geo_confidence: 0.8,
+      source_reliability: 0.82,
+      verification_status: "single_source",
+      geo_precision: "point",
+      extraction_method: "heuristic",
+      extraction_version: "headline_rules_v2",
+      published_at: article.published_at,
+      provenance: { "canonical_url" => article.canonical_url }
+    )
+    NewsEvent.create!(
+      news_source: source,
+      news_article: article,
+      url: article.url,
+      title: article.title,
+      name: source.name,
+      source: "api",
+      latitude: 26.0,
+      longitude: 53.5,
+      published_at: article.published_at,
+      fetched_at: article.published_at,
+      content_scope: "core"
+    )
+
+    Flight.create!(
+      icao24: "mil001",
+      latitude: 25.8,
+      longitude: 53.7,
+      updated_at: 1.minute.ago,
+      military: true
+    )
+    Notam.create!(
+      external_id: "NOTAM-GULF-001",
+      source: "FAA",
+      text: "Military airspace restrictions active",
+      latitude: 25.25,
+      longitude: 55.36,
+      effective_start: 1.hour.ago,
+      effective_end: 6.hours.from_now,
+      fetched_at: Time.current
+    )
+
+    insight_snapshot = SnapshotStub.new(
+      { insights: [{ title: "Military flight surge", description: "Heavy airlift into Gulf staging bases.", severity: "high", lat: 25.8, lng: 53.7 }] },
+      "ready"
+    )
+    situation_snapshot = SnapshotStub.new(
+      { zones: [{ situation_name: "Iran Theater", theater: "Middle East", pulse_score: 84, story_count: 12, source_count: 18, lat: 26.1, lng: 54.0 }] },
+      "ready"
+    )
+    chokepoint_snapshot = SnapshotStub.new(
+      {
+        chokepoints: [
+          {
+            name: "Strait of Hormuz",
+            status: "critical",
+            ships_nearby: { total: 18, tankers: 6 },
+            description: "Energy corridor under pressure",
+            commodity_signals: [
+              { symbol: "OIL_BRENT", name: "Brent Crude", change_pct: 2.6, flow_pct: 21 },
+              { symbol: "LNG", name: "LNG", change_pct: 1.4, flow_pct: 30 },
+            ],
+            lat: 26.4,
+            lng: 56.2,
+          },
+        ],
+      },
+      "ready"
+    )
+
+    with_stubbed_fetch(InsightSnapshotService, insight_snapshot) do
+      with_stubbed_fetch(ConflictPulseSnapshotService, situation_snapshot) do
+        with_stubbed_fetch(ChokepointSnapshotService, chokepoint_snapshot) do
+          get area_path(area)
+        end
+      end
+    end
+
+    assert_response :success
+    assert_includes response.body, "Impact Assessments"
+    assert_includes response.body, "Military Posture"
+    assert_includes response.body, "Maritime Passage"
+    assert_includes response.body, "Market Pressure"
+    assert_includes response.body, "Brent Crude +2.60%"
+  end
+
   test "maritime area summary renders restricted selective brief when reporting is mixed" do
     area = @user.area_workspaces.create!(
       name: "Strait of Hormuz",

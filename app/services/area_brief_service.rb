@@ -100,7 +100,7 @@ class AreaBriefService
       status_label: STATE_LABELS.fetch(state),
       confidence: STATE_CONFIDENCE.fetch(state),
       summary: maritime_summary_for(state, evidence),
-      evidence: evidence_for_display(evidence),
+      evidence: evidence_for_display(evidence, state),
       watch_items: maritime_watch_items(state),
     }
   end
@@ -139,23 +139,27 @@ class AreaBriefService
   end
 
   def selected_state_for(evidence)
-    states = evidence.map { |item| item[:state] }.uniq
+    grouped = evidence.group_by { |item| item[:state] }
+    recent_selective = grouped.fetch(:restricted_selective, []).any? { |item| item[:published_at].present? && item[:published_at] > 24.hours.ago }
 
-    return :closed if states.include?(:closed)
-    return :restricted_selective if states.include?(:restricted_selective)
-    return :restricted if states.include?(:restricted)
-    return :reopening if states.include?(:reopening)
-    return :open if states.include?(:open)
+    return :restricted_selective if recent_selective
+    return :closed if grouped[:closed].to_a.sum { |item| item[:score] } >= 1.6
+    return :restricted if grouped[:restricted].present?
+    return :reopening if grouped[:reopening].present?
+    return :open if grouped[:open].present?
 
     :live_monitor
   end
 
   def maritime_summary_for(state, evidence)
+    mixed = evidence.map { |item| item[:state] }.uniq.size > 1
+
     case state
     when :closed
       "Passage through #{@area_workspace.name} appears effectively denied rather than normally open. Recent reporting includes references to blocked transit or explicit warnings that vessels are not allowed through the corridor."
     when :restricted_selective
-      "Passage through #{@area_workspace.name} does not look fully open. Recent reporting points to selective, permission-based transit and toll-like monetization measures, with some traffic rerouted north instead of moving under normal free passage."
+      summary = "Passage through #{@area_workspace.name} does not look fully open. Recent reporting points to selective, permission-based transit and toll-like monetization measures, with some traffic rerouted north instead of moving under normal free passage."
+      mixed ? "#{summary} Signals are mixed, but the stronger current pattern is constrained passage rather than normal open transit." : summary
     when :restricted
       "Traffic through #{@area_workspace.name} is moving under constrained conditions rather than normal transit. Recent reporting points to rerouting, congestion, or war-risk frictions that materially degrade the corridor."
     when :reopening
@@ -174,8 +178,11 @@ class AreaBriefService
     "This area has live reporting and movement data, but the page still needs stronger ranking and change analysis before it can support a high-trust operational readout."
   end
 
-  def evidence_for_display(evidence)
-    evidence
+  def evidence_for_display(evidence, selected_state)
+    preferred = evidence.select { |item| item[:state] == selected_state }
+    fallback = evidence.reject { |item| item[:state] == selected_state }
+
+    (preferred + fallback)
       .uniq { |item| item[:url].presence || [item[:title], item[:publisher], item[:published_at]] }
       .first(4)
       .map do |item|

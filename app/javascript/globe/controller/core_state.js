@@ -400,6 +400,7 @@ export function wireCoreChrome(controller) {
 
 export function teardownCore(controller) {
   controller._destroyed = true
+  controller._teardownMobileUi?.()
   Object.values(controller._backgroundRefreshRetryTimers || {}).forEach(timer => clearTimeout(timer))
   TIMEOUT_PROPS.forEach(prop => {
     if (controller[prop]) clearTimeout(controller[prop])

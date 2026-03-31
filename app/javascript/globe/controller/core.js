@@ -13,6 +13,7 @@ export function applyCoreMethods(GlobeController) {
     this._destroyed = false
     initializeCoreState(this)
     wireCoreChrome(this)
+    this.initMobileUi?.()
     this._restorePrefs()
     this.loadCesium()
   }
@@ -79,6 +80,8 @@ export function applyCoreMethods(GlobeController) {
       maximumRenderTimeChange: Infinity,
     })
 
+    this._applyInitialMobileSceneMode?.()
+
     // Mobile performance tuning
     if (this._isMobile && this._isMobile()) {
       this.viewer.scene.fxaa = false
@@ -113,6 +116,8 @@ export function applyCoreMethods(GlobeController) {
       // Apply DB-saved preferences (camera, layers, sections, countries)
       this._applyRestoredPrefs()
     }
+
+    this._syncMobileChrome?.()
 
     // Track data freshness per layer
     this._layerFreshness = {}

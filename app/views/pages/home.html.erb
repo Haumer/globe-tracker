@@ -4,6 +4,8 @@
      data-globe-signed-in-value="<%= user_signed_in? %>"
      data-globe-saved-prefs-value="<%= (current_user&.preferences || {}).to_json %>">
   <div id="cesium-viewer"></div>
+  <%= render "pages/mobile_hud" %>
+  <button id="mobile-sheet-scrim" type="button" data-action="click->globe#dismissMobileSurface" aria-label="Close open mobile panel"></button>
 
   <%# ── Sidebar toggle ── ─────────────────────────────────────── %>
   <button id="sidebar-toggle" data-action="click->globe#toggleSidebar" data-tip="Toggle panel" data-tip-pos="right" aria-label="Toggle sidebar">

@@ -269,7 +269,8 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineLayerReloadTimer = setTimeout(async () => {
       await this._timelineLoadFrames()
       this._renderNearestFrame()
-      this._timelineUpdateEvents()
+      await this._timelineUpdateEvents()
+      await this._timelineUpdateConflictPulse()
     }, 300)
   }
 }

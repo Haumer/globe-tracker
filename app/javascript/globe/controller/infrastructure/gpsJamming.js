@@ -5,11 +5,16 @@ export function applyGpsJammingMethods(GlobeController) {
 
   GlobeController.prototype.toggleGpsJamming = function() {
     this.gpsJammingVisible = this.hasGpsJammingToggleTarget && this.gpsJammingToggleTarget.checked
+    if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
+
     if (this.gpsJammingVisible) {
-      this.fetchGpsJamming()
-      this._gpsJammingInterval = setInterval(() => this.fetchGpsJamming(), 60000)
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchGpsJamming()
+        this._gpsJammingInterval = setInterval(() => this.fetchGpsJamming(), 60000)
+      }
     } else {
-      if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
       this._clearGpsJammingEntities()
     }
     this._syncQuickBar()
@@ -39,6 +44,7 @@ export function applyGpsJammingMethods(GlobeController) {
     this._clearGpsJammingEntities()
     const dataSource = this.getGpsJammingDataSource()
     const Cesium = window.Cesium
+    dataSource.show = true
 
     if (cells.length === 0) return
 

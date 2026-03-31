@@ -6,11 +6,19 @@ export function applyOutagesMethods(GlobeController) {
 
   GlobeController.prototype.toggleOutages = function() {
     this.outagesVisible = this.hasOutagesToggleTarget && this.outagesToggleTarget.checked
+    if (this._outageInterval) {
+      clearInterval(this._outageInterval)
+      this._outageInterval = null
+    }
+
     if (this.outagesVisible) {
-      this.fetchOutages()
-      this._outageInterval = setInterval(() => this.fetchOutages(), 300000) // 5min
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchOutages()
+        this._outageInterval = setInterval(() => this.fetchOutages(), 300000) // 5min
+      }
     } else {
-      if (this._outageInterval) clearInterval(this._outageInterval)
       this._clearOutageEntities()
     }
     this._syncQuickBar()
@@ -41,6 +49,7 @@ export function applyOutagesMethods(GlobeController) {
     this._clearOutageEntities()
     const Cesium = window.Cesium
     const dataSource = this.getOutagesDataSource()
+    dataSource.show = true
 
     const levelColors = {
       critical: "#e040fb",

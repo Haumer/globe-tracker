@@ -130,7 +130,7 @@ export function applyTimelineEventMethods(GlobeController) {
     }
 
     if (byType.gps_jamming && this.gpsJammingVisible) {
-      const jammingData = byType.gps_jamming.map(event => ({
+      const jammingData = collapseTimelineGpsJammingEvents(byType.gps_jamming, this._timelineCursor).map(event => ({
         lat: event.lat,
         lng: event.lng,
         total: event.total,
@@ -138,6 +138,7 @@ export function applyTimelineEventMethods(GlobeController) {
         pct: event.pct,
         level: event.level,
       }))
+      this._gpsJammingData = jammingData
       this._renderGpsJamming(jammingData)
     }
 
@@ -153,4 +154,35 @@ export function applyTimelineEventMethods(GlobeController) {
       this._renderOutages({ summary: outageEvents, events: outageEvents })
     }
   }
+}
+
+function collapseTimelineGpsJammingEvents(events, cursor) {
+  const cursorMs = cursor instanceof Date ? cursor.getTime() : Date.now()
+  const byCell = new Map()
+
+  events.forEach(event => {
+    const key = `${event.lat},${event.lng}`
+    const current = byCell.get(key)
+    if (!current || gpsJammingCursorDistance(event, cursorMs) < gpsJammingCursorDistance(current, cursorMs)) {
+      byCell.set(key, event)
+      return
+    }
+
+    if (gpsJammingCursorDistance(event, cursorMs) === gpsJammingCursorDistance(current, cursorMs) &&
+      gpsJammingEventTime(event) > gpsJammingEventTime(current)) {
+      byCell.set(key, event)
+    }
+  })
+
+  return [...byCell.values()]
+}
+
+function gpsJammingCursorDistance(event, cursorMs) {
+  const eventMs = gpsJammingEventTime(event)
+  return Number.isFinite(eventMs) ? Math.abs(eventMs - cursorMs) : Number.POSITIVE_INFINITY
+}
+
+function gpsJammingEventTime(event) {
+  const eventMs = event?.time ? new Date(event.time).getTime() : Number.NaN
+  return Number.isFinite(eventMs) ? eventMs : Number.NEGATIVE_INFINITY
 }

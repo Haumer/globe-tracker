@@ -12,15 +12,20 @@ export function applyNewsRenderingMethods(GlobeController) {
 
   GlobeController.prototype.toggleNews = function() {
     this.newsVisible = this.hasNewsToggleTarget && this.newsToggleTarget.checked
+    if (this._newsInterval) {
+      clearInterval(this._newsInterval)
+      this._newsInterval = null
+    }
+
     if (this.newsVisible) {
-      this.fetchNews()
-      this._newsInterval = setInterval(() => this.fetchNews(), 900000)
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchNews()
+        this._newsInterval = setInterval(() => this.fetchNews(), 900000)
+      }
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = ""
     } else {
-      if (this._newsInterval) {
-        clearInterval(this._newsInterval)
-        this._newsInterval = null
-      }
       this._clearNewsEntities()
       this._newsData = []
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = "none"
@@ -88,6 +93,7 @@ export function applyNewsRenderingMethods(GlobeController) {
   GlobeController.prototype._renderNews = function(events) {
     this._clearNewsEntities()
     const dataSource = this.getNewsDataSource()
+    dataSource.show = true
 
     const categoryColors = {
       conflict: "#f44336",

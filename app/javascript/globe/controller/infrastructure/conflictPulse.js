@@ -9,7 +9,13 @@ export function applyConflictPulseMethods(GlobeController) {
     this.situationsVisible = this.hasSituationsToggleTarget && this.situationsToggleTarget.checked
     this._strikeArcsVisible = this.hasStrikeArcsToggleTarget && this.strikeArcsToggleTarget.checked
     this._hexTheaterVisible = this.hasHexTheaterToggleTarget && this.hexTheaterToggleTarget.checked
-    if (this.situationsVisible) {
+    if (this._timelineActive) {
+      if (this.situationsVisible) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this._stopConflictPulse({ clearData: true })
+      }
+    } else if (this.situationsVisible) {
       this._startConflictPulse()
     } else {
       this._stopConflictPulse({ clearData: true })

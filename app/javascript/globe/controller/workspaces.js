@@ -1,4 +1,4 @@
-import { encodeState, applyDeepLink } from "../deeplinks"
+import { encodeState, applyDeepLink } from "globe/deeplinks"
 
 export function applyWorkspaceMethods(GlobeController) {
 

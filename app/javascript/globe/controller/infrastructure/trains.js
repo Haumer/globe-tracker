@@ -1,4 +1,4 @@
-import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "globe/utils"
 
 const TRAIN_COLORS = {
   // High-speed / long distance

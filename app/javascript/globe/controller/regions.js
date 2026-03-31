@@ -4,8 +4,8 @@
 // flies camera to region, enables region-specific layers,
 // and scopes all data fetches to the region's bounding box.
 
-import { REGIONS, REGION_MAP, REGION_GROUPS } from "../regions"
-import { applyDeepLink } from "../deeplinks"
+import { REGIONS, REGION_MAP, REGION_GROUPS } from "globe/regions"
+import { applyDeepLink } from "globe/deeplinks"
 
 export function applyRegionMethods(GlobeController) {
   function regionBoundsCenter(bounds = {}) {

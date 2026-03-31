@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor } from "../../utils"
+import { getDataSource, cachedColor } from "globe/utils"
 
 function railwayColor(railway) {
   return railway.electrified === 1

@@ -1,9 +1,9 @@
-import { getViewportBounds, restoreCamera, saveCamera } from "../camera"
-import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "../utils"
-import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
-import { applyCoreEntityClickMethods } from "./core_entity_clicks"
-import { initializeCoreState, teardownCore, wireCoreChrome } from "./core_state"
-import { applyCoreUiHelpers } from "./core_ui_helpers"
+import { getViewportBounds, restoreCamera, saveCamera } from "globe/camera"
+import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "globe/utils"
+import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "globe/deeplinks"
+import { applyCoreEntityClickMethods } from "globe/controller/core_entity_clicks"
+import { initializeCoreState, teardownCore, wireCoreChrome } from "globe/controller/core_state"
+import { applyCoreUiHelpers } from "globe/controller/core_ui_helpers"
 
 export function applyCoreMethods(GlobeController) {
   applyCoreUiHelpers(GlobeController)

@@ -1,4 +1,4 @@
-import { LAYER_REGISTRY, QUICK_TOGGLE_MAP } from "./ui_registry"
+import { LAYER_REGISTRY, QUICK_TOGGLE_MAP } from "globe/controller/ui_registry"
 
 export function applyUiQuickBarMethods(GlobeController) {
   GlobeController.prototype.quickToggle = function(event) {

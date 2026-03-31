@@ -1,4 +1,4 @@
-import { findCountryAtPoint } from "../../utils"
+import { findCountryAtPoint } from "globe/utils"
 import {
   renderConflictPulseDetailHtml,
   renderHexDetailHtml,

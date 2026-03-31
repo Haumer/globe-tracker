@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor } from "../utils"
+import { getDataSource, cachedColor } from "globe/utils"
 
 export function applyWeatherMethods(GlobeController) {
 

@@ -1,4 +1,4 @@
-import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "../utils"
+import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 import {
   renderAirportDetailHtml,
   renderEarthquakeDetailHtml,

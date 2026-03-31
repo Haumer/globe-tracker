@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource } from "globe/utils"
 
 export function applyPipelinesMethods(GlobeController) {
   GlobeController.prototype.getPipelinesDataSource = function() { return getDataSource(this.viewer, this._ds, "pipelines") }

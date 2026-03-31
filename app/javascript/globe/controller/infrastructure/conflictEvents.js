@@ -1,4 +1,4 @@
-import { getDataSource, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
 
 export function applyConflictsMethods(GlobeController) {
   GlobeController.prototype.getConflictsDataSource = function() { return getDataSource(this.viewer, this._ds, "conflicts") }

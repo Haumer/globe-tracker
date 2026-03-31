@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 
 function createMilitaryBaseIcon(baseType, color) {
   const size = 28

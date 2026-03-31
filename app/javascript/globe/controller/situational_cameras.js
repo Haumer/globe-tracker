@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource } from "globe/utils"
 import {
   renderCameraListCard,
   renderFeaturedCameraCard,

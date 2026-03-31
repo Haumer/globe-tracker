@@ -1,5 +1,5 @@
-import { getDataSource, cachedColor } from "../../utils"
-import { COUNTRY_CENTROIDS } from "../../country_centroids"
+import { getDataSource, cachedColor } from "globe/utils"
+import { COUNTRY_CENTROIDS } from "globe/country_centroids"
 
 export function applyTrafficMethods(GlobeController) {
   GlobeController.prototype.getTrafficDataSource = function() { return getDataSource(this.viewer, this._ds, "traffic") }

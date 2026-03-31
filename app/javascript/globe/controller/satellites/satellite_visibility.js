@@ -1,4 +1,4 @@
-import { haversineDistance } from "../../utils"
+import { haversineDistance } from "globe/utils"
 
 const SAT_EVENT_MAP = {
   weather: ["fire", "natural", "weather", "earthquake"],

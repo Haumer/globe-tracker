@@ -1,6 +1,6 @@
-import { CONTEXT_LAYER_CONFIG, renderContextAction, renderContextItemBody, renderContextSection, renderSelectedContext } from "./context_presenters"
-import { applyContextNodeMethods } from "./context_nodes"
-import { applyContextSectionMethods } from "./context_sections"
+import { CONTEXT_LAYER_CONFIG, renderContextAction, renderContextItemBody, renderContextSection, renderSelectedContext } from "globe/controller/context_presenters"
+import { applyContextNodeMethods } from "globe/controller/context_nodes"
+import { applyContextSectionMethods } from "globe/controller/context_sections"
 
 export function applyContextMethods(GlobeController) {
   applyContextNodeMethods(GlobeController)

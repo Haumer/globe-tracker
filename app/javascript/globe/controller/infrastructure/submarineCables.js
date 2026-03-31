@@ -1,4 +1,4 @@
-import { findCountryAtPoint, getDataSource, cachedColor } from "../../utils"
+import { findCountryAtPoint, getDataSource, cachedColor } from "globe/utils"
 
 export function applyCablesMethods(GlobeController) {
   GlobeController.prototype.getCablesDataSource = function() { return getDataSource(this.viewer, this._ds, "cables") }

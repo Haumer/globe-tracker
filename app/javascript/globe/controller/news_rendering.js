@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource } from "globe/utils"
 
 export function applyNewsRenderingMethods(GlobeController) {
   GlobeController.prototype.getNewsDataSource = function() { return getDataSource(this.viewer, this._ds, "news") }

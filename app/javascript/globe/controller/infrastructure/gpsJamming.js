@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor } from "../../utils"
+import { getDataSource, cachedColor } from "globe/utils"
 
 export function applyGpsJammingMethods(GlobeController) {
   GlobeController.prototype.getGpsJammingDataSource = function() { return getDataSource(this.viewer, this._ds, "gpsJamming") }

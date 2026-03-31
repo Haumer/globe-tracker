@@ -1,5 +1,5 @@
-import { applyConflictPulseInteractionMethods } from "./conflict_pulse_interactions"
-import { applyConflictPulseRenderingMethods } from "./conflict_pulse_rendering"
+import { applyConflictPulseInteractionMethods } from "globe/controller/infrastructure/conflict_pulse_interactions"
+import { applyConflictPulseRenderingMethods } from "globe/controller/infrastructure/conflict_pulse_rendering"
 
 export function applyConflictPulseMethods(GlobeController) {
   applyConflictPulseRenderingMethods(GlobeController)

@@ -1,5 +1,5 @@
-import { getDataSource } from "../utils"
-import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, renderInsightFeedHtml } from "./insight_presenters"
+import { getDataSource } from "globe/utils"
+import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, renderInsightFeedHtml } from "globe/controller/insight_presenters"
 
 export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._shouldRenderInsightMarker = function(insight) {

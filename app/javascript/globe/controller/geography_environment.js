@@ -1,4 +1,4 @@
-import { resetTilt, resetView, viewTopDown, zoomIn, zoomOut } from "../camera"
+import { resetTilt, resetView, viewTopDown, zoomIn, zoomOut } from "globe/camera"
 
 export function applyGeographyEnvironmentMethods(GlobeController) {
   GlobeController.prototype.toggleTerrain = function() {

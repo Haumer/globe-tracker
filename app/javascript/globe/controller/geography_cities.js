@@ -1,4 +1,4 @@
-import { getDataSource, LABEL_DEFAULTS } from "../utils"
+import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
 
 export function applyGeographyCityMethods(GlobeController) {
   GlobeController.prototype.toggleCities = function() {

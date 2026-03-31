@@ -1,4 +1,4 @@
-import { getDataSource, createPlaneIcon } from "../utils"
+import { getDataSource, createPlaneIcon } from "globe/utils"
 
 export function applyFlightRenderingMethods(GlobeController) {
   GlobeController.prototype.fetchFlights = async function() {

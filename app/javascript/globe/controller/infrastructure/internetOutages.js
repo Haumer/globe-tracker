@@ -1,5 +1,5 @@
-import { getDataSource } from "../../utils"
-import { COUNTRY_CENTROIDS } from "../../country_centroids"
+import { getDataSource } from "globe/utils"
+import { COUNTRY_CENTROIDS } from "globe/country_centroids"
 
 export function applyOutagesMethods(GlobeController) {
   GlobeController.prototype.getOutagesDataSource = function() { return getDataSource(this.viewer, this._ds, "outages") }

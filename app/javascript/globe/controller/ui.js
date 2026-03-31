@@ -1,7 +1,7 @@
-import { applyUiPanelMethods } from "./ui_panel"
-import { applyUiPreferenceMethods } from "./ui_prefs"
-import { applyUiQuickBarMethods } from "./ui_quickbar"
-import { applyUiStatMethods } from "./ui_stats"
+import { applyUiPanelMethods } from "globe/controller/ui_panel"
+import { applyUiPreferenceMethods } from "globe/controller/ui_prefs"
+import { applyUiQuickBarMethods } from "globe/controller/ui_quickbar"
+import { applyUiStatMethods } from "globe/controller/ui_stats"
 
 export function applyUiMethods(GlobeController) {
   applyUiPanelMethods(GlobeController)

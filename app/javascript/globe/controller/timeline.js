@@ -1,7 +1,7 @@
-import { applyTimelineControlMethods } from "./timeline_controls"
-import { applyTimelineDetailMethods } from "./timeline_details"
-import { applyTimelineEventMethods } from "./timeline_events"
-import { applyTimelineFrameMethods } from "./timeline_frames"
+import { applyTimelineControlMethods } from "globe/controller/timeline_controls"
+import { applyTimelineDetailMethods } from "globe/controller/timeline_details"
+import { applyTimelineEventMethods } from "globe/controller/timeline_events"
+import { applyTimelineFrameMethods } from "globe/controller/timeline_frames"
 
 export function applyTimelineMethods(GlobeController) {
   applyTimelineControlMethods(GlobeController)

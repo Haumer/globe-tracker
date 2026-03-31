@@ -1,5 +1,5 @@
-import { getViewportBounds } from "../camera"
-import { getDataSource } from "../utils"
+import { getViewportBounds } from "globe/camera"
+import { getDataSource } from "globe/utils"
 
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineUpdateEvents = async function() {

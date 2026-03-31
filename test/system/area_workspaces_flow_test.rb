@@ -77,15 +77,15 @@ class AreaWorkspacesFlowTest < ApplicationSystemTestCase
     visit "/#25.0000,52.0000,3000000,0.000,-1.120;r:gulf-states"
 
     assert_selector "#region-indicator .region-badge", text: "GULF STATES", wait: 30
-    assert_selector "#region-indicator .region-track-btn", text: "Track Area", wait: 30
+    assert_selector "#region-indicator .region-track-btn", text: /track area/i, wait: 30
 
     assert_difference("AreaWorkspace.count", 1) do
-      click_button "Track Area"
+      find("#region-indicator .region-track-btn").click
       assert_current_path(/\/areas\/\d+/, wait: 30)
     end
 
     assert_text "Gulf States"
-    assert_text "Preset Region"
+    assert_text(/preset region/i)
     assert_selector "a", text: "Open On Globe"
   end
 end

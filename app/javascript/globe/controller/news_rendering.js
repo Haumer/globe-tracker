@@ -216,6 +216,75 @@ export function applyNewsRenderingMethods(GlobeController) {
     if (this._newsActiveTab === "articles") {
       this._renderNewsArticleList()
       this._setNewsDotOpacity(0.25)
+    } else {
+      this._setNewsDotOpacity(1.0)
+    }
+  }
+
+  GlobeController.prototype._renderTimelineNews = function(events) {
+    this._clearNewsEntities()
+    const dataSource = this.getNewsDataSource()
+    dataSource.show = true
+    this._newsArcData = []
+
+    const categoryColors = {
+      conflict: "#f44336",
+      unrest: "#ff9800",
+      disaster: "#ff5722",
+      health: "#e91e63",
+      economy: "#ffc107",
+      diplomacy: "#4caf50",
+      cyber: "#00bcd4",
+      other: "#90a4ae",
+    }
+
+    events.forEach((ev, idx) => {
+      const color = categoryColors[ev.category] || "#90a4ae"
+      const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const title = ev.title || ev.name || "Untitled"
+      const labelText = idx < 12 ? this._truncateNewsLabel(title, 36) : ""
+      const sourceName = ev.source ? `${this._escapeHtml(ev.source)} · ` : ""
+
+      const entity = dataSource.entities.add({
+        id: `timeline-news-${ev.id || idx}`,
+        position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
+        point: {
+          pixelSize: idx < 12 ? 13 : 9,
+          color: cesiumColor.withAlpha(0.88),
+          outlineColor: cesiumColor.withAlpha(0.35),
+          outlineWidth: idx < 12 ? 3 : 2,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 1e7, 0.45),
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelText ? {
+          text: labelText,
+          font: "13px DM Sans, sans-serif",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -20),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 6e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 6e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        } : undefined,
+        description: `<div style="font-family: 'DM Sans', sans-serif; max-width: 320px;">
+          <div style="font-size: 11px; color: ${color}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${sourceName}${this._escapeHtml(ev.category || "news")}</div>
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px; line-height: 1.3;">${this._escapeHtml(title)}</div>
+          ${ev.time ? `<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">${this._escapeHtml(ev.time)}</div>` : ""}
+          <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" style="color: ${color}; font-size: 11px;">Read →</a>
+        </div>`,
+      })
+
+      this._newsEntities.push(entity)
+    })
+
+    this._renderRegionFlows()
+
+    if (this._newsActiveTab === "articles") {
+      this._renderNewsArticleList()
+      this._setNewsDotOpacity(0.25)
     }
   }
 

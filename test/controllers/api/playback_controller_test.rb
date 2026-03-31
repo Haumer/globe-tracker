@@ -8,7 +8,12 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
       recorded_at: 30.minutes.ago
     )
 
-    get "/api/playback", params: { from: 1.hour.ago.iso8601, to: Time.current.iso8601, type: "flight" }
+    get "/api/playback", params: {
+      from: 1.hour.ago.iso8601,
+      to: Time.current.iso8601,
+      type: "flight",
+      lamin: 47.5, lamax: 48.5, lomin: 15.5, lomax: 16.5
+    }
     assert_response :success
 
     data = JSON.parse(response.body)
@@ -30,7 +35,12 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "playback with empty data returns zero frames" do
-    get "/api/playback", params: { from: 1.hour.ago.iso8601, to: Time.current.iso8601, type: "flight" }
+    get "/api/playback", params: {
+      from: 1.hour.ago.iso8601,
+      to: Time.current.iso8601,
+      type: "flight",
+      lamin: 47.5, lamax: 48.5, lomin: 15.5, lomax: 16.5
+    }
     assert_response :success
 
     data = JSON.parse(response.body)
@@ -41,7 +51,12 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
     PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.0, longitude: 16.0, recorded_at: 30.minutes.ago)
     PositionSnapshot.create!(entity_type: "ship", entity_id: "s1", latitude: 48.0, longitude: 16.0, recorded_at: 30.minutes.ago)
 
-    get "/api/playback", params: { from: 1.hour.ago.iso8601, to: Time.current.iso8601, type: "all" }
+    get "/api/playback", params: {
+      from: 1.hour.ago.iso8601,
+      to: Time.current.iso8601,
+      type: "all",
+      lamin: 47.5, lamax: 48.5, lomin: 15.5, lomax: 16.5
+    }
     assert_response :success
 
     data = JSON.parse(response.body)
@@ -68,7 +83,8 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
       get "/api/playback", params: {
         from: 3.days.ago.iso8601,
         to: Time.current.iso8601,
-        type: "flight"
+        type: "flight",
+        lamin: 47.5, lamax: 48.5, lomin: 15.5, lomax: 16.5
       }
       assert_response :success
 
@@ -78,5 +94,20 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
       assert_includes data["frames"].values.flatten.map { |frame| frame["id"] }, "f-new"
       refute_includes data["frames"].values.flatten.map { |frame| frame["id"] }, "f-old"
     end
+  end
+
+  test "playback without bounds returns a safe empty response" do
+    PositionSnapshot.create!(
+      entity_type: "flight", entity_id: "f1",
+      latitude: 48.0, longitude: 16.0,
+      recorded_at: 30.minutes.ago
+    )
+
+    get "/api/playback", params: { from: 1.hour.ago.iso8601, to: Time.current.iso8601, type: "flight" }
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    assert_equal 0, data["frame_count"]
+    assert_equal "viewport_bounds_required", data["error"]
   end
 end

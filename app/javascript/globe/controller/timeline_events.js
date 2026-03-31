@@ -1,4 +1,4 @@
-import { getViewportBounds } from "globe/camera"
+import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
 export function applyTimelineEventMethods(GlobeController) {
@@ -22,13 +22,14 @@ export function applyTimelineEventMethods(GlobeController) {
     }
 
     let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
-    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
+    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : (getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds)
     if (bounds) {
       url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
     }
 
     try {
       const response = await fetch(url)
+      if (!response.ok) throw new Error(`Timeline events request failed with ${response.status}`)
       const events = await response.json()
       this._timelineEventCount = Array.isArray(events) ? events.length : 0
       this._renderUnifiedTimelineEvents(events)
@@ -114,19 +115,30 @@ export function applyTimelineEventMethods(GlobeController) {
     }
 
     if (byType.news && this.newsVisible) {
-      const newsData = byType.news.map(event => ({
-        lat: event.lat,
-        lng: event.lng,
-        name: event.name,
-        url: event.url,
-        tone: event.tone,
-        level: event.level,
-        category: event.category,
-        themes: event.themes || [],
-        time: event.time,
-      }))
+      const cursorMs = this._timelineCursor?.getTime() || Date.now()
+      const newsData = byType.news
+        .filter(event => {
+          const eventMs = event.time ? new Date(event.time).getTime() : Number.NEGATIVE_INFINITY
+          return !Number.isFinite(eventMs) || eventMs <= cursorMs
+        })
+        .map(event => ({
+          id: event.id,
+          lat: event.lat,
+          lng: event.lng,
+          title: event.title,
+          name: event.name,
+          url: event.url,
+          tone: event.tone,
+          level: event.level,
+          category: event.category,
+          themes: event.themes || [],
+          source: event.source,
+          threat: event.threat,
+          cluster_id: event.cluster_id,
+          time: event.time,
+        }))
       this._newsData = newsData
-      this._renderNews(newsData)
+      this._renderTimelineNews(newsData)
     }
 
     if (byType.gps_jamming && this.gpsJammingVisible) {

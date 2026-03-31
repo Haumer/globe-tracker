@@ -38,20 +38,19 @@ class PositionSnapshotTest < ActiveSupport::TestCase
   end
 
   test "playback_frames groups by time interval" do
-    now = Time.current
-    3.times do |i|
-      PositionSnapshot.create!(
-        entity_type: "flight", entity_id: "f1",
-        latitude: 48.0 + i * 0.1, longitude: 16.0,
-        recorded_at: now - (60 * i).seconds
-      )
-    end
+    t0 = Time.utc(2026, 3, 31, 9, 5, 0)
+    PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.0, longitude: 16.0, recorded_at: t0)
+    PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.1, longitude: 16.0, recorded_at: t0 + 20.minutes)
+    PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.2, longitude: 16.0, recorded_at: t0 + 35.minutes)
 
     frames = PositionSnapshot.playback_frames(
-      entity_type: "flight", from: now - 5.minutes, to: now, bounds: {}, interval: 30
+      entity_type: "flight", from: t0, to: t0 + 1.hour, bounds: {}, interval: 30.minutes.to_i
     )
     assert_kind_of Hash, frames
     assert frames.values.all? { |v| v.is_a?(Array) }
+    assert_equal 2, frames.size
+    assert_equal 48.1, frames.values.first.first.latitude
+    assert_equal 48.2, frames.values.last.first.latitude
   end
 
   test "purge_older_than removes old snapshots" do

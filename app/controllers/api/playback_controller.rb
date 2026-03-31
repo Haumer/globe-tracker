@@ -19,13 +19,25 @@ module Api
                          elsif range_hours > 12 then 60
                          else 30
                          end
-      interval = (params[:interval] || default_interval).to_i.clamp(10, 120)
+      interval_minutes = (params[:interval] || default_interval).to_i.clamp(10, 120)
       effective_bounds = bounds.size == 4 ? bounds : {}
+
+      if effective_bounds.empty?
+        render json: {
+          from: from.utc.iso8601,
+          to: to.utc.iso8601,
+          entity_type: entity_type,
+          frame_count: 0,
+          frames: {},
+          error: "viewport_bounds_required",
+        }
+        return
+      end
 
       if entity_type == "all"
         # Unified timeline: load both flights and ships
-        flight_frames = PositionSnapshot.playback_frames(entity_type: "flight", from: from, to: to, bounds: effective_bounds, interval: interval)
-        ship_frames = PositionSnapshot.playback_frames(entity_type: "ship", from: from, to: to, bounds: effective_bounds, interval: interval)
+        flight_frames = PositionSnapshot.playback_frames(entity_type: "flight", from: from, to: to, bounds: effective_bounds, interval: interval_minutes.minutes.to_i)
+        ship_frames = PositionSnapshot.playback_frames(entity_type: "ship", from: from, to: to, bounds: effective_bounds, interval: interval_minutes.minutes.to_i)
 
         # Merge into unified frames with type annotation
         all_keys = (flight_frames.keys + ship_frames.keys).uniq.sort
@@ -50,7 +62,7 @@ module Api
           from: from,
           to: to,
           bounds: effective_bounds,
-          interval: interval,
+          interval: interval_minutes.minutes.to_i,
         )
 
         render json: {
@@ -179,7 +191,9 @@ module Api
       when "news"
         ne = te.eventable
         themes = parse_json_field(ne.themes)
-        base.merge(name: ne.name, url: ne.url, tone: ne.tone, level: ne.level, category: ne.category, themes: themes)
+        base.merge(name: ne.name, title: ne.title, url: ne.url, tone: ne.tone, level: ne.level,
+                   category: ne.category, themes: themes, source: ne.source,
+                   threat: ne.threat_level, cluster_id: ne.story_cluster_id)
       when "gps_jamming"
         gj = te.eventable
         base.merge(total: gj.total, bad: gj.bad, pct: gj.percentage, level: gj.level)
@@ -219,6 +233,7 @@ module Api
         spd: s.speed,
         vr: s.vertical_rate,
         gnd: s.on_ground,
+        time: s.recorded_at&.utc&.iso8601,
         x: s.extra.present? ? JSON.parse(s.extra) : nil,
       }
     end

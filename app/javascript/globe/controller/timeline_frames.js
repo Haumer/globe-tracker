@@ -1,4 +1,4 @@
-import { getViewportBounds } from "globe/camera"
+import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
 export function applyTimelineFrameMethods(GlobeController) {
@@ -23,14 +23,21 @@ export function applyTimelineFrameMethods(GlobeController) {
     }
 
     let url = `/api/playback?from=${from}&to=${to}&type=${playbackType}`
-    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
+    const bounds = resolveTimelineBounds.call(this)
     if (bounds) {
       url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
     }
 
     try {
       const response = await fetch(url)
+      if (!response.ok) throw new Error(`Timeline playback request failed with ${response.status}`)
       const data = await response.json()
+      if (data?.error === "viewport_bounds_required") {
+        this._timelineFrames = {}
+        this._timelineKeys = []
+        this._timelineFrameIndex = 0
+        return { frameCount: 0, movementEnabled: false, boundsRequired: true }
+      }
       syncTimelineRangeFromResponse.call(this, data)
       this._timelineFrames = data.frames || {}
       this._timelineKeys = Object.keys(this._timelineFrames).sort()
@@ -183,6 +190,18 @@ export function applyTimelineFrameMethods(GlobeController) {
     const minutes = String(date.getUTCMinutes()).padStart(2, "0")
     return `${month}-${day} ${hours}:${minutes}`
   }
+}
+
+function resolveTimelineBounds() {
+  if (this.hasActiveFilter()) {
+    const bounds = this.getFilterBounds()
+    if (bounds) this._timelinePlaybackBounds = bounds
+    return bounds
+  }
+
+  const bounds = getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds || null
+  if (bounds) this._timelinePlaybackBounds = bounds
+  return bounds
 }
 
 function syncTimelineRangeFromResponse(data) {

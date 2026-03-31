@@ -93,6 +93,14 @@ export function getViewportBounds(viewer) {
   }
 }
 
+export function getPlaybackBounds(viewer) {
+  const viewportBounds = getViewportBounds(viewer)
+  const candidateBounds = viewportBounds || computeViewRectangleBounds(viewer) || approximateCameraBounds(viewer)
+  if (!candidateBounds) return null
+
+  return clampPlaybackBounds(candidateBounds, viewer)
+}
+
 // ── Camera Controls ──────────────────────────────────────
 
 function flyToCurrentPosition(viewer, { heightFactor = 1, maxHeight, heading, pitch, duration = 0.5 } = {}) {
@@ -149,4 +157,66 @@ export function zoomIn(viewer) {
 
 export function zoomOut(viewer) {
   flyToCurrentPosition(viewer, { heightFactor: 2, maxHeight: 40_000_000 })
+}
+
+function computeViewRectangleBounds(viewer) {
+  const scene = viewer?.scene
+  const rectangle = scene?.camera?.computeViewRectangle?.(scene?.globe?.ellipsoid)
+  if (!rectangle) return null
+
+  return {
+    lamin: C().Math.toDegrees(rectangle.south),
+    lamax: C().Math.toDegrees(rectangle.north),
+    lomin: C().Math.toDegrees(rectangle.west),
+    lomax: C().Math.toDegrees(rectangle.east),
+  }
+}
+
+function approximateCameraBounds(viewer) {
+  const carto = viewer?.camera?.positionCartographic
+  if (!carto) return null
+
+  const lat = C().Math.toDegrees(carto.latitude)
+  const lng = C().Math.toDegrees(carto.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+
+  const latSpan = playbackLatSpanForHeight(carto.height)
+  const lngSpan = latSpan / Math.max(Math.cos(lat * Math.PI / 180), 0.25)
+
+  return {
+    lamin: lat - latSpan / 2,
+    lamax: lat + latSpan / 2,
+    lomin: lng - lngSpan / 2,
+    lomax: lng + lngSpan / 2,
+  }
+}
+
+function clampPlaybackBounds(bounds, viewer) {
+  const centerLat = midpoint(bounds.lamin, bounds.lamax)
+  const centerLng = midpoint(bounds.lomin, bounds.lomax)
+  const latSpan = Math.abs(bounds.lamax - bounds.lamin)
+  const lngSpan = Math.abs(bounds.lomax - bounds.lomin)
+  const maxLatSpan = playbackLatSpanForHeight(viewer?.camera?.positionCartographic?.height)
+  const maxLngSpan = maxLatSpan / Math.max(Math.cos(centerLat * Math.PI / 180), 0.25)
+  const clampedLatSpan = Math.max(2, Math.min(latSpan || maxLatSpan, maxLatSpan))
+  const clampedLngSpan = Math.max(2, Math.min(lngSpan || maxLngSpan, maxLngSpan))
+
+  return {
+    lamin: Math.max(-85, centerLat - clampedLatSpan / 2),
+    lamax: Math.min(85, centerLat + clampedLatSpan / 2),
+    lomin: centerLng - clampedLngSpan / 2,
+    lomax: centerLng + clampedLngSpan / 2,
+  }
+}
+
+function playbackLatSpanForHeight(height) {
+  if (!Number.isFinite(height) || height <= 0) return 8
+  return Math.max(4, Math.min(24, height / 300000))
+}
+
+function midpoint(a, b) {
+  if (Number.isFinite(a) && Number.isFinite(b)) return (a + b) / 2
+  if (Number.isFinite(a)) return a
+  if (Number.isFinite(b)) return b
+  return 0
 }

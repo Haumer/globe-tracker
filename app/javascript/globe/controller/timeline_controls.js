@@ -352,6 +352,11 @@ function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, 
   const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
     this.gpsJammingVisible || this.outagesVisible || this.situationsVisible
 
+  if (frameStatus?.boundsRequired) {
+    this._toast("Zoom in or apply a region filter to load movement playback.")
+    return
+  }
+
   if (frameCount > 0) {
     const suffix = opening ? " — press play" : ""
     this._toast(`Time travel: ${frameCount} movement frames loaded${suffix}`, "success")

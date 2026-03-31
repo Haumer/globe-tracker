@@ -8,6 +8,7 @@ import { connectEventsChannel } from "channels/events_channel"
 
 const APP_VERSION_CHECK_MS = 15_000
 const INITIAL_APP_VERSION_CHECK_MS = 3_000
+const APP_RELOAD_REVISION_STORAGE_KEY = "gt-app-reload-revision"
 
 // Only connect ActionCable on the globe page (avoid wasting Puma threads on static pages)
 function connectIfGlobe() {
@@ -36,6 +37,10 @@ async function checkForAppUpdate() {
 
     const data = await response.json()
     if (data?.revision && data.revision !== knownAppRevision) {
+      const lastReloadedRevision = window.sessionStorage?.getItem(APP_RELOAD_REVISION_STORAGE_KEY)
+      if (lastReloadedRevision === data.revision) return
+
+      window.sessionStorage?.setItem(APP_RELOAD_REVISION_STORAGE_KEY, data.revision)
       window.location.reload()
     }
   } catch (_error) {
@@ -58,6 +63,12 @@ function startAppVersionWatcher() {
 
 document.addEventListener("turbo:load", () => {
   knownAppRevision = currentAppRevision()
+  if (knownAppRevision) {
+    const lastReloadedRevision = window.sessionStorage?.getItem(APP_RELOAD_REVISION_STORAGE_KEY)
+    if (lastReloadedRevision === knownAppRevision) {
+      window.sessionStorage?.removeItem(APP_RELOAD_REVISION_STORAGE_KEY)
+    }
+  }
   connectIfGlobe()
   startAppVersionWatcher()
 })

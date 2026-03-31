@@ -3,7 +3,7 @@ import {
   renderCameraListCard,
   renderFeaturedCameraCard,
   renderWebcamDetailHtml,
-} from "./situational_presenters"
+} from "globe/controller/situational_presenters"
 
 export function applySituationalCameraMethods(GlobeController) {
   GlobeController.prototype.getWebcamsDataSource = function() {

@@ -5,7 +5,7 @@ import {
   renderSituationPanelHtml,
   renderStrategicSituationDetailHtml,
   renderStrikeArcDetailHtml,
-} from "./conflict_pulse_presenters"
+} from "globe/controller/infrastructure/conflict_pulse_presenters"
 
 export function applyConflictPulseInteractionMethods(GlobeController) {
   GlobeController.prototype._flyToConflictPulse = function(zone) {

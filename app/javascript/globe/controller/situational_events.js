@@ -3,7 +3,7 @@ import {
   renderAirportDetailHtml,
   renderEarthquakeDetailHtml,
   renderNaturalEventDetailHtml,
-} from "./situational_presenters"
+} from "globe/controller/situational_presenters"
 
 export function applySituationalEventMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }

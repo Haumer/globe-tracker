@@ -192,6 +192,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this.timelineBarTarget.style.display = "none"
 
     this._timelineLastKnown = null
+    this._timelineAppliedFrameIndex = -1
     this._ds["timeline"]?.entities.removeAll()
     this._ds["timelineEvents"]?.entities.removeAll()
 
@@ -282,6 +283,7 @@ function initializeTimelineState(range) {
   this._timelineFrames = {}
   this._timelineKeys = []
   this._timelineFrameIndex = 0
+  this._timelineAppliedFrameIndex = -1
   this._timelineEventCount = 0
   this._timelineSituationCount = 0
 

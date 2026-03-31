@@ -23,6 +23,27 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
     assert_equal "flight", data["entity_type"]
   end
 
+  test "GET /api/playback preserves raw timestamps for 24 hour replay by default" do
+    travel_to Time.utc(2026, 3, 31, 10, 0, 0) do
+      t0 = Time.current - 30.minutes
+      PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.0, longitude: 16.0, recorded_at: t0)
+      PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.1, longitude: 16.1, recorded_at: t0 + 5.minutes)
+      PositionSnapshot.create!(entity_type: "flight", entity_id: "f1", latitude: 48.2, longitude: 16.2, recorded_at: t0 + 10.minutes)
+
+      get "/api/playback", params: {
+        from: 1.hour.ago.iso8601,
+        to: Time.current.iso8601,
+        type: "flight",
+        lamin: 47.5, lamax: 48.5, lomin: 15.5, lomax: 16.5
+      }
+      assert_response :success
+
+      data = JSON.parse(response.body)
+      assert_equal 3, data["frame_count"]
+      assert_equal [t0.utc.iso8601, (t0 + 5.minutes).utc.iso8601, (t0 + 10.minutes).utc.iso8601], data["frames"].keys
+    end
+  end
+
   test "GET /api/playback/range returns time range info" do
     get "/api/playback/range"
     assert_response :success

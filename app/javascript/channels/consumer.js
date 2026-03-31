@@ -4,7 +4,7 @@ let consumer = null
 
 export function getConsumer() {
   if (!consumer) {
-    // Use the action-cable-url meta tag (set by AnyCable to point at the Go server)
+    // Allow an explicit cable URL override, otherwise use the app-mounted /cable endpoint.
     const meta = document.querySelector('meta[name="action-cable-url"]')
     const url = meta ? meta.content : "/cable"
     consumer = createConsumer(url)

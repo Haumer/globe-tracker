@@ -19,7 +19,11 @@ module Api
                          elsif range_hours > 12 then 60
                          else 30
                          end
-      interval_minutes = (params[:interval] || default_interval).to_i.clamp(10, 120)
+      interval_seconds = if params[:interval].present?
+        params[:interval].to_i.clamp(10, 120).minutes.to_i
+      elsif range_hours > 24
+        default_interval.minutes.to_i
+      end
       effective_bounds = bounds.size == 4 ? bounds : {}
 
       if effective_bounds.empty?
@@ -36,8 +40,8 @@ module Api
 
       if entity_type == "all"
         # Unified timeline: load both flights and ships
-        flight_frames = PositionSnapshot.playback_frames(entity_type: "flight", from: from, to: to, bounds: effective_bounds, interval: interval_minutes.minutes.to_i)
-        ship_frames = PositionSnapshot.playback_frames(entity_type: "ship", from: from, to: to, bounds: effective_bounds, interval: interval_minutes.minutes.to_i)
+        flight_frames = PositionSnapshot.playback_frames(entity_type: "flight", from: from, to: to, bounds: effective_bounds, interval: interval_seconds)
+        ship_frames = PositionSnapshot.playback_frames(entity_type: "ship", from: from, to: to, bounds: effective_bounds, interval: interval_seconds)
 
         # Merge into unified frames with type annotation
         all_keys = (flight_frames.keys + ship_frames.keys).uniq.sort
@@ -62,7 +66,7 @@ module Api
           from: from,
           to: to,
           bounds: effective_bounds,
-          interval: interval_minutes.minutes.to_i,
+          interval: interval_seconds,
         )
 
         render json: {

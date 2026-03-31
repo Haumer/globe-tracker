@@ -8,6 +8,7 @@ export function applyTimelineFrameMethods(GlobeController) {
     const to = this._timelineRangeEnd.toISOString()
 
     this._timelineLastKnown = null
+    this._timelineAppliedFrameIndex = -1
     this._ds["timeline"]?.entities.removeAll()
 
     let playbackType = "all"
@@ -42,7 +43,9 @@ export function applyTimelineFrameMethods(GlobeController) {
       this._timelineFrames = data.frames || {}
       this._timelineKeys = Object.keys(this._timelineFrames).sort()
       this._timelineFrameIndex = 0
-      if (this._timelineKeys.length > 0) this._renderTimelineFrame(0)
+      this._timelineLastKnown = new Map()
+      this._timelineAppliedFrameIndex = -1
+      this._renderNearestFrame()
       return { frameCount: this._timelineKeys.length, movementEnabled: true }
     } catch (error) {
       console.error("Timeline frame load error:", error)
@@ -51,22 +54,25 @@ export function applyTimelineFrameMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderNearestFrame = function() {
-    if (this._timelineKeys.length === 0) return
+    if (this._timelineKeys.length === 0) {
+      this._renderTimelineFrame(-1)
+      return
+    }
+
     const cursorIso = this._timelineCursor.toISOString()
     let low = 0
     let high = this._timelineKeys.length - 1
 
     while (low < high) {
-      const mid = (low + high) >> 1
-      if (this._timelineKeys[mid] < cursorIso) low = mid + 1
-      else high = mid
+      const mid = ((low + high + 1) >> 1)
+      if (this._timelineKeys[mid] <= cursorIso) low = mid
+      else high = mid - 1
     }
 
-    if (low > 0) {
-      const prev = new Date(this._timelineKeys[low - 1]).getTime()
-      const current = new Date(this._timelineKeys[low]).getTime()
-      const target = this._timelineCursor.getTime()
-      if (Math.abs(target - prev) < Math.abs(target - current)) low -= 1
+    if (this._timelineKeys[low] > cursorIso) {
+      this._timelineFrameIndex = -1
+      this._renderTimelineFrame(-1)
+      return
     }
 
     this._timelineFrameIndex = low
@@ -75,50 +81,41 @@ export function applyTimelineFrameMethods(GlobeController) {
 
   GlobeController.prototype._renderTimelineFrame = function(index) {
     const Cesium = window.Cesium
+    const dataSource = getDataSource(this.viewer, this._ds, "timeline")
+    if (index < 0) {
+      this._timelineLastKnown = new Map()
+      this._timelineAppliedFrameIndex = -1
+      dataSource.entities.removeAll()
+      this._requestRender()
+      return
+    }
+
     const key = this._timelineKeys[index]
     if (!key) return
 
-    const frameEntities = this._timelineFrames[key] || []
     const cursorMs = this._timelineCursor ? this._timelineCursor.getTime() : new Date(key).getTime()
-    if (!this._timelineLastKnown) this._timelineLastKnown = new Map()
-
-    frameEntities.forEach(entity => {
-      this._timelineLastKnown.set(`${entity.type}-${entity.id}`, {
-        ...entity,
-        seenAt: cursorMs,
-      })
-    })
-
-    const nextKey = this._timelineKeys[index + 1]
-    const nextMap = new Map()
-    if (nextKey) {
-      ;(this._timelineFrames[nextKey] || []).forEach(entity => nextMap.set(`${entity.type}-${entity.id}`, entity))
-    }
-
-    const dataSource = getDataSource(this.viewer, this._ds, "timeline")
+    applyTimelineFramesThrough.call(this, index)
     const activeIds = new Set()
     const hasFilter = this.hasActiveFilter()
-    const maxStaleMs = 120000
 
     this._timelineLastKnown.forEach((entity, entityKey) => {
       const ageSinceSnapshot = cursorMs - entity.seenAt
-      if (ageSinceSnapshot > maxStaleMs) {
+      if (ageSinceSnapshot < 0 || ageSinceSnapshot > timelineEntityStaleMs(entity.type)) {
         this._timelineLastKnown.delete(entityKey)
         return
       }
 
-      const state = projectTimelineEntity.call(this, entity, entityKey, nextKey, nextMap, cursorMs)
-      if (hasFilter && !this.pointPassesFilter(state.lat, state.lng)) return
+      if (hasFilter && !this.pointPassesFilter(entity.lat, entity.lng)) return
 
       const isFlight = entity.type === "flight"
       const id = `tl-${entity.type}-${entity.id}`
       activeIds.add(id)
-      const position = Cesium.Cartesian3.fromDegrees(state.lng, state.lat, state.alt + 100)
+      const position = Cesium.Cartesian3.fromDegrees(entity.lng, entity.lat, (entity.alt || 0) + 100)
       let timelineEntity = dataSource.entities.getById(id)
 
       if (timelineEntity) {
         timelineEntity.position = position
-        timelineEntity.billboard.rotation = -Cesium.Math.toRadians(state.hdg)
+        timelineEntity.billboard.rotation = -Cesium.Math.toRadians(entity.hdg || 0)
         if (timelineEntity.label) timelineEntity.label.text = entity.callsign || entity.id
       } else {
         timelineEntity = dataSource.entities.add({
@@ -127,7 +124,7 @@ export function applyTimelineFrameMethods(GlobeController) {
           billboard: {
             image: isFlight ? (entity.gnd ? this.planeIconGround : this.planeIcon) : this._timelineShipIcon(),
             scale: isFlight ? 1.0 : 0.8,
-            rotation: -Cesium.Math.toRadians(state.hdg),
+            rotation: -Cesium.Math.toRadians(entity.hdg || 0),
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             heightReference: Cesium.HeightReference.NONE,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -154,13 +151,6 @@ export function applyTimelineFrameMethods(GlobeController) {
     }
     toRemove.forEach(entity => dataSource.entities.remove(entity))
     this._requestRender()
-  }
-
-  GlobeController.prototype._lerpAngle = function(a, b, t) {
-    let diff = b - a
-    if (diff > 180) diff -= 360
-    if (diff < -180) diff += 360
-    return (a + diff * t + 360) % 360
   }
 
   GlobeController.prototype._timelineShipIcon = function() {
@@ -192,6 +182,32 @@ export function applyTimelineFrameMethods(GlobeController) {
   }
 }
 
+function applyTimelineFramesThrough(index) {
+  if (!this._timelineLastKnown || index < this._timelineAppliedFrameIndex) {
+    this._timelineLastKnown = new Map()
+    this._timelineAppliedFrameIndex = -1
+  }
+
+  for (let frameIndex = this._timelineAppliedFrameIndex + 1; frameIndex <= index; frameIndex++) {
+    const frameKey = this._timelineKeys[frameIndex]
+    const frameTimeMs = new Date(frameKey).getTime()
+    const frameEntities = this._timelineFrames[frameKey] || []
+
+    frameEntities.forEach(entity => {
+      this._timelineLastKnown.set(`${entity.type}-${entity.id}`, {
+        ...entity,
+        seenAt: frameTimeMs,
+      })
+    })
+  }
+
+  this._timelineAppliedFrameIndex = index
+}
+
+function timelineEntityStaleMs(entityType) {
+  return entityType === "ship" ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000
+}
+
 function resolveTimelineBounds() {
   if (this.hasActiveFilter()) {
     const bounds = this.getFilterBounds()
@@ -219,32 +235,4 @@ function syncTimelineRangeFromResponse(data) {
   this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(to)
   this._updateTimelineCursorDisplay()
   this._syncScrubberToCursor()
-}
-
-function projectTimelineEntity(entity, entityKey, nextKey, nextMap, cursorMs) {
-  let lat = entity.lat
-  let lng = entity.lng
-  let alt = entity.alt || 0
-  let hdg = entity.hdg || 0
-  const next = nextMap.get(entityKey)
-
-  if (next && nextKey) {
-    const nextMs = new Date(nextKey).getTime()
-    const spanMs = nextMs - entity.seenAt
-    if (spanMs > 0) {
-      const t = Math.max(0, Math.min(1, (cursorMs - entity.seenAt) / spanMs))
-      lat = entity.lat + (next.lat - entity.lat) * t
-      lng = entity.lng + (next.lng - entity.lng) * t
-      alt = (entity.alt || 0) + ((next.alt || 0) - (entity.alt || 0)) * t
-      hdg = this._lerpAngle(entity.hdg || 0, next.hdg || 0, t)
-    }
-  } else if (cursorMs > entity.seenAt && entity.spd > 0) {
-    const dt = (cursorMs - entity.seenAt) / 1000
-    const dLat = (entity.spd * Math.cos((entity.hdg || 0) * Math.PI / 180) * dt) / 111320
-    const dLng = (entity.spd * Math.sin((entity.hdg || 0) * Math.PI / 180) * dt) / (111320 * Math.cos(entity.lat * Math.PI / 180))
-    lat += dLat
-    lng += dLng
-  }
-
-  return { lat, lng, alt, hdg }
 }

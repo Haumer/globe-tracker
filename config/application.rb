@@ -32,8 +32,5 @@ module GlobeTracker
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
 
-    # Use AnyCable secret to sign Turbo Streams
-    # https://docs.anycable.io/guides/hotwire?id=rails-applications
-    config.turbo.signed_stream_verifier_key = AnyCable.config.secret
   end
 end

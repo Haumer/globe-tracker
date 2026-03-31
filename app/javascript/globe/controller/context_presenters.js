@@ -16,9 +16,9 @@ export function renderSelectedContext(controller, context) {
   const meta = (context.meta || [])
     .filter(item => item?.value)
     .map(item => `
-      <div class="detail-field">
-        <span class="detail-label">${controller._escapeHtml(item.label)}</span>
-        <span class="detail-value">${controller._escapeHtml(item.value)}</span>
+      <div class="context-stat">
+        <span class="context-stat-label">${controller._escapeHtml(item.label)}</span>
+        <span class="context-stat-value">${controller._escapeHtml(item.value)}</span>
       </div>
     `)
     .join("")
@@ -53,17 +53,17 @@ export function renderSelectedContext(controller, context) {
     .join("")
 
   return `
-    <div class="insight-card insight-card--${controller._escapeHtml(context.severity || "medium")}">
+    <div class="insight-card insight-card--${controller._escapeHtml(context.severity || "medium")} insight-card--context">
       <div class="insight-card-severity">
         <i class="fa-solid ${controller._escapeHtml(context.icon || "fa-circle-info")}" style="color:${controller._escapeHtml(context.accentColor || "#4fc3f7")};"></i>
       </div>
       <div class="insight-card-body">
         <div class="insight-card-type">${controller._escapeHtml(context.eyebrow || "CONTEXT")}</div>
         <div class="insight-card-title">${controller._escapeHtml(context.title || "Selected context")}</div>
-        ${context.subtitle ? `<div class="insight-card-desc" style="margin-top:4px;color:rgba(226,232,240,0.78);">${controller._escapeHtml(context.subtitle)}</div>` : ""}
-        ${context.summary ? `<div class="insight-card-desc">${controller._escapeHtml(context.summary)}</div>` : ""}
-        ${meta ? `<div class="detail-grid" style="margin-top:10px;">${meta}</div>` : ""}
-        ${actions ? `<div class="insight-card-actions" style="margin-top:10px;">${actions}</div>` : ""}
+        ${context.subtitle ? `<div class="insight-card-desc insight-card-desc--context-subtitle">${controller._escapeHtml(context.subtitle)}</div>` : ""}
+        ${context.summary ? `<div class="insight-card-desc insight-card-desc--context-summary">${controller._escapeHtml(context.summary)}</div>` : ""}
+        ${meta ? `<div class="context-meta-strip">${meta}</div>` : ""}
+        ${actions ? `<div class="insight-card-actions context-actions">${actions}</div>` : ""}
         ${sections}
       </div>
     </div>
@@ -76,9 +76,9 @@ export function renderContextSection(controller, section) {
   const rows = (section.rows || [])
     .filter(row => row?.value)
     .map(row => `
-      <div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-        <span style="font:600 10px var(--gt-mono);color:rgba(200,210,225,0.6);text-transform:uppercase;letter-spacing:0.6px;">${controller._escapeHtml(row.label)}</span>
-        <span style="font:500 11px var(--gt-sans);color:#f8fafc;text-align:right;overflow-wrap:anywhere;word-break:break-word;">${controller._escapeHtml(row.value)}</span>
+      <div class="context-row">
+        <span class="context-row-label">${controller._escapeHtml(row.label)}</span>
+        <span class="context-row-value">${controller._escapeHtml(row.value)}</span>
       </div>
     `)
     .join("")
@@ -97,8 +97,8 @@ export function renderContextSection(controller, section) {
   if (!body) return ""
 
   return `
-    <div style="margin-top:12px;">
-      <div style="font:600 9px var(--gt-mono);color:rgba(200,210,225,0.45);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">
+    <div class="context-section">
+      <div class="context-section-title">
         ${controller._escapeHtml(section.title || "Section")}
       </div>
       ${chips ? `<div class="insight-card-chips">${chips}</div>` : ""}
@@ -110,15 +110,15 @@ export function renderContextSection(controller, section) {
 
 export function renderContextItemBody(controller, item) {
   const label = `
-    <div style="font:500 11px var(--gt-sans);color:#f8fafc;line-height:1.35;overflow-wrap:anywhere;word-break:break-word;">${controller._escapeHtml(item.label)}</div>
-    ${item.meta ? `<div style="font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);margin-top:2px;">${controller._escapeHtml(item.meta)}</div>` : ""}
+    <div class="context-item-label">${controller._escapeHtml(item.label)}</div>
+    ${item.meta ? `<div class="context-item-meta">${controller._escapeHtml(item.meta)}</div>` : ""}
   `
 
   if (!item.badge) return label
 
   return `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-      <div style="min-width:0;">${label}</div>
+    <div class="context-item-body context-item-body--badged">
+      <div class="context-item-copy">${label}</div>
       <span class="ins-chip ins-chip--${controller._escapeHtml(item.badge.variant || "eq")}" style="flex-shrink:0;">${controller._escapeHtml(item.badge.label)}</span>
     </div>
   `
@@ -153,15 +153,15 @@ function renderContextItem(controller, item) {
 
   if (item.nodeRequest?.kind && item.nodeRequest?.id) {
     return `
-      <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+      <div class="context-item">
         <button
+          class="context-item-hit"
           type="button"
           data-action="click->globe#selectContextNode"
           data-kind="${controller._escapeHtml(item.nodeRequest.kind)}"
           data-id="${controller._escapeHtml(item.nodeRequest.id)}"
           data-title="${controller._escapeHtml(item.label)}"
           data-summary="${controller._escapeHtml(item.meta || "")}"
-          style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
         >
           ${itemBody}
         </button>
@@ -171,12 +171,12 @@ function renderContextItem(controller, item) {
 
   if (item.cameraId) {
     return `
-      <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+      <div class="context-item">
         <button
+          class="context-item-hit"
           type="button"
           data-action="click->globe#openContextCamera"
           data-camera-id="${controller._escapeHtml(item.cameraId)}"
-          style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
         >
           ${itemBody}
         </button>
@@ -192,8 +192,9 @@ function renderContextItem(controller, item) {
     const layerAttr = item.layerKey ? ` data-layer-key="${controller._escapeHtml(item.layerKey)}"` : ""
 
     return `
-      <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+      <div class="context-item">
         <button
+          class="context-item-hit"
           type="button"
           data-action="click->globe#openContextLayer"
           ${layerAttr}
@@ -201,7 +202,6 @@ function renderContextItem(controller, item) {
           ${latAttr}
           ${lngAttr}
           ${heightAttr}
-          style="display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;"
         >
           ${itemBody}
         </button>
@@ -211,8 +211,8 @@ function renderContextItem(controller, item) {
 
   if (item.url) {
     return `
-      <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-        <a href="${controller._safeUrl(item.url)}" target="_blank" rel="noopener" style="display:block;text-decoration:none;">
+      <div class="context-item">
+        <a class="context-item-hit" href="${controller._safeUrl(item.url)}" target="_blank" rel="noopener">
           ${itemBody}
         </a>
       </div>
@@ -220,7 +220,7 @@ function renderContextItem(controller, item) {
   }
 
   return `
-    <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+    <div class="context-item">
       ${itemBody}
     </div>
   `

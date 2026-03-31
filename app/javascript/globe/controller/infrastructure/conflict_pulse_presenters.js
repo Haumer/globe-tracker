@@ -39,6 +39,20 @@ export function renderConflictPulseDetailHtml(controller, zone) {
 
   const spikeBar = Math.min(zone.spike_ratio / 5.0, 1.0) * 100
   const toneBar = Math.min(Math.abs(zone.avg_tone) / 10.0, 1.0) * 100
+  const actionButtons = [
+    zone.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${controller._escapeHtml(zone.theater)}">
+      <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${controller._escapeHtml(zone.theater)}
+    </button>` : "",
+    casePath ? `<a class="detail-track-btn" style="background:rgba(56,189,248,0.16);border-color:rgba(56,189,248,0.3);color:#7dd3fc;font-weight:700;text-decoration:none;" href="${controller._safeUrl(casePath)}">
+      <i class="fa-solid fa-folder-plus" style="margin-right:4px;"></i>Create Case
+    </a>` : "",
+    `<button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${controller._escapeHtml(JSON.stringify(crossLayerSignals))}">
+      <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area
+    </button>`,
+    `<button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
+      <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
+    </button>`,
+  ].filter(Boolean).join("")
 
   return `
     <div class="detail-callsign" style="color:${color};">
@@ -67,7 +81,7 @@ export function renderConflictPulseDetailHtml(controller, zone) {
       </div>
     </div>
 
-    <div style="margin:8px 0;">
+    <div style="margin:7px 0;">
       <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">FREQUENCY SPIKE</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
@@ -77,7 +91,7 @@ export function renderConflictPulseDetailHtml(controller, zone) {
       </div>
     </div>
 
-    <div style="margin:8px 0;">
+    <div style="margin:7px 0;">
       <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">TONE SEVERITY</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
@@ -88,36 +102,22 @@ export function renderConflictPulseDetailHtml(controller, zone) {
     </div>
 
     ${signalHtml ? `
-      <div style="margin:10px 0;">
+      <div style="margin:8px 0;">
         <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">CROSS-LAYER SIGNALS</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div>
       </div>
     ` : ""}
 
-    <div style="margin:10px 0;">
+    <div style="margin:8px 0;">
       <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">TOP HEADLINES</div>
       ${headlinesHtml}
     </div>
 
-    <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:8px;">
+    <div style="font:400 9px var(--gt-mono,monospace);color:#666;margin-top:6px;">
       Sources: ${tierHtml} · Updated ${new Date(zone.detected_at).toLocaleTimeString()}
     </div>
 
-    ${zone.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${controller._escapeHtml(zone.theater)}">
-      <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${controller._escapeHtml(zone.theater)}
-    </button>` : ""}
-
-    ${casePath ? `<a class="detail-track-btn" style="background:rgba(56,189,248,0.16);border-color:rgba(56,189,248,0.3);color:#7dd3fc;font-weight:700;text-decoration:none;" href="${controller._safeUrl(casePath)}">
-      <i class="fa-solid fa-folder-plus" style="margin-right:4px;"></i>Create Case
-    </a>` : ""}
-
-    <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;font-weight:700;" data-action="click->globe#revealPulseConnections" data-lat="${zone.lat}" data-lng="${zone.lng}" data-signals="${controller._escapeHtml(JSON.stringify(crossLayerSignals))}">
-      <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Explore This Area
-    </button>
-
-    <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;" data-action="click->globe#showSatVisibility" data-lat="${zone.lat}" data-lng="${zone.lng}">
-      <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
-    </button>
+    <div class="detail-action-grid">${actionButtons}</div>
 
     ${controller._connectionsPlaceholder()}
   `
@@ -153,6 +153,14 @@ export function renderStrategicSituationDetailHtml(controller, item) {
         <span style="font:700 11px var(--gt-mono);color:${color};">${flow.pct}% of world</span>
       </div>
     `).join("")
+  const actionButtons = [
+    item.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${controller._escapeHtml(item.theater)}">
+      <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${controller._escapeHtml(item.theater)}
+    </button>` : "",
+    `<button class="detail-track-btn" style="background:rgba(38,198,218,0.15);border-color:rgba(38,198,218,0.3);color:#26c6da;" data-action="click->globe#selectContextNode" data-kind="${controller._escapeHtml(item.kind || "entity")}" data-id="${controller._escapeHtml(item.node_id || item.name || "")}" data-title="${controller._escapeHtml(item.name || "Strategic node")}" data-summary="${controller._escapeHtml(item.pressure_summary || "")}">
+      <i class="fa-solid fa-diagram-project" style="margin-right:4px;"></i>Open Graph Context
+    </button>`,
+  ].filter(Boolean).join("")
 
   return `
     <div class="detail-callsign" style="color:${color};">
@@ -161,7 +169,7 @@ export function renderStrategicSituationDetailHtml(controller, item) {
     <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
       ${(item.status || "monitoring").toUpperCase()} — STRATEGIC ${item.strategic_score || 0}
     </div>
-    <div style="font:400 10px var(--gt-mono,monospace);color:#aaa;margin-bottom:10px;line-height:1.4;">
+    <div style="font:400 10px var(--gt-mono,monospace);color:#aaa;margin-bottom:8px;line-height:1.4;">
       ${controller._escapeHtml(item.pressure_summary || "")}
     </div>
     <div class="detail-grid">
@@ -175,15 +183,10 @@ export function renderStrategicSituationDetailHtml(controller, item) {
       </div>
       ${item.theater ? `<div class="detail-field"><span class="detail-label">Theater</span><span class="detail-value">${controller._escapeHtml(item.theater)}</span></div>` : ""}
     </div>
-    ${signalHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">LIVE SIGNALS</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div></div>` : ""}
-    ${flowRows ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">FLOW EXPOSURE</div>${flowRows}</div>` : ""}
-    ${headlinesHtml ? `<div style="margin:10px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">DIRECT REPORTING</div>${headlinesHtml}</div>` : ""}
-    ${item.theater ? `<button class="detail-track-btn" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.3);color:#ffa726;font-weight:700;" data-action="click->globe#highlightTheater" data-theater="${controller._escapeHtml(item.theater)}">
-      <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>Highlight ${controller._escapeHtml(item.theater)}
-    </button>` : ""}
-    <button class="detail-track-btn" style="background:rgba(38,198,218,0.15);border-color:rgba(38,198,218,0.3);color:#26c6da;" data-action="click->globe#selectContextNode" data-kind="${controller._escapeHtml(item.kind || "entity")}" data-id="${controller._escapeHtml(item.node_id || item.name || "")}" data-title="${controller._escapeHtml(item.name || "Strategic node")}" data-summary="${controller._escapeHtml(item.pressure_summary || "")}">
-      <i class="fa-solid fa-diagram-project" style="margin-right:4px;"></i>Open Graph Context
-    </button>
+    ${signalHtml ? `<div style="margin:8px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">LIVE SIGNALS</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div></div>` : ""}
+    ${flowRows ? `<div style="margin:8px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">FLOW EXPOSURE</div>${flowRows}</div>` : ""}
+    ${headlinesHtml ? `<div style="margin:8px 0;"><div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">DIRECT REPORTING</div>${headlinesHtml}</div>` : ""}
+    <div class="detail-action-grid">${actionButtons}</div>
     ${controller._connectionsPlaceholder()}
   `
 }

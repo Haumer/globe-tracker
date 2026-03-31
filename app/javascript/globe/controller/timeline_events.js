@@ -15,7 +15,11 @@ export function applyTimelineEventMethods(GlobeController) {
     if (this.newsVisible) types.push("news")
     if (this.gpsJammingVisible) types.push("gps_jamming")
     if (this.outagesVisible) types.push("internet_outage")
-    if (types.length === 0) return
+    if (types.length === 0) {
+      this._timelineEventCount = 0
+      getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
+      return 0
+    }
 
     let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
     const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
@@ -26,15 +30,24 @@ export function applyTimelineEventMethods(GlobeController) {
     try {
       const response = await fetch(url)
       const events = await response.json()
+      this._timelineEventCount = Array.isArray(events) ? events.length : 0
       this._renderUnifiedTimelineEvents(events)
       this._updateStats()
+      return this._timelineEventCount
     } catch (error) {
       console.error("Timeline events error:", error)
+      this._timelineEventCount = 0
+      return 0
     }
   }
 
   GlobeController.prototype._timelineUpdateConflictPulse = async function() {
-    if (!this._timelineActive || !this._timelineCursor || !this.situationsVisible) return
+    if (!this._timelineActive || !this._timelineCursor) return 0
+    if (!this.situationsVisible) {
+      this._timelineSituationCount = 0
+      this._clearConflictPulseEntities?.()
+      return 0
+    }
 
     const cursorMs = this._timelineCursor.getTime()
     const bucket = cursorMs - (cursorMs % 3600000)
@@ -51,11 +64,15 @@ export function applyTimelineEventMethods(GlobeController) {
       this._conflictPulseZones = data.zones || []
       this._strikeArcData = data.strike_arcs || []
       this._hexCellData = data.hex_cells || []
+      this._timelineSituationCount = this._conflictPulseZones.length
       this._renderConflictPulse?.()
       this._renderSituationPanel?.()
       if (this._syncRightPanels) this._syncRightPanels()
+      return this._timelineSituationCount
     } catch (error) {
       console.warn("Timeline conflict pulse fetch failed:", error)
+      this._timelineSituationCount = 0
+      return 0
     }
   }
 

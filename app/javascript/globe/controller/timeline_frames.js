@@ -19,7 +19,7 @@ export function applyTimelineFrameMethods(GlobeController) {
       this._timelineFrames = {}
       this._timelineKeys = []
       this._timelineFrameIndex = 0
-      return
+      return { frameCount: 0, movementEnabled: false }
     }
 
     let url = `/api/playback?from=${from}&to=${to}&type=${playbackType}`
@@ -31,12 +31,15 @@ export function applyTimelineFrameMethods(GlobeController) {
     try {
       const response = await fetch(url)
       const data = await response.json()
+      syncTimelineRangeFromResponse.call(this, data)
       this._timelineFrames = data.frames || {}
       this._timelineKeys = Object.keys(this._timelineFrames).sort()
       this._timelineFrameIndex = 0
       if (this._timelineKeys.length > 0) this._renderTimelineFrame(0)
+      return { frameCount: this._timelineKeys.length, movementEnabled: true }
     } catch (error) {
       console.error("Timeline frame load error:", error)
+      return { frameCount: 0, movementEnabled: true, error: true }
     }
   }
 
@@ -180,6 +183,23 @@ export function applyTimelineFrameMethods(GlobeController) {
     const minutes = String(date.getUTCMinutes()).padStart(2, "0")
     return `${month}-${day} ${hours}:${minutes}`
   }
+}
+
+function syncTimelineRangeFromResponse(data) {
+  const from = data?.from ? new Date(data.from) : null
+  const to = data?.to ? new Date(data.to) : null
+  if (!from || !to || isNaN(from) || isNaN(to)) return
+
+  this._timelineRangeStart = from
+  this._timelineRangeEnd = to
+  if (!this._timelineCursor || this._timelineCursor < from || this._timelineCursor > to) {
+    this._timelineCursor = new Date(from.getTime())
+  }
+
+  this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(from)
+  this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(to)
+  this._updateTimelineCursorDisplay()
+  this._syncScrubberToCursor()
 }
 
 function projectTimelineEntity(entity, entityKey, nextKey, nextMap, cursorMs) {

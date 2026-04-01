@@ -27,7 +27,7 @@ class CountryIndicatorRefreshServiceTest < ActiveSupport::TestCase
           {
             "indicator" => { "id" => series_key, "value" => series_key },
             "country" => { "id" => "1W", "value" => "World" },
-            "countryiso3code" => "",
+            "countryiso3code" => "WLD",
             "date" => "2024",
             "value" => 999,
           },

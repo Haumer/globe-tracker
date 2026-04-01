@@ -65,7 +65,7 @@ class GlobalPollerService
     { job: RefreshSubmarineCablesJob, every: 24.hours, offset: 0.minutes },
     { job: RefreshMilitaryBasesJob, every: 24.hours, offset: 6.hours },
     { job: RefreshCountryIndicatorsJob, every: 24.hours, offset: 8.hours },
-    { job: RefreshTradeFlowsJob, every: 24.hours, offset: 9.hours },
+    { job: RefreshTradeFlowsJob, every: 1.hour, offset: 9.minutes },
     { job: RefreshEnergyBalancesJob, every: 24.hours, offset: 10.hours },
     { job: RefreshSectorInputsJob, every: 24.hours, offset: 11.hours },
     { job: RefreshTradeLocationsJob, every: 7.days, offset: 12.hours },

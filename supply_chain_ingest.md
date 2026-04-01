@@ -20,14 +20,22 @@ This app now has a raw economic and supply-chain ingest layer built around publi
 
 - `Strategic Trade Flows`
   - service: `TradeFlowRefreshService`
-  - cadence: daily via `RefreshTradeFlowsJob`
+  - cadence: hourly via `RefreshTradeFlowsJob`
   - storage: `trade_flow_snapshots`
   - source mode:
-    - normalized CSV from `STRATEGIC_TRADE_FLOWS_SOURCE_PATH`
-    - normalized CSV from `STRATEGIC_TRADE_FLOWS_SOURCE_URL`
+    - `UN Comtrade` keyed API when `COMTRADE_PRIMARY_SECRET` is present
+    - optional key failover with `COMTRADE_SECONDARY_SECRET`
+    - normalized CSV fallback from `STRATEGIC_TRADE_FLOWS_SOURCE_PATH`
+    - normalized CSV fallback from `STRATEGIC_TRADE_FLOWS_SOURCE_URL`
+  - automation:
+    - polls `getLiveUpdate` to discover newly released reporter-period slices
+    - bootstraps the latest available monthly period automatically on an empty DB
+    - drains multi-request bootstraps incrementally across runs instead of hammering the API in one pass
+    - preserves pending request groups and honors Comtrade `429` cool-down windows automatically
+    - fetches only the strategic HS basket used by the app
   - intended upstream sources:
-    - `CEPII BACI`
-    - `UN Comtrade` when access is available again
+    - `UN Comtrade`
+    - `CEPII BACI` fallback if keyed API is unavailable again
 
 - `Energy Balances`
   - service: `EnergyBalanceRefreshService`
@@ -67,6 +75,8 @@ This app now has a raw economic and supply-chain ingest layer built around publi
     - official `Coordinates` strings like `2516N 05518E`
 
 ## Expected CSV Shapes
+
+The CSV shapes below remain supported for offline backfills and manual recovery, but trade ingest no longer depends on them when Comtrade credentials are configured.
 
 ### Strategic Trade Flows
 
@@ -181,6 +191,15 @@ Current keys:
 - `fertilizer`
 - `semiconductors`
 - `semiconductor_equipment`
+
+## Trade API Configuration
+
+For fully automatic trade refreshes, set:
+
+- `COMTRADE_PRIMARY_SECRET`
+- `COMTRADE_SECONDARY_SECRET` optional
+
+When those are present, `TradeFlowRefreshService` uses the keyed Comtrade API directly and only falls back to CSV inputs if no Comtrade key is configured.
 
 ## Derived Layers
 

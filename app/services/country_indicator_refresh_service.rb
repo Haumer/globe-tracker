@@ -146,7 +146,8 @@ class CountryIndicatorRefreshService
   end
 
   def valid_country_row?(row)
-    row["countryiso3code"].to_s.match?(/\A[A-Z]{3}\z/)
+    row["countryiso3code"].to_s.match?(/\A[A-Z]{3}\z/) &&
+      normalize_iso2(row.dig("country", "id")).present?
   end
 
   def normalize_iso2(value)

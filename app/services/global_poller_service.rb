@@ -64,6 +64,13 @@ class GlobalPollerService
     { job: RefreshRailwaysJob, every: 12.hours, offset: 4.hours },
     { job: RefreshSubmarineCablesJob, every: 24.hours, offset: 0.minutes },
     { job: RefreshMilitaryBasesJob, every: 24.hours, offset: 6.hours },
+    { job: RefreshCountryIndicatorsJob, every: 24.hours, offset: 8.hours },
+    { job: RefreshTradeFlowsJob, every: 24.hours, offset: 9.hours },
+    { job: RefreshEnergyBalancesJob, every: 24.hours, offset: 10.hours },
+    { job: RefreshSectorInputsJob, every: 24.hours, offset: 11.hours },
+    { job: RefreshTradeLocationsJob, every: 7.days, offset: 12.hours },
+    { job: RefreshSupplyChainDerivationsJob, every: 24.hours, offset: 13.hours },
+    { job: RefreshSupplyChainOntologyJob, every: 24.hours, offset: 13.hours + 15.minutes },
   ].freeze
 
   LIVE_LAYER_CADENCES = {

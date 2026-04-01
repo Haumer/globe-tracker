@@ -312,6 +312,69 @@ class Api::NodeContextsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "operational_activity", body.dig("relationships", 0, "relation_type")
   end
 
+  test "returns country entity context with supply-chain evidence labels" do
+    japan = OntologyEntity.create!(
+      canonical_key: "country:jpn",
+      entity_type: "country",
+      canonical_name: "Japan",
+      country_code: "JP",
+      metadata: {
+        "gdp_nominal_usd" => 4_200_000_000_000,
+        "imports_goods_services_pct_gdp" => 21.6,
+        "energy_imports_net_pct_energy_use" => 87.4,
+        "latest_year" => 2024,
+      }
+    )
+    crude_oil = OntologyEntity.create!(
+      canonical_key: "commodity:oil_crude",
+      entity_type: "commodity",
+      canonical_name: "Crude Oil",
+      metadata: { "description" => "Strategic supply-chain commodity" }
+    )
+    dependency = CountryCommodityDependency.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      commodity_key: "oil_crude",
+      commodity_name: "Crude Oil",
+      supplier_count: 2,
+      top_partner_country_code: "AE",
+      top_partner_country_code_alpha3: "ARE",
+      top_partner_country_name: "United Arab Emirates",
+      top_partner_share_pct: 75.0,
+      import_share_gdp_pct: 0.0476,
+      dependency_score: 0.64,
+      metadata: {},
+      fetched_at: Time.current
+    )
+
+    relationship = OntologyRelationship.create!(
+      source_node: crude_oil,
+      target_node: japan,
+      relation_type: "import_dependency",
+      confidence: 0.78,
+      derived_by: "test",
+      explanation: "Japan depends on imported crude oil."
+    )
+    OntologyRelationshipEvidence.create!(
+      ontology_relationship: relationship,
+      evidence: dependency,
+      evidence_role: "dependency_profile",
+      confidence: 0.74
+    )
+
+    get "/api/node_context", params: { kind: "entity", id: "country:jpn" }
+
+    assert_response :success
+    body = JSON.parse(response.body)
+    assert_equal "Japan", body.dig("node", "name")
+    assert_equal "GDP $4.2T · 21.6% imports/GDP · 87.4% net energy imports · 2024", body.dig("node", "summary")
+    assert_equal "Japan crude oil imports", body.dig("evidence", 0, "label")
+    assert_equal "dependency_profile", body.dig("evidence", 0, "role")
+    assert_equal "import_dependency", body.dig("relationships", 0, "relation_type")
+    assert_equal "Crude Oil", body.dig("relationships", 0, "node", "name")
+  end
+
   private
 
   def create_story_cluster(key, title, lead_article: nil)

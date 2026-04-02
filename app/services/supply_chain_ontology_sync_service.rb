@@ -1,4 +1,6 @@
 class SupplyChainOntologySyncService
+  include StructuralMethods
+
   DERIVED_BY = "supply_chain_ontology_sync_v1".freeze
   COUNTRY_ENTITY_TYPE = "country".freeze
   SECTOR_ENTITY_TYPE = "sector".freeze
@@ -41,11 +43,13 @@ class SupplyChainOntologySyncService
 
       sync_country_entities
       sync_sector_entities
+      sync_chokepoint_entities
       sync_commodity_entities
 
       result = {
         countries: @country_entities.size,
         sectors: @sector_entities.size,
+        chokepoints: @chokepoint_entities.size,
         commodities: @commodity_entities.size,
         economic_profiles: sync_economic_profile_relationships,
         import_dependencies: sync_import_dependency_relationships,
@@ -144,24 +148,6 @@ class SupplyChainOntologySyncService
 
       OntologySyncSupport.upsert_alias(entity, profile.sector_name, alias_type: "sector")
       @sector_entities[[profile.country_code_alpha3, profile.sector_key]] = entity
-    end
-  end
-
-  def sync_commodity_entities
-    commodity_pairs.each do |commodity_key, commodity_name|
-      entity = OntologySyncSupport.upsert_entity(
-        canonical_key: commodity_entity_key(commodity_key),
-        entity_type: "commodity",
-        canonical_name: commodity_name,
-        metadata: {
-          "description" => "#{commodity_name} is tracked as a strategic supply-chain commodity.",
-          "commodity_key" => commodity_key,
-          "strategic" => true,
-        }
-      )
-
-      OntologySyncSupport.upsert_alias(entity, commodity_name, alias_type: "official")
-      @commodity_entities[commodity_key] = entity
     end
   end
 
@@ -280,34 +266,31 @@ class SupplyChainOntologySyncService
   end
 
   def sync_structural_flow_dependencies
-    country_chokepoint_exposures
-      .group_by { |row| [row.chokepoint_key, row.commodity_key] }
-      .count do |(chokepoint_key, commodity_key), exposures|
-        source = chokepoint_entity_for(chokepoint_key)
-        target = @commodity_entities[commodity_key]
-        next false if source.blank? || target.blank?
+    structural_flow_rows.count do |row|
+      source = @chokepoint_entities[row.fetch(:chokepoint_key).to_s]
+      target = @commodity_entities[row.fetch(:commodity_key)]
+      next false if source.blank? || target.blank?
 
-        strongest = exposures.max_by { |row| row.exposure_score.to_f }
-        top_countries = exposures.sort_by { |row| -row.exposure_score.to_f }.first(3).map(&:country_name)
-        relationship = OntologySyncSupport.upsert_relationship(
-          source_node: source,
-          target_node: target,
-          relation_type: "flow_dependency",
-          confidence: confidence_from_score(strongest.exposure_score, floor: 0.45),
-          derived_by: DERIVED_BY,
-          explanation: "#{source.canonical_name} is a structural route dependency for #{target.canonical_name}, with downstream import exposure in #{top_countries.join(', ')}.",
-          metadata: {
-            "chokepoint_key" => chokepoint_key,
-            "commodity_key" => commodity_key,
-            "country_count" => exposures.map(&:country_code_alpha3).uniq.size,
-            "max_exposure_score" => strongest.exposure_score&.to_f,
-          }
+      relationship = OntologySyncSupport.upsert_relationship(
+        source_node: source,
+        target_node: target,
+        relation_type: "flow_dependency",
+        confidence: row.fetch(:confidence),
+        derived_by: DERIVED_BY,
+        explanation: row.fetch(:explanation),
+        metadata: row.fetch(:metadata)
+      )
+
+      Array(row[:evidence_rows]).each do |exposure|
+        attach_evidence(
+          relationship,
+          exposure,
+          evidence_role: "exposure_profile",
+          confidence: confidence_from_score(exposure.exposure_score, floor: 0.45)
         )
-        exposures.sort_by { |row| -row.exposure_score.to_f }.first(3).each do |exposure|
-          attach_evidence(relationship, exposure, evidence_role: "exposure_profile", confidence: confidence_from_score(exposure.exposure_score, floor: 0.45))
-        end
-        true
       end
+      true
+    end
   end
 
   def country_profiles
@@ -334,26 +317,6 @@ class SupplyChainOntologySyncService
     @country_chokepoint_exposures ||= CountryChokepointExposure.order(exposure_score: :desc).to_a
   end
 
-  def commodity_pairs
-    @commodity_pairs ||= begin
-      names = {}
-
-      country_commodity_dependencies.each do |dependency|
-        names[dependency.commodity_key] ||= dependency.commodity_name.presence || SupplyChainCatalog.commodity_name_for(dependency.commodity_key)
-      end
-      country_chokepoint_exposures.each do |exposure|
-        names[exposure.commodity_key] ||= exposure.commodity_name.presence || SupplyChainCatalog.commodity_name_for(exposure.commodity_key)
-      end
-      sector_input_profiles.each do |profile|
-        next unless profile.input_kind == "commodity" || SupplyChainCatalog.commodity_name_for(profile.input_key).present?
-
-        names[profile.input_key] ||= profile.input_name.presence || SupplyChainCatalog.commodity_name_for(profile.input_key)
-      end
-
-      names.compact.sort_by { |commodity_key, commodity_name| [commodity_name, commodity_key] }
-    end
-  end
-
   def applicable_inputs_for(country_code_alpha3, sector_key)
     scoped = sector_input_profiles.select do |profile|
       profile.country_code_alpha3 == country_code_alpha3 && profile.sector_key == sector_key
@@ -362,57 +325,6 @@ class SupplyChainOntologySyncService
 
     sector_input_profiles.select do |profile|
       profile.scope_key == "global" && profile.sector_key == sector_key
-    end
-  end
-
-  def input_entity_for_profile(profile)
-    if profile.input_kind == "commodity" || SupplyChainCatalog.commodity_name_for(profile.input_key).present?
-      @commodity_entities[profile.input_key] ||= begin
-        name = profile.input_name.presence || SupplyChainCatalog.commodity_name_for(profile.input_key) || profile.input_key.to_s.humanize
-        OntologySyncSupport.upsert_entity(
-          canonical_key: commodity_entity_key(profile.input_key),
-          entity_type: "commodity",
-          canonical_name: name,
-          metadata: {
-            "description" => "#{name} is tracked as a strategic supply-chain commodity.",
-            "commodity_key" => profile.input_key,
-            "strategic" => true,
-          }
-        )
-      end
-    else
-      @input_entities[[profile.input_kind, profile.input_key]] ||= OntologySyncSupport.upsert_entity(
-        canonical_key: "input:#{profile.input_kind}:#{OntologySyncSupport.slugify(profile.input_key)}",
-        entity_type: INPUT_ENTITY_TYPE,
-        canonical_name: display_name_for_input_profile(profile),
-        metadata: {
-          "description" => "#{display_name_for_input_profile(profile)} is a modeled production input.",
-          "input_kind" => profile.input_kind,
-          "input_key" => profile.input_key,
-        }
-      )
-    end
-  end
-
-  def chokepoint_entity_for(chokepoint_key)
-    @chokepoint_entities[chokepoint_key.to_s] ||= begin
-      config = ChokepointMonitorService::CHOKEPOINTS.fetch(chokepoint_key.to_sym)
-      entity = OntologySyncSupport.upsert_entity(
-        canonical_key: "corridor:chokepoint:#{chokepoint_key}",
-        entity_type: "corridor",
-        canonical_name: config.fetch(:name),
-        metadata: {
-          "strategic_kind" => "chokepoint",
-          "description" => config[:description],
-          "latitude" => config[:lat],
-          "longitude" => config[:lng],
-          "radius_km" => config[:radius_km],
-          "countries" => config[:countries],
-          "flows" => config[:flows],
-        }.compact
-      )
-      OntologySyncSupport.upsert_alias(entity, config.fetch(:name), alias_type: "official")
-      entity
     end
   end
 
@@ -449,6 +361,17 @@ class SupplyChainOntologySyncService
 
   def import_dependency_explanation(dependency)
     parts = []
+    if dependency.metadata["estimated"]
+      parts << "#{dependency.country_name} is estimated to depend on imported #{dependency.commodity_name}"
+      if dependency.metadata["driver_sector_name"].present? && dependency.metadata["driver_sector_share_pct"].present?
+        parts << "through #{dependency.metadata["driver_sector_name"]} (#{dependency.metadata["driver_sector_share_pct"].to_f.round(1)}% GDP share)"
+      end
+      if dependency.metadata["energy_imports_pct"].present?
+        parts << "with #{dependency.metadata["energy_imports_pct"].to_f.round(1)}% net energy imports"
+      end
+      return parts.join(" ")
+    end
+
     parts << "#{dependency.country_name} depends on imported #{dependency.commodity_name}"
     parts << "(#{dependency.import_share_gdp_pct.to_f.round(2)}% of GDP)" if dependency.import_share_gdp_pct.present?
     if dependency.top_partner_country_name.present? && dependency.top_partner_share_pct.present?
@@ -461,11 +384,11 @@ class SupplyChainOntologySyncService
     top_labels = exposures.first(3).map do |row|
       "#{row.commodity_name} (#{row.exposure_score.to_f.round(2)})"
     end
-    "#{country_name} carries structural exposure to #{chokepoint_name} through #{top_labels.join(', ')}."
-  end
-
-  def display_name_for_input_profile(profile)
-    profile.input_name.presence || profile.input_key.to_s.humanize
+    if exposures.all? { |row| row.metadata["estimated"] }
+      "#{country_name} has estimated structural exposure to #{chokepoint_name} through #{top_labels.join(', ')}."
+    else
+      "#{country_name} carries structural exposure to #{chokepoint_name} through #{top_labels.join(', ')}."
+    end
   end
 
   def confidence_from_share(value)

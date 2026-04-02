@@ -157,6 +157,85 @@ class SupplyChainCatalog
     },
   ].freeze
 
+  BASELINE_SECTOR_INPUT_PRIORS = {
+    "manufacturing" => [
+      {
+        input_kind: "commodity",
+        input_key: "oil_refined",
+        input_name: "Refined Petroleum",
+        coefficient: 0.32,
+        note: "Fuel and petrochemical inputs support broad manufacturing output.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "lng",
+        input_name: "Liquefied Natural Gas",
+        coefficient: 0.26,
+        note: "Industrial heat and power demand often rides on gas and LNG availability.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "helium",
+        input_name: "Helium",
+        coefficient: 0.18,
+        note: "Precision, medical, and semiconductor-adjacent manufacturing depends on helium.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "semiconductor_equipment",
+        input_name: "Semiconductor Manufacturing Equipment",
+        coefficient: 0.14,
+        note: "Advanced manufacturing output is sensitive to semiconductor tooling and maintenance cycles.",
+      },
+    ],
+    "industry" => [
+      {
+        input_kind: "commodity",
+        input_key: "oil_crude",
+        input_name: "Crude Oil",
+        coefficient: 0.28,
+        note: "Heavy industry remains exposed to oil and petrochemical feedstocks.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "lng",
+        input_name: "Liquefied Natural Gas",
+        coefficient: 0.24,
+        note: "Industrial power and heat are commonly gas-linked.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "copper",
+        input_name: "Copper",
+        coefficient: 0.18,
+        note: "Electrical and industrial buildouts are copper-intensive.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "iron_ore",
+        input_name: "Iron Ore",
+        coefficient: 0.16,
+        note: "Steelmaking and heavy industrial output remain tied to iron ore supply.",
+      },
+    ],
+    "agriculture" => [
+      {
+        input_kind: "commodity",
+        input_key: "fertilizer",
+        input_name: "Fertilizer",
+        coefficient: 0.34,
+        note: "Crop yields and planted acreage are highly sensitive to fertilizer availability.",
+      },
+      {
+        input_kind: "commodity",
+        input_key: "oil_refined",
+        input_name: "Refined Petroleum",
+        coefficient: 0.16,
+        note: "Farm equipment and rural logistics depend on diesel and refined fuels.",
+      },
+    ],
+  }.freeze
+
   class << self
     def commodity_key_for_hs(hs_code)
       normalized = hs_code.to_s.gsub(/\D/, "")
@@ -187,6 +266,15 @@ class SupplyChainCatalog
         Array(prior[:commodity_keys]).include?(key) &&
           Array(prior[:destination_country_alpha3]).include?(alpha3)
       end
+    end
+
+    def strategic_commodity_pairs
+      STRATEGIC_COMMODITIES.map { |commodity_key, config| [commodity_key, config.fetch(:name)] }
+        .sort_by { |commodity_key, commodity_name| [commodity_name, commodity_key] }
+    end
+
+    def baseline_sector_inputs_for(sector_key)
+      Array(BASELINE_SECTOR_INPUT_PRIORS[sector_key.to_s]).map(&:dup)
     end
   end
 end

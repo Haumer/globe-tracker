@@ -192,6 +192,19 @@ export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._affectedInsightEntities = function(insight) {
     const entities = insight?.entities || {}
     const affected = []
+    const appendNode = node => {
+      if (!node?.kind || !node?.id) return
+      if (affected.some(entry => entry.kind === node.kind && entry.id === node.id)) return
+      affected.push({
+        kind: node.kind,
+        id: node.id,
+        label: node.label || node.name || node.id,
+        icon: node.kind === "commodity" ? "fa-chart-line" : "fa-circle-nodes",
+      })
+    }
+
+    appendNode(entities.primary_node)
+    appendNode(entities.secondary_node)
 
     if (entities.flight?.icao24 || entities.flight?.callsign) {
       const flightLabel = entities.flight.callsign || entities.flight.icao24 || "Affected flight"
@@ -226,6 +239,8 @@ export function applyInsightsMethods(GlobeController) {
     if (affectedEntities.length !== 1) return "Show affected entities"
 
     return {
+      entity: "Show affected node",
+      commodity: "Show affected commodity",
       flight: "Show affected flight",
       ship: "Show affected ship",
       chokepoint: "Show affected node",
@@ -413,6 +428,17 @@ export function applyInsightsMethods(GlobeController) {
           await this._flyToInsightTarget(chokepoint.lat, chokepoint.lng, 450000, 1.0)
         }
         this.showChokepointDetail?.(chokepoint)
+        return true
+      }
+      case "entity":
+      case "commodity": {
+        const nodes = [insight?.entities?.primary_node, insight?.entities?.secondary_node].filter(Boolean)
+        const node = nodes.find(candidate => candidate.kind === entityKind)
+        if (!node?.id) return false
+        if (Number.isFinite(insight?.lat) && Number.isFinite(insight?.lng)) {
+          await this._flyToInsightTarget(insight.lat, insight.lng, 450000, 1.0)
+        }
+        this._focusContextNode?.({ kind: entityKind, id: node.id }, { title: node.label || node.id, lat: insight?.lat, lng: insight?.lng })
         return true
       }
       default:

@@ -416,6 +416,7 @@ class NodeContextService
           id: evidence.id,
           label: evidence.input_name.presence || evidence.input_key.to_s.humanize,
           meta: [
+            ("estimated" if evidence.metadata["estimated"]),
             evidence.input_kind,
             ("coeff #{evidence.coefficient.to_f.round(3)}" if evidence.coefficient.present?),
             evidence.scope_key,
@@ -427,6 +428,7 @@ class NodeContextService
           id: evidence.id,
           label: "#{evidence.country_name} #{evidence.commodity_name.to_s.downcase} imports",
           meta: [
+            ("estimated" if evidence.metadata["estimated"]),
             ("#{evidence.import_share_gdp_pct.to_f.round(2)}% GDP" if evidence.import_share_gdp_pct.present?),
             ("#{evidence.top_partner_country_name} #{evidence.top_partner_share_pct.to_f.round(1)}%" if evidence.top_partner_country_name.present? && evidence.top_partner_share_pct.present?),
           ].compact.join(" · "),
@@ -437,6 +439,7 @@ class NodeContextService
           id: evidence.id,
           label: "#{evidence.country_name} #{evidence.chokepoint_name} exposure",
           meta: [
+            ("estimated" if evidence.metadata["estimated"]),
             evidence.commodity_name,
             ("score #{evidence.exposure_score.to_f.round(2)}" if evidence.exposure_score.present?),
           ].compact.join(" · "),

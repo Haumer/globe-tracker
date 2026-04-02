@@ -1,6 +1,10 @@
 require "set"
 
 class SupplyChainNormalizationService
+  include EstimationMethods
+  include ExposureMethods
+  include ScoringMethods
+
   extend Refreshable
 
   SOURCE_STATUS = {
@@ -22,8 +26,8 @@ class SupplyChainNormalizationService
     country_sector_profiles = build_country_sector_profiles(now)
     enrich_country_profiles!(country_profiles, country_sector_profiles)
 
-    sector_input_profiles = build_sector_input_profiles(now)
-    country_commodity_dependencies, partner_support = build_country_commodity_dependencies(country_profiles, now)
+    sector_input_profiles = build_sector_input_profiles(country_sector_profiles, now)
+    country_commodity_dependencies, partner_support = build_country_commodity_dependencies(country_profiles, country_sector_profiles, now)
     country_chokepoint_exposures = build_country_chokepoint_exposures(
       country_commodity_dependencies: country_commodity_dependencies,
       partner_support: partner_support,
@@ -158,7 +162,7 @@ class SupplyChainNormalizationService
     end
   end
 
-  def build_sector_input_profiles(now)
+  def build_sector_input_profiles(country_sector_profiles, now)
     records = []
 
     latest_sector_input_rows.values
@@ -191,10 +195,14 @@ class SupplyChainNormalizationService
           end
       end
 
+    if records.empty?
+      records = build_baseline_sector_input_profiles(country_sector_profiles, now)
+    end
+
     records
   end
 
-  def build_country_commodity_dependencies(country_profiles, now)
+  def build_country_commodity_dependencies(country_profiles, country_sector_profiles, now)
     country_lookup = country_profiles.index_by { |row| row.fetch(:country_code_alpha3) }
     latest_energy_metrics = latest_energy_metrics_by_country_commodity
     dependencies = []
@@ -267,143 +275,15 @@ class SupplyChainNormalizationService
       }
     end
 
-    [dependencies, partner_support]
-  end
-
-  def build_country_chokepoint_exposures(country_commodity_dependencies:, partner_support:, now:)
-    exposure_map = {}
-
-    country_commodity_dependencies.each do |dependency|
-      country_alpha3 = dependency.fetch(:country_code_alpha3)
-      commodity_key = dependency.fetch(:commodity_key)
-      support = partner_support[[country_alpha3, commodity_key]]
-      next if support.blank?
-
-      support.fetch(:partners).each do |partner|
-        next if partner.fetch(:share_fraction) <= 0
-
-        direct_chokepoints_for_partner(partner).each do |chokepoint_key|
-          register_exposure!(
-            exposure_map: exposure_map,
-            dependency: dependency,
-            chokepoint_key: chokepoint_key,
-            score_contribution: exposure_contribution_for(
-              dependency_score: dependency.fetch(:dependency_score),
-              share_fraction: partner.fetch(:share_fraction),
-              commodity_key: commodity_key,
-              chokepoint_key: chokepoint_key
-            ),
-            supplier_share_pct: partner.fetch(:share_pct),
-            partner_names: [partner.fetch(:partner_country_name)],
-            partner_codes: [partner.fetch(:partner_country_code_alpha3)],
-            rationale: "#{partner.fetch(:partner_country_name)} exports commonly transit #{chokepoint_name_for(chokepoint_key)}.",
-            metadata: {
-              "support_type" => "direct_supplier",
-            }
-          )
-        end
-      end
-
-      apply_route_priors!(
-        exposure_map: exposure_map,
-        dependency: dependency,
-        support: support
-      )
-    end
-
-    exposure_map.values
-      .group_by { |row| [row.fetch(:country_code_alpha3), row.fetch(:commodity_key)] }
-      .flat_map do |_key, rows|
-        rows.sort_by { |row| -row.fetch(:exposure_score).to_f }
-          .first(MAX_CHOKEPOINT_EXPOSURES_PER_COMMODITY)
-      end
-      .map do |row|
-        row.merge(
-          exposure_score: row.fetch(:exposure_score).to_f.clamp(0.0, 1.0).round(6),
-          supplier_share_pct: row.fetch(:supplier_share_pct).to_f.clamp(0.0, 100.0).round(4),
-          metadata: row.fetch(:metadata).merge(
-            "supporting_partner_names" => row.fetch(:metadata).fetch("supporting_partner_names", []).uniq.sort,
-            "supporting_partner_codes" => row.fetch(:metadata).fetch("supporting_partner_codes", []).uniq.sort,
-          ),
-          fetched_at: now,
-          created_at: now,
-          updated_at: now,
-        )
-      end
-  end
-
-  def apply_route_priors!(exposure_map:, dependency:, support:)
-    priors = SupplyChainCatalog.route_priors_for(
-      country_code_alpha3: dependency.fetch(:country_code_alpha3),
-      commodity_key: dependency.fetch(:commodity_key)
+    estimated_dependencies = build_estimated_country_commodity_dependencies(
+      country_profiles: country_profiles,
+      country_sector_profiles: country_sector_profiles,
+      existing_keys: dependencies.map { |row| [row.fetch(:country_code_alpha3), row.fetch(:commodity_key)] }.to_set,
+      now: now
     )
-    return if priors.blank?
+    dependencies.concat(estimated_dependencies)
 
-    priors.each do |prior|
-      required_keys = Array(prior[:requires_any_source_chokepoint]).map(&:to_s)
-      supporting_rows = required_keys.filter_map do |chokepoint_key|
-        exposure_map[[dependency.fetch(:country_code_alpha3), dependency.fetch(:commodity_key), chokepoint_key]]
-      end
-      next if supporting_rows.blank?
-
-      supporting_score = supporting_rows.sum { |row| row.fetch(:exposure_score).to_f }
-      next if supporting_score <= 0
-
-      supporting_share_pct = supporting_rows.sum { |row| row.fetch(:supplier_share_pct).to_f }
-      supporting_partner_names = supporting_rows.flat_map { |row| row.fetch(:metadata).fetch("supporting_partner_names", []) }.uniq
-      supporting_partner_codes = supporting_rows.flat_map { |row| row.fetch(:metadata).fetch("supporting_partner_codes", []) }.uniq
-
-      register_exposure!(
-        exposure_map: exposure_map,
-        dependency: dependency,
-        chokepoint_key: prior.fetch(:chokepoint_key),
-        score_contribution: [supporting_score * prior.fetch(:multiplier).to_f, dependency.fetch(:dependency_score).to_f].min,
-        supplier_share_pct: supporting_share_pct,
-        partner_names: supporting_partner_names,
-        partner_codes: supporting_partner_codes,
-        rationale: prior.fetch(:note),
-        metadata: {
-          "support_type" => "route_prior",
-          "requires_any_source_chokepoint" => required_keys,
-        }
-      )
-    end
-  end
-
-  def register_exposure!(exposure_map:, dependency:, chokepoint_key:, score_contribution:, supplier_share_pct:, partner_names:, partner_codes:, rationale:, metadata:)
-    return if chokepoint_key.blank? || score_contribution.to_f <= 0
-
-    key = [dependency.fetch(:country_code_alpha3), dependency.fetch(:commodity_key), chokepoint_key.to_s]
-    existing = exposure_map[key] ||= {
-      country_code: dependency.fetch(:country_code),
-      country_code_alpha3: dependency.fetch(:country_code_alpha3),
-      country_name: dependency.fetch(:country_name),
-      commodity_key: dependency.fetch(:commodity_key),
-      commodity_name: dependency.fetch(:commodity_name),
-      chokepoint_key: chokepoint_key.to_s,
-      chokepoint_name: chokepoint_name_for(chokepoint_key),
-      exposure_score: 0.0,
-      dependency_score: dependency.fetch(:dependency_score).to_f,
-      supplier_share_pct: 0.0,
-      rationale: nil,
-      metadata: {
-        "supporting_partner_names" => [],
-        "supporting_partner_codes" => [],
-        "support_types" => [],
-      },
-    }
-
-    existing[:exposure_score] += score_contribution.to_f
-    existing[:supplier_share_pct] += supplier_share_pct.to_f
-    existing[:dependency_score] = [existing[:dependency_score].to_f, dependency.fetch(:dependency_score).to_f].max
-    existing[:metadata]["supporting_partner_names"] |= Array(partner_names).compact_blank
-    existing[:metadata]["supporting_partner_codes"] |= Array(partner_codes).compact_blank
-    existing[:metadata]["support_types"] |= [metadata["support_type"]].compact
-    metadata.each do |meta_key, meta_value|
-      next if meta_key == "support_type"
-      existing[:metadata][meta_key] = meta_value
-    end
-    existing[:rationale] = [existing[:rationale], rationale].compact.join(" ").strip
+    [dependencies, partner_support]
   end
 
   def persist_profiles!(country_profiles:, country_sector_profiles:, sector_input_profiles:, country_commodity_dependencies:, country_chokepoint_exposures:)
@@ -494,58 +374,7 @@ class SupplyChainNormalizationService
       .sort_by { |partner| -partner.fetch(:trade_value_usd) }
   end
 
-  def direct_chokepoints_for_partner(partner)
-    country_code = partner.fetch(:partner_country_code, nil).to_s.upcase
-    return [] if country_code.blank?
-
-    ChokepointMonitorService::CHOKEPOINTS.each_with_object([]) do |(chokepoint_key, config), memo|
-      memo << chokepoint_key.to_s if Array(config[:countries]).include?(country_code)
-    end
-  end
-
-  def dependency_score_for(import_share_gdp_pct:, top_partner_share_pct:, concentration_hhi:, energy_imports_pct:, buffer_relief:)
-    import_intensity = normalized_score(import_share_gdp_pct, ceiling: 6.0)
-    top_partner_intensity = normalized_score(top_partner_share_pct, ceiling: 100.0)
-    concentration_intensity = normalized_score(concentration_hhi, ceiling: 1.0)
-    energy_intensity = normalized_score(energy_imports_pct, ceiling: 100.0)
-
-    score = (import_intensity * 0.45) +
-      (top_partner_intensity * 0.2) +
-      (concentration_intensity * 0.2) +
-      (energy_intensity * 0.15) -
-      (buffer_relief.to_f * 0.05)
-
-    score.clamp(0.0, 1.0).round(6)
-  end
-
-  def buffer_relief_score(metrics)
-    return 0.0 if metrics.blank?
-
-    metrics.filter_map do |metric_key, value|
-      next unless metric_key.to_s.match?(/stock|storage|inventory|reserve|cover|buffer/i)
-      normalized_score(value, ceiling: 120.0)
-    end.max.to_f
-  end
-
-  def exposure_contribution_for(dependency_score:, share_fraction:, commodity_key:, chokepoint_key:)
-    flow_type = SupplyChainCatalog.commodity_flow_type_for(commodity_key)
-    flow_pct = ChokepointMonitorService::CHOKEPOINTS.dig(chokepoint_key.to_sym, :flows, flow_type, :pct)
-    chokepoint_importance = 0.55 + (normalized_score(flow_pct, ceiling: 30.0) * 0.45)
-
-    dependency_score.to_f * share_fraction.to_f * chokepoint_importance
-  end
-
-  def normalized_score(value, ceiling:)
-    return 0.0 if value.blank?
-
-    (value.to_f / ceiling.to_f).clamp(0.0, 1.0)
-  end
-
   def value_numeric(row)
     row&.value_numeric
-  end
-
-  def chokepoint_name_for(chokepoint_key)
-    ChokepointMonitorService::CHOKEPOINTS.fetch(chokepoint_key.to_sym).fetch(:name)
   end
 end

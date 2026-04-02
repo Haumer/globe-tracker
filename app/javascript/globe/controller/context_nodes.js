@@ -22,11 +22,14 @@ export function applyContextNodeMethods(GlobeController) {
 
     const entities = insight.entities || {}
     const theaterName = entities.theater?.name || entities.pulse?.theater || null
-    const nodeRequest = entities.chokepoint?.name
+    const preferredNode = entities.primary_node?.kind && entities.primary_node?.id
+      ? { kind: entities.primary_node.kind, id: entities.primary_node.id }
+      : null
+    const nodeRequest = preferredNode || (entities.chokepoint?.name
       ? { kind: "chokepoint", id: entities.chokepoint.name }
       : theaterName
         ? { kind: "theater", id: theaterName }
-        : null
+        : null)
 
     const detectedAt = insight.detected_at || insight.created_at || "undated"
     const objectKind = nodeRequest?.kind || "insight"

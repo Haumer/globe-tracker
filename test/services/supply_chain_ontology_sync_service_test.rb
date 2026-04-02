@@ -111,6 +111,7 @@ class SupplyChainOntologySyncServiceTest < ActiveSupport::TestCase
     result = SupplyChainOntologySyncService.sync(force_normalize: false)
 
     assert_operator result[:countries], :>=, 1
+    assert_operator result[:commodities], :>=, SupplyChainCatalog::STRATEGIC_COMMODITIES.size
     assert_operator result[:flow_dependencies], :>=, 1
 
     japan = OntologyEntity.find_by!(canonical_key: "country:jpn")
@@ -161,5 +162,27 @@ class SupplyChainOntologySyncServiceTest < ActiveSupport::TestCase
 
     status = SourceFeedStatus.find_by(feed_key: "derived_supply_chain_ontology:supply-chain-ontology")
     assert_equal "success", status.status
+  end
+
+  test "projects baseline strategic commodities and chokepoint flows without dependency rows" do
+    CountryCommodityDependency.delete_all
+    CountryChokepointExposure.delete_all
+    SectorInputProfile.delete_all
+
+    result = SupplyChainOntologySyncService.sync(force_normalize: false)
+
+    assert_operator result[:commodities], :>=, SupplyChainCatalog::STRATEGIC_COMMODITIES.size
+
+    crude_oil = OntologyEntity.find_by!(canonical_key: "commodity:oil_crude")
+    hormuz = OntologyEntity.find_by!(canonical_key: "corridor:chokepoint:hormuz")
+    flow_relationship = OntologyRelationship.find_by!(
+      source_node: hormuz,
+      target_node: crude_oil,
+      relation_type: "flow_dependency",
+      derived_by: SupplyChainOntologySyncService::DERIVED_BY
+    )
+
+    assert_includes flow_relationship.explanation, "Largest oil chokepoint globally"
+    assert_equal "global_chokepoint_flow", flow_relationship.metadata.fetch("source_kind")
   end
 end

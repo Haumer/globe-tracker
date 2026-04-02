@@ -120,7 +120,7 @@ class SupplyChainNormalizationServiceTest < ActiveSupport::TestCase
     assert_equal 1, CountryProfile.count
     assert_equal 4, CountrySectorProfile.count
     assert_equal 2, SectorInputProfile.count
-    assert_equal 1, CountryCommodityDependency.count
+    assert_operator CountryCommodityDependency.count, :>=, 1
 
     profile = CountryProfile.find_by!(country_code_alpha3: "JPN")
     assert_equal 2024, profile.latest_year
@@ -157,6 +157,29 @@ class SupplyChainNormalizationServiceTest < ActiveSupport::TestCase
     status = SourceFeedStatus.find_by(feed_key: "derived_supply_chain:supply-chain-derivations")
     assert_equal "success", status.status
     assert_equal CountryChokepointExposure.count, status.metadata.fetch("country_chokepoint_exposures")
+  end
+
+  test "seeds estimated dependencies and chokepoint exposures when trade feeds are empty" do
+    TradeFlowSnapshot.delete_all
+    SectorInputSnapshot.delete_all
+
+    count = SupplyChainNormalizationService.new.refresh
+
+    assert_operator count, :>=, 8
+    assert_operator SectorInputProfile.count, :>=, 2
+
+    estimated_dependency = CountryCommodityDependency.find_by!(country_code_alpha3: "JPN", commodity_key: "oil_crude")
+    assert_equal "estimate", estimated_dependency.period_type
+    assert_equal true, estimated_dependency.metadata.fetch("estimated")
+    assert_includes estimated_dependency.metadata.fetch("route_priors"), "malacca"
+
+    estimated_exposure = CountryChokepointExposure.find_by!(country_code_alpha3: "JPN", commodity_key: "oil_crude", chokepoint_key: "hormuz")
+    assert_equal true, estimated_exposure.metadata.fetch("estimated")
+    assert_includes estimated_exposure.rationale, "Estimated"
+
+    baseline_input = SectorInputProfile.find_by!(scope_key: "global", sector_key: "manufacturing", input_key: "oil_refined")
+    assert_equal true, baseline_input.metadata.fetch("estimated")
+    assert_equal "curated_prior", baseline_input.metadata.fetch("source")
   end
 
   private

@@ -272,4 +272,40 @@ class NewsNormalizationRecorderTest < ActiveSupport::TestCase
     assert_equal "Kelownacapnews", article.publisher_name
     assert_equal "kelownacapnews.com", article.publisher_domain
   end
+
+  test "handles non-hash ingest payloads without warning-level failure" do
+    ingest = NewsIngest.create!(
+      source_feed: "worldnews",
+      source_endpoint_url: "https://api.worldnewsapi.com/search-news",
+      raw_url: "https://example.com/shipping/story",
+      raw_title: "Port disruption raises freight costs",
+      raw_summary: "Story summary",
+      raw_published_at: Time.utc(2026, 4, 3, 12, 0, 0),
+      fetched_at: Time.utc(2026, 4, 3, 12, 5, 0),
+      payload_format: "json",
+      raw_payload: "unexpected string payload",
+      http_status: 200,
+      content_hash: "string-payload-example"
+    )
+
+    mapping = NewsNormalizationRecorder.record_all([
+      {
+        url: "https://example.com/shipping/story",
+        title: "Port disruption raises freight costs",
+        name: "Example Maritime Journal",
+        source: "worldnews",
+        published_at: Time.utc(2026, 4, 3, 12, 0, 0),
+        fetched_at: Time.utc(2026, 4, 3, 12, 5, 0),
+        news_ingest_id: ingest.id,
+      },
+    ])
+
+    article = NewsArticle.first
+    source = NewsSource.first
+
+    assert mapping["https://example.com/shipping/story"]
+    assert_equal "publisher", source.source_kind
+    assert_equal "example.com", source.publisher_domain
+    assert_equal "Example", article.publisher_name
+  end
 end

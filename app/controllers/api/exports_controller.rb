@@ -4,13 +4,23 @@ module Api
   class ExportsController < ApplicationController
     before_action :authenticate_user!
 
+    GEOJSON_LAYERS = %w[flights ships earthquakes conflicts].freeze
+    CSV_LAYERS = %w[flights ships earthquakes].freeze
+    MAX_EXPORT_WINDOW = 7.days
+    MAX_GEOJSON_LAYERS = 4
+
     # GET /api/exports/geojson?layers=flights,earthquakes&from=ISO&to=ISO
     def geojson
       features = []
-      layers = (params[:layers] || "flights").split(",").map(&:strip)
-      from = parse_time(params[:from]) || 1.hour.ago
-      to = parse_time(params[:to]) || Time.current
-      from = [from, to - 7.days].max
+      layers = normalized_layers(
+        raw_layers: params[:layers],
+        allowed_layers: GEOJSON_LAYERS,
+        default_layers: ["flights"],
+        max_count: MAX_GEOJSON_LAYERS
+      )
+      return render_invalid_layer_error(allowed: GEOJSON_LAYERS) if layers.blank?
+
+      from, to = normalized_time_range(default_from: 1.hour.ago)
 
       bounds = parse_bounds
 
@@ -68,10 +78,10 @@ module Api
 
     # GET /api/exports/csv?layer=flights&from=ISO&to=ISO
     def csv
-      layer = params[:layer] || "flights"
-      from = parse_time(params[:from]) || 1.hour.ago
-      to = parse_time(params[:to]) || Time.current
-      from = [from, to - 7.days].max
+      layer = normalized_layer(raw_layer: params[:layer], allowed_layers: CSV_LAYERS, default_layer: "flights")
+      return render_invalid_layer_error(allowed: CSV_LAYERS) if layer.blank?
+
+      from, to = normalized_time_range(default_from: 1.hour.ago)
       bounds = parse_bounds
 
       csv_data = CSV.generate(headers: true) do |csv|
@@ -92,7 +102,9 @@ module Api
           end
         when "earthquakes"
           csv << %w[external_id title magnitude depth latitude longitude event_time]
-          Earthquake.where(event_time: from..to).order(:event_time).limit(10_000).each do |eq|
+          scope = Earthquake.where(event_time: from..to)
+          scope = scope.within_bounds(bounds) if bounds.size == 4
+          scope.order(:event_time).limit(10_000).each do |eq|
             csv << [eq.external_id, eq.title, eq.magnitude, eq.depth, eq.latitude, eq.longitude, eq.event_time&.iso8601]
           end
         end
@@ -104,8 +116,7 @@ module Api
     # GET /api/exports/flight_history/:id — full route for a specific flight
     def flight_history
       entity_id = params[:id]
-      from = parse_time(params[:from]) || 24.hours.ago
-      to = parse_time(params[:to]) || Time.current
+      from, to = normalized_time_range(default_from: 24.hours.ago)
 
       snaps = PositionSnapshot.flights
         .where(entity_id: entity_id)
@@ -134,10 +145,43 @@ module Api
       nil
     end
 
+    def normalized_time_range(default_from:)
+      to = parse_time(params[:to]) || Time.current
+      from = parse_time(params[:from]) || default_from
+      from, to = [from, to].minmax
+      from = [from, to - MAX_EXPORT_WINDOW].max
+      [from, to]
+    end
+
+    def normalized_layers(raw_layers:, allowed_layers:, default_layers:, max_count:)
+      values = raw_layers.present? ? raw_layers.to_s.split(",") : Array(default_layers)
+      values
+        .map { |layer| layer.to_s.strip }
+        .reject(&:blank?)
+        .select { |layer| allowed_layers.include?(layer) }
+        .uniq
+        .first(max_count)
+    end
+
+    def normalized_layer(raw_layer:, allowed_layers:, default_layer:)
+      requested = raw_layer.presence || default_layer
+      return if requested.blank?
+
+      layer = requested.to_s.strip
+      allowed_layers.include?(layer) ? layer : nil
+    end
+
     def parse_bounds
       %i[lamin lamax lomin lomax].each_with_object({}) do |key, h|
         h[key] = params[key].to_f if params[key].present?
       end
+    end
+
+    def render_invalid_layer_error(allowed:)
+      render json: {
+        error: "Unsupported export layer",
+        allowed_layers: allowed,
+      }, status: :unprocessable_content
     end
   end
 end

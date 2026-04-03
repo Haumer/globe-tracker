@@ -255,7 +255,7 @@ class ChokepointMonitorService
       commodities = CommodityPrice.where("recorded_at > ?", 24.hours.ago)
         .order(recorded_at: :desc)
 
-      self.class.relevant_commodity_symbols_for(chokepoint_key).each do |symbol|
+      self.relevant_commodity_symbols_for(chokepoint_key).each do |symbol|
         latest = commodities.find_by(symbol: symbol)
         next unless latest
         signals << {

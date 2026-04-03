@@ -691,14 +691,16 @@ class CrossLayerAnalyzer
   # ── Conflict pulse (news-driven developing situations) ───────
 
   def conflict_pulse_hotspots
-    zones = ConflictPulseService.analyze
+    pulse_data = ConflictPulseService.analyze
+    zones = pulse_data.is_a?(Hash) ? Array(pulse_data[:zones]) : Array(pulse_data)
+
     zones.select { |z| z[:pulse_score] >= 50 }.map do |zone|
       severity = if zone[:pulse_score] >= 80 then "critical"
                  elsif zone[:pulse_score] >= 60 then "high"
                  else "medium"
                  end
 
-      signals = zone[:cross_layer_signals]
+      signals = zone[:cross_layer_signals].is_a?(Hash) ? zone[:cross_layer_signals] : {}
       signal_parts = []
       signal_parts << "#{signals[:military_flights]} mil flights" if signals[:military_flights]
       signal_parts << "GPS jamming #{signals[:gps_jamming]}%" if signals[:gps_jamming]

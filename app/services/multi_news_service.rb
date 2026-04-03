@@ -301,7 +301,8 @@ class MultiNewsService
     uri.query = URI.encode_www_form(config[:params].call(key))
 
     response = fetch_json(uri)
-    articles = config[:articles_path].call(response[:data]) if response
+    response_data = response&.dig(:data)
+    articles = response_data.present? ? Array(config[:articles_path].call(response_data)) : nil
     unless articles
       SourceFeedStatusRecorder.record(
         provider: "multi-news",
@@ -322,7 +323,15 @@ class MultiNewsService
     ingest_items = []
 
     articles.each_with_index do |article, idx|
+      next unless article.is_a?(Hash)
+
       raw_mapped = config[:mapping].call(article)
+      next unless raw_mapped.is_a?(Hash)
+
+      raw_url = article["url"] || raw_mapped[:url]
+      raw_title = article["title"] || raw_mapped[:title]
+      next if raw_url.blank? || raw_title.blank?
+
       mapped = NewsSourceAdapter.normalize!(
         source_adapter: source_name,
         attrs: raw_mapped.merge(
@@ -330,14 +339,13 @@ class MultiNewsService
           source: source_label
         )
       )
-      raw_url = article["url"] || mapped[:url]
       ingest_items << {
         item_key: mapped[:url].presence || raw_url.presence || "#{source_name}-#{idx}",
         source_feed: source_name,
         source_endpoint_url: uri.to_s,
         external_id: article["id"] || article["uuid"],
         raw_url: raw_url,
-        raw_title: article["title"] || mapped[:title],
+        raw_title: raw_title,
         raw_summary: mapped[:summary],
         raw_published_at: mapped[:published_at] || article["publish_date"] || article["published"] || article["publishedAt"] || article["published_at"] || article["created_at"],
         fetched_at: now,

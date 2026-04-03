@@ -933,4 +933,39 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
     end
   end
+
+  test "conflict pulse hotspots accept hashed service payloads" do
+    mocked_payload = {
+      zones: [
+        {
+          lat: 26.6,
+          lng: 56.3,
+          pulse_score: 84,
+          escalation_trend: "surging",
+          count_24h: 7,
+          source_count: 4,
+          story_count: 3,
+          spike_ratio: 2.7,
+          theater: "Middle East / Iran War",
+          top_headlines: ["Shipping pressure builds around Hormuz"],
+          cross_layer_signals: { military_flights: 3, gps_jamming: 18 },
+          detected_at: Time.current.iso8601,
+        },
+      ],
+    }
+
+    original_analyze = ConflictPulseService.method(:analyze)
+    ConflictPulseService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "conflict_pulse" }
+
+      assert insight
+      assert_equal "critical", insight[:severity]
+      assert_includes insight[:description], "3 mil flights"
+      assert_equal "Middle East / Iran War", insight.dig(:entities, :theater, :name)
+    ensure
+      ConflictPulseService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
+  end
 end

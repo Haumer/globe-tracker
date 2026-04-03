@@ -35,6 +35,28 @@ class ChokepointMonitorServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "analyze includes commodity signals when recent quotes exist" do
+    CommodityPrice.create!(
+      symbol: "OIL_BRENT",
+      category: "commodity",
+      name: "Brent Crude",
+      price: 87.4,
+      change_pct: 2.1,
+      unit: "USD/bbl",
+      latitude: 26.56,
+      longitude: 56.27,
+      region: "Middle East",
+      recorded_at: Time.current
+    )
+
+    hormuz = ChokepointMonitorService.analyze.find { |cp| cp[:id] == "hormuz" }
+    signal = hormuz[:commodity_signals].find { |entry| entry[:symbol] == "OIL_BRENT" }
+
+    assert signal
+    assert_equal "Brent Crude", signal[:name]
+    assert_equal 2.1, signal[:change_pct]
+  end
+
   test "determine_status returns elevated when conflict pulse present" do
     conflict_zones = [{ score: 60, trend: "escalating" }]
     status = ChokepointMonitorService.send(:determine_status, { total: 10 }, conflict_zones, {})

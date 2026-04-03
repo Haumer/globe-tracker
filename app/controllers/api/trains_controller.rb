@@ -10,6 +10,8 @@ module Api
     ].freeze
 
     def index
+      return render json: [] unless LayerAvailability.enabled?(:trains)
+
       trains = TrainObservation.current.select(*LIST_COLUMNS)
       trains = trains.within_bounds(parse_bbox(params[:bbox])) if params[:bbox].present?
 

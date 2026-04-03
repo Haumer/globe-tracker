@@ -1,7 +1,37 @@
 require "test_helper"
 
 class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
-  test "GET /api/trains returns persisted observations" do
+  setup do
+    @original_disabled_layers = LayerAvailability.disabled_layers
+  end
+
+  teardown do
+    LayerAvailability.disabled_layers = @original_disabled_layers
+  end
+
+  test "GET /api/trains returns empty while the layer is disabled" do
+    TrainObservation.create!(
+      external_id: "oebb-ice-123",
+      source: "hafas",
+      operator_key: "oebb",
+      operator_name: "ÖBB",
+      name: "ICE 123",
+      category: "ICE",
+      category_long: "InterCityExpress",
+      flag: "AT",
+      latitude: 48.21,
+      longitude: 16.37,
+      raw_payload: {},
+      fetched_at: Time.current,
+      expires_at: 90.seconds.from_now,
+    )
+
+    get "/api/trains"
+    assert_response :success
+    assert_equal [], JSON.parse(response.body)
+  end
+
+  test "GET /api/trains returns persisted observations when the layer is enabled" do
     TrainObservation.create!(
       external_id: "oebb-ice-123",
       source: "hafas",
@@ -24,6 +54,8 @@ class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 90.seconds.from_now,
     )
 
+    LayerAvailability.disabled_layers = []
+
     get "/api/trains"
     assert_response :success
 
@@ -36,7 +68,7 @@ class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "high", data.first["snapConfidence"]
   end
 
-  test "GET /api/trains excludes stale observations and filters by bbox" do
+  test "GET /api/trains excludes stale observations and filters by bbox when enabled" do
     TrainObservation.create!(
       external_id: "inside",
       source: "hafas",
@@ -68,6 +100,8 @@ class Api::TrainsControllerTest < ActionDispatch::IntegrationTest
       fetched_at: 10.minutes.ago,
       expires_at: 8.minutes.ago,
     )
+
+    LayerAvailability.disabled_layers = []
 
     get "/api/trains", params: { bbox: "47.0,15.0,49.0,17.0" }
     assert_response :success

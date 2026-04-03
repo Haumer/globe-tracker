@@ -31,7 +31,7 @@ class GlobalPollerService
   JOB_SCHEDULES = [
     { job: PollOpenskyJob, every: 15.seconds, offset: 0.seconds },
     { job: PollAdsbMilitaryJob, every: 15.seconds, offset: 5.seconds },
-    { job: RefreshLiveTrainsJob, every: 30.seconds, offset: 10.seconds },
+    { job: RefreshLiveTrainsJob, every: 30.seconds, offset: 10.seconds, conditional: :trains_layer_enabled? },
     { job: RefreshEarthquakesJob, every: 2.minutes, offset: 0.seconds },
     { job: PollAdsbRegionJob, every: 30.seconds, offset: 20.seconds, dynamic: :adsb_region },
     { job: RefreshNewsJob, every: 5.minutes, offset: 0.seconds },
@@ -61,7 +61,7 @@ class GlobalPollerService
     { job: RefreshAirportsJob, every: 12.hours, offset: 0.minutes },
     { job: RefreshPowerPlantsJob, every: 12.hours, offset: 90.minutes },
     { job: RefreshPipelinesJob, every: 12.hours, offset: 3.hours },
-    { job: RefreshRailwaysJob, every: 12.hours, offset: 4.hours },
+    { job: RefreshRailwaysJob, every: 12.hours, offset: 4.hours, conditional: :railways_layer_enabled? },
     { job: RefreshSubmarineCablesJob, every: 24.hours, offset: 0.minutes },
     { job: RefreshMilitaryBasesJob, every: 24.hours, offset: 6.hours },
     { job: RefreshCountryIndicatorsJob, every: 24.hours, offset: 8.hours },
@@ -198,6 +198,14 @@ class GlobalPollerService
       return true if conditional.blank?
 
       send(conditional)
+    end
+
+    def trains_layer_enabled?
+      LayerAvailability.enabled?(:trains)
+    end
+
+    def railways_layer_enabled?
+      LayerAvailability.enabled?(:railways)
     end
 
     def schedule_label(schedule, now)

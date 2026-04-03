@@ -1,4 +1,5 @@
 import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "globe/utils"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 const TRAIN_COLORS = {
   // High-speed / long distance
@@ -41,6 +42,15 @@ export function applyTrainsMethods(GlobeController) {
   }
 
   GlobeController.prototype.toggleTrains = function() {
+    if (isLayerTemporarilyDisabled("trains")) {
+      if (this.hasTrainsToggleTarget) this.trainsToggleTarget.checked = false
+      this.trainsVisible = false
+      this._toast?.("Live Trains temporarily disabled during cleanup")
+      this._syncQuickBar()
+      this._savePrefs()
+      return
+    }
+
     this.trainsVisible = this.hasTrainsToggleTarget && this.trainsToggleTarget.checked
     if (this.trainsVisible) {
       if (!this._trainPositions) this._trainPositions = new Map()

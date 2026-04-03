@@ -1,8 +1,13 @@
-import { LAYER_REGISTRY, QUICK_TOGGLE_MAP } from "globe/controller/ui_registry"
+import { LAYER_REGISTRY, QUICK_TOGGLE_MAP, isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 export function applyUiQuickBarMethods(GlobeController) {
   GlobeController.prototype.quickToggle = function(event) {
     const layer = event.currentTarget.dataset.layer
+
+    if (isLayerTemporarilyDisabled(layer)) {
+      this._toast?.("Layer temporarily disabled during cleanup")
+      return
+    }
 
     if (layer === "satellites") {
       toggleSatelliteQuickMode.call(this)
@@ -50,6 +55,10 @@ export function applyUiQuickBarMethods(GlobeController) {
 
     for (const layer of LAYER_REGISTRY) {
       syncTarget(layer.qlTarget, this[layer.visibleProp])
+      const hasTarget = `has${capitalize(layer.qlTarget)}Target`
+      if (!this[hasTarget]) continue
+      this[`${layer.qlTarget}Target`].classList.toggle("sb-disabled", Boolean(layer.disabled))
+      this[`${layer.qlTarget}Target`].setAttribute("aria-disabled", String(Boolean(layer.disabled)))
     }
 
     const anySat = Object.values(this.satCategoryVisible).some(Boolean)
@@ -96,7 +105,7 @@ export function applyUiQuickBarMethods(GlobeController) {
     if (!this.hasActiveLayerPillsTarget) return
 
     const layers = LAYER_REGISTRY
-      .filter(layer => layer.pill)
+      .filter(layer => layer.pill && !layer.disabled)
       .map(layer => ({
         key: layer.key,
         active: this[layer.visibleProp],

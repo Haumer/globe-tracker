@@ -12,6 +12,8 @@
   <input type="checkbox" data-globe-target="gpsJammingToggle" data-action="change->globe#toggleGpsJamming">
   <input type="checkbox" data-globe-target="newsToggle" data-action="change->globe#toggleNews">
   <input type="checkbox" data-globe-target="cablesToggle" data-action="change->globe#toggleCables">
+  <input type="checkbox" data-globe-target="portsToggle" data-action="change->globe#togglePorts">
+  <input type="checkbox" data-globe-target="shippingLanesToggle" data-action="change->globe#toggleShippingLanes">
   <input type="checkbox" data-globe-target="pipelinesToggle" data-action="change->globe#togglePipelines">
   <input type="checkbox" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
   <input type="checkbox" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
@@ -52,9 +54,10 @@
         <span class="sb-layer-name">Ships (AIS)</span>
         <span class="sb-layer-dot"></span>
       </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="trains" data-globe-target="qlTrains">
+      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="trains" data-globe-target="qlTrains" aria-disabled="true" title="Temporarily disabled during cleanup">
         <i class="fa-solid fa-train-subway sb-layer-icon" style="color: #e53935;"></i>
         <span class="sb-layer-name">Live Trains</span>
+        <span class="sb-layer-status">Disabled</span>
         <span class="sb-layer-dot"></span>
       </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="satellites" data-globe-target="qlSatellites">
@@ -216,7 +219,7 @@
   <div class="sb-section" data-section="infrastructure">
     <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
       <span class="sb-section-dot" style="--dot: #00bcd4;"></span>
-      <div><span class="sb-section-title">Infrastructure</span><div class="sb-section-hint">Cables, pipelines, railways, power plants, webcams</div></div>
+      <div><span class="sb-section-title">Infrastructure</span><div class="sb-section-hint">Cables, ports, shipping, pipelines, power</div></div>
       <span class="sb-section-count" id="sec-count-infrastructure"></span>
       <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
     </div>
@@ -226,14 +229,26 @@
         <span class="sb-layer-name">Submarine Cables</span>
         <span class="sb-layer-dot"></span>
       </div>
+      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="ports" data-globe-target="qlPorts">
+        <i class="fa-solid fa-anchor sb-layer-icon" style="color: #8bc34a;"></i>
+        <span class="sb-layer-name">Ports</span>
+        <span class="sb-layer-dot"></span>
+      </div>
+      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="shippingLanes" data-globe-target="qlShippingLanes" aria-disabled="true" title="Temporarily disabled during cleanup">
+        <i class="fa-solid fa-route sb-layer-icon" style="color: #ff8a00;"></i>
+        <span class="sb-layer-name">Shipping Lanes</span>
+        <span class="sb-layer-status">Disabled</span>
+        <span class="sb-layer-dot"></span>
+      </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="pipelines" data-globe-target="qlPipelines">
         <i class="fa-solid fa-oil-well sb-layer-icon" style="color: #ff6d00;"></i>
         <span class="sb-layer-name">Oil & Gas Pipelines</span>
         <span class="sb-layer-dot"></span>
       </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="railways" data-globe-target="qlRailways">
+      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="railways" data-globe-target="qlRailways" aria-disabled="true" title="Temporarily disabled during cleanup">
         <i class="fa-solid fa-train sb-layer-icon" style="color: #90a4ae;"></i>
         <span class="sb-layer-name">Railways</span>
+        <span class="sb-layer-status">Disabled</span>
         <span class="sb-layer-dot"></span>
       </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="powerPlants" data-globe-target="qlPowerPlants">

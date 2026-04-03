@@ -150,6 +150,21 @@
         animation: ql-pulse 2s infinite;
       }
     }
+
+    &.sb-disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+
+      &:hover {
+        background: transparent;
+      }
+
+      .sb-layer-name,
+      .sb-layer-icon,
+      .sb-layer-dot {
+        opacity: 0.65;
+      }
+    }
   }
 
   .sb-layer-icon {
@@ -171,6 +186,13 @@
     width: 6px;
     height: 6px;
     flex-shrink: 0;
+  }
+
+  .sb-layer-status {
+    font: 600 9px var(--gt-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 213, 79, 0.78);
   }
 
   .sb-section-count {

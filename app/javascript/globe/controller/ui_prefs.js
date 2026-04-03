@@ -1,3 +1,5 @@
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+
 export function applyUiPreferenceMethods(GlobeController) {
   GlobeController.prototype._savePrefs = function() {
     if (!this.signedInValue || !this.viewer) return
@@ -85,6 +87,8 @@ function buildLayerPrefs() {
     gpsJamming: this.gpsJammingVisible,
     news: this.newsVisible,
     cables: this.cablesVisible,
+    ports: this.portsVisible,
+    shippingLanes: this.shippingLanesVisible,
     pipelines: this.pipelinesVisible,
     railways: this.railwaysVisible,
     trains: this.trainsVisible,
@@ -176,6 +180,8 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.gpsJamming, "gpsJammingToggle", "toggleGpsJamming")
   toggleIf.call(this, l.news, "newsToggle", "toggleNews")
   toggleIf.call(this, l.cables, "cablesToggle", "toggleCables")
+  toggleIf.call(this, l.ports, "portsToggle", "togglePorts")
+  toggleIf.call(this, l.shippingLanes, "shippingLanesToggle", "toggleShippingLanes")
   toggleIf.call(this, l.pipelines, "pipelinesToggle", "togglePipelines")
   toggleIf.call(this, l.railways, "railwaysToggle", "toggleRailways")
   toggleIf.call(this, l.trains, "trainsToggle", "toggleTrains")
@@ -250,6 +256,8 @@ function restoreSelections(prefs) {
 }
 
 function toggleIf(enabled, targetBase, methodName) {
+  const layerKey = targetBase.replace(/Toggle$/, "")
+  if (isLayerTemporarilyDisabled(layerKey)) return
   const hasTarget = `has${capitalize(targetBase)}Target`
   if (!enabled || !this[hasTarget]) return
   this[`${targetBase}Target`].checked = true

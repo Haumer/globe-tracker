@@ -12,7 +12,9 @@ export function applyGeographyCaptureMethods(GlobeController) {
     ["notams", "notamsVisible"],
     ["gpsJamming", "gpsJammingVisible"],
     ["chokepoints", "chokepointsVisible"],
+    ["ports", "portsVisible"],
     ["powerPlants", "powerPlantsVisible"],
+    ["shippingLanes", "shippingLanesVisible"],
     ["pipelines", "pipelinesVisible"],
     ["cables", "cablesVisible"],
     ["outages", "outagesVisible"],
@@ -349,7 +351,7 @@ export function applyGeographyCaptureMethods(GlobeController) {
   GlobeController.prototype._inferAreaProfile = function(layers) {
     const layerSet = new Set(layers)
 
-    if (layerSet.has("ships") || layerSet.has("chokepoints") || layerSet.has("cables")) return "maritime"
+    if (layerSet.has("ships") || layerSet.has("chokepoints") || layerSet.has("cables") || layerSet.has("shippingLanes")) return "maritime"
     if (layerSet.has("notams") || layerSet.has("flights")) return "airspace"
     if (layerSet.has("gpsJamming") || layerSet.has("outages")) return "cyber"
     if (layerSet.has("powerPlants") || layerSet.has("pipelines")) return "infrastructure"

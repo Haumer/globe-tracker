@@ -1,5 +1,6 @@
 require "csv"
 require "net/http"
+require "openssl"
 require "uri"
 require "zlib"
 
@@ -21,19 +22,25 @@ module TabularDatasetLoader
     fetch_remote_body(url)
   end
 
-  def fetch_remote_body(url, limit: 3)
+  def fetch_remote_body(url, limit: 3, verify_ssl: true)
     raise ArgumentError, "too many redirects for #{url}" if limit <= 0
 
     uri = URI(url)
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 15, read_timeout: 120) do |http|
-      http.request(Net::HTTP::Get.new(uri))
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == "https"
+    http.open_timeout = 15
+    http.read_timeout = 120
+    http.verify_mode = verify_ssl ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE if http.use_ssl?
+
+    response = http.start do |client|
+      client.request(Net::HTTP::Get.new(uri))
     end
 
     case response
     when Net::HTTPSuccess
       response.body
     when Net::HTTPRedirection
-      fetch_remote_body(response["location"], limit: limit - 1)
+      fetch_remote_body(response["location"], limit: limit - 1, verify_ssl: verify_ssl)
     else
       raise "HTTP #{response.code} while fetching #{url}"
     end

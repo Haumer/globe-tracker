@@ -1,4 +1,5 @@
 import { getDataSource, cachedColor } from "globe/utils"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 function railwayColor(railway) {
   return railway.electrified === 1
@@ -10,6 +11,15 @@ export function applyRailwaysMethods(GlobeController) {
   GlobeController.prototype.getRailwaysDataSource = function() { return getDataSource(this.viewer, this._ds, "railways") }
 
   GlobeController.prototype.toggleRailways = function() {
+    if (isLayerTemporarilyDisabled("railways")) {
+      if (this.hasRailwaysToggleTarget) this.railwaysToggleTarget.checked = false
+      this.railwaysVisible = false
+      this._toast?.("Railways temporarily disabled during cleanup")
+      this._syncQuickBar()
+      this._savePrefs()
+      return
+    }
+
     this.railwaysVisible = this.hasRailwaysToggleTarget && this.railwaysToggleTarget.checked
     if (this.railwaysVisible) {
       this.fetchRailways()

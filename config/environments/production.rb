@@ -1,5 +1,7 @@
 require "active_support/core_ext/integer/time"
 
+require Rails.root.join("lib/redis_ssl_config")
+
 Rails.application.configure do
   config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"), protocol: "https" }
   # Settings specified here will take precedence over those in config/application.rb.
@@ -81,14 +83,8 @@ Rails.application.configure do
         Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
       },
     }
-    # Heroku Redis uses self-signed certs with rediss:// URLs.
-    # Use CA cert if available, otherwise accept Heroku's self-signed cert (still TLS-encrypted).
-    if ENV["REDIS_URL"]&.start_with?("rediss://")
-      redis_cache_opts[:ssl_params] = if ENV["REDIS_CA_CERT"]
-        { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: ENV["REDIS_CA_CERT"] }
-      else
-        { verify_mode: OpenSSL::SSL::VERIFY_NONE }
-      end
+    if (redis_ssl_params = RedisSslConfig.params_for(ENV["REDIS_URL"]))
+      redis_cache_opts[:ssl_params] = redis_ssl_params
     end
     config.cache_store = :redis_cache_store, redis_cache_opts
   else

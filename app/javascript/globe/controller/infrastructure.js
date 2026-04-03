@@ -1,5 +1,7 @@
 import { applyGpsJammingMethods } from "globe/controller/infrastructure/gpsJamming"
 import { applyCablesMethods } from "globe/controller/infrastructure/submarineCables"
+import { applyPortsMethods } from "globe/controller/infrastructure/ports"
+import { applyShippingLanesMethods } from "globe/controller/infrastructure/shippingLanes"
 import { applyOutagesMethods } from "globe/controller/infrastructure/internetOutages"
 import { applyPowerPlantsMethods } from "globe/controller/infrastructure/powerPlants"
 import { applyConflictsMethods } from "globe/controller/infrastructure/conflictEvents"
@@ -18,6 +20,8 @@ import { applyNavalVesselsMethods } from "globe/controller/infrastructure/navalV
 export function applyInfrastructureMethods(GlobeController) {
   applyGpsJammingMethods(GlobeController)
   applyCablesMethods(GlobeController)
+  applyPortsMethods(GlobeController)
+  applyShippingLanesMethods(GlobeController)
   applyOutagesMethods(GlobeController)
   applyPowerPlantsMethods(GlobeController)
   applyConflictsMethods(GlobeController)

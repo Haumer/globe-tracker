@@ -62,6 +62,7 @@ const TIMEOUT_PROPS = [
   "_timelineLayerReloadTimer",
   "_polyHighlightTimer",
   "_toastTimer",
+  "_portDebounce",
 ]
 
 const RAF_PROPS = [
@@ -78,6 +79,7 @@ const CAMERA_MOVE_END_CALLBACK_PROPS = [
   "_flightCameraCb",
   "_shipCameraCb",
   "_rwCameraCb",
+  "_portCameraCb",
   "_airbaseCameraCb",
   "_milBaseCameraCb",
   "_notamCameraCb",
@@ -279,6 +281,13 @@ export function initializeCoreState(controller) {
   controller.cablesVisible = false
   controller._cableEntities = []
   controller._landingPointEntities = []
+  controller.portsVisible = false
+  controller._portAll = []
+  controller._portData = []
+  controller._portEntities = []
+  controller.shippingLanesVisible = false
+  controller._shippingLaneEntities = []
+  controller._shippingLaneData = []
   controller.pipelinesVisible = false
   controller._pipelineEntities = []
   controller._pipelineData = []

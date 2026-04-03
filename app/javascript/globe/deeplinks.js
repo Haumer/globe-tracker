@@ -4,10 +4,12 @@
 // Format: #lat,lng,height,heading,pitch|layer1,layer2,...|sat:cat1,cat2|mil:0|countries:US,DE
 // All sections after camera are optional.
 
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+
 const LAYER_KEYS = [
   "flights", "trails", "ships", "borders", "cities", "airports",
   "earthquakes", "naturalEvents", "cameras", "gpsJamming", "news",
-  "cables", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
+  "cables", "ports", "shippingLanes", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
   "fireHotspots", "weather", "financial", "insights", "situations",
   "pipelines", "railways", "trains", "chokepoints", "militaryBases", "airbases",
 ]
@@ -16,7 +18,7 @@ const LAYER_KEYS = [
 const LAYER_SHORT = {
   flights: "fl", trails: "tr", ships: "sh", borders: "bd", cities: "ct",
   airports: "ap", earthquakes: "eq", naturalEvents: "ev", cameras: "cm",
-  gpsJamming: "gj", news: "nw", cables: "cb", outages: "ou",
+  gpsJamming: "gj", news: "nw", cables: "cb", ports: "po", shippingLanes: "sl", outages: "ou",
   powerPlants: "pp", conflicts: "cf", traffic: "tf", notams: "nt", terrain: "tn",
   fireHotspots: "fh", weather: "wx", financial: "fn", insights: "in", situations: "si",
   pipelines: "pl", railways: "rl", trains: "tns", chokepoints: "cp", militaryBases: "mb", airbases: "ab",
@@ -192,7 +194,7 @@ export function applyDeepLink(controller, state) {
       borders: "toggleBorders", cities: "toggleCities", airports: "toggleAirports",
       earthquakes: "toggleEarthquakes", naturalEvents: "toggleNaturalEvents",
       cameras: "toggleCameras", gpsJamming: "toggleGpsJamming", news: "toggleNews",
-      cables: "toggleCables", outages: "toggleOutages", powerPlants: "togglePowerPlants",
+      cables: "toggleCables", ports: "togglePorts", shippingLanes: "toggleShippingLanes", outages: "toggleOutages", powerPlants: "togglePowerPlants",
       conflicts: "toggleConflicts", traffic: "toggleTraffic", notams: "toggleNotams",
       terrain: "toggleTerrain", fireHotspots: "toggleFireHotspots", weather: "toggleWeather",
       financial: "toggleFinancial", insights: "toggleInsights", situations: "toggleSituations",
@@ -204,7 +206,7 @@ export function applyDeepLink(controller, state) {
       borders: "bordersToggle", cities: "citiesToggle", airports: "airportsToggle",
       earthquakes: "earthquakesToggle", naturalEvents: "naturalEventsToggle",
       cameras: "camerasToggle", gpsJamming: "gpsJammingToggle", news: "newsToggle",
-      cables: "cablesToggle", outages: "outagesToggle", powerPlants: "powerPlantsToggle",
+      cables: "cablesToggle", ports: "portsToggle", shippingLanes: "shippingLanesToggle", outages: "outagesToggle", powerPlants: "powerPlantsToggle",
       conflicts: "conflictsToggle", traffic: "trafficToggle", notams: "notamsToggle",
       fireHotspots: "fireHotspotsToggle", weather: "weatherToggle", financial: "financialToggle",
       terrain: "terrainToggle", insights: "insightsToggle", situations: "situationsToggle",
@@ -213,6 +215,7 @@ export function applyDeepLink(controller, state) {
     }
 
     for (const layer of state.layers) {
+      if (isLayerTemporarilyDisabled(layer)) continue
       const method = toggleMap[layer]
       const target = targetMap[layer]
       if (!method || !controller[method]) continue

@@ -178,7 +178,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "fire-", "outage-", "conf-", "insight-", "traf-"]
+          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked)) return
@@ -417,7 +417,7 @@ export function applyCoreMethods(GlobeController) {
       naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
       cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
       situations: "qlSituations", insights: "qlInsights",
-      traffic: "qlTraffic", cables: "qlCables", powerPlants: "qlPowerPlants",
+      traffic: "qlTraffic", cables: "qlCables", ports: "qlPorts", shippingLanes: "qlShippingLanes", powerPlants: "qlPowerPlants",
       notams: "qlNotams", fireHotspots: "qlFireHotspots", weather: "qlWeather",
       financial: "qlFinancial",
     }
@@ -910,7 +910,7 @@ export function applyCoreMethods(GlobeController) {
         camera: { lat: 30, lng: 0, height: 20000000 },
       },
       infrastructure: {
-        layers: ["cables", "powerPlants", "gpsJamming", "outages", "borders"],
+        layers: ["cables", "ports", "shippingLanes", "powerPlants", "gpsJamming", "outages", "borders"],
         camera: { lat: 35, lng: 30, height: 12000000 },
       },
     }

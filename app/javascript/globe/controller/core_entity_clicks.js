@@ -143,6 +143,29 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.detailPanelTarget.style.display = ""
         return true
       }},
+      { prefix: "port-", skip: [], handler: (id) => {
+        this.showPortDetail(id)
+        return true
+      }},
+      { prefix: "shipping-lane-", skip: ["shipping-label-"], handler: () => {
+        const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
+        if (!laneId) return false
+        this._highlightPolyline(picked.id)
+        this.showShippingLaneDetail(laneId)
+        return true
+      }},
+      { prefix: "shipping-port-", skip: [], handler: () => {
+        const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
+        if (!laneId) return false
+        this.showShippingLaneDetail(laneId)
+        return true
+      }},
+      { prefix: "shipping-stop-", skip: [], handler: () => {
+        const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
+        if (!laneId) return false
+        this.showShippingLaneDetail(laneId)
+        return true
+      }},
       { prefix: "pipeline-", skip: ["pipeline-label-"], handler: () => {
         const props = picked.id.properties
         if (!props) return false

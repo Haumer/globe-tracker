@@ -35,6 +35,7 @@ class SourceCatalog
         { icon: "fa-solid fa-ship",             title: "CEPII BACI",            status: "FREE",       status_class: "free",       link: "https://www.cepii.fr/CEPII/en/bdd_modele/bdd_modele_item.asp?id=37" },
         { icon: "fa-solid fa-industry",         title: "OECD ICIO / TiVA",      status: "FREE",       status_class: "free",       link: "https://www.oecd.org/en/data/datasets/inter-country-input-output-tables.html" },
         { icon: "fa-solid fa-gas-pump",         title: "JODI Oil & Gas",        status: "FREE",       status_class: "free",       link: "https://www.jodidata.org/oil/database/overview.aspx" },
+        { icon: "fa-solid fa-anchor",           title: "World Port Index",      status: "FREE",       status_class: "free",       link: "https://vcps.nga.mil/nauticalpubs-feature/rest/services/WPI/World_Port_Index_Viewer/FeatureServer" },
         { icon: "fa-solid fa-anchor",           title: "UN/LOCODE",             status: "FREE",       status_class: "free",       link: "https://unece.org/trade/uncefact/unlocode" },
         { icon: "fa-solid fa-cubes",            title: "USGS Minerals",         status: "FREE",       status_class: "free",       link: "https://pubs.usgs.gov/publication/mcs2025" },
         { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API",        link: "https://alphavantage.co" },

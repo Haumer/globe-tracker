@@ -66,13 +66,18 @@ This app now has a raw economic and supply-chain ingest layer built around publi
   - cadence: weekly via `RefreshTradeLocationsJob`
   - storage: `trade_locations`
   - source mode:
-    - CSV from `TRADE_LOCATIONS_SOURCE_PATH`
-    - CSV from `TRADE_LOCATIONS_SOURCE_URL`
+    - `World Port Index` feature service by default
+    - optional `World Port Index` CSV from `WORLD_PORT_INDEX_SOURCE_PATH`
+    - optional override URL from `WORLD_PORT_INDEX_SOURCE_URL`
+    - optional `UN/LOCODE` CSV supplement from `TRADE_LOCATIONS_SOURCE_PATH`
+    - optional `UN/LOCODE` CSV supplement from `TRADE_LOCATIONS_SOURCE_URL`
   - intended upstream sources:
+    - `World Port Index`
     - `UN/LOCODE`
   - supports:
     - normalized `latitude` / `longitude`
     - official `Coordinates` strings like `2516N 05518E`
+    - WPI facility attributes such as `Oil Terminal Depth`, `LNG Terminal Depth`, `Cargo Pier Depth`, `Harbor Size`, and `Harbor Use`
 
 ## Expected CSV Shapes
 
@@ -173,6 +178,42 @@ Supported UN/LOCODE-style columns:
 - `Coordinates`
 - `Status`
 - `Ch`
+
+### World Port Index
+
+The app can now ingest WPI directly from the official NGA feature service without a manual file step.
+
+Optional env vars:
+
+- `WORLD_PORT_INDEX_ENABLED`
+  - defaults to enabled
+- `WORLD_PORT_INDEX_SOURCE_URL`
+  - defaults to the official NGA `FeatureServer/0/query` endpoint
+- `WORLD_PORT_INDEX_SOURCE_PATH`
+  - optional CSV backfill or offline fallback
+- `WORLD_PORT_INDEX_SSL_VERIFY`
+  - defaults to strict TLS verification
+  - set to `false` only if the NGA endpoint presents a broken certificate chain in your runtime environment
+
+Supported WPI fields:
+
+- `wpinumber`
+- `main_port_`
+- `alternate_`
+- `unlocode`
+- `countryCode`
+- `dodwaterbo`
+- `channel_de`
+- `anchorage_`
+- `cargo_pier`
+- `oil_termin`
+- `lng_termin`
+- `maxvessell`
+- `maxvesselb`
+- `maxvesseld`
+- `harbor_siz`
+- `harbor_typ`
+- `harbor_use`
 
 ## Commodity Mapping
 

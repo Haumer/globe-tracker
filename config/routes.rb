@@ -42,6 +42,8 @@ Rails.application.routes.draw do
     resources :natural_events, only: [:index]
     resources :gps_jamming, only: [:index]
     resources :submarine_cables, only: [:index]
+    resources :ports, only: [:index]
+    resources :shipping_lanes, only: [:index]
     resources :pipelines, only: [:index]
     resources :railways, only: [:index]
     resources :trains, only: [:index]

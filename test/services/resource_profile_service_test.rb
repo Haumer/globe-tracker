@@ -54,4 +54,17 @@ class ResourceProfileServiceTest < ActiveSupport::TestCase
     assert_equal "Electricity", profile[:metrics].second[:value]
     assert_equal "1,450 MW", profile[:metrics].third[:value]
   end
+
+  test "builds chokepoint resource profiles from configured flow nodes" do
+    profile = ResourceProfileService.for(
+      kind: "chokepoint",
+      identifier: "hormuz",
+      title: "Strait of Hormuz"
+    )
+
+    assert profile.present?
+    assert_equal "Strategic flow node", profile[:subtitle]
+    assert_includes profile[:summary], "Persian Gulf"
+    assert_includes profile[:metrics].first[:value], "21% global flow"
+  end
 end

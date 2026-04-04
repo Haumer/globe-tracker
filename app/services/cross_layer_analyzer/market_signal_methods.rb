@@ -10,6 +10,12 @@ class CrossLayerAnalyzer
         next if cp[:conflict_pulse].empty?
 
         chokepoint_name = normalized_chokepoint_name(cp)
+        resource_context = ResourceProfileService.for(kind: "chokepoint", identifier: cp[:id], title: chokepoint_name)
+        supporting_signals = NearbySupportingSignalsService.cross_layer_signals(
+          object_kind: "chokepoint",
+          latitude: cp[:lat],
+          longitude: cp[:lng]
+        )
         top_pulse = cp[:conflict_pulse].max_by { |z| z[:score] }
         commodity_parts = cp[:commodity_signals].first(3).filter_map do |signal|
           next unless signal[:change_pct] && signal[:change_pct].abs > 0.5
@@ -22,7 +28,7 @@ class CrossLayerAnalyzer
           type: "chokepoint_disruption",
           severity: chokepoint_disruption_severity(cp[:status]),
           title: "#{chokepoint_name}: #{top_pulse[:trend]} conflict near #{flow_parts.first || "major shipping lane"}",
-          description: chokepoint_disruption_description(cp: cp, flow_parts: flow_parts, commodity_parts: commodity_parts),
+          description: chokepoint_disruption_description(cp: cp, flow_parts: flow_parts, commodity_parts: commodity_parts, supporting_signals: supporting_signals, resource_context: resource_context),
           lat: cp[:lat],
           lng: cp[:lng],
           entities: {
@@ -31,6 +37,8 @@ class CrossLayerAnalyzer
             flows: flows.transform_values { |flow| { pct: flow[:pct], note: flow[:note] } },
             commodities: cp[:commodity_signals].first(3),
             conflict: cp[:conflict_pulse],
+            supporting_signals: compact_supporting_signal_entities(supporting_signals),
+            resource_context: compact_resource_context(resource_context),
           },
           detected_at: cp[:checked_at],
         }
@@ -48,6 +56,12 @@ class CrossLayerAnalyzer
         market_moves = current_market_moves(cp, latest_quotes)
         next if market_moves.empty? || cp[:status] == "normal"
 
+        resource_context = ResourceProfileService.for(kind: "chokepoint", identifier: cp[:id], title: normalized_chokepoint_name(cp))
+        supporting_signals = NearbySupportingSignalsService.cross_layer_signals(
+          object_kind: "chokepoint",
+          latitude: cp[:lat],
+          longitude: cp[:lng]
+        )
         top_move = market_moves.max_by { |signal| signal[:change_pct].to_f.abs }
         top_pulse = Array(cp[:conflict_pulse]).max_by { |pulse| pulse[:score].to_f }
 
@@ -55,7 +69,7 @@ class CrossLayerAnalyzer
           type: "chokepoint_market_stress",
           severity: chokepoint_market_stress_severity(cp[:status], top_move[:change_pct]),
           title: "#{normalized_chokepoint_name(cp)}: #{top_move[:symbol]} reacting to chokepoint stress",
-          description: chokepoint_market_stress_description(cp: cp, top_move: top_move, top_pulse: top_pulse),
+          description: chokepoint_market_stress_description(cp: cp, top_move: top_move, top_pulse: top_pulse, supporting_signals: supporting_signals, resource_context: resource_context),
           lat: cp[:lat],
           lng: cp[:lng],
           entities: {
@@ -64,6 +78,8 @@ class CrossLayerAnalyzer
             conflict: Array(cp[:conflict_pulse]).first(3),
             ships: cp[:ships_nearby],
             flows: (cp[:flows] || {}).transform_values { |flow| { pct: flow[:pct], note: flow[:note] } },
+            supporting_signals: compact_supporting_signal_entities(supporting_signals),
+            resource_context: compact_resource_context(resource_context),
           },
           detected_at: cp[:checked_at] || Time.current.iso8601,
         }
@@ -191,11 +207,15 @@ class CrossLayerAnalyzer
       end
     end
 
-    def chokepoint_disruption_description(cp:, flow_parts:, commodity_parts:)
+    def chokepoint_disruption_description(cp:, flow_parts:, commodity_parts:, supporting_signals:, resource_context:)
       description = "#{cp[:ships_nearby][:total]} ships nearby"
       description += " (#{cp[:ships_nearby][:tankers]} tankers)" if cp[:ships_nearby][:tankers].to_i > 0
       description += " — #{flow_parts.join(", ")}" if flow_parts.any?
       description += " — #{commodity_parts.join(", ")}" if commodity_parts.any?
+      description += " — #{resource_context[:summary]}" if resource_context&.dig(:summary).present?
+      if (supporting = supporting_signal_summary(supporting_signals)).present?
+        description += " — #{supporting}"
+      end
       description
     end
 
@@ -207,13 +227,15 @@ class CrossLayerAnalyzer
       end
     end
 
-    def chokepoint_market_stress_description(cp:, top_move:, top_pulse:)
+    def chokepoint_market_stress_description(cp:, top_move:, top_pulse:, supporting_signals:, resource_context:)
       description_parts = [
         "#{top_move[:name] || top_move[:symbol]} #{format_change_pct(top_move[:change_pct])}",
         "#{cp.dig(:ships_nearby, :total).to_i} ships nearby",
       ]
       description_parts << "#{cp.dig(:ships_nearby, :tankers).to_i} tankers" if cp.dig(:ships_nearby, :tankers).to_i.positive?
       description_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}" if top_pulse
+      description_parts << resource_context[:summary] if resource_context&.dig(:summary).present?
+      description_parts << supporting_signal_summary(supporting_signals) if supporting_signals.present?
       description_parts.join(" — ")
     end
 

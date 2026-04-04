@@ -743,12 +743,27 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       assert insight
       assert_equal "Suez Canal: escalating conflict near 12% of world oil", insight[:title]
       assert_equal "Suez Canal", insight.dig(:entities, :chokepoint, :name)
+      assert_equal "Strategic flow node", insight.dig(:entities, :resource_context, :subtitle)
     ensure
       ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
     end
   end
 
   test "chokepoint market stress fires when commodity signals move materially" do
+    FireHotspot.create!(
+      external_id: "market-stress-strike-001",
+      latitude: 12.62,
+      longitude: 43.31,
+      brightness: 349.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 57.0,
+      daynight: "N",
+      acq_datetime: 8.hours.ago,
+      fetched_at: Time.current
+    )
+
     mocked_payload = [{
       id: "bab_el_mandeb",
       name: "Bab el-Mandeb",
@@ -775,6 +790,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       assert_equal "high", insight[:severity]
       assert_includes insight[:title], "OIL_BRENT"
       assert_equal "Bab el-Mandeb", insight.dig(:entities, :chokepoint, :name)
+      assert_equal 1, insight.dig(:entities, :supporting_signals, :thermal)
     ensure
       ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
     end
@@ -948,7 +964,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
           spike_ratio: 2.7,
           theater: "Middle East / Iran War",
           top_headlines: ["Shipping pressure builds around Hormuz"],
-          cross_layer_signals: { military_flights: 3, gps_jamming: 18 },
+          cross_layer_signals: { military_flights: 3, gps_jamming: 18, strike_signals_7d: 2, verified_strike_reports_7d: 1 },
           detected_at: Time.current.iso8601,
         },
       ],
@@ -963,7 +979,9 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       assert insight
       assert_equal "critical", insight[:severity]
       assert_includes insight[:description], "3 mil flights"
+      assert_includes insight[:description], "2 lagging strike signals"
       assert_equal "Middle East / Iran War", insight.dig(:entities, :theater, :name)
+      assert_equal 1, insight.dig(:entities, :supporting_signals, :verified)
     ensure
       ConflictPulseService.singleton_class.send(:define_method, :analyze, original_analyze)
     end

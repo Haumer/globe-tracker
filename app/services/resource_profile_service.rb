@@ -3,9 +3,24 @@ class ResourceProfileService
     "oil" => "Oil",
     "gas" => "Gas",
     "products" => "Refined products",
+    "lng" => "LNG",
+    "container" => "Container trade",
+    "grain" => "Grain",
+    "trade" => "Trade",
+    "semiconductors" => "Semiconductors",
   }.freeze
 
   def self.call(primary_object:)
+    new(primary_object: primary_object).call
+  end
+
+  def self.for(kind:, identifier:, title: nil, object_type: nil)
+    primary_object = Struct.new(:object_kind, :object_identifier, :title, :object_type).new(
+      kind,
+      identifier,
+      title,
+      object_type
+    )
     new(primary_object: primary_object).call
   end
 
@@ -17,6 +32,8 @@ class ResourceProfileService
     return nil unless @primary_object.present?
 
     case @primary_object.object_kind.to_s
+    when "chokepoint"
+      build_chokepoint_profile
     when "pipeline"
       build_pipeline_profile
     when "power_plant"
@@ -27,6 +44,29 @@ class ResourceProfileService
   end
 
   private
+
+  def build_chokepoint_profile
+    chokepoint = resolve_chokepoint
+    return nil unless chokepoint.present?
+
+    flows = chokepoint[:flows].to_h
+    top_flows = flows.first(3).map do |key, data|
+      label = RESOURCE_LABELS.fetch(key.to_s, key.to_s.tr("_", " ").titleize)
+      pct = data[:pct].presence
+      pct.present? ? "#{label} #{pct}% global flow" : data[:note]
+    end.compact
+
+    {
+      title: "Resource Context",
+      subtitle: "Strategic flow node",
+      summary: chokepoint[:description].presence || "Concentrates global trade and resource flows through a narrow corridor.",
+      metrics: [
+        { label: "Primary flows", value: top_flows.first || "Strategic maritime traffic" },
+        { label: "Countries", value: Array(chokepoint[:countries]).any? ? Array(chokepoint[:countries]).join(", ") : "Unknown" },
+        { label: "Risk factors", value: Array(chokepoint[:risk_factors]).any? ? Array(chokepoint[:risk_factors]).first(2).join(" · ") : "None" },
+      ],
+    }
+  end
 
   def build_pipeline_profile
     pipeline = Pipeline.find_by(pipeline_id: @primary_object.object_identifier) || Pipeline.find_by(name: @primary_object.title)
@@ -76,6 +116,15 @@ class ResourceProfileService
       PowerPlant.find_by(id: identifier)
     else
       PowerPlant.find_by(gppd_idnr: identifier) || PowerPlant.find_by(name: @primary_object.title)
+    end
+  end
+
+  def resolve_chokepoint
+    identifier = @primary_object.object_identifier.to_s
+    if ChokepointMonitorService::CHOKEPOINTS.key?(identifier.to_sym)
+      ChokepointMonitorService::CHOKEPOINTS.fetch(identifier.to_sym)
+    else
+      ChokepointMonitorService::CHOKEPOINTS.values.find { |entry| entry[:name] == @primary_object.title }
     end
   end
 

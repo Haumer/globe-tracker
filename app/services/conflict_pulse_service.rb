@@ -421,7 +421,7 @@ class ConflictPulseService
       tone_score = [avg_tone.abs / 7.0 * 15, 15].min
       diversity_score = [sources_24h.size / 5.0 * 10, 10].min
       cluster_score = [story_count / 4.0 * 10, 10].min
-      cross_score = [signals.size * 5, 15].min
+      cross_score = cross_layer_score(signals)
 
       # Sustained intensity bonus: high-volume zones are critical even without a spike
       # 20+ weighted articles/24h = ongoing major event (war, large-scale conflict)
@@ -594,6 +594,8 @@ class ConflictPulseService
     gps_jamming: "Electronic warfare degrading civilian aviation navigation in the region",
     internet_outage: "Major internet disruption — possible infrastructure damage or state censorship",
     fire_hotspots: "Satellite-detected fires consistent with airstrikes or burning infrastructure",
+    strike_signals_7d: "Lagging thermal strike detections within the last 7 days around the current focus",
+    verified_strike_reports_7d: "Verified strike reports within the last 7 days around the current focus",
     known_conflict_zone: "Historical conflict events from UCDP database — baseline for current escalation",
     ships_nearby: "Live vessel activity around a strategic corridor",
     tankers_nearby: "Tanker traffic moving through a strategic energy corridor",
@@ -605,7 +607,7 @@ class ConflictPulseService
     end
   end
 
-  def cross_layer_signals(lat, lng, radius_km: 250)
+  def cross_layer_signals(lat, lng, radius_km: 250, object_kind: "theater")
     bounds = bbox(lat, lng, radius_km)
     signals = {}
 
@@ -629,6 +631,14 @@ class ConflictPulseService
       .where(latitude: bounds[:lamin]..bounds[:lamax], longitude: bounds[:lomin]..bounds[:lomax]).count
     signals[:fire_hotspots] = fires if fires > 5
 
+    signals.merge!(
+      NearbySupportingSignalsService.cross_layer_signals(
+        object_kind: object_kind,
+        latitude: lat,
+        longitude: lng
+      )
+    )
+
     historical = ConflictEvent.within_bounds(bounds).count
     signals[:known_conflict_zone] = historical if historical > 10
 
@@ -636,6 +646,13 @@ class ConflictPulseService
   rescue => e
     Rails.logger.warn("ConflictPulseService cross-layer error: #{e.message}")
     {}
+  end
+
+  def cross_layer_score(signals)
+    score = [signals.size * 4, 12].min
+    score += [[signals[:strike_signals_7d].to_i / 3.0, 2].min, 0].max
+    score += [[signals[:verified_strike_reports_7d].to_i * 1.5, 3].min, 0].max
+    [score.round(1), 15].min
   end
 
   def build_strategic_situations(zones)
@@ -771,7 +788,7 @@ class ConflictPulseService
   end
 
   def strategic_cross_layer_signals(chokepoint)
-    signals = cross_layer_signals(chokepoint[:lat], chokepoint[:lng], radius_km: STRATEGIC_CROSS_LAYER_RADIUS_KM)
+    signals = cross_layer_signals(chokepoint[:lat], chokepoint[:lng], radius_km: STRATEGIC_CROSS_LAYER_RADIUS_KM, object_kind: "chokepoint")
     ship_bounds = bbox(chokepoint[:lat], chokepoint[:lng], [chokepoint[:radius_km].to_f * 2.0, 120.0].max)
     nearby_ships = Ship.where("updated_at > ?", @reference_time - 45.minutes)
       .where(latitude: ship_bounds[:lamin]..ship_bounds[:lamax], longitude: ship_bounds[:lomin]..ship_bounds[:lomax])
@@ -796,6 +813,8 @@ class ConflictPulseService
     score += 6 if signals[:tankers_nearby].to_i > 0
     score += 8 if signals[:gps_jamming].present?
     score += 6 if signals[:military_flights].to_i > 0
+    score += 4 if signals[:strike_signals_7d].to_i >= 3
+    score += 4 if signals[:verified_strike_reports_7d].to_i.positive?
     [score.round, 100].min
   end
 

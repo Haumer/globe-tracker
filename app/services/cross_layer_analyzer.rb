@@ -706,6 +706,8 @@ class CrossLayerAnalyzer
       signal_parts << "GPS jamming #{signals[:gps_jamming]}%" if signals[:gps_jamming]
       signal_parts << "internet outage" if signals[:internet_outage]
       signal_parts << "#{signals[:fire_hotspots]} fires" if signals[:fire_hotspots]
+      signal_parts << "#{signals[:strike_signals_7d]} lagging strike signals" if signals[:strike_signals_7d]
+      signal_parts << "#{signals[:verified_strike_reports_7d]} verified strike reports" if signals[:verified_strike_reports_7d]
 
       desc = "#{zone[:count_24h]} reports from #{zone[:source_count]} sources (#{zone[:escalation_trend]})"
       desc += " + #{signal_parts.join(", ")}" if signal_parts.any?
@@ -722,6 +724,7 @@ class CrossLayerAnalyzer
           theater: zone[:theater].present? ? { name: zone[:theater] } : nil,
           news: { count_24h: zone[:count_24h], sources: zone[:source_count], stories: zone[:story_count] },
           cross_layer: signals.presence,
+          supporting_signals: compact_supporting_signal_entities(signals),
           headlines: zone[:top_headlines]&.first(3),
         }.compact,
         detected_at: zone[:detected_at],
@@ -900,5 +903,35 @@ class CrossLayerAnalyzer
 
   def severity_score(severity)
     { "critical" => 4, "high" => 3, "medium" => 2, "low" => 1 }[severity.to_s] || 0
+  end
+
+  def compact_supporting_signal_entities(signals)
+    return nil if signals.blank?
+
+    payload = {}
+    payload[:thermal] = signals[:strike_signals_7d].to_i if signals[:strike_signals_7d].to_i.positive?
+    payload[:verified] = signals[:verified_strike_reports_7d].to_i if signals[:verified_strike_reports_7d].to_i.positive?
+    payload.presence
+  end
+
+  def supporting_signal_summary(signals)
+    return nil if signals.blank?
+
+    parts = []
+    parts << "#{signals[:strike_signals_7d]} thermal signals" if signals[:strike_signals_7d].to_i.positive?
+    parts << "#{signals[:verified_strike_reports_7d]} verified reports" if signals[:verified_strike_reports_7d].to_i.positive?
+    return nil if parts.empty?
+
+    "#{parts.join(" + ")} in nearby corroboration scope"
+  end
+
+  def compact_resource_context(profile)
+    return nil unless profile.present?
+
+    {
+      subtitle: profile[:subtitle],
+      summary: profile[:summary],
+      metrics: Array(profile[:metrics]).first(3),
+    }.compact
   end
 end

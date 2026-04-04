@@ -147,10 +147,25 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
       )
     end
 
+    FireHotspot.create!(
+      external_id: "pulse-strike-001",
+      latitude: 50.2,
+      longitude: 35.2,
+      brightness: 351.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 60.0,
+      daynight: "N",
+      acq_datetime: 12.hours.ago,
+      fetched_at: Time.current
+    )
+
     data = ConflictPulseService.analyze; result = data[:zones] || []
     assert result.any?
     zone = result.first
     assert zone[:cross_layer_signals][:military_flights], "Should detect military flights"
+    assert_equal 1, zone[:cross_layer_signals][:strike_signals_7d]
   end
 
   test "caches results when cache store supports it" do

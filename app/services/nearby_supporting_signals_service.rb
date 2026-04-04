@@ -23,6 +23,28 @@ class NearbySupportingSignalsService
     ).call
   end
 
+  def self.cross_layer_signals(object_kind:, latitude:, longitude:, window: DEFAULT_WINDOW)
+    payload = call(
+      object_kind: object_kind,
+      latitude: latitude,
+      longitude: longitude,
+      window: window,
+      item_limit: 0
+    )
+    return {} if payload.blank?
+
+    strike_group = Array(payload[:groups]).find { |group| group[:key] == "strikes" }
+    return {} unless strike_group.present?
+
+    aggregate = strike_group[:aggregate].to_h
+    {}.tap do |signals|
+      thermal_count = aggregate[:thermal_count].to_i
+      verified_count = aggregate[:verified_count].to_i
+      signals[:strike_signals_7d] = thermal_count if thermal_count.positive?
+      signals[:verified_strike_reports_7d] = verified_count if verified_count.positive?
+    end
+  end
+
   def initialize(object_kind:, latitude:, longitude:, window:, item_limit:)
     @object_kind = object_kind.to_s
     @latitude = latitude
@@ -93,6 +115,10 @@ class NearbySupportingSignalsService
       key: "strikes",
       title: "Strike Signals",
       note: "Strike detections trail live reporting and work best as short-window corroboration around the current focus.",
+      aggregate: {
+        thermal_count: thermal_count,
+        verified_count: verified_count,
+      },
       metrics: [
         { label: "Thermal / #{(@window / 1.day).to_i}d", value: thermal_count },
         { label: "Verified / #{(@window / 1.day).to_i}d", value: verified_count },

@@ -54,4 +54,29 @@ class NearbySupportingSignalsServiceTest < ActiveSupport::TestCase
 
     assert_nil signals
   end
+
+  test "builds canonical cross layer signal keys" do
+    FireHotspot.create!(
+      external_id: "svc-strike-near-002",
+      latitude: 26.7,
+      longitude: 56.45,
+      brightness: 348.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 58.2,
+      daynight: "N",
+      acq_datetime: 18.hours.ago,
+      fetched_at: Time.current
+    )
+
+    signals = NearbySupportingSignalsService.cross_layer_signals(
+      object_kind: "chokepoint",
+      latitude: 26.55,
+      longitude: 56.3
+    )
+
+    assert_equal 1, signals[:strike_signals_7d]
+    assert_nil signals[:verified_strike_reports_7d]
+  end
 end

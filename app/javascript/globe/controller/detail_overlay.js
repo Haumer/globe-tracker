@@ -314,11 +314,13 @@ export function applyDetailOverlayMethods(GlobeController) {
     const displayedSize = Math.min(width, height) * scale * distanceScale
     if (!(displayedSize > 0)) return fallback
 
-    const factor = state.kind === "conflict_pulse"
-      ? (24 / 52)
-      : state.kind === "strategic_situation"
-        ? 0.4
-        : 0.45
+    if (state.kind === "conflict_pulse") {
+      return displayedSize * 0.34 + 3
+    }
+
+    const factor = state.kind === "strategic_situation"
+      ? 0.4
+      : 0.45
 
     return displayedSize * factor
   }
@@ -497,7 +499,7 @@ export function applyDetailOverlayMethods(GlobeController) {
       case "conflict_pulse": {
         const score = toNumber(data?.pulse_score) || 0
         const iconSize = score >= 70 ? 48 : score >= 50 ? 44 : 36
-        return Math.max(0, iconSize * 0.43 - 1)
+        return Math.max(0, iconSize * 0.34 + 3)
       }
       case "strategic_situation":
         return data?.status === "critical" ? 12.5 : 11

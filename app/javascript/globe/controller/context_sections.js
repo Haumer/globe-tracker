@@ -57,10 +57,7 @@ export function applyContextSectionMethods(GlobeController) {
     const coords = this._contextCoordinates(context)
     if (!coords) return []
 
-    return [
-      this._buildObservationContextSection(coords),
-      this._buildLayerDiscoverabilitySection(coords),
-    ].filter(Boolean)
+    return [this._buildNearbyToolsSection(coords)].filter(Boolean)
   }
 
   GlobeController.prototype._contextCoordinates = function(context) {
@@ -88,12 +85,38 @@ export function applyContextSectionMethods(GlobeController) {
     return null
   }
 
-  GlobeController.prototype._buildObservationContextSection = function(coords) {
+  GlobeController.prototype._buildNearbyToolsSection = function(coords) {
+    const watchItems = this._buildObservationContextItems(coords)
+    const crossCheckItems = this._buildLayerDiscoverabilityItems(coords)
+    const groups = []
+
+    if (watchItems.length) {
+      groups.push({
+        title: "Watch",
+        items: watchItems,
+      })
+    }
+
+    if (crossCheckItems.length) {
+      groups.push({
+        title: "Cross-check",
+        items: crossCheckItems,
+      })
+    }
+
+    if (!groups.length) return null
+
+    return {
+      title: "Nearby tools",
+      variant: "utility",
+      groups,
+    }
+  }
+
+  GlobeController.prototype._buildObservationContextItems = function(coords) {
     const nearbyCameras = this._nearbyCamerasForContext(coords).slice(0, 4)
     if (nearbyCameras.length) {
-      return {
-        title: "Watch nearby",
-        items: nearbyCameras.map(cam => {
+      return nearbyCameras.map(cam => {
           const badge = this._cameraModeBadge(cam)
           const distance = `${cam.distanceKm.toFixed(cam.distanceKm < 10 ? 1 : 0)} km`
           return {
@@ -109,14 +132,11 @@ export function applyContextSectionMethods(GlobeController) {
             },
             cameraId: cam.id,
           }
-        }),
-      }
+        })
     }
 
     if (!this.camerasVisible) {
-      return {
-        title: "Watch nearby",
-        items: [{
+      return [{
           label: "Enable cameras",
           meta: "Show nearby live streams and webcam feeds around this location.",
           badge: { label: "CAM", variant: "news" },
@@ -125,14 +145,13 @@ export function applyContextSectionMethods(GlobeController) {
           lat: coords.lat,
           lng: coords.lng,
           height: coords.height || 300000,
-        }],
-      }
+        }]
     }
 
-    return null
+    return []
   }
 
-  GlobeController.prototype._buildLayerDiscoverabilitySection = function(coords) {
+  GlobeController.prototype._buildLayerDiscoverabilityItems = function(coords) {
     const items = []
     const suggestions = []
 
@@ -292,12 +311,7 @@ export function applyContextSectionMethods(GlobeController) {
       renderedItems.push(...suggestions.slice(0, 6 - renderedItems.length))
     }
 
-    if (!renderedItems.length) return null
-
-    return {
-      title: "Cross-check nearby",
-      items: renderedItems,
-    }
+    return renderedItems
   }
 
   GlobeController.prototype._nearbyCamerasForContext = function(coords, radiusKm = 160) {

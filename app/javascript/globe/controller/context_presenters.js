@@ -106,20 +106,38 @@ export function renderContextSection(controller, section) {
     .map(item => renderContextItem(controller, item))
     .join("")
 
+  const groups = (section.groups || [])
+    .map(group => {
+      const groupItems = (group.items || [])
+        .filter(item => item?.label)
+        .map(item => renderContextItem(controller, item))
+        .join("")
+      if (!groupItems) return ""
+
+      return `
+        <div class="context-section-group">
+          ${group.title ? `<div class="context-section-group-title">${controller._escapeHtml(group.title)}</div>` : ""}
+          <div class="context-items">${groupItems}</div>
+        </div>
+      `
+    })
+    .join("")
+
   const chips = (section.chips || [])
     .filter(Boolean)
     .map(chip => `<span class="ins-chip ins-chip--${controller._escapeHtml(chip.variant || "eq")}">${controller._escapeHtml(chip.label)}</span>`)
     .join("")
 
   const html = section.html || ""
-  if (!rows && !items && !chips && !html) return ""
+  if (!rows && !items && !chips && !html && !groups) return ""
 
   return `
-    <section class="context-section">
+    <section class="context-section${section.variant ? ` context-section--${controller._escapeHtml(section.variant)}` : ""}">
       <div class="context-section-title">${controller._escapeHtml(section.title || "Section")}</div>
       ${chips ? `<div class="context-chip-row">${chips}</div>` : ""}
       ${rows ? `<div class="context-rows">${rows}</div>` : ""}
       ${html ? `<div class="context-html">${html}</div>` : ""}
+      ${groups}
       ${items ? `<div class="context-items">${items}</div>` : ""}
     </section>
   `

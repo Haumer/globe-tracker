@@ -11,6 +11,10 @@
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+.context-section--utility {
+  background: rgba(255, 255, 255, 0.018);
+}
+
 .context-section-title,
 .context-brief-label {
   font: 700 8px var(--gt-mono);
@@ -22,6 +26,20 @@
 .context-section-title {
   margin-bottom: 8px;
   letter-spacing: 1.1px;
+}
+
+.context-section-group + .context-section-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.context-section-group-title {
+  margin-bottom: 6px;
+  font: 700 7px/1 var(--gt-mono);
+  letter-spacing: 0.95px;
+  text-transform: uppercase;
+  color: rgba(167, 182, 201, 0.46);
 }
 
 .context-html,

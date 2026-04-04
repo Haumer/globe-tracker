@@ -147,4 +147,13 @@ module InvestigationCasesHelper
 
     object_view_href_for(request) if request.present?
   end
+
+  def investigation_case_signal_badge_class(kind)
+    case kind.to_s
+    when "verified"
+      "case-badge--signal-verified"
+    else
+      "case-badge--signal-thermal"
+    end
+  end
 end

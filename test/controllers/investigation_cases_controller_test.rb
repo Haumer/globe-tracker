@@ -244,6 +244,74 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Strait of Hormuz"
   end
 
+  test "GET /cases/:id surfaces nearby strike signals in the case workspace" do
+    investigation_case = @user.investigation_cases.create!(
+      title: "Hormuz strike watch",
+      status: "monitoring",
+      severity: "high",
+      summary: "Track lagging strike corroboration around the theater."
+    )
+    investigation_case.case_objects.create!(
+      object_kind: "theater",
+      object_identifier: "Iran Theater",
+      title: "Iran Theater",
+      summary: "Regional pressure and corroborating signals",
+      object_type: "theater",
+      latitude: 26.55,
+      longitude: 56.3,
+      source_context: { "pulse_score" => 81, "escalation_trend" => "escalating" }
+    )
+
+    FireHotspot.create!(
+      external_id: "strike-near-001",
+      latitude: 26.7,
+      longitude: 56.45,
+      brightness: 348.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 58.2,
+      daynight: "N",
+      acq_datetime: 18.hours.ago,
+      fetched_at: Time.current
+    )
+    FireHotspot.create!(
+      external_id: "strike-old-001",
+      latitude: 26.65,
+      longitude: 56.33,
+      brightness: 342.0,
+      confidence: "high",
+      satellite: "Terra",
+      instrument: "MODIS",
+      frp: 42.0,
+      daynight: "D",
+      acq_datetime: 9.days.ago,
+      fetched_at: Time.current
+    )
+    FireHotspot.create!(
+      external_id: "strike-far-001",
+      latitude: 7.1,
+      longitude: 4.2,
+      brightness: 360.0,
+      confidence: "high",
+      satellite: "NOAA-21",
+      instrument: "VIIRS",
+      frp: 64.3,
+      daynight: "N",
+      acq_datetime: 12.hours.ago,
+      fetched_at: Time.current
+    )
+
+    get case_path(investigation_case)
+
+    assert_response :success
+    assert_includes response.body, "Recent Strike Signals"
+    assert_includes response.body, "Strike detections trail live reporting"
+    assert_includes response.body, "Thermal strike signal"
+    assert_includes response.body, "Aqua"
+    assert_not_includes response.body, "No nearby strike signals are in the current 7-day scope."
+  end
+
   test "PATCH /cases/:id updates status severity and assignee while preserving globe return state" do
     investigation_case = @user.investigation_cases.create!(
       title: "Iran theater watch",

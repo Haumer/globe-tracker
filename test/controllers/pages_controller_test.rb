@@ -14,6 +14,19 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "id=\"mobile-sheet-scrim\""
   end
 
+  test "home page emits matching importmap and preload paths for context presenters" do
+    get "/"
+
+    assert_response :success
+
+    importmap_path = response.body[/\"globe\/controller\/context_presenters\":\s*\"([^\"]+)\"/, 1]
+    preload_path = response.body[/<link rel="modulepreload" href=\"([^\"]*globe\/controller\/context_presenters-[^\"]+\.js)\"/, 1]
+
+    assert importmap_path.present?, "expected context_presenters in inline importmap"
+    assert preload_path.present?, "expected context_presenters modulepreload tag"
+    assert_equal preload_path, importmap_path
+  end
+
   test "home page includes social metadata and favicon links" do
     get "/"
 

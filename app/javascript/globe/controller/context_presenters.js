@@ -71,6 +71,20 @@ function renderPinnedMapSection(controller, context) {
   `
 }
 
+function renderMetricGrid(metrics = []) {
+  const cards = metrics
+    .filter(metric => metric?.label && metric?.value)
+    .map(metric => `
+      <div class="context-metric-card">
+        <div class="context-metric-label">${metric.label}</div>
+        <div class="context-metric-value">${metric.value}</div>
+      </div>
+    `)
+    .join("")
+
+  return cards ? `<div class="context-metric-grid">${cards}</div>` : ""
+}
+
 function renderTheaterRailSection(controller, context) {
   const zone = context?.zoneData || {}
   const brief = context?.theaterBrief || {}
@@ -95,31 +109,39 @@ function renderTheaterRailSection(controller, context) {
     stateHtml = '<div class="context-brief-state context-brief-state--error">Stored AI brief unavailable. Showing live factual read.</div>'
   }
 
-  const rows = [
+  const metrics = [
+    zone.pulse_score ? { label: "Pulse", value: `${zone.pulse_score}` } : null,
     zone.count_24h ? { label: "Reports / 24h", value: `${zone.count_24h}` } : null,
     zone.source_count ? { label: "Sources", value: `${zone.source_count}` } : null,
-    zone.story_count ? { label: "Story clusters", value: `${zone.story_count}` } : null,
     zone.detected_at ? { label: "Updated", value: controller._timeAgo(new Date(zone.detected_at)) } : null,
   ].filter(Boolean)
 
-  return renderContextSection(controller, {
-    title: "Active read",
-    variant: "summary",
-    html: `
-      <div class="context-brief context-brief--summary">
-        <div class="context-brief-group">
-          <div class="context-brief-label">Current read</div>
+  const developments = controller._theaterReportingItems
+    ? controller._theaterReportingItems(zone).slice(0, 3)
+    : []
+
+  return [
+    renderContextSection(controller, {
+      title: "Live read",
+      variant: "summary",
+      html: `
+        ${renderMetricGrid(metrics)}
+        <div class="context-brief context-brief--summary">
           <div class="context-brief-body">${controller._escapeHtml(assessment)}</div>
+          <div class="context-brief-confidence">
+            <span class="context-brief-confidence-level context-brief-confidence-level--${controller._escapeHtml(confidenceLevelKey)}">${controller._escapeHtml(confidenceLevel)} confidence</span>
+            ${confidenceRationale ? `<span class="context-brief-confidence-text">${controller._escapeHtml(confidenceRationale)}</span>` : ""}
+          </div>
+          ${stateHtml}
         </div>
-        <div class="context-brief-confidence">
-          <span class="context-brief-confidence-level context-brief-confidence-level--${controller._escapeHtml(confidenceLevelKey)}">${controller._escapeHtml(confidenceLevel)} confidence</span>
-          ${confidenceRationale ? `<span class="context-brief-confidence-text">${controller._escapeHtml(confidenceRationale)}</span>` : ""}
-        </div>
-        ${stateHtml}
-      </div>
-    `,
-    rows,
-  })
+      `,
+    }),
+    developments.length ? renderContextSection(controller, {
+      title: "Latest developments",
+      variant: "summary",
+      items: developments,
+    }) : "",
+  ].filter(Boolean)
 }
 
 function renderRecordedRailSection(controller, context) {
@@ -150,10 +172,10 @@ function renderRecordedRailSection(controller, context) {
   })
 }
 
-function primaryContextRailSection(controller, context) {
-  if (!context) return ""
+function primaryContextRailSections(controller, context) {
+  if (!context) return []
   if (context.kind === "theater") return renderTheaterRailSection(controller, context)
-  return renderRecordedRailSection(controller, context)
+  return [renderRecordedRailSection(controller, context)].filter(Boolean)
 }
 
 function primaryContextActions(controller, context) {
@@ -178,10 +200,12 @@ function primaryContextActions(controller, context) {
     })
   }
 
-  const externalAction = (context.actions || []).find(action => action.url || action.path)
+  const externalAction = context.kind === "theater"
+    ? null
+    : (context.actions || []).find(action => action.url || action.path)
   if (externalAction) actions.push(externalAction)
 
-  return actions.slice(0, 3)
+  return actions.slice(0, 2)
 }
 
 export function renderSelectedContext(controller, context) {
@@ -209,7 +233,8 @@ export function renderSelectedContext(controller, context) {
     return '<div class="context-empty">Click a map item to inspect its live context here. Deep analysis belongs in the case workspace.</div>'
   }
 
-  const metaPills = (context.meta || [])
+  const showTopSummary = context.kind !== "theater"
+  const metaPills = (showTopSummary ? (context.meta || []) : [])
     .filter(item => item?.value)
     .map(item => `
       <span class="context-meta-pill">
@@ -219,7 +244,7 @@ export function renderSelectedContext(controller, context) {
     `)
     .join("")
 
-  const sections = [primaryContextRailSection(controller, context)].filter(Boolean)
+  const sections = [...primaryContextRailSections(controller, context)]
   if (pinnedSection) sections.push(pinnedSection)
 
   const actions = primaryContextActions(controller, context)
@@ -243,7 +268,7 @@ export function renderSelectedContext(controller, context) {
         </div>
         <div class="context-title">${controller._escapeHtml(context.title || "Selected context")}</div>
         ${context.subtitle ? `<div class="context-subtitle">${controller._escapeHtml(context.subtitle)}</div>` : ""}
-        ${context.summary ? `<div class="context-summary">${controller._escapeHtml(context.summary)}</div>` : ""}
+        ${showTopSummary && context.summary ? `<div class="context-summary">${controller._escapeHtml(context.summary)}</div>` : ""}
         ${metaPills ? `<div class="context-meta">${metaPills}</div>` : ""}
         ${actions ? `<div class="context-actions">${actions}</div>` : ""}
       </div>

@@ -1,14 +1,19 @@
 .context-section-list {
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 6px 12px 12px;
 }
 
 .context-section {
-  padding: 10px;
+  padding: 10px 11px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.022);
   border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.context-section--summary {
+  background: rgba(255, 255, 255, 0.026);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .context-section--utility {
@@ -81,12 +86,16 @@
   gap: 10px;
 }
 
+.context-brief--summary {
+  gap: 12px;
+}
+
 .context-brief-group {
   gap: 6px;
 }
 
 .context-brief-body {
-  font: 500 11px/1.55 var(--gt-sans);
+  font: 500 12px/1.58 var(--gt-sans);
   color: rgba(236, 241, 248, 0.92);
 }
 
@@ -161,6 +170,10 @@
   gap: 0;
 }
 
+.context-section--summary .context-items {
+  gap: 6px;
+}
+
 .context-row {
   display: flex;
   justify-content: space-between;
@@ -203,7 +216,7 @@
 .context-item-static {
   display: block;
   width: 100%;
-  padding: 7px 0;
+  padding: 8px 0;
   background: none;
   border: 0;
   text-align: left;
@@ -240,16 +253,16 @@
 }
 
 .context-item-label {
-  font: 500 11px/1.35 var(--gt-sans);
-  color: rgba(240, 245, 250, 0.9);
+  font: 600 12px/1.38 var(--gt-sans);
+  color: rgba(240, 245, 250, 0.92);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .context-item-meta {
   margin-top: 3px;
-  font: 500 9px/1.35 var(--gt-mono);
-  color: rgba(184, 197, 214, 0.45);
+  font: 500 9px/1.4 var(--gt-mono);
+  color: rgba(184, 197, 214, 0.52);
   overflow-wrap: anywhere;
   word-break: break-word;
 }

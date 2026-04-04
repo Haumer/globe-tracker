@@ -154,6 +154,21 @@ module ApplicationHelper
     enabled.uniq.select { |key| allowed.include?(key) }
   end
 
+  def javascript_importmap_tags_for_revision(entry_point = "application", importmap: Rails.application.importmap)
+    cache_key = Rails.env.production? ? entry_point.to_s : "#{entry_point}:#{app_revision}"
+    importmap_json = importmap.to_json(resolver: self, cache_key: "#{cache_key}:json")
+    preload_packages = importmap.preloaded_module_packages(resolver: self, entry_point:, cache_key: "#{cache_key}:preload")
+    nonce = request&.content_security_policy_nonce
+
+    safe_join [
+      javascript_inline_importmap_tag(importmap_json),
+      safe_join(preload_packages.map { |path, package|
+        tag.link rel: "modulepreload", href: path, nonce:, integrity: package.integrity
+      }, "\n"),
+      javascript_import_module_tag(entry_point),
+    ], "\n"
+  end
+
   def sidebar_advanced_library_layers_by_key
     @sidebar_advanced_library_layers_by_key ||= sidebar_advanced_library_layers.index_by { |layer| layer[:key] }
   end

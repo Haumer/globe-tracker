@@ -1,17 +1,13 @@
 .context-shell {
   --context-accent: #4fc3f7;
-  background: rgba(5, 9, 16, 0.74);
-  border: 1px solid color-mix(in srgb, var(--context-accent) 28%, rgba(255, 255, 255, 0.08));
-  border-radius: 12px;
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .context-overview {
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 12px 12px 8px;
 }
 
 .context-kicker {
@@ -74,18 +70,18 @@
 }
 
 .context-title {
-  font: 700 18px/1.08 var(--gt-mono);
+  font: 700 21px/1.04 var(--gt-mono);
   color: rgba(245, 248, 252, 0.97);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.45px;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .context-subtitle {
-  margin-top: 8px;
-  font: 600 10px/1.35 var(--gt-mono);
-  color: rgba(212, 224, 239, 0.76);
-  letter-spacing: 0.65px;
+  margin-top: 7px;
+  font: 700 10px/1.35 var(--gt-mono);
+  color: rgba(212, 224, 239, 0.68);
+  letter-spacing: 0.9px;
   text-transform: uppercase;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -132,8 +128,8 @@
 .context-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 7px;
+  margin-top: 14px;
 }
 
 .context-action-btn {
@@ -141,12 +137,12 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 4px 9px;
+  padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid rgba(147, 197, 253, 0.18);
   background: rgba(147, 197, 253, 0.08);
   color: #bfdbfe;
-  font: 600 9px var(--gt-mono);
+  font: 700 9px var(--gt-mono);
   letter-spacing: 0.25px;
   text-decoration: none;
   cursor: pointer;
@@ -157,4 +153,33 @@
     border-color: rgba(147, 197, 253, 0.28);
     color: #e0edff;
   }
+}
+
+.context-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.context-metric-card {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.context-metric-label {
+  font: 700 8px/1 var(--gt-mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(177, 191, 209, 0.54);
+}
+
+.context-metric-value {
+  margin-top: 7px;
+  font: 700 15px/1.05 var(--gt-mono);
+  color: rgba(244, 247, 252, 0.95);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

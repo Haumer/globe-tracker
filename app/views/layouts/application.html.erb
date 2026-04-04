@@ -51,7 +51,7 @@
     <% else %>
       <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
     <% end %>
-    <%= javascript_importmap_tags %>
+    <%= javascript_importmap_tags_for_revision %>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {

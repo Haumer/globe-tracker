@@ -17,8 +17,6 @@
   <input type="checkbox" data-globe-target="gpsJammingToggle" data-action="change->globe#toggleGpsJamming">
   <input type="checkbox" data-globe-target="newsToggle" data-action="change->globe#toggleNews">
   <input type="checkbox" data-globe-target="cablesToggle" data-action="change->globe#toggleCables">
-  <input type="checkbox" data-globe-target="portsToggle" data-action="change->globe#togglePorts">
-  <input type="checkbox" data-globe-target="shippingLanesToggle" data-action="change->globe#toggleShippingLanes">
   <input type="checkbox" data-globe-target="pipelinesToggle" data-action="change->globe#togglePipelines">
   <input type="checkbox" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
   <input type="checkbox" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
@@ -40,59 +38,8 @@
 </div>
 
 <div class="sb-sections">
-  <%# ── Tracking ── %>
-  <div class="sb-section" data-section="tracking">
-    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #4fc3f7;"></span>
-      <div><span class="sb-section-title">Tracking</span><div class="sb-section-hint">Flights, ships, trains, satellites</div></div>
-      <span class="sb-section-count" id="sec-count-tracking"></span>
-      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
-    </div>
-    <div class="sb-section-body" role="region">
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="flights" data-globe-target="qlFlights">
-        <i class="fa-solid fa-plane sb-layer-icon" style="color: #4fc3f7;"></i>
-        <span class="sb-layer-name">Flights</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="ships" data-globe-target="qlShips">
-        <i class="fa-solid fa-ship sb-layer-icon" style="color: #26c6da;"></i>
-        <span class="sb-layer-name">Ships (AIS)</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="trains" data-globe-target="qlTrains" aria-disabled="true" title="Temporarily disabled during cleanup">
-        <i class="fa-solid fa-train-subway sb-layer-icon" style="color: #e53935;"></i>
-        <span class="sb-layer-name">Live Trains</span>
-        <span class="sb-layer-status">Disabled</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="satellites" data-globe-target="qlSatellites">
-        <i class="fa-solid fa-satellite sb-layer-icon" style="color: #ab47bc;"></i>
-        <span class="sb-layer-name">Satellites</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="notams" data-globe-target="qlNotams">
-        <i class="fa-solid fa-ban sb-layer-icon" style="color: #ef5350;"></i>
-        <span class="sb-layer-name">NOTAMs / TFRs</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-
-      <%# Flight sub-options (shown when flights active) %>
-      <div class="sb-sub-options" data-globe-target="flightSubOptions" style="display:none;">
-        <div class="sb-mini-divider"></div>
-        <%= globe_toggle target: "civilianToggle", action: "toggleFlightFilter", label: "Civilian", dot: "#4fc3f7", checked: true %>
-        <%= globe_toggle target: "militaryToggle", action: "toggleFlightFilter", label: "Military", dot: "#ef5350", checked: true %>
-        <%= globe_toggle target: "trailsToggle", action: "toggleTrails", label: "Flight Trails" %>
-        <div class="sb-airline-filter" data-globe-target="airlineFilter" style="display:none;">
-          <div class="sb-filter-label">AIRLINES</div>
-          <div class="sb-airline-chips" data-globe-target="airlineChips"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <%# ── Events ── %>
-  <div class="sb-section" data-section="events">
-    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
+  <div class="sb-section" data-section="primary-signals">
+    <div class="sb-section-head open" data-action="click->globe#toggleSection" role="button" aria-expanded="true" tabindex="0">
       <span class="sb-section-dot" style="--dot: #ff7043;"></span>
       <div>
         <span class="sb-section-title">Primary Signals</span>
@@ -101,45 +48,12 @@
       <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
     </div>
     <div class="sb-section-body" role="region">
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="earthquakes" data-globe-target="qlEarthquakes">
-        <i class="fa-solid fa-house-crack sb-layer-icon" style="color: #ff7043;"></i>
-        <span class="sb-layer-name">Earthquakes</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="events" data-globe-target="qlEvents">
-        <i class="fa-solid fa-bolt sb-layer-icon" style="color: #66bb6a;"></i>
-        <span class="sb-layer-name">Natural Events</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="fireHotspots" data-globe-target="qlFireHotspots">
-        <i class="fa-solid fa-fire sb-layer-icon" style="color: #ff5722;"></i>
-        <span class="sb-layer-name">Fire Hotspots</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="arc-controls" data-globe-target="fireHotspotOptions" style="display:none;">
-        <div class="arc-controls-row">
-          <label class="arc-mini-toggle">
-            <input type="checkbox" checked data-globe-target="fireClustersToggle" data-action="change->globe#toggleFireClusters">
-            <span class="arc-mini-track"></span>
-            <span>Dense Clusters</span>
-          </label>
-        </div>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="weather" data-globe-target="qlWeather">
-        <i class="fa-solid fa-cloud-sun-rain sb-layer-icon" style="color: #1e88e5;"></i>
-        <span class="sb-layer-name">Weather</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <%# Weather sublayer panel %>
-      <div data-globe-target="weatherPanel" style="display:none;" class="wx-panel"></div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="conflicts" data-globe-target="qlConflicts">
-        <i class="fa-solid fa-crosshairs sb-layer-icon" style="color: #f44336;"></i>
-        <span class="sb-layer-name">Conflict Events</span>
-        <span class="sb-layer-dot"></span>
-      </div>
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="situations" data-globe-target="qlSituations">
         <i class="fa-solid fa-wave-square sb-layer-icon" style="color: #ff7043;"></i>
-        <span class="sb-layer-name">Conflict Theaters</span>
+        <div class="sb-layer-copy">
+          <span class="sb-layer-name">Conflict Theaters</span>
+          <span class="sb-layer-meta">Derived theaters, hotspots, and escalation patterns</span>
+        </div>
         <span class="sb-layer-dot"></span>
       </div>
       <div class="arc-controls" data-globe-target="situationOptions" style="display:none;padding:4px 0 4px 28px;">
@@ -205,64 +119,15 @@
         Advanced layers stay out of the default stack. When you enable one, or when the current view activates one, it shows up here.
       </div>
 
-  <%# ── Infrastructure ── %>
-  <div class="sb-section" data-section="infrastructure">
-    <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #00bcd4;"></span>
-      <div><span class="sb-section-title">Infrastructure</span><div class="sb-section-hint">Cables, ports, shipping, pipelines, power</div></div>
-      <span class="sb-section-count" id="sec-count-infrastructure"></span>
-      <i class="fa-solid fa-chevron-down sb-chevron" aria-hidden="true"></i>
-    </div>
-    <div class="sb-section-body" role="region">
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="cables" data-globe-target="qlCables">
-        <i class="fa-solid fa-network-wired sb-layer-icon" style="color: #00bcd4;"></i>
-        <span class="sb-layer-name">Submarine Cables</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="ports" data-globe-target="qlPorts">
-        <i class="fa-solid fa-anchor sb-layer-icon" style="color: #8bc34a;"></i>
-        <span class="sb-layer-name">Ports</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="shippingLanes" data-globe-target="qlShippingLanes" aria-disabled="true" title="Temporarily disabled during cleanup">
-        <i class="fa-solid fa-route sb-layer-icon" style="color: #ff8a00;"></i>
-        <span class="sb-layer-name">Shipping Lanes</span>
-        <span class="sb-layer-status">Disabled</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="pipelines" data-globe-target="qlPipelines">
-        <i class="fa-solid fa-oil-well sb-layer-icon" style="color: #ff6d00;"></i>
-        <span class="sb-layer-name">Oil & Gas Pipelines</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row sb-disabled" data-action="click->globe#quickToggle" data-layer="railways" data-globe-target="qlRailways" aria-disabled="true" title="Temporarily disabled during cleanup">
-        <i class="fa-solid fa-train sb-layer-icon" style="color: #90a4ae;"></i>
-        <span class="sb-layer-name">Railways</span>
-        <span class="sb-layer-status">Disabled</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="powerPlants" data-globe-target="qlPowerPlants">
-        <i class="fa-solid fa-plug sb-layer-icon" style="color: #ffc107;"></i>
-        <span class="sb-layer-name">Power Plants</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="cameras" data-globe-target="qlCameras">
-        <i class="fa-solid fa-video sb-layer-icon" style="color: #29b6f6;"></i>
-        <span class="sb-layer-name">Webcams</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="financial" data-globe-target="qlFinancial">
-        <i class="fa-solid fa-chart-line sb-layer-icon" style="color: #66bb6a;"></i>
-        <span class="sb-layer-name">Markets</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-      <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="chokepoints" data-globe-target="qlChokepoints">
-        <i class="fa-solid fa-anchor sb-layer-icon" style="color: #4fc3f7;"></i>
-        <span class="sb-layer-name">Shipping Chokepoints</span>
-        <span class="sb-layer-dot"></span>
-      </div>
-    </div>
-  </div>
+      <% advanced_layers.each do |layer| %>
+        <div class="sb-enabled-layer" data-enabled-layer-row="<%= layer[:key] %>" style="<%= enabled_layer_keys.include?(layer[:key]) ? '' : 'display:none;' %>">
+          <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="<%= layer[:key] %>" data-globe-target="<%= layer[:target] %>">
+            <i class="<%= layer[:icon] %> sb-layer-icon" style="color: <%= layer[:color] %>;"></i>
+            <div class="sb-layer-copy">
+              <span class="sb-layer-name"><%= layer[:label] %></span>
+            </div>
+            <span class="sb-layer-dot"></span>
+          </div>
 
           <% case layer[:key] %>
           <% when "flights" %>

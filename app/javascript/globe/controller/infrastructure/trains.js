@@ -1,4 +1,5 @@
-import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "globe/utils"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 const TRAIN_COLORS = {
   // High-speed / long distance
@@ -19,6 +20,21 @@ function trainColor(category) {
 
 const DEFAULT_LERP_DURATION = 10000 // ms — fallback for first movement
 const LATENCY_BUFFER = 1.2 // run 20% slower to absorb network jitter
+const POSITION_EPSILON = 0.00001
+const MOVEMENT_SIGNAL_WINDOW = 90000 // ms — tolerate repeated coarse positions before declaring stopped
+const SNAP_RENDER_CONFIDENCES = new Set(["high", "medium"])
+
+function resolvedTrainCoordinates(train) {
+  if (
+    train?.snappedLat != null &&
+    train?.snappedLng != null &&
+    SNAP_RENDER_CONFIDENCES.has(train.snapConfidence)
+  ) {
+    return { lat: train.snappedLat, lng: train.snappedLng, snapped: true }
+  }
+
+  return { lat: train?.lat, lng: train?.lng, snapped: false }
+}
 
 export function applyTrainsMethods(GlobeController) {
   GlobeController.prototype.getTrainsDataSource = function() {
@@ -26,6 +42,15 @@ export function applyTrainsMethods(GlobeController) {
   }
 
   GlobeController.prototype.toggleTrains = function() {
+    if (isLayerTemporarilyDisabled("trains")) {
+      if (this.hasTrainsToggleTarget) this.trainsToggleTarget.checked = false
+      this.trainsVisible = false
+      this._toast?.("Live Trains temporarily disabled during cleanup")
+      this._syncQuickBar()
+      this._savePrefs()
+      return
+    }
+
     this.trainsVisible = this.hasTrainsToggleTarget && this.trainsToggleTarget.checked
     if (this.trainsVisible) {
       if (!this._trainPositions) this._trainPositions = new Map()
@@ -80,42 +105,57 @@ export function applyTrainsMethods(GlobeController) {
     const seen = new Set()
 
     for (const t of trains) {
-      if (!t.lat || !t.lng) continue
+      const coords = resolvedTrainCoordinates(t)
+      if (coords.lat == null || coords.lng == null) continue
       seen.add(t.id)
       const prev = this._trainPositions.get(t.id)
 
       if (prev) {
         // Train existed before — set up animation from current rendered pos to new pos
-        const hasMoved = Math.abs(prev.targetLat - t.lat) > 0.00001 ||
-                         Math.abs(prev.targetLng - t.lng) > 0.00001
+        const previousTargetLat = prev.targetLat
+        const previousTargetLng = prev.targetLng
+        const previousProgress = prev.progress
+        const hasMoved = Math.abs(previousTargetLat - coords.lat) > POSITION_EPSILON ||
+                         Math.abs(previousTargetLng - coords.lng) > POSITION_EPSILON
+        const progressChanged = t.progress != null && previousProgress != null
+          ? t.progress !== previousProgress
+          : t.progress != null && previousProgress == null
         prev.fromLat = prev.currentLat
         prev.fromLng = prev.currentLng
-        prev.targetLat = t.lat
-        prev.targetLng = t.lng
+        prev.targetLat = coords.lat
+        prev.targetLng = coords.lng
+        prev.snapped = coords.snapped
         if (hasMoved) {
           // Measure actual time between position changes for lerp duration
-          const dt = prev.lastMovedAt ? (now - prev.lastMovedAt) : DEFAULT_LERP_DURATION
+          const dt = prev.lastMovedAt ? Math.max(now - prev.lastMovedAt, 1000) : DEFAULT_LERP_DURATION
           prev.lerpDuration = dt * LATENCY_BUFFER
           // Estimate speed: haversine distance / time
-          const dLat = t.lat - prev.targetLat
-          const dLng = t.lng - prev.targetLng
-          const distKm = Math.sqrt(dLat * dLat + dLng * dLng * Math.cos(t.lat * Math.PI / 180) ** 2) * 111.32
+          const dLat = coords.lat - previousTargetLat
+          const dLng = coords.lng - previousTargetLng
+          const distKm = Math.sqrt(dLat * dLat + dLng * dLng * Math.cos(coords.lat * Math.PI / 180) ** 2) * 111.32
           prev.speedKmh = Math.round(distKm / (dt / 3600000))
           prev.lastMovedAt = now
         }
+        if (progressChanged) prev.lastProgressAt = now
+        prev.progress = t.progress
         prev.startTime = now
-        // Only mark stopped after 30s of no position change
-        prev.moving = (now - (prev.lastMovedAt || 0)) < 30000
+        // HAFAS often repeats coarse coordinates; keep trains moving while progress is still advancing.
+        const lastSignalAt = Math.max(prev.lastMovedAt || 0, prev.lastProgressAt || 0)
+        prev.moving = !lastSignalAt || (now - lastSignalAt) < MOVEMENT_SIGNAL_WINDOW
       } else {
         // New train — assume moving until proven otherwise
         this._trainPositions.set(t.id, {
-          fromLat: t.lat, fromLng: t.lng,
-          targetLat: t.lat, targetLng: t.lng,
-          currentLat: t.lat, currentLng: t.lng,
+          fromLat: coords.lat, fromLng: coords.lng,
+          targetLat: coords.lat, targetLng: coords.lng,
+          currentLat: coords.lat, currentLng: coords.lng,
           startTime: now,
           lastMovedAt: now,
+          lastProgressAt: now,
           lerpDuration: DEFAULT_LERP_DURATION,
           moving: true,
+          progress: t.progress,
+          speedKmh: null,
+          snapped: coords.snapped,
         })
       }
     }
@@ -148,15 +188,16 @@ export function applyTrainsMethods(GlobeController) {
 
     dataSource.entities.suspendEvents()
     this._trainData.forEach(t => {
-      if (!t.lat || !t.lng) return
+      const coords = resolvedTrainCoordinates(t)
+      if (coords.lat == null || coords.lng == null) return
       activeIds.add(t.id)
 
       const color = trainColor(t.category)
       if (!iconCache[color]) iconCache[color] = createTrainIcon(color)
 
       const pos = this._trainPositions?.get(t.id)
-      const lat = pos ? pos.currentLat : t.lat
-      const lng = pos ? pos.currentLng : t.lng
+      const lat = pos ? pos.currentLat : coords.lat
+      const lng = pos ? pos.currentLng : coords.lng
 
       const existing = existingMap.get(t.id)
       if (existing) {
@@ -272,6 +313,8 @@ export function applyTrainsMethods(GlobeController) {
     const color = trainColor(t.category)
     const isTracking = this.trackedTrainId === t.id
     const pos = this._trainPositions?.get(t.id)
+    const renderCoords = resolvedTrainCoordinates(t)
+    const snapConfidenceLabel = t.snapConfidence ? t.snapConfidence.charAt(0).toUpperCase() + t.snapConfidence.slice(1) : ""
     const movingLabel = pos ? (pos.moving ? "Moving" : "Stopped") : ""
     const movingColor = pos?.moving ? "#66bb6a" : "#ff9800"
     const speedLabel = pos?.speedKmh && pos.moving ? `~${pos.speedKmh} km/h` : ""
@@ -303,6 +346,14 @@ export function applyTrainsMethods(GlobeController) {
           <span class="detail-label">Speed</span>
           <span class="detail-value">${speedLabel}</span>
         </div>` : ""}
+        ${snapConfidenceLabel ? `<div class="detail-field">
+          <span class="detail-label">Track Match</span>
+          <span class="detail-value">${this._escapeHtml(snapConfidenceLabel)}</span>
+        </div>` : ""}
+        ${t.snapDistanceM != null ? `<div class="detail-field">
+          <span class="detail-label">Rail Offset</span>
+          <span class="detail-value">${Math.round(t.snapDistanceM)}m</span>
+        </div>` : ""}
         ${t.direction ? `<div class="detail-field">
           <span class="detail-label">Direction</span>
           <span class="detail-value">${this._escapeHtml(t.direction)}</span>
@@ -313,8 +364,12 @@ export function applyTrainsMethods(GlobeController) {
         </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">Position</span>
-          <span class="detail-value">${t.lat.toFixed(4)}, ${t.lng.toFixed(4)}</span>
+          <span class="detail-value">${renderCoords.lat.toFixed(4)}, ${renderCoords.lng.toFixed(4)}</span>
         </div>
+        ${renderCoords.snapped ? `<div class="detail-field">
+          <span class="detail-label">Raw Fix</span>
+          <span class="detail-value">${t.lat.toFixed(4)}, ${t.lng.toFixed(4)}</span>
+        </div>` : ""}
         <div class="detail-field">
           <span class="detail-label">Updated</span>
           <span class="detail-value">${t.fetchedAt ? this._timeAgo(new Date(t.fetchedAt)) : "—"}</span>
@@ -359,10 +414,11 @@ export function applyTrainsMethods(GlobeController) {
     this.stopTracking() // stop any flight tracking
     const t = this._trainData?.find(tr => tr.id === id)
     if (t) {
+      const coords = resolvedTrainCoordinates(t)
       const Cesium = window.Cesium
       const h = this._trackingHeights[this._trackingHeightIdx]
       this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(t.lng, t.lat, h),
+        destination: Cesium.Cartesian3.fromDegrees(coords.lng, coords.lat, h),
         duration: 1.5,
       })
     }

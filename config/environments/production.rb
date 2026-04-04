@@ -1,5 +1,7 @@
 require "active_support/core_ext/integer/time"
 
+require Rails.root.join("lib/redis_ssl_config")
+
 Rails.application.configure do
   config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"), protocol: "https" }
   # Settings specified here will take precedence over those in config/application.rb.
@@ -21,14 +23,15 @@ Rails.application.configure do
   # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true
 
-  # Disable serving static files from `public/`, relying on NGINX/Apache to do so instead.
-  # config.public_file_server.enabled = false
+  # Heroku serves from the app process, so enable the public file server there and
+  # rely on precompiled assets instead of runtime asset compilation.
+  config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present? || ENV["DYNO"].present?
 
   # Compress CSS using a preprocessor.
   # config.assets.css_compressor = :sass
 
-  # Do not fall back to assets pipeline if a precompiled asset is missed.
-  config.assets.compile = true
+  # Do not fall back to runtime asset compilation in production.
+  config.assets.compile = false
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
@@ -80,14 +83,8 @@ Rails.application.configure do
         Rails.logger.warn("Redis cache error: #{exception.class} - #{exception.message}")
       },
     }
-    # Heroku Redis uses self-signed certs with rediss:// URLs.
-    # Use CA cert if available, otherwise accept Heroku's self-signed cert (still TLS-encrypted).
-    if ENV["REDIS_URL"]&.start_with?("rediss://")
-      redis_cache_opts[:ssl_params] = if ENV["REDIS_CA_CERT"]
-        { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: ENV["REDIS_CA_CERT"] }
-      else
-        { verify_mode: OpenSSL::SSL::VERIFY_NONE }
-      end
+    if (redis_ssl_params = RedisSslConfig.params_for(ENV["REDIS_URL"]))
+      redis_cache_opts[:ssl_params] = redis_ssl_params
     end
     config.cache_store = :redis_cache_store, redis_cache_opts
   else

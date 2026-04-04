@@ -11,6 +11,8 @@ class ChokepointMonitorService
     panama: %w[OIL_WTI LNG COPPER],
     taiwan_strait: %w[COPPER IRON],
     danish_straits: %w[OIL_BRENT GAS_NAT],
+    cape: %w[OIL_BRENT LNG TRADE],
+    cape_horn: %w[OIL_BRENT LNG TRADE],
   }.freeze
 
   # Major maritime chokepoints with trade flow data
@@ -158,6 +160,18 @@ class ChokepointMonitorService
       countries: %w[MZ MG],
       risk_factors: ["Insurgency in Cabo Delgado", "Piracy", "Climate events"],
     },
+    cape_horn: {
+      name: "Cape Horn",
+      lat: -55.98, lng: -67.29,
+      radius_km: 120,
+      description: "Southern tip of South America. Long-ocean alternative linking Atlantic and Pacific traffic.",
+      flows: {
+        trade: { pct: nil, volume: nil, note: "Fallback Pacific-Atlantic route when Panama or canal-sized assumptions break down" },
+        oil: { pct: nil, volume: nil, note: "Occasional long-haul tanker reroute around South America" },
+      },
+      countries: %w[CL AR],
+      risk_factors: ["Extreme weather", "Long-distance reroute costs", "Limited service support"],
+    },
   }.freeze
 
   class << self
@@ -241,7 +255,7 @@ class ChokepointMonitorService
       commodities = CommodityPrice.where("recorded_at > ?", 24.hours.ago)
         .order(recorded_at: :desc)
 
-      self.class.relevant_commodity_symbols_for(chokepoint_key).each do |symbol|
+      self.relevant_commodity_symbols_for(chokepoint_key).each do |symbol|
         latest = commodities.find_by(symbol: symbol)
         next unless latest
         signals << {

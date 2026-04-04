@@ -818,4 +818,154 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     assert_includes insight[:title], "JPY"
     assert_equal "JP", insight.dig(:entities, :traffic, :country_code)
   end
+
+  test "supply chain vulnerability highlights import-heavy manufacturing countries" do
+    CountryProfile.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      latest_year: 2024,
+      gdp_nominal_usd: 4_200_000_000_000,
+      imports_goods_services_pct_gdp: 21.6,
+      energy_imports_net_pct_energy_use: 87.4,
+      metadata: {},
+      fetched_at: Time.current
+    )
+    CountrySectorProfile.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      sector_key: "manufacturing",
+      sector_name: "Manufacturing",
+      period_year: 2024,
+      share_pct: 19.3,
+      rank: 1,
+      metadata: {},
+      fetched_at: Time.current
+    )
+    CountryCommodityDependency.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      commodity_key: "oil_crude",
+      commodity_name: "Crude Oil",
+      period_type: "estimate",
+      dependency_score: 0.66,
+      metadata: { "estimated" => true },
+      fetched_at: Time.current
+    )
+
+    insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "supply_chain_vulnerability" }
+
+    assert insight
+    assert_equal "high", insight[:severity]
+    assert_includes insight[:title], "Japan"
+    assert_equal "country:jpn", insight.dig(:entities, :primary_node, :id)
+    assert_equal "Crude Oil", insight.dig(:entities, :dependencies, 0, :commodity_name)
+  end
+
+  test "country chokepoint dependency surfaces exposed import chains" do
+    CountryProfile.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      latest_year: 2024,
+      energy_imports_net_pct_energy_use: 87.4,
+      metadata: {},
+      fetched_at: Time.current
+    )
+    CountryChokepointExposure.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      commodity_key: "oil_crude",
+      commodity_name: "Crude Oil",
+      chokepoint_key: "hormuz",
+      chokepoint_name: "Strait of Hormuz",
+      exposure_score: 0.62,
+      dependency_score: 0.64,
+      supplier_share_pct: 0.0,
+      rationale: "Estimated from macro route priors.",
+      metadata: { "estimated" => true },
+      fetched_at: Time.current
+    )
+    CountryChokepointExposure.create!(
+      country_code: "JP",
+      country_code_alpha3: "JPN",
+      country_name: "Japan",
+      commodity_key: "oil_crude",
+      commodity_name: "Crude Oil",
+      chokepoint_key: "malacca",
+      chokepoint_name: "Strait of Malacca",
+      exposure_score: 0.38,
+      dependency_score: 0.64,
+      supplier_share_pct: 0.0,
+      rationale: "Estimated from macro route priors.",
+      metadata: { "estimated" => true },
+      fetched_at: Time.current
+    )
+
+    mocked_payload = [{
+      id: "hormuz",
+      name: "Strait of Hormuz",
+      lat: 26.56,
+      lng: 56.27,
+      status: "elevated",
+      ships_nearby: { total: 12, tankers: 5, cargo: 4 },
+      flows: { oil: { pct: 21, note: "Largest oil chokepoint globally" } },
+      commodity_signals: [],
+      conflict_pulse: [],
+      checked_at: Time.current.iso8601,
+    }]
+
+    original_analyze = ChokepointMonitorService.method(:analyze)
+    ChokepointMonitorService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "country_chokepoint_dependency" }
+
+      assert insight
+      assert_equal "high", insight[:severity]
+      assert_includes insight[:title], "Japan"
+      assert_equal "country:jpn", insight.dig(:entities, :primary_node, :id)
+      assert_equal "Strait of Hormuz", insight.dig(:entities, :chokepoint, :name)
+    ensure
+      ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
+  end
+
+  test "conflict pulse hotspots accept hashed service payloads" do
+    mocked_payload = {
+      zones: [
+        {
+          lat: 26.6,
+          lng: 56.3,
+          pulse_score: 84,
+          escalation_trend: "surging",
+          count_24h: 7,
+          source_count: 4,
+          story_count: 3,
+          spike_ratio: 2.7,
+          theater: "Middle East / Iran War",
+          top_headlines: ["Shipping pressure builds around Hormuz"],
+          cross_layer_signals: { military_flights: 3, gps_jamming: 18 },
+          detected_at: Time.current.iso8601,
+        },
+      ],
+    }
+
+    original_analyze = ConflictPulseService.method(:analyze)
+    ConflictPulseService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "conflict_pulse" }
+
+      assert insight
+      assert_equal "critical", insight[:severity]
+      assert_includes insight[:description], "3 mil flights"
+      assert_equal "Middle East / Iran War", insight.dig(:entities, :theater, :name)
+    ensure
+      ConflictPulseService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
+  end
 end

@@ -1,9 +1,9 @@
-import { getViewportBounds, restoreCamera, saveCamera } from "../camera"
-import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "../utils"
-import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "../deeplinks"
-import { applyCoreEntityClickMethods } from "./core_entity_clicks"
-import { initializeCoreState, teardownCore, wireCoreChrome } from "./core_state"
-import { applyCoreUiHelpers } from "./core_ui_helpers"
+import { getViewportBounds, restoreCamera, saveCamera } from "globe/camera"
+import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "globe/utils"
+import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "globe/deeplinks"
+import { applyCoreEntityClickMethods } from "globe/controller/core_entity_clicks"
+import { initializeCoreState, teardownCore, wireCoreChrome } from "globe/controller/core_state"
+import { applyCoreUiHelpers } from "globe/controller/core_ui_helpers"
 
 export function applyCoreMethods(GlobeController) {
   applyCoreUiHelpers(GlobeController)
@@ -13,6 +13,7 @@ export function applyCoreMethods(GlobeController) {
     this._destroyed = false
     initializeCoreState(this)
     wireCoreChrome(this)
+    this.initMobileUi?.()
     this._restorePrefs()
     this.loadCesium()
   }
@@ -79,6 +80,8 @@ export function applyCoreMethods(GlobeController) {
       maximumRenderTimeChange: Infinity,
     })
 
+    this._applyInitialMobileSceneMode?.()
+
     // Mobile performance tuning
     if (this._isMobile && this._isMobile()) {
       this.viewer.scene.fxaa = false
@@ -113,6 +116,8 @@ export function applyCoreMethods(GlobeController) {
       // Apply DB-saved preferences (camera, layers, sections, countries)
       this._applyRestoredPrefs()
     }
+
+    this._syncMobileChrome?.()
 
     // Track data freshness per layer
     this._layerFreshness = {}
@@ -173,7 +178,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "fire-", "outage-", "conf-", "insight-", "traf-"]
+          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked, click.position)) return
@@ -418,7 +423,7 @@ export function applyCoreMethods(GlobeController) {
       naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
       cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
       situations: "qlSituations", insights: "qlInsights",
-      traffic: "qlTraffic", cables: "qlCables", powerPlants: "qlPowerPlants",
+      traffic: "qlTraffic", cables: "qlCables", ports: "qlPorts", shippingLanes: "qlShippingLanes", powerPlants: "qlPowerPlants",
       notams: "qlNotams", fireHotspots: "qlFireHotspots", weather: "qlWeather",
       financial: "qlFinancial",
     }
@@ -911,7 +916,7 @@ export function applyCoreMethods(GlobeController) {
         camera: { lat: 30, lng: 0, height: 20000000 },
       },
       infrastructure: {
-        layers: ["cables", "powerPlants", "gpsJamming", "outages", "borders"],
+        layers: ["cables", "ports", "shippingLanes", "powerPlants", "gpsJamming", "outages", "borders"],
         camera: { lat: 35, lng: 30, height: 12000000 },
       },
     }

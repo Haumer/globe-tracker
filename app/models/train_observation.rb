@@ -2,6 +2,7 @@ class TrainObservation < ApplicationRecord
   include BoundsFilterable
 
   belongs_to :train_ingest, optional: true
+  belongs_to :matched_railway, class_name: "Railway", optional: true
 
   validates :external_id, presence: true, uniqueness: true
   validates :fetched_at, presence: true

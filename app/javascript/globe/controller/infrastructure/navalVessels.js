@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 
 const NAVAL_SHIP_TYPES = new Set([35, 55])
 const NAVAL_NAME_PATTERNS = /\b(USS|HMS|HMAS|INS|KRI|HMCS|HMNZS|FGS|FS|ITS|ESPS|TCG|ROKS|JS|BRP)\b/i

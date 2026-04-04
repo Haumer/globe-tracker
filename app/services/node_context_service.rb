@@ -217,6 +217,24 @@ class NodeContextService
         parts << format_change(entity.metadata["change_pct"]) if entity.metadata["change_pct"].present?
         parts << entity.metadata["region"] if entity.metadata["region"].present?
         parts.join(" · ").presence
+      when "country"
+        parts = []
+        parts << format_usd_short(entity.metadata["gdp_nominal_usd"], prefix: "GDP ") if entity.metadata["gdp_nominal_usd"].present?
+        parts << "#{entity.metadata["imports_goods_services_pct_gdp"].to_f.round(1)}% imports/GDP" if entity.metadata["imports_goods_services_pct_gdp"].present?
+        parts << "#{entity.metadata["energy_imports_net_pct_energy_use"].to_f.round(1)}% net energy imports" if entity.metadata["energy_imports_net_pct_energy_use"].present?
+        parts << entity.metadata["latest_year"] if entity.metadata["latest_year"].present?
+        parts.join(" · ").presence
+      when "sector"
+        parts = []
+        parts << entity.metadata["country_name"] if entity.metadata["country_name"].present?
+        parts << "#{entity.metadata["share_pct"].to_f.round(1)}% GDP share" if entity.metadata["share_pct"].present?
+        parts << "rank #{entity.metadata["rank"]}" if entity.metadata["rank"].present?
+        parts.join(" · ").presence
+      when "input"
+        parts = []
+        parts << entity.metadata["input_kind"] if entity.metadata["input_kind"].present?
+        parts << entity.metadata["input_key"] if entity.metadata["input_key"].present?
+        parts.join(" · ").presence
       when "airport"
         parts = []
         parts << entity.metadata["airport_type"] if entity.metadata["airport_type"].present?
@@ -405,6 +423,60 @@ class NodeContextService
           label: evidence.reason.presence || "Operational NOTAM",
           meta: [evidence.country, evidence.effective_start&.iso8601].compact.join(" · "),
         }
+      when CountryProfile
+        {
+          type: "country_profile",
+          id: evidence.id,
+          label: evidence.country_name,
+          meta: [
+            format_usd_short(evidence.gdp_nominal_usd, prefix: "GDP "),
+            (evidence.latest_year if evidence.latest_year.present?),
+          ].compact.join(" · "),
+        }
+      when CountrySectorProfile
+        {
+          type: "country_sector_profile",
+          id: evidence.id,
+          label: "#{evidence.country_name} #{evidence.sector_name}",
+          meta: [
+            "#{evidence.share_pct.to_f.round(1)}% GDP share",
+            ("rank #{evidence.rank}" if evidence.rank.present?),
+          ].compact.join(" · "),
+        }
+      when SectorInputProfile
+        {
+          type: "sector_input_profile",
+          id: evidence.id,
+          label: evidence.input_name.presence || evidence.input_key.to_s.humanize,
+          meta: [
+            ("estimated" if evidence.metadata["estimated"]),
+            evidence.input_kind,
+            ("coeff #{evidence.coefficient.to_f.round(3)}" if evidence.coefficient.present?),
+            evidence.scope_key,
+          ].compact.join(" · "),
+        }
+      when CountryCommodityDependency
+        {
+          type: "country_commodity_dependency",
+          id: evidence.id,
+          label: "#{evidence.country_name} #{evidence.commodity_name.to_s.downcase} imports",
+          meta: [
+            ("estimated" if evidence.metadata["estimated"]),
+            ("#{evidence.import_share_gdp_pct.to_f.round(2)}% GDP" if evidence.import_share_gdp_pct.present?),
+            ("#{evidence.top_partner_country_name} #{evidence.top_partner_share_pct.to_f.round(1)}%" if evidence.top_partner_country_name.present? && evidence.top_partner_share_pct.present?),
+          ].compact.join(" · "),
+        }
+      when CountryChokepointExposure
+        {
+          type: "country_chokepoint_exposure",
+          id: evidence.id,
+          label: "#{evidence.country_name} #{evidence.chokepoint_name} exposure",
+          meta: [
+            ("estimated" if evidence.metadata["estimated"]),
+            evidence.commodity_name,
+            ("score #{evidence.exposure_score.to_f.round(2)}" if evidence.exposure_score.present?),
+          ].compact.join(" · "),
+        }
       else
         {
           type: evidence.class.name.underscore,
@@ -428,6 +500,23 @@ class NodeContextService
     def format_price(price, unit)
       rendered = price.to_f.abs >= 100 ? price.to_f.round(1).to_s : price.to_f.round(2).to_s
       unit.present? ? "#{rendered} #{unit}" : rendered
+    end
+
+    def format_usd_short(value, prefix: "")
+      return if value.blank?
+
+      amount = value.to_f
+      suffix = if amount >= 1_000_000_000_000
+        "#{(amount / 1_000_000_000_000).round(2)}T"
+      elsif amount >= 1_000_000_000
+        "#{(amount / 1_000_000_000).round(1)}B"
+      elsif amount >= 1_000_000
+        "#{(amount / 1_000_000).round(1)}M"
+      else
+        amount.round.to_s
+      end
+
+      "#{prefix}$#{suffix}"
     end
   end
 end

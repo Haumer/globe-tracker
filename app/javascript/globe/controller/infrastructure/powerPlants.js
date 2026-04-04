@@ -1,4 +1,4 @@
-import { getDataSource, createPowerPlantIcon, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, createPowerPlantIcon, LABEL_DEFAULTS } from "globe/utils"
 
 export function applyPowerPlantsMethods(GlobeController) {
   GlobeController.prototype.getPowerPlantsDataSource = function() { return getDataSource(this.viewer, this._ds, "power-plants") }

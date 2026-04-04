@@ -1,5 +1,4 @@
-import { applyDeepLink } from "../deeplinks"
-import { LAYER_REGISTRY, LAYER_REGISTRY_BY_KEY } from "./ui_registry"
+import { encodeState, applyDeepLink } from "globe/deeplinks"
 
 export function applyWorkspaceMethods(GlobeController) {
 
@@ -135,7 +134,27 @@ export function applyWorkspaceMethods(GlobeController) {
       camera_heading: this.viewer.camera.heading,
       camera_pitch: this.viewer.camera.pitch,
       layers: {
-        ...layerPrefs,
+        flights: this.flightsVisible,
+        trails: this.trailsVisible,
+        ships: this.shipsVisible,
+        borders: this.bordersVisible,
+        cities: this.citiesVisible,
+        airports: this.airportsVisible,
+        earthquakes: this.earthquakesVisible,
+        naturalEvents: this.naturalEventsVisible,
+        cameras: this.camerasVisible,
+        insights: this.insightsVisible,
+        situations: this.situationsVisible,
+        gpsJamming: this.gpsJammingVisible,
+        news: this.newsVisible,
+        cables: this.cablesVisible,
+        ports: this.portsVisible,
+        shippingLanes: this.shippingLanesVisible,
+        outages: this.outagesVisible,
+        powerPlants: this.powerPlantsVisible,
+        conflicts: this.conflictsVisible,
+        traffic: this.trafficVisible,
+        notams: this.notamsVisible,
         strikeArcs: this._strikeArcsVisible,
         hexTheater: this._hexTheaterVisible,
         fireClusters: this.fireClustersVisible,
@@ -201,8 +220,28 @@ export function applyWorkspaceMethods(GlobeController) {
 
   // Turn off all visible layers so we start clean when loading a workspace
   GlobeController.prototype._clearAllLayers = function() {
-    for (const layer of LAYER_REGISTRY) {
-      if (!this[layer.visibleProp]) continue
+    const layerToggles = [
+      ["flightsVisible", "flightsToggle", "toggleFlights"],
+      ["shipsVisible", "shipsToggle", "toggleShips"],
+      ["bordersVisible", "bordersToggle", "toggleBorders"],
+      ["citiesVisible", "citiesToggle", "toggleCities"],
+      ["airportsVisible", "airportsToggle", "toggleAirports"],
+      ["earthquakesVisible", "earthquakesToggle", "toggleEarthquakes"],
+      ["naturalEventsVisible", "naturalEventsToggle", "toggleNaturalEvents"],
+      ["camerasVisible", "camerasToggle", "toggleCameras"],
+      ["insightsVisible", "insightsToggle", "toggleInsights"],
+      ["situationsVisible", "situationsToggle", "toggleSituations"],
+      ["gpsJammingVisible", "gpsJammingToggle", "toggleGpsJamming"],
+      ["newsVisible", "newsToggle", "toggleNews"],
+      ["cablesVisible", "cablesToggle", "toggleCables"],
+      ["portsVisible", "portsToggle", "togglePorts"],
+      ["shippingLanesVisible", "shippingLanesToggle", "toggleShippingLanes"],
+      ["outagesVisible", "outagesToggle", "toggleOutages"],
+      ["powerPlantsVisible", "powerPlantsToggle", "togglePowerPlants"],
+      ["conflictsVisible", "conflictsToggle", "toggleConflicts"],
+      ["trafficVisible", "trafficToggle", "toggleTraffic"],
+      ["notamsVisible", "notamsToggle", "toggleNotams"],
+    ]
 
       const hasTarget = "has" + layer.toggleTarget.charAt(0).toUpperCase() + layer.toggleTarget.slice(1) + "Target"
       if (this[hasTarget]) {

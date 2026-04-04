@@ -61,17 +61,7 @@
     </script>
   </head>
 
-  <body class="<%= [
-    ('globe-page' if controller_name == 'pages' && action_name == 'home'),
-    ('sources-page' if controller_name == 'pages' && action_name == 'sources'),
-    ('about-page' if controller_name == 'pages' && action_name == 'about'),
-    ('landing-page' if controller_name == 'pages' && action_name == 'landing'),
-    ('object-view-page' if controller_name == 'objects'),
-    ('case-view-page' if controller_name == 'investigation_cases'),
-    ('auth-page' if devise_controller?),
-    ("auth-page--#{controller_name.dasherize}" if devise_controller?),
-    ("auth-page--#{action_name.dasherize}" if devise_controller?),
-  ].compact.join(' ') %>">
+  <body class="<%= 'globe-page' if controller_name == 'pages' && action_name == 'home' %><%= 'sources-page' if controller_name == 'pages' && action_name == 'sources' %><%= 'about-page' if controller_name == 'pages' && action_name == 'about' %><%= 'landing-page' if controller_name == 'pages' && action_name == 'landing' %><%= ' object-view-page' if controller_name == 'objects' %><%= ' case-view-page' if controller_name == 'investigation_cases' %><%= ' area-view-page' if controller_name == 'area_workspaces' %><%= ' devise-page' if controller_path.start_with?('devise/') %>">
     <%= render "shared/navbar" %>
     <%= render "shared/flashes" %>
     <%= yield %>

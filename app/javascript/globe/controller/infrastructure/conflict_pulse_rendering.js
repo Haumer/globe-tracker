@@ -1,4 +1,4 @@
-import { getDataSource } from "../../utils"
+import { getDataSource } from "globe/utils"
 
 export function applyConflictPulseRenderingMethods(GlobeController) {
   GlobeController.prototype._conflictPulseEntityKey = function(value, fallback = "unknown") {

@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor } from "../utils"
+import { getDataSource, cachedColor } from "globe/utils"
 
 const FIRE_CLUSTER_HEIGHT_TIERS = [
   { minHeight: 16_000_000, cellSize: 7.0 },

@@ -1,9 +1,9 @@
-import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "../utils"
+import { getDataSource, createAirportIcon, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 import {
   renderAirportDetailHtml,
   renderEarthquakeDetailHtml,
   renderNaturalEventDetailHtml,
-} from "./situational_presenters"
+} from "globe/controller/situational_presenters"
 
 export function applySituationalEventMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }
@@ -105,7 +105,11 @@ export function applySituationalEventMethods(GlobeController) {
   GlobeController.prototype.toggleEarthquakes = function() {
     this.earthquakesVisible = this.hasEarthquakesToggleTarget && this.earthquakesToggleTarget.checked
     if (this.earthquakesVisible) {
-      this.fetchEarthquakes()
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchEarthquakes()
+      }
     } else {
       this._clearEarthquakeEntities()
       this._earthquakeData = []
@@ -118,7 +122,11 @@ export function applySituationalEventMethods(GlobeController) {
   GlobeController.prototype.toggleNaturalEvents = function() {
     this.naturalEventsVisible = this.hasNaturalEventsToggleTarget && this.naturalEventsToggleTarget.checked
     if (this.naturalEventsVisible) {
-      this.fetchNaturalEvents()
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchNaturalEvents()
+      }
     } else {
       this._clearNaturalEventEntities()
       this._naturalEventData = []
@@ -130,6 +138,7 @@ export function applySituationalEventMethods(GlobeController) {
 
   GlobeController.prototype._startEventsRefresh = function() {
     if (this._eventsInterval) clearInterval(this._eventsInterval)
+    if (this._timelineActive) return
     if (this.earthquakesVisible || this.naturalEventsVisible) {
       this._eventsInterval = setInterval(() => {
         if (this.earthquakesVisible) this.fetchEarthquakes()
@@ -160,6 +169,7 @@ export function applySituationalEventMethods(GlobeController) {
     const Cesium = window.Cesium
     this._clearEarthquakeEntities()
     const dataSource = this.getEventsDataSource()
+    dataSource.show = true
 
     dataSource.entities.suspendEvents()
     this._earthquakeData.forEach(eq => {
@@ -485,6 +495,7 @@ export function applySituationalEventMethods(GlobeController) {
     const Cesium = window.Cesium
     this._clearNaturalEventEntities()
     const dataSource = this.getEventsDataSource()
+    dataSource.show = true
 
     dataSource.entities.suspendEvents()
     this._naturalEventData.forEach(ev => {

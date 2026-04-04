@@ -406,7 +406,7 @@ class NewsNormalizationRecorder
     end
 
     def publisher_name_for(record, ingest, publisher_domain)
-      raw_payload = ingest&.raw_payload || {}
+      raw_payload = ingest_payload(ingest)
 
       candidates = [
         raw_payload.dig("source", "name"),
@@ -599,7 +599,7 @@ class NewsNormalizationRecorder
       )
       return direct_match if direct_match
 
-      raw_payload = ingest&.raw_payload || {}
+      raw_payload = ingest_payload(ingest)
       values = [
         title,
         ingest&.raw_title,
@@ -665,11 +665,12 @@ class NewsNormalizationRecorder
     end
 
     def publisher_domain_for(record_url, ingest)
+      raw_payload = ingest_payload(ingest)
       candidates = [
         domain_from_url(record_url),
         domain_from_url(ingest&.raw_url),
-        scrub_string(ingest&.raw_payload&.dig("source", "domain"), 255),
-        scrub_string(ingest&.raw_payload&.dig("domain"), 255),
+        scrub_string(raw_payload.dig("source", "domain"), 255),
+        scrub_string(raw_payload["domain"], 255),
       ]
 
       candidates.find(&:present?)
@@ -706,7 +707,7 @@ class NewsNormalizationRecorder
     end
 
     def publisher_country_for(ingest)
-      raw_payload = ingest&.raw_payload || {}
+      raw_payload = ingest_payload(ingest)
       value = raw_payload["source_country"] || raw_payload["locale"] || raw_payload["country"] || raw_payload.dig("source", "country")
       value = value.first if value.is_a?(Array)
 
@@ -714,8 +715,13 @@ class NewsNormalizationRecorder
     end
 
     def language_for(ingest)
-      raw_payload = ingest&.raw_payload || {}
+      raw_payload = ingest_payload(ingest)
       scrub_string(raw_payload["language"] || raw_payload["lang"], 20)
+    end
+
+    def ingest_payload(ingest)
+      payload = ingest&.raw_payload
+      payload.is_a?(Hash) ? payload : {}
     end
 
     def canonicalize_url(url)

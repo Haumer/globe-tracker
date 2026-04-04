@@ -55,7 +55,7 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
 
     travel_to Time.zone.parse("2026-03-25 10:00:10 UTC") do
       result = GlobalPollerService.tick!
-      assert_includes result[:job_names], "RefreshLiveTrainsJob"
+      refute_includes result[:job_names], "RefreshLiveTrainsJob"
       refute_includes result[:job_names], "PollAdsbMilitaryJob"
     end
   end

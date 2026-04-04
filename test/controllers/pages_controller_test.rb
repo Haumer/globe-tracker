@@ -7,6 +7,9 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_match(/selected context/i, response.body)
     assert_includes response.body, "data-rp-pane=\"context\""
+    assert_includes response.body, "id=\"mobile-hud\""
+    assert_includes response.body, "data-mobile-scene=\"2d\""
+    assert_includes response.body, "id=\"mobile-sheet-scrim\""
   end
 
   test "home page includes social metadata and favicon links" do

@@ -3,6 +3,16 @@ require "test_helper"
 class TrainRefreshServiceTest < ActiveSupport::TestCase
   test "refresh persists ingests and observations from snapshots" do
     fetched_at = Time.current
+    railway = Railway.create!(
+      category: 1,
+      electrified: 1,
+      continent: "Europe",
+      min_lat: 48.21,
+      max_lat: 48.21,
+      min_lng: 16.30,
+      max_lng: 16.45,
+      coordinates: [[16.30, 48.21], [16.45, 48.21]]
+    )
 
     snapshots = [
       {
@@ -44,6 +54,9 @@ class TrainRefreshServiceTest < ActiveSupport::TestCase
     assert_equal "ÖBB", observation.operator_name
     assert_equal "ICE", observation.category
     assert_equal 42, observation.progress
+    assert_equal railway.id, observation.matched_railway_id
+    assert_equal "high", observation.snap_confidence
+    assert_in_delta 48.21, observation.snapped_latitude, 0.00001
   end
 
   test "refresh deletes missing observations for a successful operator snapshot" do
@@ -128,6 +141,44 @@ class TrainRefreshServiceTest < ActiveSupport::TestCase
         assert_equal 1, TrainRefreshService.refresh_if_stale(force: true)
       end
     end
+  end
+
+  test "stale? matches the 30 second live cadence" do
+    TrainObservation.create!(
+      external_id: "fresh-train",
+      source: "hafas",
+      operator_key: "oebb",
+      operator_name: "ÖBB",
+      name: "RJX 101",
+      category: "RJX",
+      category_long: "Railjet Express",
+      latitude: 48.21,
+      longitude: 16.37,
+      raw_payload: {},
+      fetched_at: 29.seconds.ago,
+      expires_at: 90.seconds.from_now,
+    )
+
+    assert_not TrainRefreshService.stale?
+
+    TrainObservation.delete_all
+
+    TrainObservation.create!(
+      external_id: "stale-train",
+      source: "hafas",
+      operator_key: "oebb",
+      operator_name: "ÖBB",
+      name: "RJX 102",
+      category: "RJX",
+      category_long: "Railjet Express",
+      latitude: 48.21,
+      longitude: 16.37,
+      raw_payload: {},
+      fetched_at: 31.seconds.ago,
+      expires_at: 90.seconds.from_now,
+    )
+
+    assert TrainRefreshService.stale?
   end
 
   private

@@ -1,16 +1,14 @@
-const PRIMARY_LAYER_SET = new Set(["situations", "insights", "news"])
-
-const BASE_LAYER_REGISTRY = [
+export const LAYER_REGISTRY = [
   { key: "flights", toggleTarget: "flightsToggle", method: "toggleFlights", visibleProp: "flightsVisible", qlTarget: "qlFlights", section: "tracking", pill: { label: "FLT", color: "#4fc3f7" } },
   { key: "ships", toggleTarget: "shipsToggle", method: "toggleShips", visibleProp: "shipsVisible", qlTarget: "qlShips", section: "tracking", pill: { label: "AIS", color: "#26c6da" } },
-  { key: "trains", toggleTarget: "trainsToggle", method: "toggleTrains", visibleProp: "trainsVisible", qlTarget: "qlTrains", section: "tracking", pill: { label: "TRAIN", color: "#e53935" } },
+  { key: "trains", toggleTarget: "trainsToggle", method: "toggleTrains", visibleProp: "trainsVisible", qlTarget: "qlTrains", section: "tracking", pill: { label: "TRAIN", color: "#e53935" }, disabled: true },
   { key: "notams", toggleTarget: "notamsToggle", method: "toggleNotams", visibleProp: "notamsVisible", qlTarget: "qlNotams", section: "tracking", pill: { label: "NOTAM", color: "#ffab40" } },
   { key: "earthquakes", toggleTarget: "earthquakesToggle", method: "toggleEarthquakes", visibleProp: "earthquakesVisible", qlTarget: "qlEarthquakes", section: "events", pill: { label: "EQ", color: "#ff5252" } },
-  { key: "naturalEvents", toggleTarget: "naturalEventsToggle", method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents", section: "events", pill: { label: "EVT", color: "#ff9800" } },
+  { key: "events", toggleTarget: "naturalEventsToggle", method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents", section: "events", pill: { label: "EVT", color: "#ff9800" } },
   { key: "fireHotspots", toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible", qlTarget: "qlFireHotspots", section: "events", pill: { label: "FIRE", color: "#ff6d00" } },
   { key: "weather", toggleTarget: "weatherToggle", method: "toggleWeather", visibleProp: "weatherVisible", qlTarget: "qlWeather", section: "events", pill: { label: "WX", color: "#64b5f6" } },
   { key: "conflicts", toggleTarget: "conflictsToggle", method: "toggleConflicts", visibleProp: "conflictsVisible", qlTarget: "qlConflicts", section: "events", pill: { label: "WAR", color: "#ef5350" } },
-  { key: "situations", toggleTarget: "situationsToggle", method: "toggleSituations", visibleProp: "situationsVisible", qlTarget: "qlSituations", section: "events", pill: { label: "SIT", color: "#ff7043" } },
+  { key: "situations", toggleTarget: "situationsToggle", method: "toggleSituations", visibleProp: "situationsVisible", qlTarget: "qlSituations", section: "events", pill: { label: "THE", color: "#ff7043" } },
   { key: "news", toggleTarget: "newsToggle", method: "toggleNews", visibleProp: "newsVisible", qlTarget: "qlNews", section: "events", pill: { label: "NEWS", color: "#7c4dff" } },
   { key: "insights", toggleTarget: "insightsToggle", method: "toggleInsights", visibleProp: "insightsVisible", qlTarget: "qlInsights", section: "events", pill: { label: "INS", color: "#26c6da" } },
   { key: "militaryFlights", toggleTarget: "militaryToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "_milFlightsActive", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },
@@ -19,8 +17,10 @@ const BASE_LAYER_REGISTRY = [
   { key: "navalVessels", toggleTarget: "navalVesselsToggle", method: "toggleNavalVessels", visibleProp: "navalVesselsVisible", qlTarget: "qlNavalVessels", section: "military", pill: { label: "NAVY", color: "#42a5f5" } },
   { key: "strikes", toggleTarget: "strikesToggle", method: "toggleStrikes", visibleProp: "strikesVisible", qlTarget: "qlStrikes", section: "military", pill: { label: "STRK", color: "#e040fb" } },
   { key: "cables", toggleTarget: "cablesToggle", method: "toggleCables", visibleProp: "cablesVisible", qlTarget: "qlCables", section: "infrastructure", pill: { label: "CBL", color: "#00bcd4" } },
+  { key: "ports", toggleTarget: "portsToggle", method: "togglePorts", visibleProp: "portsVisible", qlTarget: "qlPorts", section: "infrastructure", pill: { label: "PORT", color: "#8bc34a" } },
+  { key: "shippingLanes", toggleTarget: "shippingLanesToggle", method: "toggleShippingLanes", visibleProp: "shippingLanesVisible", qlTarget: "qlShippingLanes", section: "infrastructure", pill: { label: "LANE", color: "#ff8a00" }, disabled: true },
   { key: "pipelines", toggleTarget: "pipelinesToggle", method: "togglePipelines", visibleProp: "pipelinesVisible", qlTarget: "qlPipelines", section: "infrastructure", pill: { label: "PIPE", color: "#ff6d00" } },
-  { key: "railways", toggleTarget: "railwaysToggle", method: "toggleRailways", visibleProp: "railwaysVisible", qlTarget: "qlRailways", section: "infrastructure", pill: { label: "RAIL", color: "#90a4ae" } },
+  { key: "railways", toggleTarget: "railwaysToggle", method: "toggleRailways", visibleProp: "railwaysVisible", qlTarget: "qlRailways", section: "infrastructure", pill: { label: "RAIL", color: "#90a4ae" }, disabled: true },
   { key: "powerPlants", toggleTarget: "powerPlantsToggle", method: "togglePowerPlants", visibleProp: "powerPlantsVisible", qlTarget: "qlPowerPlants", section: "infrastructure", pill: { label: "PWR", color: "#ffc107" } },
   { key: "cameras", toggleTarget: "camerasToggle", method: "toggleCameras", visibleProp: "camerasVisible", qlTarget: "qlCameras", section: "infrastructure", pill: { label: "CAM", color: "#29b6f6" } },
   { key: "financial", toggleTarget: "financialToggle", method: "toggleFinancial", visibleProp: "financialVisible", qlTarget: "qlFinancial", section: "infrastructure", pill: { label: "MKT", color: "#66bb6a" } },
@@ -34,20 +34,14 @@ const BASE_LAYER_REGISTRY = [
   { key: "terrain", toggleTarget: "terrainToggle", method: "toggleTerrain", visibleProp: "terrainEnabled", qlTarget: "qlTerrain", section: "map", pill: null },
 ]
 
-export const PRIMARY_LAYER_KEYS = [...PRIMARY_LAYER_SET]
-export const ADVANCED_LAYER_KEYS = BASE_LAYER_REGISTRY.map(layer => layer.key).filter(key => !PRIMARY_LAYER_SET.has(key))
-export const ADVANCED_LIBRARY_KEYS = [...ADVANCED_LAYER_KEYS, "satellites"]
-
-export const LAYER_REGISTRY = BASE_LAYER_REGISTRY.map(layer => ({
-  ...layer,
-  surfacedByDefault: PRIMARY_LAYER_SET.has(layer.key),
-  advanced: !PRIMARY_LAYER_SET.has(layer.key),
-}))
-
-export const LAYER_REGISTRY_BY_KEY = Object.fromEntries(
-  LAYER_REGISTRY.map(layer => [layer.key, layer])
-)
-
 export const QUICK_TOGGLE_MAP = Object.fromEntries(
   LAYER_REGISTRY.map(layer => [layer.key, { target: layer.toggleTarget, method: layer.method }])
 )
+
+export function layerRegistryEntry(layerKey) {
+  return LAYER_REGISTRY.find(layer => layer.key === layerKey) || null
+}
+
+export function isLayerTemporarilyDisabled(layerKey) {
+  return Boolean(layerRegistryEntry(layerKey)?.disabled)
+}

@@ -6,14 +6,10 @@ export function applyUiPanelMethods(GlobeController) {
   GlobeController.prototype.toggleSidebar = function() {
     if (this._isMobile()) {
       const sidebar = this.sidebarTarget
-      if (sidebar.classList.contains("mobile-expanded")) {
-        sidebar.classList.remove("mobile-expanded", "mobile-peek")
-      } else if (sidebar.classList.contains("mobile-peek")) {
-        sidebar.classList.remove("mobile-peek")
-        sidebar.classList.add("mobile-expanded")
-      } else {
-        sidebar.classList.add("mobile-peek")
-      }
+      const expanded = sidebar.classList.contains("mobile-expanded")
+      sidebar.classList.toggle("mobile-expanded", !expanded)
+      sidebar.classList.toggle("mobile-peek", expanded)
+      this._syncMobileChrome?.()
     } else {
       this.sidebarTarget.classList.toggle("collapsed")
     }

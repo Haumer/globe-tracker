@@ -2,6 +2,7 @@ require "test_helper"
 
 class Api::RailwaysControllerTest < ActionDispatch::IntegrationTest
   setup do
+    @original_disabled_layers = LayerAvailability.disabled_layers
     @railway = Railway.create!(
       category: 0,
       electrified: 1,
@@ -14,7 +15,21 @@ class Api::RailwaysControllerTest < ActionDispatch::IntegrationTest
     )
   end
 
-  test "GET /api/railways returns railway segments" do
+  teardown do
+    LayerAvailability.disabled_layers = @original_disabled_layers
+  end
+
+  test "GET /api/railways returns empty while the layer is disabled" do
+    get "/api/railways"
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    assert_equal [], data
+  end
+
+  test "GET /api/railways returns railway segments when enabled" do
+    LayerAvailability.disabled_layers = []
+
     get "/api/railways"
     assert_response :success
 
@@ -23,7 +38,9 @@ class Api::RailwaysControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, data.size
   end
 
-  test "GET /api/railways with bbox filters by bounding box" do
+  test "GET /api/railways with bbox filters by bounding box when enabled" do
+    LayerAvailability.disabled_layers = []
+
     get "/api/railways", params: { bbox: "47.0,15.0,48.0,17.0" }
     assert_response :success
 
@@ -31,7 +48,9 @@ class Api::RailwaysControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, data.size
   end
 
-  test "GET /api/railways with non-overlapping bbox returns empty" do
+  test "GET /api/railways with non-overlapping bbox returns empty when enabled" do
+    LayerAvailability.disabled_layers = []
+
     get "/api/railways", params: { bbox: "0.0,0.0,1.0,1.0" }
     assert_response :success
 

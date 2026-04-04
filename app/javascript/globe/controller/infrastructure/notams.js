@@ -1,4 +1,4 @@
-import { getDataSource, haversineDistance } from "../../utils"
+import { getDataSource, haversineDistance } from "globe/utils"
 
 export function applyNotamsMethods(GlobeController) {
   GlobeController.prototype.getNotamsDataSource = function() { return getDataSource(this.viewer, this._ds, "notams") }

@@ -6,20 +6,24 @@ import { LAYER_REGISTRY_BY_KEY } from "./controller/ui_registry"
 // Format: #lat,lng,height,heading,pitch|layer1,layer2,...|sat:cat1,cat2|mil:0|countries:US,DE
 // All sections after camera are optional.
 
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+
 const LAYER_KEYS = [
   "flights", "trails", "ships", "borders", "cities", "airports",
   "earthquakes", "naturalEvents", "cameras", "gpsJamming", "news",
-  "cables", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
+  "cables", "ports", "shippingLanes", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
   "fireHotspots", "weather", "financial", "insights", "situations",
+  "pipelines", "railways", "trains", "chokepoints", "militaryBases", "airbases",
 ]
 
 // Short aliases to keep URLs compact
 const LAYER_SHORT = {
   flights: "fl", trails: "tr", ships: "sh", borders: "bd", cities: "ct",
   airports: "ap", earthquakes: "eq", naturalEvents: "ev", cameras: "cm",
-  gpsJamming: "gj", news: "nw", cables: "cb", outages: "ou",
+  gpsJamming: "gj", news: "nw", cables: "cb", ports: "po", shippingLanes: "sl", outages: "ou",
   powerPlants: "pp", conflicts: "cf", traffic: "tf", notams: "nt", terrain: "tn",
   fireHotspots: "fh", weather: "wx", financial: "fn", insights: "in", situations: "si",
+  pipelines: "pl", railways: "rl", trains: "tns", chokepoints: "cp", militaryBases: "mb", airbases: "ab",
 }
 
 const SHORT_TO_LAYER = Object.fromEntries(
@@ -78,14 +82,13 @@ export function encodeState(controller) {
     parts.push("f:" + mil)
   }
 
-  // Selected countries
-  if (controller.selectedCountries?.size > 0) {
-    parts.push("co:" + [...controller.selectedCountries].join("|"))
-  }
-
-  // Active region
   if (controller._activeRegion) {
     parts.push("r:" + controller._activeRegion.key)
+  } else if (controller._activeCircle?.center && controller._activeCircle?.radius) {
+    const center = controller._activeCircle.center
+    parts.push(`ci:${center.lat.toFixed(4)},${center.lng.toFixed(4)},${Math.round(controller._activeCircle.radius)}`)
+  } else if (controller.selectedCountries?.size > 0) {
+    parts.push("co:" + [...controller.selectedCountries].join("|"))
   }
 
   return "#" + parts.join(";")
@@ -135,6 +138,15 @@ export function decodeHash(hash) {
       result.showMilitary = val.includes("m")
     } else if (key === "co") {
       result.countries = val.split("|")
+    } else if (key === "ci") {
+      const circle = val.split(",")
+      if (circle.length === 3) {
+        result.circle = {
+          lat: parseFloat(circle[0]),
+          lng: parseFloat(circle[1]),
+          radius: parseFloat(circle[2]),
+        }
+      }
     } else if (key === "r") {
       result.region = val
     }
@@ -185,9 +197,36 @@ export function applyDeepLink(controller, state) {
 
   // Apply layers — toggle on only the ones specified
   if (state.layers) {
+    const toggleMap = {
+      flights: "toggleFlights", trails: "toggleTrails", ships: "toggleShips",
+      borders: "toggleBorders", cities: "toggleCities", airports: "toggleAirports",
+      earthquakes: "toggleEarthquakes", naturalEvents: "toggleNaturalEvents",
+      cameras: "toggleCameras", gpsJamming: "toggleGpsJamming", news: "toggleNews",
+      cables: "toggleCables", ports: "togglePorts", shippingLanes: "toggleShippingLanes", outages: "toggleOutages", powerPlants: "togglePowerPlants",
+      conflicts: "toggleConflicts", traffic: "toggleTraffic", notams: "toggleNotams",
+      terrain: "toggleTerrain", fireHotspots: "toggleFireHotspots", weather: "toggleWeather",
+      financial: "toggleFinancial", insights: "toggleInsights", situations: "toggleSituations",
+      pipelines: "togglePipelines", railways: "toggleRailways", trains: "toggleTrains",
+      chokepoints: "toggleChokepoints", militaryBases: "toggleMilitaryBases", airbases: "toggleAirbases",
+    }
+    const targetMap = {
+      flights: "flightsToggle", trails: "trailsToggle", ships: "shipsToggle",
+      borders: "bordersToggle", cities: "citiesToggle", airports: "airportsToggle",
+      earthquakes: "earthquakesToggle", naturalEvents: "naturalEventsToggle",
+      cameras: "camerasToggle", gpsJamming: "gpsJammingToggle", news: "newsToggle",
+      cables: "cablesToggle", ports: "portsToggle", shippingLanes: "shippingLanesToggle", outages: "outagesToggle", powerPlants: "powerPlantsToggle",
+      conflicts: "conflictsToggle", traffic: "trafficToggle", notams: "notamsToggle",
+      fireHotspots: "fireHotspotsToggle", weather: "weatherToggle", financial: "financialToggle",
+      terrain: "terrainToggle", insights: "insightsToggle", situations: "situationsToggle",
+      pipelines: "pipelinesToggle", railways: "railwaysToggle", trains: "trainsToggle",
+      chokepoints: "chokepointsToggle", militaryBases: "militaryBasesToggle", airbases: "airbasesToggle",
+    }
+
     for (const layer of state.layers) {
-      const config = LAYER_REGISTRY_BY_KEY[layer]
-      if (!config || !controller[config.method]) continue
+      if (isLayerTemporarilyDisabled(layer)) continue
+      const method = toggleMap[layer]
+      const target = targetMap[layer]
+      if (!method || !controller[method]) continue
 
       if (controller[config.visibleProp]) continue
 
@@ -196,7 +235,7 @@ export function applyDeepLink(controller, state) {
       if (controller[hasTarget]) {
         controller[targetName].checked = true
       }
-      invokeDeepLinkStep(`layer:${layer}`, () => controller[config.method]())
+      invokeDeepLinkStep(`layer:${layer}`, () => controller[method]())
     }
   }
 
@@ -231,6 +270,14 @@ export function applyDeepLink(controller, state) {
       if (controller.hasBordersToggleTarget) controller.bordersToggleTarget.checked = true
       invokeDeepLinkStep("layer:borders", () => controller.toggleBorders())
     }
+  }
+
+  if (state.circle && controller.applyCircleFilter) {
+    invokeDeepLinkStep("circle-filter", () => controller.applyCircleFilter(
+      { lat: state.circle.lat, lng: state.circle.lng },
+      state.circle.radius,
+      { showDetail: false, keepCountries: false }
+    ))
   }
 
   // Apply region (overrides camera + layers set above)

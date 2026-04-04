@@ -1,4 +1,4 @@
-import { getDataSource, cachedColor, LABEL_DEFAULTS } from "../../utils"
+import { getDataSource, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 
 function createStrikeIcon(confidence) {
   const size = 28

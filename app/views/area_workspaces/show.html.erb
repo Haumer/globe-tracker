@@ -1,0 +1,353 @@
+<% brief = @summary[:brief] %>
+<% overview = @summary[:overview] %>
+<% signals = @summary[:signals] %>
+<% movement = @summary[:movement] %>
+<% assets = @summary[:assets] %>
+<% infrastructure = @summary[:infrastructure] %>
+<% impacts = @summary[:impacts] %>
+<% snapshots = @summary[:snapshots] %>
+
+<div class="case-shell area-shell">
+  <section class="case-hero case-hero--detail">
+    <div class="case-hero-main">
+      <div class="case-kicker">
+        <span><%= @area_workspace.scope_label %></span>
+        <span class="case-kicker-sep"></span>
+        <span><%= @area_workspace.profile_label %></span>
+      </div>
+      <h1 class="case-title"><%= @area_workspace.name %></h1>
+      <p class="case-summary"><%= @area_workspace.scope_detail %></p>
+
+      <% if @area_workspace.layer_labels.any? %>
+        <div class="area-chip-list">
+          <% @area_workspace.layer_labels.first(8).each do |label| %>
+            <span class="area-chip"><%= label %></span>
+          <% end %>
+        </div>
+      <% end %>
+
+      <div class="case-meta-grid">
+        <div class="case-meta-card">
+          <span class="case-meta-label">Bounds</span>
+          <span class="case-meta-value"><%= @area_workspace.bounds_label %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Signals</span>
+          <span class="case-meta-value"><%= overview.values.sum %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Updated</span>
+          <span class="case-meta-value"><%= @area_workspace.updated_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
+        </div>
+        <div class="case-meta-card">
+          <span class="case-meta-label">Countries</span>
+          <span class="case-meta-value"><%= @area_workspace.country_names.presence&.to_sentence || @area_workspace.region_name || "Area scoped" %></span>
+        </div>
+      </div>
+
+      <div class="case-actions">
+        <%= link_to "All Areas", areas_path, class: "case-action" %>
+        <%= link_to "Open On Globe", area_workspace_globe_href(@area_workspace), class: "case-action case-action--primary" %>
+      </div>
+    </div>
+
+    <aside class="case-hero-side">
+      <div class="case-side-block">
+        <div class="case-side-label">Current Pulse</div>
+        <div class="case-side-stat"><%= overview[:situations] + overview[:insights] + overview[:news] %></div>
+        <div class="case-side-meta">news, insights, and live situations in scope</div>
+      </div>
+      <div class="case-side-block">
+        <div class="case-side-label">Movement</div>
+        <div class="case-side-stat"><%= overview[:flights] + overview[:ships] + overview[:trains] %></div>
+        <div class="case-side-meta">flights, ships, and trains currently inside the area</div>
+      </div>
+    </aside>
+  </section>
+
+  <div class="case-grid area-grid">
+    <section class="case-card area-brief-card">
+      <div class="case-card-head">
+        <h2><%= brief[:title] %></h2>
+        <span class="case-badge case-badge--brief"><%= brief[:status_label] %></span>
+      </div>
+      <p class="area-brief-summary"><%= brief[:summary] %></p>
+      <div class="area-chip-list">
+        <span class="area-chip area-chip--status area-chip--ready">Confidence: <%= brief[:confidence] %></span>
+      </div>
+
+      <div class="area-brief-grid">
+        <div>
+          <div class="area-section-kicker">Evidence</div>
+          <% if brief[:evidence].any? %>
+            <div class="area-list">
+              <% brief[:evidence].each do |item| %>
+                <article class="area-list-item">
+                  <h3>
+                    <% if item[:url].present? %>
+                      <%= link_to item[:title], item[:url], target: "_blank", rel: "noopener", class: "area-list-link" %>
+                    <% else %>
+                      <%= item[:title] %>
+                    <% end %>
+                  </h3>
+                  <p><%= [item[:publisher], item[:published_at]&.strftime("%Y-%m-%d %H:%M UTC")].compact.join(" · ") %></p>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No supporting evidence surfaced for this assessment yet.</div>
+          <% end %>
+        </div>
+
+        <div>
+          <div class="area-section-kicker">Watch Next</div>
+          <div class="area-list">
+            <% brief[:watch_items].each do |item| %>
+              <article class="area-list-item">
+                <p class="area-list-copy"><%= item %></p>
+              </article>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case-card area-impact-card">
+      <div class="case-card-head">
+        <h2>Impact Assessments</h2>
+      </div>
+
+      <% if impacts.any? %>
+        <div class="area-impact-grid">
+          <% impacts.each do |impact| %>
+            <article class="area-list-item area-impact-item area-impact-item--<%= impact[:severity] %>">
+              <div class="case-list-top">
+                <h3><%= impact[:title] %></h3>
+                <span class="case-badge"><%= impact[:severity].to_s.titleize %></span>
+              </div>
+              <p class="area-list-copy"><%= impact[:summary] %></p>
+
+              <% if impact[:linked_domains].any? %>
+                <div class="area-chip-list area-impact-links">
+                  <% impact[:linked_domains].each do |domain| %>
+                    <span class="area-chip"><%= domain %></span>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <div class="area-meta-stack area-impact-metrics">
+                <% impact[:metrics].each do |metric| %>
+                  <div class="area-meta-line"><%= metric[:label] %>: <strong><%= metric[:value] %></strong></div>
+                <% end %>
+              </div>
+
+              <% if impact[:evidence].any? %>
+                <div class="area-section-kicker">Evidence</div>
+                <div class="area-list">
+                  <% impact[:evidence].each do |item| %>
+                    <article class="area-list-item">
+                      <h3>
+                        <% if item[:url].present? %>
+                          <%= link_to item[:title], item[:url], target: "_blank", rel: "noopener", class: "area-list-link" %>
+                        <% else %>
+                          <%= item[:title] %>
+                        <% end %>
+                      </h3>
+                      <p><%= [item[:publisher], item[:published_at]&.strftime("%Y-%m-%d %H:%M UTC")].compact.join(" · ") %></p>
+                    </article>
+                  <% end %>
+                </div>
+              <% end %>
+            </article>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No cross-domain impact assessments have resolved for this area yet.</div>
+      <% end %>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Overview</h2>
+      </div>
+      <div class="area-stat-grid">
+        <% overview.each do |key, count| %>
+          <article class="area-stat-card">
+            <span class="case-meta-label"><%= key.to_s.humanize %></span>
+            <strong><%= count %></strong>
+          </article>
+        <% end %>
+      </div>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Snapshot Health</h2>
+      </div>
+      <div class="area-chip-list">
+        <% snapshots.each do |key, status| %>
+          <span class="area-chip area-chip--status area-chip--<%= status %>"><%= key.to_s.humanize %>: <%= status %></span>
+        <% end %>
+      </div>
+      <div class="area-meta-stack">
+        <div class="area-meta-line">Military flights: <strong><%= movement[:flights_military] %></strong></div>
+        <div class="area-meta-line">Emergency squawks: <strong><%= movement[:flights_emergency] %></strong></div>
+        <div class="area-meta-line">Tracked trains on matched rail: <strong><%= movement[:trains_on_track] %></strong></div>
+      </div>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>What Is Happening</h2>
+      </div>
+
+      <div class="area-card-stack">
+        <div>
+          <div class="area-section-kicker">Top Headlines</div>
+          <% if signals[:headlines].any? %>
+            <div class="area-list">
+              <% signals[:headlines].each do |headline| %>
+                <article class="area-list-item">
+                  <h3>
+                    <% if headline[:url].present? %>
+                      <%= link_to headline[:title], headline[:url], target: "_blank", rel: "noopener", class: "area-list-link" %>
+                    <% else %>
+                      <%= headline[:title] %>
+                    <% end %>
+                  </h3>
+                  <p><%= [headline[:publisher], headline[:category]].compact.join(" · ") %></p>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No recent headlines in this area.</div>
+          <% end %>
+        </div>
+
+        <div>
+          <div class="area-section-kicker">Insights</div>
+          <% if signals[:insights].any? %>
+            <div class="area-list">
+              <% signals[:insights].each do |insight| %>
+                <article class="area-list-item">
+                  <h3><%= insight[:title] %></h3>
+                  <p><%= [insight[:severity].to_s.titleize, insight[:insight_type].to_s.tr("_", " ").presence].compact.join(" · ") %></p>
+                  <% if insight[:description].present? %>
+                    <p class="area-list-copy"><%= insight[:description] %></p>
+                  <% end %>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No cross-layer insights landed inside this area yet.</div>
+          <% end %>
+        </div>
+      </div>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Situations</h2>
+      </div>
+      <% if signals[:situations].any? %>
+        <div class="area-list">
+          <% signals[:situations].each do |situation| %>
+            <article class="area-list-item">
+              <div class="case-list-top">
+                <h3><%= situation[:name] %></h3>
+                <span class="case-badge">Pulse <%= situation[:pulse_score] %></span>
+              </div>
+              <p><%= [situation[:theater], situation[:trend].to_s.titleize].compact.join(" · ") %></p>
+              <div class="case-list-meta">
+                <span><%= pluralize(situation[:story_count], "story") %></span>
+                <span><%= pluralize(situation[:source_count], "source") %></span>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="case-empty case-empty--inline">No active theater bubbles intersect this area right now.</div>
+      <% end %>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Movement</h2>
+      </div>
+      <div class="area-stat-grid">
+        <article class="area-stat-card">
+          <span class="case-meta-label">Flights</span>
+          <strong><%= movement[:flights_total] %></strong>
+        </article>
+        <article class="area-stat-card">
+          <span class="case-meta-label">Ships</span>
+          <strong><%= movement[:ships_total] %></strong>
+        </article>
+        <article class="area-stat-card">
+          <span class="case-meta-label">Trains</span>
+          <strong><%= movement[:trains_total] %></strong>
+        </article>
+        <article class="area-stat-card">
+          <span class="case-meta-label">NOTAMs</span>
+          <strong><%= movement[:notams_total] %></strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Assets</h2>
+      </div>
+      <div class="area-stat-grid">
+        <% assets.each do |key, count| %>
+          <article class="area-stat-card">
+            <span class="case-meta-label"><%= key.to_s.humanize %></span>
+            <strong><%= count %></strong>
+          </article>
+        <% end %>
+      </div>
+    </section>
+
+    <section class="case-card">
+      <div class="case-card-head">
+        <h2>Infrastructure</h2>
+      </div>
+      <div class="area-card-stack">
+        <div>
+          <div class="area-section-kicker">Chokepoints</div>
+          <% if infrastructure[:chokepoints].any? %>
+            <div class="area-list">
+              <% infrastructure[:chokepoints].each do |chokepoint| %>
+                <article class="area-list-item">
+                  <h3><%= chokepoint[:name] %></h3>
+                  <p><%= [chokepoint[:status].to_s.titleize, pluralize(chokepoint[:ships_nearby].to_i, "ship")].join(" · ") %></p>
+                  <% if chokepoint[:description].present? %>
+                    <p class="area-list-copy"><%= chokepoint[:description] %></p>
+                  <% end %>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No monitored chokepoints intersect this area.</div>
+          <% end %>
+        </div>
+
+        <div>
+          <div class="area-section-kicker">Largest Power Plants</div>
+          <% if infrastructure[:power_plants].any? %>
+            <div class="area-list">
+              <% infrastructure[:power_plants].each do |plant| %>
+                <article class="area-list-item">
+                  <h3><%= plant[:name] %></h3>
+                  <p><%= [plant[:fuel], plant[:country], plant[:capacity_mw].present? ? "#{plant[:capacity_mw]} MW" : nil].compact.join(" · ") %></p>
+                </article>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="case-empty case-empty--inline">No power plant inventory currently intersects this area.</div>
+          <% end %>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

@@ -14,6 +14,8 @@ class CrossLayerAnalyzer
       conflict_pulse_hotspots
       chokepoint_disruptions
       chokepoint_market_stress
+      supply_chain_vulnerabilities
+      country_chokepoint_dependencies
       outage_currency_stress
     ].freeze
 

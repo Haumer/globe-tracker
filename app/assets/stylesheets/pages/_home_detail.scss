@@ -293,8 +293,8 @@
   backdrop-filter: var(--gt-blur);
   -webkit-backdrop-filter: var(--gt-blur);
   color: var(--gt-text);
-  padding: 16px 18px 14px;
-  border-radius: 8px;
+  padding: 12px 14px 12px;
+  border-radius: 7px;
   border: 1px solid var(--gt-border);
   min-width: 240px;
   max-width: 300px;
@@ -366,10 +366,10 @@
   }
 
   .detail-callsign {
-    font: 700 15px var(--gt-mono);
+    font: 700 14px var(--gt-mono);
     letter-spacing: 1px;
     color: var(--gt-text-bright);
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
 
   .detail-country {
@@ -377,13 +377,13 @@
     color: var(--gt-text-dim);
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   .detail-route {
     font: 500 12px var(--gt-mono);
     color: var(--gt-text-dim);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     min-height: 16px;
 
     .route-airport {
@@ -407,7 +407,7 @@
   .detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 14px;
+    gap: 6px 12px;
   }
 
   .detail-field {
@@ -424,7 +424,7 @@
   }
 
   .detail-value {
-    font: 500 13px var(--gt-mono);
+    font: 500 12px var(--gt-mono);
     color: var(--gt-text);
     font-variant-numeric: tabular-nums;
   }
@@ -503,14 +503,14 @@
   .detail-track-btn {
     display: block;
     width: 100%;
-    margin-top: 12px;
-    padding: 6px 0;
+    margin-top: 8px;
+    padding: 5px 0;
     border: 1px solid rgba(79, 195, 247, 0.25);
     border-radius: 5px;
     background: var(--gt-accent-dim);
     color: var(--gt-accent);
     font: 600 10px var(--gt-mono);
-    letter-spacing: 0.8px;
+    letter-spacing: 0.6px;
     cursor: pointer;
     transition: all 0.12s;
 
@@ -571,6 +571,19 @@
       max-height: 160px;
     }
   }
+}
+
+.detail-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.detail-action-grid .detail-track-btn {
+  margin-top: 0;
+  padding: 5px 6px;
+  line-height: 1.25;
 }
 
 @keyframes panel-in {

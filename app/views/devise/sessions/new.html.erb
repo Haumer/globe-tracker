@@ -1,57 +1,30 @@
-<div class="auth-shell">
-  <div class="auth-layout">
-    <section class="auth-panel">
-      <p class="auth-eyebrow">Workspace Access</p>
-      <h1 class="auth-title">Sign in to unlock the full GlobeTracker workspace.</h1>
-      <p class="auth-copy">The public view stays intentionally lean. Your account enables saved workspaces, alerts, investigations, and advanced layers without dumping everything into the default sidebar.</p>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Secure Access",
+           title: "Resume your watchfloor",
+           subtitle: "Sign in to return to saved alerts, active watches, and case work without losing globe context.",
+           signal: {
+             label: "Session posture",
+             value: "AUTH",
+             detail: "A signed-in session unlocks case creation, pinned evidence, and analyst-specific alerts."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
-      <div class="auth-metrics">
-        <div class="auth-metric">
-          <span class="auth-metric-value">4</span>
-          <span class="auth-metric-label">Workspace tools</span>
-        </div>
-        <div class="auth-metric">
-          <span class="auth-metric-value">1</span>
-          <span class="auth-metric-label">Restored profile</span>
-        </div>
-        <div class="auth-metric">
-          <span class="auth-metric-value">24/7</span>
-          <span class="auth-metric-label">Live access</span>
-        </div>
-      </div>
+    <div class="auth-form-grid">
+      <%= f.input :email,
+                  required: false,
+                  autofocus: true,
+                  input_html: { autocomplete: "email" } %>
+      <%= f.input :password,
+                  required: false,
+                  input_html: { autocomplete: "current-password" } %>
+      <%= f.input :remember_me, as: :boolean if devise_mapping.rememberable? %>
+    </div>
 
-      <ul class="auth-feature-list">
-        <li class="auth-feature-item"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Reveal additional layers only when you actually need them.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Save views, restore workspace preferences, and keep your own signal stack.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Move from passive monitoring into cases, notes, and investigation workflows.</span></li>
-      </ul>
-    </section>
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Log in", class: "auth-submit" %>
+    </div>
+  <% end %>
 
-    <section class="auth-card">
-      <p class="auth-card-kicker">Operator Login</p>
-      <h2 class="auth-card-title">Enter the workspace</h2>
-      <p class="auth-card-copy">Use your GlobeTracker account to restore saved views and enable private workspace controls.</p>
-
-      <%= render "devise/shared/error_messages", resource: resource %>
-
-      <%= simple_form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "auth-form" }) do |f| %>
-        <%= f.input :email,
-                    required: false,
-                    autofocus: true,
-                    label: "Email",
-                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "analyst@globetracker" } %>
-        <%= f.input :password,
-                    required: false,
-                    label: "Password",
-                    input_html: { class: "auth-field", autocomplete: "current-password", placeholder: "Your password" } %>
-        <%= f.input :remember_me, as: :boolean, label: "Keep this workstation signed in" if devise_mapping.rememberable? %>
-
-        <div class="auth-actions">
-          <%= f.button :submit, "Log in", class: "auth-submit" %>
-        </div>
-      <% end %>
-
-      <%= render "devise/shared/links" %>
-    </section>
-  </div>
-</div>
+  <%= render "devise/shared/links" %>
+<% end %>

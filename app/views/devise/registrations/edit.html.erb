@@ -1,69 +1,54 @@
-<div class="auth-shell">
-  <div class="auth-layout auth-layout--settings">
-    <section class="auth-panel">
-      <p class="auth-eyebrow">Account Settings</p>
-      <h1 class="auth-title">Manage the identity behind your workspace.</h1>
-      <p class="auth-copy">Email, password, and confirmation state all live here. This is the control surface for the operator account, not another default Devise form dump.</p>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Account Settings",
+           title: "Update operator profile",
+           subtitle: "Rotate credentials, change your email, and keep your GlobeTracker session posture current.",
+           signal: {
+             label: "Profile state",
+             value: "EDIT",
+             detail: "Changes to identity and credentials are applied against the same analyst account that owns watches and cases."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
-      <ul class="auth-feature-list">
-        <li class="auth-feature-item"><i class="fa-solid fa-user-lock" aria-hidden="true"></i><span>Changing credentials does not remove saved workspaces, cases, or layer preferences.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-envelope-open-text" aria-hidden="true"></i><span>Email changes require reconfirmation before the new address becomes active.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>Account deletion is permanent. Treat it as a deliberate cleanup action, not a navigation shortcut.</span></li>
-      </ul>
-    </section>
-
-    <section class="auth-card">
-      <p class="auth-card-kicker">Profile</p>
-      <h2 class="auth-card-title">Update account details</h2>
-      <p class="auth-card-copy">Keep the account current and re-authenticate changes with your existing password.</p>
-
-      <%= render "devise/shared/error_messages", resource: resource %>
-
-      <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "auth-form" }) do |f| %>
-        <%= f.input :email,
-                    required: true,
-                    autofocus: true,
-                    label: "Email",
-                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
-
-        <% if devise_mapping.confirmable? && resource.pending_reconfirmation? %>
-          <p class="auth-inline-note">Pending confirmation for <strong><%= resource.unconfirmed_email %></strong>.</p>
-        <% end %>
-
-        <%= f.input :password,
-                    hint: "Leave blank if the password is not changing.",
-                    required: false,
-                    label: "New password",
-                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Optional new password" } %>
-        <%= f.input :password_confirmation,
-                    required: false,
-                    label: "Confirm new password",
-                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Repeat new password" } %>
-        <%= f.input :current_password,
-                    hint: "Required to verify account changes.",
-                    required: true,
-                    label: "Current password",
-                    input_html: { class: "auth-field", autocomplete: "current-password", placeholder: "Current password" } %>
-
-        <div class="auth-actions">
-          <%= f.button :submit, "Save changes", class: "auth-submit" %>
-        </div>
-      <% end %>
-
-      <div class="auth-section">
-        <h3 class="auth-section-title">Danger Zone</h3>
-        <p class="auth-section-copy">Delete the account only if you want to remove operator access entirely.</p>
-        <div class="auth-actions">
-          <%= button_to "Delete account",
-                        registration_path(resource_name),
-                        data: { turbo_confirm: "Delete this account permanently?" },
-                        method: :delete,
-                        class: "auth-danger-btn",
-                        form_class: "auth-danger-form" %>
-        </div>
+    <% if devise_mapping.confirmable? && resource.pending_reconfirmation? %>
+      <div class="auth-inline-note">
+        Pending confirmation for <strong><%= resource.unconfirmed_email %></strong>
       </div>
+    <% end %>
 
-      <%= link_to "Back to workspace", root_path, class: "auth-link auth-back-link" %>
-    </section>
+    <div class="auth-form-grid">
+      <%= f.input :email, required: true, autofocus: true, input_html: { autocomplete: "email" } %>
+      <%= f.input :password,
+                  hint: "Leave blank to keep the current password",
+                  required: false,
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :password_confirmation,
+                  required: false,
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :current_password,
+                  hint: "Current password is required to confirm the change",
+                  required: true,
+                  input_html: { autocomplete: "current-password" } %>
+    </div>
+
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Save changes", class: "auth-submit" %>
+    </div>
+  <% end %>
+
+  <div class="auth-inline-links">
+    <%= link_to "Return to cases", cases_path, class: "auth-link-chip" %>
+    <%= link_to "Open live globe", root_path, class: "auth-link-chip auth-link-chip--ghost" %>
   </div>
-</div>
+
+  <section class="auth-danger-zone">
+    <p class="auth-danger-eyebrow">Danger zone</p>
+    <h3>Cancel this account</h3>
+    <p>This removes access to your analyst workspace and signs out the current operator session.</p>
+    <%= button_to "Cancel my account",
+                  registration_path(resource_name),
+                  data: { confirm: "Are you sure?", turbo_confirm: "Are you sure?" },
+                  method: :delete,
+                  class: "auth-danger-button" %>
+  </section>
+<% end %>

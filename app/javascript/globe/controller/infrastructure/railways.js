@@ -1,9 +1,25 @@
-import { getDataSource, cachedColor } from "../../utils"
+import { getDataSource, cachedColor } from "globe/utils"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+
+function railwayColor(railway) {
+  return railway.electrified === 1
+    ? cachedColor("#64b5f6", 0.8)
+    : cachedColor("#b0bec5", 0.75)
+}
 
 export function applyRailwaysMethods(GlobeController) {
   GlobeController.prototype.getRailwaysDataSource = function() { return getDataSource(this.viewer, this._ds, "railways") }
 
   GlobeController.prototype.toggleRailways = function() {
+    if (isLayerTemporarilyDisabled("railways")) {
+      if (this.hasRailwaysToggleTarget) this.railwaysToggleTarget.checked = false
+      this.railwaysVisible = false
+      this._toast?.("Railways temporarily disabled during cleanup")
+      this._syncQuickBar()
+      this._savePrefs()
+      return
+    }
+
     this.railwaysVisible = this.hasRailwaysToggleTarget && this.railwaysToggleTarget.checked
     if (this.railwaysVisible) {
       this.fetchRailways()
@@ -64,14 +80,12 @@ export function applyRailwaysMethods(GlobeController) {
       if (!rw.coordinates || rw.coordinates.length < 2) return
 
       const positions = rw.coordinates.map(c =>
-        Cesium.Cartesian3.fromDegrees(c[0], c[1], 100)
+        Cesium.Cartesian3.fromDegrees(c[0], c[1])
       )
 
       const isElec = rw.electrified === 1
       const isMajor = rw.category === 1
-      const color = isElec
-        ? cachedColor("#64b5f6", 0.8)
-        : cachedColor("#b0bec5", 0.75)
+      const color = railwayColor(rw)
       const width = isMajor ? 4 : rw.category === 2 ? 3 : 2.5
 
       const entity = dataSource.entities.add({
@@ -79,10 +93,9 @@ export function applyRailwaysMethods(GlobeController) {
         polyline: {
           positions,
           width,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.15,
-            color,
-          }),
+          clampToGround: true,
+          material: color,
+          zIndex: isMajor ? 3 : 2,
         },
       })
       this._railwayEntities.push(entity)

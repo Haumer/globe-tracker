@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_01_123000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -51,6 +51,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.index ["user_id", "seen", "created_at"], name: "index_alerts_on_user_id_and_seen_and_created_at"
     t.index ["user_id"], name: "index_alerts_on_user_id"
     t.index ["watch_id"], name: "index_alerts_on_watch_id"
+  end
+
+  create_table "area_workspaces", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.string "scope_type", null: false
+    t.jsonb "bounds", default: {}, null: false
+    t.jsonb "scope_metadata", default: {}, null: false
+    t.string "profile", default: "general", null: false
+    t.jsonb "default_layers", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["profile"], name: "index_area_workspaces_on_profile"
+    t.index ["scope_type"], name: "index_area_workspaces_on_scope_type"
+    t.index ["user_id", "updated_at"], name: "index_area_workspaces_on_user_id_and_updated_at"
+    t.index ["user_id"], name: "index_area_workspaces_on_user_id"
   end
 
   create_table "cameras", force: :cascade do |t|
@@ -131,6 +147,147 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.index ["type_of_violence"], name: "index_conflict_events_on_type_of_violence"
   end
 
+  create_table "country_chokepoint_exposures", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "commodity_key", null: false
+    t.string "commodity_name"
+    t.string "chokepoint_key", null: false
+    t.string "chokepoint_name", null: false
+    t.decimal "exposure_score", precision: 10, scale: 6
+    t.decimal "dependency_score", precision: 10, scale: 6
+    t.decimal "supplier_share_pct", precision: 10, scale: 4
+    t.text "rationale"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_chokepoint_exposures_on_country_code"
+    t.index ["country_code_alpha3", "commodity_key", "chokepoint_key"], name: "idx_country_chokepoint_exposures_unique_chokepoint", unique: true
+    t.index ["exposure_score"], name: "index_country_chokepoint_exposures_on_exposure_score"
+    t.index ["fetched_at"], name: "index_country_chokepoint_exposures_on_fetched_at"
+  end
+
+  create_table "country_commodity_dependencies", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "commodity_key", null: false
+    t.string "commodity_name"
+    t.date "period_start"
+    t.date "period_end"
+    t.string "period_type"
+    t.decimal "import_value_usd", precision: 20, scale: 2
+    t.integer "supplier_count"
+    t.string "top_partner_country_code"
+    t.string "top_partner_country_code_alpha3"
+    t.string "top_partner_country_name"
+    t.decimal "top_partner_share_pct", precision: 10, scale: 4
+    t.decimal "concentration_hhi", precision: 10, scale: 6
+    t.decimal "import_share_gdp_pct", precision: 10, scale: 6
+    t.decimal "dependency_score", precision: 10, scale: 6
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_commodity_dependencies_on_country_code"
+    t.index ["country_code_alpha3", "commodity_key"], name: "idx_country_commodity_dependencies_unique_commodity", unique: true
+    t.index ["dependency_score"], name: "index_country_commodity_dependencies_on_dependency_score"
+    t.index ["fetched_at"], name: "index_country_commodity_dependencies_on_fetched_at"
+  end
+
+  create_table "country_indicator_snapshots", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "indicator_key", null: false
+    t.string "indicator_name", null: false
+    t.string "period_type", default: "year", null: false
+    t.date "period_start", null: false
+    t.date "period_end"
+    t.decimal "value_numeric", precision: 20, scale: 6
+    t.string "value_text"
+    t.string "unit"
+    t.string "source", null: false
+    t.string "dataset", null: false
+    t.string "series_key"
+    t.string "release_version"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_indicator_snapshots_on_country_code"
+    t.index ["country_code_alpha3", "indicator_key", "period_type", "period_start", "dataset"], name: "idx_country_indicator_snapshots_unique_period", unique: true
+    t.index ["country_code_alpha3"], name: "index_country_indicator_snapshots_on_country_code_alpha3"
+    t.index ["fetched_at"], name: "index_country_indicator_snapshots_on_fetched_at"
+    t.index ["indicator_key"], name: "index_country_indicator_snapshots_on_indicator_key"
+  end
+
+  create_table "country_profiles", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.integer "latest_year"
+    t.decimal "gdp_nominal_usd", precision: 20, scale: 2
+    t.decimal "gdp_per_capita_usd", precision: 20, scale: 2
+    t.decimal "population_total", precision: 20
+    t.decimal "imports_goods_services_pct_gdp", precision: 10, scale: 4
+    t.decimal "exports_goods_services_pct_gdp", precision: 10, scale: 4
+    t.decimal "energy_imports_net_pct_energy_use", precision: 10, scale: 4
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_profiles_on_country_code"
+    t.index ["country_code_alpha3"], name: "index_country_profiles_on_country_code_alpha3", unique: true
+    t.index ["fetched_at"], name: "index_country_profiles_on_fetched_at"
+  end
+
+  create_table "country_sector_profiles", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "sector_key", null: false
+    t.string "sector_name", null: false
+    t.integer "period_year", null: false
+    t.decimal "share_pct", precision: 10, scale: 4
+    t.integer "rank"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_sector_profiles_on_country_code"
+    t.index ["country_code_alpha3", "sector_key"], name: "idx_country_sector_profiles_unique_sector", unique: true
+    t.index ["fetched_at"], name: "index_country_sector_profiles_on_fetched_at"
+    t.index ["rank"], name: "index_country_sector_profiles_on_rank"
+  end
+
+  create_table "country_sector_snapshots", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "sector_key", null: false
+    t.string "sector_name", null: false
+    t.string "metric_key", null: false
+    t.string "metric_name", null: false
+    t.integer "period_year", null: false
+    t.decimal "value_numeric", precision: 20, scale: 6
+    t.string "unit"
+    t.string "source", null: false
+    t.string "dataset", null: false
+    t.string "release_version"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_country_sector_snapshots_on_country_code"
+    t.index ["country_code_alpha3", "sector_key", "metric_key", "period_year", "dataset"], name: "idx_country_sector_snapshots_unique_period", unique: true
+    t.index ["country_code_alpha3"], name: "index_country_sector_snapshots_on_country_code_alpha3"
+    t.index ["fetched_at"], name: "index_country_sector_snapshots_on_fetched_at"
+    t.index ["sector_key"], name: "index_country_sector_snapshots_on_sector_key"
+  end
+
   create_table "earthquakes", force: :cascade do |t|
     t.string "external_id"
     t.string "title"
@@ -149,6 +306,31 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.index ["event_time"], name: "index_earthquakes_on_event_time"
     t.index ["external_id"], name: "index_earthquakes_on_external_id", unique: true
     t.index ["fetched_at"], name: "index_earthquakes_on_fetched_at"
+  end
+
+  create_table "energy_balance_snapshots", force: :cascade do |t|
+    t.string "country_code"
+    t.string "country_code_alpha3", null: false
+    t.string "country_name", null: false
+    t.string "commodity_key", null: false
+    t.string "metric_key", null: false
+    t.string "period_type", default: "month", null: false
+    t.date "period_start", null: false
+    t.date "period_end"
+    t.decimal "value_numeric", precision: 20, scale: 6
+    t.string "unit"
+    t.string "source", null: false
+    t.string "dataset", null: false
+    t.string "release_version"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["commodity_key"], name: "index_energy_balance_snapshots_on_commodity_key"
+    t.index ["country_code"], name: "index_energy_balance_snapshots_on_country_code"
+    t.index ["country_code_alpha3", "commodity_key", "metric_key", "period_type", "period_start", "dataset"], name: "idx_energy_balance_snapshots_unique_period", unique: true
+    t.index ["country_code_alpha3"], name: "index_energy_balance_snapshots_on_country_code_alpha3"
+    t.index ["fetched_at"], name: "index_energy_balance_snapshots_on_fetched_at"
   end
 
   create_table "fire_hotspots", force: :cascade do |t|
@@ -856,6 +1038,54 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.index ["norad_id"], name: "index_satellites_on_norad_id", unique: true
   end
 
+  create_table "sector_input_profiles", force: :cascade do |t|
+    t.string "scope_key", default: "global", null: false
+    t.string "country_code"
+    t.string "country_code_alpha3"
+    t.string "country_name"
+    t.string "sector_key", null: false
+    t.string "sector_name", null: false
+    t.string "input_kind", null: false
+    t.string "input_key", null: false
+    t.string "input_name"
+    t.integer "period_year", null: false
+    t.decimal "coefficient", precision: 20, scale: 8
+    t.integer "rank"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code_alpha3"], name: "index_sector_input_profiles_on_country_code_alpha3"
+    t.index ["fetched_at"], name: "index_sector_input_profiles_on_fetched_at"
+    t.index ["scope_key", "sector_key", "input_kind", "input_key"], name: "idx_sector_input_profiles_unique_input", unique: true
+  end
+
+  create_table "sector_input_snapshots", force: :cascade do |t|
+    t.string "scope_key", default: "global", null: false
+    t.string "country_code"
+    t.string "country_code_alpha3"
+    t.string "country_name"
+    t.string "sector_key", null: false
+    t.string "sector_name", null: false
+    t.string "input_kind", null: false
+    t.string "input_key", null: false
+    t.string "input_name"
+    t.decimal "coefficient", precision: 20, scale: 8
+    t.integer "period_year", null: false
+    t.string "source", null: false
+    t.string "dataset", null: false
+    t.string "release_version"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["fetched_at"], name: "index_sector_input_snapshots_on_fetched_at"
+    t.index ["input_key"], name: "index_sector_input_snapshots_on_input_key"
+    t.index ["scope_key", "sector_key", "input_kind", "input_key", "period_year", "dataset"], name: "idx_sector_input_snapshots_unique_period", unique: true
+    t.index ["scope_key"], name: "index_sector_input_snapshots_on_scope_key"
+    t.index ["sector_key"], name: "index_sector_input_snapshots_on_sector_key"
+  end
+
   create_table "service_runtime_states", force: :cascade do |t|
     t.string "service_name", null: false
     t.string "desired_state", default: "running", null: false
@@ -931,6 +1161,64 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.index ["recorded_at"], name: "index_timeline_events_on_recorded_at"
   end
 
+  create_table "trade_flow_snapshots", force: :cascade do |t|
+    t.string "reporter_country_code"
+    t.string "reporter_country_code_alpha3", null: false
+    t.string "reporter_country_name"
+    t.string "partner_country_code"
+    t.string "partner_country_code_alpha3", null: false
+    t.string "partner_country_name"
+    t.string "flow_direction", null: false
+    t.string "commodity_key", null: false
+    t.string "commodity_name"
+    t.string "hs_code"
+    t.string "period_type", default: "month", null: false
+    t.date "period_start", null: false
+    t.date "period_end"
+    t.decimal "trade_value_usd", precision: 20, scale: 2
+    t.decimal "quantity", precision: 20, scale: 4
+    t.string "quantity_unit"
+    t.string "source", null: false
+    t.string "dataset", null: false
+    t.string "release_version"
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["commodity_key"], name: "index_trade_flow_snapshots_on_commodity_key"
+    t.index ["fetched_at"], name: "index_trade_flow_snapshots_on_fetched_at"
+    t.index ["partner_country_code"], name: "index_trade_flow_snapshots_on_partner_country_code"
+    t.index ["partner_country_code_alpha3"], name: "index_trade_flow_snapshots_on_partner_country_code_alpha3"
+    t.index ["reporter_country_code"], name: "index_trade_flow_snapshots_on_reporter_country_code"
+    t.index ["reporter_country_code_alpha3", "partner_country_code_alpha3", "flow_direction", "commodity_key", "hs_code", "period_type", "period_start", "dataset"], name: "idx_trade_flow_snapshots_unique_period", unique: true
+    t.index ["reporter_country_code_alpha3"], name: "index_trade_flow_snapshots_on_reporter_country_code_alpha3"
+  end
+
+  create_table "trade_locations", force: :cascade do |t|
+    t.string "locode", null: false
+    t.string "country_code"
+    t.string "country_code_alpha3"
+    t.string "country_name"
+    t.string "subdivision_code"
+    t.string "name", null: false
+    t.string "normalized_name"
+    t.string "location_kind", default: "trade_node", null: false
+    t.string "function_codes"
+    t.float "latitude"
+    t.float "longitude"
+    t.string "status", default: "active", null: false
+    t.string "source", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country_code"], name: "index_trade_locations_on_country_code"
+    t.index ["country_code_alpha3"], name: "index_trade_locations_on_country_code_alpha3"
+    t.index ["latitude", "longitude"], name: "index_trade_locations_on_latitude_and_longitude"
+    t.index ["location_kind"], name: "index_trade_locations_on_location_kind"
+    t.index ["locode"], name: "index_trade_locations_on_locode", unique: true
+  end
+
   create_table "train_ingests", force: :cascade do |t|
     t.string "source_key", null: false
     t.string "source_name", null: false
@@ -965,10 +1253,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
     t.datetime "expires_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "matched_railway_id"
+    t.float "snapped_latitude"
+    t.float "snapped_longitude"
+    t.float "snap_distance_m"
+    t.string "snap_confidence"
     t.index ["expires_at"], name: "index_train_observations_on_expires_at"
     t.index ["external_id"], name: "index_train_observations_on_external_id", unique: true
     t.index ["fetched_at"], name: "index_train_observations_on_fetched_at"
+    t.index ["matched_railway_id"], name: "index_train_observations_on_matched_railway_id"
     t.index ["operator_key"], name: "index_train_observations_on_operator_key"
+    t.index ["snap_confidence"], name: "index_train_observations_on_snap_confidence"
     t.index ["train_ingest_id"], name: "index_train_observations_on_train_ingest_id"
   end
 
@@ -1050,6 +1345,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
 
   add_foreign_key "alerts", "users"
   add_foreign_key "alerts", "watches"
+  add_foreign_key "area_workspaces", "users"
   add_foreign_key "investigation_case_notes", "investigation_cases"
   add_foreign_key "investigation_case_notes", "users"
   add_foreign_key "investigation_case_objects", "investigation_cases"
@@ -1075,6 +1371,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_30_114500) do
   add_foreign_key "ontology_events", "ontology_entities", column: "place_entity_id"
   add_foreign_key "ontology_evidence_links", "ontology_events"
   add_foreign_key "ontology_relationship_evidences", "ontology_relationships"
+  add_foreign_key "train_observations", "railways", column: "matched_railway_id"
   add_foreign_key "train_observations", "train_ingests"
   add_foreign_key "watches", "users"
   add_foreign_key "workspaces", "users"

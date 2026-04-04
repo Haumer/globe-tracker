@@ -1,4 +1,4 @@
-import { createSatelliteIcon, getDataSource } from "../../utils"
+import { createSatelliteIcon, getDataSource } from "globe/utils"
 
 export function applySatDataMethods(GlobeController) {
   GlobeController.prototype.getSatellitesDataSource = function() { return getDataSource(this.viewer, this._ds, "satellites") }

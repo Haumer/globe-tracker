@@ -10,6 +10,7 @@ module ApplicationCable
 
     def find_user
       # Allow anonymous connections for public broadcasts (earthquakes, conflicts).
+      # Signed-in users keep their normal Warden/cookie-backed session on /cable.
       # Signed-in users also get per-user alert channel.
       if (user = env["warden"]&.user)
         user

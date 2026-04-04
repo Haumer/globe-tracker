@@ -1,0 +1,50 @@
+<div id="mobile-hud" aria-label="Mobile map controls">
+  <div class="mh-top">
+    <div class="mh-scene-switch" role="tablist" aria-label="Map mode">
+      <button class="mh-scene-btn" type="button" data-mobile-scene="2d" data-action="click->globe#switchMobileScene" role="tab" aria-selected="false">
+        2D Map
+      </button>
+      <button class="mh-scene-btn" type="button" data-mobile-scene="3d" data-action="click->globe#switchMobileScene" role="tab" aria-selected="false">
+        3D Globe
+      </button>
+    </div>
+
+    <div class="mh-presets" role="group" aria-label="Quick presets">
+      <button class="mh-preset" type="button" data-scenario="aviation" data-action="click->globe#applyScenarioPreset">
+        <i class="fa-solid fa-plane" aria-hidden="true"></i>
+        Flights
+      </button>
+      <button class="mh-preset" type="button" data-scenario="events" data-action="click->globe#applyScenarioPreset">
+        <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+        Events
+      </button>
+      <button class="mh-preset" type="button" data-scenario="infrastructure" data-action="click->globe#applyScenarioPreset">
+        <i class="fa-solid fa-network-wired" aria-hidden="true"></i>
+        Infra
+      </button>
+      <button class="mh-preset" type="button" data-scenario="space" data-action="click->globe#applyScenarioPreset">
+        <i class="fa-solid fa-satellite" aria-hidden="true"></i>
+        Space
+      </button>
+    </div>
+  </div>
+
+  <div class="mh-dock" role="toolbar" aria-label="Mobile globe controls">
+    <button class="mh-dock-btn" type="button" data-mobile-surface-target="layers" data-action="click->globe#toggleSidebar">
+      <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+      <span>Layers</span>
+    </button>
+    <button class="mh-dock-btn" type="button" data-mobile-surface-target="panel" data-action="click->globe#toggleRightPanel">
+      <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+      <span>Feeds</span>
+    </button>
+    <button class="mh-dock-btn" type="button" data-mobile-surface-target="timeline" data-action="click->globe#timelineOpen">
+      <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+      <span>Timeline</span>
+    </button>
+    <button class="mh-dock-btn" type="button" data-mobile-surface-target="reset" data-action="click->globe#resetView">
+      <i class="fa-solid fa-globe" aria-hidden="true"></i>
+      <span>Reset</span>
+    </button>
+  </div>
+</div>

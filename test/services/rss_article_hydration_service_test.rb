@@ -128,6 +128,59 @@ class RssArticleHydrationServiceTest < ActiveSupport::TestCase
     assert_equal "open_timeout", article.hydration_error
   end
 
+  test "hydrate forced non-rss article persists maritime signal and clears force reason" do
+    source = NewsSource.create!(
+      canonical_key: "wire:forced-area",
+      name: "Forced Area Source",
+      source_kind: "wire",
+      publisher_domain: "example.com"
+    )
+    article = NewsArticle.create!(
+      news_source: source,
+      url: "https://example.com/hormuz-selective",
+      canonical_url: "https://example.com/hormuz-selective",
+      title: "Hormuz shipping update",
+      summary: nil,
+      publisher_name: "Forced Area Source",
+      publisher_domain: "example.com",
+      content_scope: "core",
+      published_at: Time.utc(2026, 3, 25, 10, 0, 0),
+      fetched_at: Time.utc(2026, 3, 25, 10, 1, 0),
+      metadata: {
+        "transport_source" => "api",
+        "force_hydration_reason" => "area_candidate:maritime",
+        "force_hydration_requested_at" => Time.current.iso8601,
+      }
+    )
+
+    stub_request(:get, article.url)
+      .to_return(
+        status: 200,
+        headers: { "Content-Type" => "text/html" },
+        body: <<~HTML
+          <html lang="en">
+            <head>
+              <meta property="og:title" content="Iran monetizes selective passage in Hormuz" />
+              <meta property="og:description" content="Officials described transit fees and permission-based passage for some vessels in the Strait of Hormuz." />
+            </head>
+            <body>
+              <article><p>Officials described transit fees and permission-based passage for some vessels in the Strait of Hormuz.</p></article>
+            </body>
+          </html>
+        HTML
+      )
+
+    hydrated = RssArticleHydrationService.hydrate(article.id)
+
+    assert hydrated
+    article.reload
+    assert_equal "hydrated", article.hydration_status
+    assert_nil article.metadata["force_hydration_reason"]
+    assert_nil article.metadata["force_hydration_requested_at"]
+    assert_equal "restricted_selective", article.metadata.dig("maritime_passage_signal", "state")
+    assert_includes article.metadata.dig("maritime_passage_signal", "signals"), "transit_fee"
+  end
+
   private
 
   def create_rss_article(title:, summary:, content_scope:, published_at: Time.utc(2026, 3, 24, 12, 0, 0))

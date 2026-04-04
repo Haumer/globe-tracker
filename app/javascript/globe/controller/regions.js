@@ -4,10 +4,33 @@
 // flies camera to region, enables region-specific layers,
 // and scopes all data fetches to the region's bounding box.
 
-import { REGIONS, REGION_MAP, REGION_GROUPS } from "../regions"
-import { applyDeepLink } from "../deeplinks"
+import { REGIONS, REGION_MAP, REGION_GROUPS } from "globe/regions"
+import { applyDeepLink } from "globe/deeplinks"
 
 export function applyRegionMethods(GlobeController) {
+  function regionBoundsCenter(bounds = {}) {
+    return {
+      lat: ((bounds.lamin || 0) + (bounds.lamax || 0)) / 2.0,
+      lng: ((bounds.lomin || 0) + (bounds.lomax || 0)) / 2.0,
+    }
+  }
+
+  function regionCameraCenter(region) {
+    const center = regionBoundsCenter(region.bounds)
+    return {
+      lat: region.camera?.lat ?? center.lat,
+      lng: region.camera?.lng ?? center.lng,
+    }
+  }
+
+  function regionCameraHeight(region) {
+    const bounds = region.bounds || {}
+    const center = regionBoundsCenter(bounds)
+    const latSpanKm = Math.abs((bounds.lamax || 0) - (bounds.lamin || 0)) * 111.0
+    const lngSpanKm = Math.abs((bounds.lomax || 0) - (bounds.lomin || 0)) * 111.0 * Math.abs(Math.cos(center.lat * Math.PI / 180))
+    const derivedHeight = Math.round((Math.max(latSpanKm, lngSpanKm) * 1250.0) / 10000) * 10000
+    return Math.max(region.camera?.height || 0, derivedHeight, 300000)
+  }
 
   GlobeController.prototype._initRegions = function() {
     this._activeRegion = null
@@ -35,19 +58,21 @@ export function applyRegionMethods(GlobeController) {
     // so we shift the camera south proportional to height and tilt angle.
     const Cesium = window.Cesium
     if (Cesium && this.viewer) {
-      const pitch = region.camera.pitch || -Cesium.Math.PI_OVER_TWO
+      const center = regionCameraCenter(region)
+      const height = regionCameraHeight(region)
+      const pitch = region.camera?.pitch || -Cesium.Math.PI_OVER_TWO
       const tiltFromDown = Math.abs(pitch + Math.PI / 2) // 0 = straight down, ~0.7 = 45°
-      const heightKm = region.camera.height / 1000
+      const heightKm = height / 1000
       // Degrees-lat offset: sqrt of height keeps it sane at high altitudes
       const latOffset = tiltFromDown * Math.sqrt(heightKm) * 0.25
-      const camLat = region.camera.lat - latOffset
+      const camLat = center.lat - latOffset
 
       this.viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
-          region.camera.lng, camLat, region.camera.height
+          center.lng, camLat, height
         ),
         orientation: {
-          heading: region.camera.heading || 0,
+          heading: region.camera?.heading || 0,
           pitch: pitch,
           roll: 0,
         },
@@ -167,12 +192,50 @@ export function applyRegionMethods(GlobeController) {
     if (!indicator) return
 
     if (this._activeRegion) {
-      indicator.innerHTML =
-        `<div class="region-active-bar">` +
-          `<span class="region-badge">${this._activeRegion.name}</span>` +
-          `<span class="region-desc">${this._activeRegion.description}</span>` +
-          `<button class="region-exit-btn" data-action="click->globe#exitRegion" title="Exit region">&times;</button>` +
-        `</div>`
+      const bar = document.createElement("div")
+      bar.className = "region-active-bar"
+
+      const badge = document.createElement("span")
+      badge.className = "region-badge"
+      badge.textContent = this._activeRegion.name
+      bar.appendChild(badge)
+
+      const desc = document.createElement("span")
+      desc.className = "region-desc"
+      desc.textContent = this._activeRegion.description
+      bar.appendChild(desc)
+
+      if (this.signedInValue) {
+        const payload = this._buildAreaWorkspacePayload()
+        if (payload && this._buildAreaWorkspaceForm) {
+          bar.appendChild(this._buildAreaWorkspaceForm(payload, {
+            formClass: "region-track-form",
+            submitClass: "region-track-btn",
+            submitLabel: "Track Area",
+            submitTitle: "Track area",
+          }))
+        }
+      } else {
+        const link = document.createElement("a")
+        link.className = "region-track-btn"
+        link.href = "/users/sign_in"
+        link.textContent = "Sign In"
+        bar.appendChild(link)
+      }
+
+      const exitBtn = document.createElement("button")
+      exitBtn.type = "button"
+      exitBtn.className = "region-exit-btn"
+      exitBtn.title = "Exit region"
+      exitBtn.textContent = "\u00d7"
+      exitBtn.addEventListener("click", event => {
+        event.preventDefault()
+        this.exitRegion()
+      })
+      bar.appendChild(exitBtn)
+
+      indicator.replaceChildren(bar)
+
       indicator.style.display = ""
     } else {
       indicator.innerHTML = ""

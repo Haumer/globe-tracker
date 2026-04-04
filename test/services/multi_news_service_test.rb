@@ -89,4 +89,65 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
     assert_equal "example-api", status.display_name
     assert_equal "disabled", status.status
   end
+
+  test "fetch_source records an error when the provider returns no payload" do
+    config = {
+      name: "example-api",
+      env_key: nil,
+      base_url: "https://example.com/news",
+      params: ->(_key) { {} },
+      articles_path: ->(data) { data["news"] },
+      mapping: ->(_article) { {} },
+    }
+
+    @service.singleton_class.send(:define_method, :fetch_json) do |_uri|
+      { data: nil, http_status: 502, error_message: "upstream empty body" }
+    end
+
+    result = @service.send(:fetch_source, config)
+
+    assert_equal({ records: [], ingest_items: [] }, result)
+    assert_equal "error", SourceFeedStatus.last.status
+    assert_equal 502, SourceFeedStatus.last.last_http_status
+  end
+
+  test "fetch_source skips malformed articles instead of raising" do
+    config = {
+      name: "example-api",
+      env_key: nil,
+      base_url: "https://example.com/news",
+      params: ->(_key) { {} },
+      articles_path: ->(data) { data["news"] },
+      mapping: ->(article) {
+        {
+          url: article["url"],
+          title: article["title"],
+          summary: article["description"],
+          published_at: article["published_at"],
+          themes: [],
+        }
+      },
+    }
+
+    @service.singleton_class.send(:define_method, :fetch_json) do |_uri|
+      {
+        data: {
+          "news" => [
+            { "title" => "missing url" },
+            { "url" => "https://example.com/articles/ok", "title" => "Port closures raise costs", "description" => "Example", "published_at" => Time.current.iso8601 },
+          ],
+        },
+        http_status: 200,
+      }
+    end
+    @service.singleton_class.send(:define_method, :resolve_location) do |_country, _title, _url|
+      [48.2, 16.3]
+    end
+
+    result = @service.send(:fetch_source, config)
+
+    assert_equal 1, result[:records].size
+    assert_equal "https://example.com/articles/ok", result[:records].first[:url]
+    assert_equal "success", SourceFeedStatus.last.status
+  end
 end

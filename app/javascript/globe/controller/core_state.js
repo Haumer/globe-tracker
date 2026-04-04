@@ -61,8 +61,8 @@ const TIMEOUT_PROPS = [
   "_timelineEventTimer",
   "_timelineLayerReloadTimer",
   "_polyHighlightTimer",
-  "_conflictPulseRefreshDebounce",
   "_toastTimer",
+  "_portDebounce",
 ]
 
 const RAF_PROPS = [
@@ -79,6 +79,7 @@ const CAMERA_MOVE_END_CALLBACK_PROPS = [
   "_flightCameraCb",
   "_shipCameraCb",
   "_rwCameraCb",
+  "_portCameraCb",
   "_airbaseCameraCb",
   "_milBaseCameraCb",
   "_notamCameraCb",
@@ -280,6 +281,13 @@ export function initializeCoreState(controller) {
   controller.cablesVisible = false
   controller._cableEntities = []
   controller._landingPointEntities = []
+  controller.portsVisible = false
+  controller._portAll = []
+  controller._portData = []
+  controller._portEntities = []
+  controller.shippingLanesVisible = false
+  controller._shippingLaneEntities = []
+  controller._shippingLaneData = []
   controller.pipelinesVisible = false
   controller._pipelineEntities = []
   controller._pipelineData = []
@@ -365,9 +373,6 @@ export function initializeCoreState(controller) {
   controller._alertData = []
   controller._alertUnseenCount = 0
   controller._selectedContext = null
-  controller._anchoredDetailState = null
-  controller._onAnchoredDetailPostRender = null
-  controller._onAnchoredDetailResize = null
   controller._ds = {}
   controller._backgroundRefreshRetryTimers = {}
   controller._backgroundRefreshRetryCounts = {}
@@ -385,12 +390,7 @@ export function wireCoreChrome(controller) {
     if (data.type === "earthquake" && controller.earthquakesVisible) {
       controller.fetchEarthquakes?.()
     } else if (data.type === "conflict_escalation" && controller.situationsVisible) {
-      clearTimeout(controller._conflictPulseRefreshDebounce)
-      controller._conflictPulseRefreshDebounce = setTimeout(() => {
-        if (controller.situationsVisible && !controller._timelineActive) {
-          controller._fetchConflictPulse?.()
-        }
-      }, 750)
+      controller._fetchConflictPulse?.()
     }
   }
 
@@ -409,6 +409,7 @@ export function wireCoreChrome(controller) {
 
 export function teardownCore(controller) {
   controller._destroyed = true
+  controller._teardownMobileUi?.()
   Object.values(controller._backgroundRefreshRetryTimers || {}).forEach(timer => clearTimeout(timer))
   TIMEOUT_PROPS.forEach(prop => {
     if (controller[prop]) clearTimeout(controller[prop])
@@ -437,10 +438,6 @@ export function teardownCore(controller) {
   if (controller._onBreakingEvent) {
     document.removeEventListener("globe:breaking-event", controller._onBreakingEvent)
   }
-  if (controller._onAnchoredDetailResize) {
-    window.removeEventListener("resize", controller._onAnchoredDetailResize)
-    controller._onAnchoredDetailResize = null
-  }
 
   if (controller._handler) controller._handler.destroy()
   if (controller._ytMessageCleanup) {
@@ -452,12 +449,6 @@ export function teardownCore(controller) {
   detachCameraMoveEndCallbacks(controller, viewer)
 
   if (viewer) {
-    if (controller._onAnchoredDetailPostRender) {
-      try {
-        viewer.scene?.postRender?.removeEventListener(controller._onAnchoredDetailPostRender)
-      } catch {}
-      controller._onAnchoredDetailPostRender = null
-    }
     try {
       viewer.destroy()
     } finally {

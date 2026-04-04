@@ -1,32 +1,30 @@
-<div class="auth-shell">
-  <div class="auth-layout">
-    <section class="auth-panel">
-      <p class="auth-eyebrow">Account Unlock</p>
-      <h1 class="auth-title">Restore access when the account has been locked out.</h1>
-      <p class="auth-copy">If Devise locked the account after repeated attempts, request a clean unlock email and continue from there.</p>
-    </section>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "Account Recovery",
+           title: "Unlock operator access",
+           subtitle: "Request a fresh unlock email when repeated login attempts have tripped the account lock.",
+           signal: {
+             label: "Lock status",
+             value: "SAFE",
+             detail: "Unlock flows restore access without changing account ownership, watches, or case history."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: unlock_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
-    <section class="auth-card">
-      <p class="auth-card-kicker">Unlock</p>
-      <h2 class="auth-card-title">Send unlock email</h2>
-      <p class="auth-card-copy">Enter the account email and we’ll resend unlock instructions.</p>
+    <% if resource.errors[:unlock_token].present? %>
+      <div class="auth-token-error"><%= resource.errors.full_messages_for(:unlock_token).to_sentence %></div>
+    <% end %>
 
-      <%= render "devise/shared/error_messages", resource: resource %>
+    <div class="auth-form-grid">
+      <%= f.input :email,
+                  required: true,
+                  autofocus: true,
+                  input_html: { autocomplete: "email" } %>
+    </div>
 
-      <%= simple_form_for(resource, as: resource_name, url: unlock_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
-        <%= f.full_error :unlock_token %>
-        <%= f.input :email,
-                    required: true,
-                    autofocus: true,
-                    label: "Email",
-                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Send unlock instructions", class: "auth-submit" %>
+    </div>
+  <% end %>
 
-        <div class="auth-actions">
-          <%= f.button :submit, "Resend unlock", class: "auth-submit" %>
-        </div>
-      <% end %>
-
-      <%= render "devise/shared/links" %>
-    </section>
-  </div>
-</div>
+  <%= render "devise/shared/links" %>
+<% end %>

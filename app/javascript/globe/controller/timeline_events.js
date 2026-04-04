@@ -1,5 +1,5 @@
-import { getViewportBounds } from "../camera"
-import { getDataSource } from "../utils"
+import { getPlaybackBounds } from "globe/camera"
+import { getDataSource } from "globe/utils"
 
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineUpdateEvents = async function() {
@@ -15,26 +15,40 @@ export function applyTimelineEventMethods(GlobeController) {
     if (this.newsVisible) types.push("news")
     if (this.gpsJammingVisible) types.push("gps_jamming")
     if (this.outagesVisible) types.push("internet_outage")
-    if (types.length === 0) return
+    if (types.length === 0) {
+      this._timelineEventCount = 0
+      getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
+      return 0
+    }
 
     let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
-    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : getViewportBounds(this.viewer)
+    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : (getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds)
     if (bounds) {
       url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
     }
 
     try {
       const response = await fetch(url)
+      if (!response.ok) throw new Error(`Timeline events request failed with ${response.status}`)
       const events = await response.json()
+      this._timelineEventCount = Array.isArray(events) ? events.length : 0
       this._renderUnifiedTimelineEvents(events)
       this._updateStats()
+      return this._timelineEventCount
     } catch (error) {
       console.error("Timeline events error:", error)
+      this._timelineEventCount = 0
+      return 0
     }
   }
 
   GlobeController.prototype._timelineUpdateConflictPulse = async function() {
-    if (!this._timelineActive || !this._timelineCursor || !this.situationsVisible) return
+    if (!this._timelineActive || !this._timelineCursor) return 0
+    if (!this.situationsVisible) {
+      this._timelineSituationCount = 0
+      this._clearConflictPulseEntities?.()
+      return 0
+    }
 
     const cursorMs = this._timelineCursor.getTime()
     const bucket = cursorMs - (cursorMs % 3600000)
@@ -51,11 +65,15 @@ export function applyTimelineEventMethods(GlobeController) {
       this._conflictPulseZones = data.zones || []
       this._strikeArcData = data.strike_arcs || []
       this._hexCellData = data.hex_cells || []
+      this._timelineSituationCount = this._conflictPulseZones.length
       this._renderConflictPulse?.()
       this._renderSituationPanel?.()
       if (this._syncRightPanels) this._syncRightPanels()
+      return this._timelineSituationCount
     } catch (error) {
       console.warn("Timeline conflict pulse fetch failed:", error)
+      this._timelineSituationCount = 0
+      return 0
     }
   }
 
@@ -97,23 +115,34 @@ export function applyTimelineEventMethods(GlobeController) {
     }
 
     if (byType.news && this.newsVisible) {
-      const newsData = byType.news.map(event => ({
-        lat: event.lat,
-        lng: event.lng,
-        name: event.name,
-        url: event.url,
-        tone: event.tone,
-        level: event.level,
-        category: event.category,
-        themes: event.themes || [],
-        time: event.time,
-      }))
+      const cursorMs = this._timelineCursor?.getTime() || Date.now()
+      const newsData = byType.news
+        .filter(event => {
+          const eventMs = event.time ? new Date(event.time).getTime() : Number.NEGATIVE_INFINITY
+          return !Number.isFinite(eventMs) || eventMs <= cursorMs
+        })
+        .map(event => ({
+          id: event.id,
+          lat: event.lat,
+          lng: event.lng,
+          title: event.title,
+          name: event.name,
+          url: event.url,
+          tone: event.tone,
+          level: event.level,
+          category: event.category,
+          themes: event.themes || [],
+          source: event.source,
+          threat: event.threat,
+          cluster_id: event.cluster_id,
+          time: event.time,
+        }))
       this._newsData = newsData
-      this._renderNews(newsData)
+      this._renderTimelineNews(newsData)
     }
 
     if (byType.gps_jamming && this.gpsJammingVisible) {
-      const jammingData = byType.gps_jamming.map(event => ({
+      const jammingData = collapseTimelineGpsJammingEvents(byType.gps_jamming, this._timelineCursor).map(event => ({
         lat: event.lat,
         lng: event.lng,
         total: event.total,
@@ -121,6 +150,7 @@ export function applyTimelineEventMethods(GlobeController) {
         pct: event.pct,
         level: event.level,
       }))
+      this._gpsJammingData = jammingData
       this._renderGpsJamming(jammingData)
     }
 
@@ -136,4 +166,35 @@ export function applyTimelineEventMethods(GlobeController) {
       this._renderOutages({ summary: outageEvents, events: outageEvents })
     }
   }
+}
+
+function collapseTimelineGpsJammingEvents(events, cursor) {
+  const cursorMs = cursor instanceof Date ? cursor.getTime() : Date.now()
+  const byCell = new Map()
+
+  events.forEach(event => {
+    const key = `${event.lat},${event.lng}`
+    const current = byCell.get(key)
+    if (!current || gpsJammingCursorDistance(event, cursorMs) < gpsJammingCursorDistance(current, cursorMs)) {
+      byCell.set(key, event)
+      return
+    }
+
+    if (gpsJammingCursorDistance(event, cursorMs) === gpsJammingCursorDistance(current, cursorMs) &&
+      gpsJammingEventTime(event) > gpsJammingEventTime(current)) {
+      byCell.set(key, event)
+    }
+  })
+
+  return [...byCell.values()]
+}
+
+function gpsJammingCursorDistance(event, cursorMs) {
+  const eventMs = gpsJammingEventTime(event)
+  return Number.isFinite(eventMs) ? Math.abs(eventMs - cursorMs) : Number.POSITIVE_INFINITY
+}
+
+function gpsJammingEventTime(event) {
+  const eventMs = event?.time ? new Date(event.time).getTime() : Number.NaN
+  return Number.isFinite(eventMs) ? eventMs : Number.NEGATIVE_INFINITY
 }

@@ -2,6 +2,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "webmock/minitest"
+Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |file| require file }
 
 # Block all external HTTP requests in tests — forces proper stubbing
 WebMock.disable_net_connect!(allow_localhost: true)

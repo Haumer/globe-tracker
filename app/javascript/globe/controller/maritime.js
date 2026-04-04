@@ -1,4 +1,4 @@
-import { getDataSource } from "../utils"
+import { getDataSource } from "globe/utils"
 
 export function applyMaritimeMethods(GlobeController) {
   GlobeController.prototype.fetchShips = async function() {
@@ -169,6 +169,10 @@ export function applyMaritimeMethods(GlobeController) {
     dataSource.entities.resumeEvents()
 
     this._updateStats()
+    if (this.hasActiveFilter() && this.entityListPanelTarget?.classList.contains("rp-pane--active")) {
+      this.updateEntityList?.()
+    }
+    this._requestRender()
   }
 
   GlobeController.prototype.getShipsDataSource = function() { return getDataSource(this.viewer, this._ds, "ships") }
@@ -247,6 +251,7 @@ export function applyMaritimeMethods(GlobeController) {
     }
     if (this._ds["ships"]) {
       this._ds["ships"].show = this.shipsVisible
+      this._requestRender()
     }
     if (this.shipsVisible) {
       this.fetchShips()

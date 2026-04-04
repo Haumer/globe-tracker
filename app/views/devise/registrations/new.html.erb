@@ -1,61 +1,33 @@
-<div class="auth-shell">
-  <div class="auth-layout">
-    <section class="auth-panel">
-      <p class="auth-eyebrow">Private Workspace</p>
-      <h1 class="auth-title">Create an operator account for saved investigations and advanced layers.</h1>
-      <p class="auth-copy">Accounts keep the public monitoring surface clean while giving logged-in users a personal workspace for research, saved views, and private controls.</p>
+<%= render "devise/shared/auth_shell",
+           eyebrow: "New Operator",
+           title: "Create an analyst account",
+           subtitle: "Open a GlobeTracker workspace for cases, object views, live alerts, and saved watchlists.",
+           signal: {
+             label: "Provisioning",
+             value: "NEW",
+             detail: "New accounts drop into the same live workspace used for investigation and monitoring."
+           } do %>
+  <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "auth-form" }) do |f| %>
+    <%= render "devise/shared/error_messages", resource: resource %>
 
-      <div class="auth-metrics">
-        <div class="auth-metric">
-          <span class="auth-metric-value">Saved</span>
-          <span class="auth-metric-label">Workspaces</span>
-        </div>
-        <div class="auth-metric">
-          <span class="auth-metric-value">Cases</span>
-          <span class="auth-metric-label">Investigations</span>
-        </div>
-        <div class="auth-metric">
-          <span class="auth-metric-value">Alerts</span>
-          <span class="auth-metric-label">Watchlists</span>
-        </div>
-      </div>
+    <div class="auth-form-grid">
+      <%= f.input :email,
+                  required: true,
+                  autofocus: true,
+                  input_html: { autocomplete: "email" } %>
+      <%= f.input :password,
+                  required: true,
+                  hint: ("#{@minimum_password_length} characters minimum" if @minimum_password_length),
+                  input_html: { autocomplete: "new-password" } %>
+      <%= f.input :password_confirmation,
+                  required: true,
+                  input_html: { autocomplete: "new-password" } %>
+    </div>
 
-      <ul class="auth-feature-list">
-        <li class="auth-feature-item"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Enable specialized layers without crowding the public sidebar.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-binoculars" aria-hidden="true"></i><span>Track situations across sessions with a persistent view state.</span></li>
-        <li class="auth-feature-item"><i class="fa-solid fa-bell" aria-hidden="true"></i><span>Attach alerts and notes to the regions and signals you actually care about.</span></li>
-      </ul>
-    </section>
+    <div class="auth-form-actions">
+      <%= f.button :submit, "Create account", class: "auth-submit" %>
+    </div>
+  <% end %>
 
-    <section class="auth-card">
-      <p class="auth-card-kicker">Registration</p>
-      <h2 class="auth-card-title">Create your account</h2>
-      <p class="auth-card-copy">Keep it tight: one email, one password, one persistent workspace profile.</p>
-
-      <%= render "devise/shared/error_messages", resource: resource %>
-
-      <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "auth-form" }) do |f| %>
-        <%= f.input :email,
-                    required: true,
-                    autofocus: true,
-                    label: "Email",
-                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
-        <%= f.input :password,
-                    required: true,
-                    label: "Password",
-                    hint: ("#{@minimum_password_length} characters minimum" if @minimum_password_length),
-                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Create a password" } %>
-        <%= f.input :password_confirmation,
-                    required: true,
-                    label: "Confirm password",
-                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Repeat your password" } %>
-
-        <div class="auth-actions">
-          <%= f.button :submit, "Create account", class: "auth-submit" %>
-        </div>
-      <% end %>
-
-      <%= render "devise/shared/links" %>
-    </section>
-  </div>
-</div>
+  <%= render "devise/shared/links" %>
+<% end %>

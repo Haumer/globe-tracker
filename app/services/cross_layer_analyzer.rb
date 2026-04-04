@@ -1,4 +1,7 @@
 class CrossLayerAnalyzer
+  include MarketSignalMethods
+  include SupplyChainMethods
+
   PROXIMITY_KM = 200
   CABLE_OUTAGE_RADIUS_KM = 1000
   CORROBORATED_NEWS_STATUSES = %w[multi_source cross_layer_corroborated].freeze
@@ -688,14 +691,16 @@ class CrossLayerAnalyzer
   # ── Conflict pulse (news-driven developing situations) ───────
 
   def conflict_pulse_hotspots
-    zones = ConflictPulseService.analyze
+    pulse_data = ConflictPulseService.analyze
+    zones = pulse_data.is_a?(Hash) ? Array(pulse_data[:zones]) : Array(pulse_data)
+
     zones.select { |z| z[:pulse_score] >= 50 }.map do |zone|
       severity = if zone[:pulse_score] >= 80 then "critical"
                  elsif zone[:pulse_score] >= 60 then "high"
                  else "medium"
                  end
 
-      signals = zone[:cross_layer_signals]
+      signals = zone[:cross_layer_signals].is_a?(Hash) ? zone[:cross_layer_signals] : {}
       signal_parts = []
       signal_parts << "#{signals[:military_flights]} mil flights" if signals[:military_flights]
       signal_parts << "GPS jamming #{signals[:gps_jamming]}%" if signals[:gps_jamming]
@@ -725,232 +730,6 @@ class CrossLayerAnalyzer
   rescue => e
     Rails.logger.error("CrossLayerAnalyzer conflict_pulse_hotspots: #{e.message}")
     []
-  end
-
-  # ── Chokepoint disruption (shipping lane + conflict + commodities)
-
-  def chokepoint_disruptions
-    chokepoints = ChokepointMonitorService.analyze rescue []
-
-    chokepoints.filter_map do |cp|
-      next if cp[:status] == "normal"
-      next if cp[:conflict_pulse].empty?
-
-      chokepoint_name = normalized_chokepoint_name(cp)
-      top_pulse = cp[:conflict_pulse].max_by { |z| z[:score] }
-      commodity_parts = cp[:commodity_signals].first(3).filter_map do |c|
-        next unless c[:change_pct] && c[:change_pct].abs > 0.5
-        "#{c[:symbol]} #{c[:change_pct] > 0 ? "+" : ""}#{c[:change_pct]}%"
-      end
-
-      flow_parts = []
-      flows = cp[:flows] || {}
-      flows.each do |type, data|
-        next unless data[:pct]
-        flow_parts << "#{data[:pct]}% of world #{type}"
-      end
-
-      severity = cp[:status] == "critical" ? "critical" : (cp[:status] == "elevated" ? "high" : "medium")
-
-      desc = "#{cp[:ships_nearby][:total]} ships nearby"
-      desc += " (#{cp[:ships_nearby][:tankers]} tankers)" if cp[:ships_nearby][:tankers].to_i > 0
-      desc += " — #{flow_parts.join(", ")}" if flow_parts.any?
-      desc += " — #{commodity_parts.join(", ")}" if commodity_parts.any?
-
-      {
-        type: "chokepoint_disruption",
-        severity: severity,
-        title: "#{chokepoint_name}: #{top_pulse[:trend]} conflict near #{flow_parts.first || "major shipping lane"}",
-        description: desc,
-        lat: cp[:lat],
-        lng: cp[:lng],
-        entities: {
-          chokepoint: { name: chokepoint_name, status: cp[:status] },
-          ships: cp[:ships_nearby],
-          flows: flows.transform_values { |f| { pct: f[:pct], note: f[:note] } },
-          commodities: cp[:commodity_signals].first(3),
-          conflict: cp[:conflict_pulse],
-        },
-        detected_at: cp[:checked_at],
-      }
-    end
-  rescue => e
-    Rails.logger.error("CrossLayerAnalyzer chokepoint_disruptions: #{e.message}")
-    []
-  end
-
-  # ── Chokepoint market stress (operational pressure + price move) ─────────
-
-  def chokepoint_market_stress
-    chokepoints = ChokepointMonitorService.analyze rescue []
-    latest_quotes = latest_market_quotes
-
-    chokepoints.filter_map do |cp|
-      market_moves = current_market_moves(cp, latest_quotes)
-      next if market_moves.empty?
-      next if cp[:status] == "normal"
-
-      top_move = market_moves.max_by { |signal| signal[:change_pct].to_f.abs }
-      top_pulse = Array(cp[:conflict_pulse]).max_by { |pulse| pulse[:score].to_f }
-      chokepoint_name = normalized_chokepoint_name(cp)
-      move_label = format_change_pct(top_move[:change_pct])
-      severity = if cp[:status] == "critical" || top_move[:change_pct].to_f.abs >= 2.5
-        "high"
-      else
-        "medium"
-      end
-
-      desc_parts = [
-        "#{top_move[:name] || top_move[:symbol]} #{move_label}",
-        "#{cp.dig(:ships_nearby, :total).to_i} ships nearby",
-      ]
-      desc_parts << "#{cp.dig(:ships_nearby, :tankers).to_i} tankers" if cp.dig(:ships_nearby, :tankers).to_i.positive?
-      desc_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}" if top_pulse
-
-      {
-        type: "chokepoint_market_stress",
-        severity: severity,
-        title: "#{chokepoint_name}: #{top_move[:symbol]} reacting to chokepoint stress",
-        description: desc_parts.join(" — "),
-        lat: cp[:lat],
-        lng: cp[:lng],
-        entities: {
-          chokepoint: { name: chokepoint_name, status: cp[:status] },
-          commodities: market_moves.first(3),
-          conflict: Array(cp[:conflict_pulse]).first(3),
-          ships: cp[:ships_nearby],
-          flows: (cp[:flows] || {}).transform_values { |flow| { pct: flow[:pct], note: flow[:note] } },
-        },
-        detected_at: cp[:checked_at] || Time.current.iso8601,
-      }
-    end
-  rescue => e
-    Rails.logger.error("CrossLayerAnalyzer chokepoint_market_stress: #{e.message}")
-    []
-  end
-
-  # ── Outage + currency stress ──────────────────────────────────────────────
-
-  def outage_currency_stress
-    latest_quotes = latest_market_quotes
-    latest_country_outages.filter_map do |country_code, outage|
-      currency_symbol = COUNTRY_CURRENCY_MAP[country_code]
-      quote = latest_quotes[currency_symbol]
-      next if currency_symbol.blank? || quote.blank?
-      next if quote.change_pct.blank? || quote.change_pct.to_f.abs < 0.5
-
-      lat, lng = COUNTRY_CENTROIDS[country_code] || [nil, nil]
-      traffic = InternetTrafficSnapshot.where(country_code: country_code).order(recorded_at: :desc).first
-      severity = if outage.score.to_f >= 85 || quote.change_pct.to_f.abs >= 1.0
-        "high"
-      else
-        "medium"
-      end
-
-      desc = "#{outage.level} outage"
-      desc += ", traffic at #{traffic.traffic_pct.to_f.round(1)}% of baseline" if traffic
-      desc += ", #{currency_symbol} #{format_change_pct(quote.change_pct)}"
-
-      {
-        type: "outage_currency_stress",
-        severity: severity,
-        title: "#{outage.entity_name}: outage coincides with #{currency_symbol} move",
-        description: desc,
-        lat: lat,
-        lng: lng,
-        entities: {
-          outages: [{ country_code: country_code, level: outage.level, score: outage.score.to_f }],
-          currency: {
-            symbol: currency_symbol,
-            name: quote.name,
-            price: quote.price.to_f,
-            change_pct: quote.change_pct.to_f,
-          },
-          traffic: traffic ? { country_code: traffic.country_code, traffic_pct: traffic.traffic_pct.to_f.round(1) } : nil,
-        }.compact,
-        detected_at: outage.started_at&.iso8601 || Time.current.iso8601,
-      }
-    end
-  rescue => e
-    Rails.logger.error("CrossLayerAnalyzer outage_currency_stress: #{e.message}")
-    []
-  end
-
-  # ── Helpers ───────────────────────────────────────────────────
-
-  def latest_market_quotes
-    YahooMarketSignalService.merge_quotes(CommodityPrice.latest.to_a).index_by(&:symbol)
-  end
-
-  def latest_country_outages
-    InternetOutage.where("started_at > ?", 12.hours.ago)
-      .where(entity_type: "country")
-      .group_by(&:entity_code)
-      .transform_values { |outages| outages.max_by { |outage| [outage.score.to_f, outage.started_at.to_i] } }
-  end
-
-  def format_change_pct(value)
-    return "flat" if value.blank?
-
-    numeric = value.to_f.round(2)
-    "#{numeric.positive? ? '+' : ''}#{numeric}%"
-  end
-
-  def current_market_moves(chokepoint, latest_quotes)
-    Array(chokepoint[:commodity_signals]).filter_map do |signal|
-      current_quote = latest_quotes[signal[:symbol]]
-      change_pct = current_quote&.change_pct&.to_f
-      change_pct = signal[:change_pct].to_f if change_pct.blank?
-      next if change_pct.blank? || change_pct.abs < 1.0
-
-      signal.merge(
-        name: current_quote&.name || signal[:name],
-        price: current_quote&.price&.to_f&.round(2) || signal[:price],
-        change_pct: change_pct.round(2)
-      )
-    end
-  end
-
-  def normalized_chokepoint_name(chokepoint)
-    canonical_chokepoint_name(chokepoint) || fallback_chokepoint_name(chokepoint)
-  end
-
-  def canonical_chokepoint_name(chokepoint)
-    key = chokepoint[:id].presence&.to_sym
-    if key && ChokepointMonitorService::CHOKEPOINTS.key?(key)
-      return ChokepointMonitorService::CHOKEPOINTS.fetch(key).fetch(:name)
-    end
-
-    raw_name = chokepoint[:name].to_s.squish
-    exact_match = ChokepointMonitorService::CHOKEPOINTS.values.find { |candidate| candidate[:name] == raw_name }
-    return exact_match[:name] if exact_match
-
-    lat = chokepoint[:lat]
-    lng = chokepoint[:lng]
-    return if lat.blank? || lng.blank?
-
-    nearby_match = ChokepointMonitorService::CHOKEPOINTS.values.find do |candidate|
-      distance_km(candidate[:lat], candidate[:lng], lat, lng) <= 80
-    end
-    nearby_match&.fetch(:name)
-  end
-
-  def fallback_chokepoint_name(chokepoint)
-    raw_name = chokepoint[:name].to_s.squish
-    return "Strategic chokepoint" if raw_name.blank?
-
-    return raw_name unless suspicious_chokepoint_name?(raw_name)
-
-    sanitized = raw_name.split(/ carries | is a critical | makes |, making /i).first.to_s.squish
-    sanitized.present? ? sanitized : "Strategic chokepoint"
-  end
-
-  def suspicious_chokepoint_name?(name)
-    lowered = name.to_s.downcase
-    lowered.include?("flow dependency benchmark") ||
-      lowered.include?("world oil") ||
-      lowered.include?("world trade") ||
-      name.length > 120
   end
 
   def bbox(lat, lng, radius_km)

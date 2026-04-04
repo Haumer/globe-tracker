@@ -1,0 +1,62 @@
+<div class="case-shell area-shell">
+  <section class="case-hero">
+    <div class="case-hero-main">
+      <div class="case-kicker">
+        <span>Saved Areas</span>
+        <span class="case-kicker-sep"></span>
+        <span><%= pluralize(@area_workspaces.size, "workspace") %></span>
+      </div>
+      <h1 class="case-title">Area workspaces</h1>
+      <p class="case-summary">
+        Save a region, country selection, or custom globe area once, then come back to the same bounded operating picture later.
+      </p>
+      <div class="case-actions">
+        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+        <%= link_to "Cases", cases_path, class: "case-action" %>
+      </div>
+    </div>
+
+    <aside class="case-hero-side">
+      <div class="case-side-block">
+        <div class="case-side-label">Saved Areas</div>
+        <div class="case-side-stat"><%= @area_workspaces.size %></div>
+        <div class="case-side-meta">country, theater, and custom region monitors</div>
+      </div>
+    </aside>
+  </section>
+
+  <% if @area_workspaces.any? %>
+    <div class="case-list">
+      <% @area_workspaces.each do |area_workspace| %>
+        <article class="case-list-item">
+          <div class="case-list-top">
+            <div>
+              <div class="case-code"><%= area_workspace.scope_label %></div>
+              <h2><%= link_to area_workspace.name, area_path(area_workspace), class: "case-link" %></h2>
+            </div>
+            <div class="case-badges">
+              <span class="case-badge"><%= area_workspace.profile_label %></span>
+            </div>
+          </div>
+          <p><%= area_workspace.scope_detail %></p>
+          <div class="case-list-meta">
+            <span><%= area_workspace.bounds_label %></span>
+            <span>Updated <%= time_ago_in_words(area_workspace.updated_at) %> ago</span>
+          </div>
+          <div class="case-inline-actions">
+            <%= link_to "Area Page", area_path(area_workspace), class: "case-inline-action" %>
+            <%= link_to "Open On Globe", area_workspace_globe_href(area_workspace), class: "case-inline-action case-inline-action--primary" %>
+          </div>
+        </article>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="case-empty">
+      <h2 class="case-intake-title">No saved areas yet</h2>
+      <p>Track a country, region, or drawn area from the globe to start building durable area workspaces.</p>
+      <div class="case-actions">
+        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+      </div>
+    </div>
+  <% end %>
+</div>

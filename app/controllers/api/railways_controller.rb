@@ -3,6 +3,8 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
+      return render json: [] unless LayerAvailability.enabled?(:railways)
+
       # Viewport-filtered query
       scope = Railway.all
 

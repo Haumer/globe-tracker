@@ -10,7 +10,7 @@ class ApplicationController < ActionController::Base
   private
 
   def app_revision
-    @app_revision ||= Rails.application.importmap.digest(resolver: helpers)
+    AppRevision.current
   end
 
   def prevent_html_caching

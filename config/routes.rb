@@ -5,6 +5,7 @@ Rails.application.routes.draw do
   get "sources", to: "pages#sources"
   get "about", to: "pages#about"
   get "objects/:kind/:id", to: "objects#show", as: :object_view
+  resources :areas, controller: "area_workspaces", only: [:index, :show, :create]
   resources :cases, controller: "investigation_cases", only: [:index, :show, :new, :create, :update] do
     resources :notes, controller: "investigation_case_notes", only: [:create]
   end
@@ -41,6 +42,8 @@ Rails.application.routes.draw do
     resources :natural_events, only: [:index]
     resources :gps_jamming, only: [:index]
     resources :submarine_cables, only: [:index]
+    resources :ports, only: [:index]
+    resources :shipping_lanes, only: [:index]
     resources :pipelines, only: [:index]
     resources :railways, only: [:index]
     resources :trains, only: [:index]

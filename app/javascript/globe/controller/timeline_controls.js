@@ -23,15 +23,11 @@ export function applyTimelineControlMethods(GlobeController) {
       this._updateTimelineCursorDisplay()
 
       this._toast("Loading time travel data...")
-      await this._timelineLoadFrames()
-      this._timelineUpdateEvents()
-      this._timelineUpdateConflictPulse()
+      const frameStatus = await this._timelineLoadFrames()
+      const eventCount = await this._timelineUpdateEvents()
+      const situationCount = await this._timelineUpdateConflictPulse()
 
-      if (this._timelineKeys.length > 0) {
-        this._toast(`Time travel: ${this._timelineKeys.length} frames loaded — press play`, "success")
-      } else {
-        this._toast("No playback data found for this time range", "error")
-      }
+      showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, true)
     } catch (error) {
       console.error("Timeline open error:", error)
     }
@@ -196,6 +192,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this.timelineBarTarget.style.display = "none"
 
     this._timelineLastKnown = null
+    this._timelineAppliedFrameIndex = -1
     this._ds["timeline"]?.entities.removeAll()
     this._ds["timelineEvents"]?.entities.removeAll()
 
@@ -260,15 +257,11 @@ export function applyTimelineControlMethods(GlobeController) {
     this._syncScrubberToCursor()
 
     this._toast("Loading time travel data...")
-    await this._timelineLoadFrames()
-    this._timelineUpdateEvents()
-    this._timelineUpdateConflictPulse()
+    const frameStatus = await this._timelineLoadFrames()
+    const eventCount = await this._timelineUpdateEvents()
+    const situationCount = await this._timelineUpdateConflictPulse()
 
-    if (this._timelineKeys.length > 0) {
-      this._toast(`Time travel: ${this._timelineKeys.length} frames loaded`, "success")
-    } else {
-      this._toast("No position snapshots in this range (events still visible)", "error")
-    }
+    showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, false)
   }
 
   GlobeController.prototype._timelineOnLayerToggle = function() {
@@ -277,7 +270,8 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineLayerReloadTimer = setTimeout(async () => {
       await this._timelineLoadFrames()
       this._renderNearestFrame()
-      this._timelineUpdateEvents()
+      await this._timelineUpdateEvents()
+      await this._timelineUpdateConflictPulse()
     }, 300)
   }
 }
@@ -289,11 +283,14 @@ function initializeTimelineState(range) {
   this._timelineFrames = {}
   this._timelineKeys = []
   this._timelineFrameIndex = 0
+  this._timelineAppliedFrameIndex = -1
+  this._timelineEventCount = 0
+  this._timelineSituationCount = 0
 
   const oldest = new Date(range.oldest)
   const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))
-  const threeDaysAgo = new Date(newest.getTime() - 3 * 24 * 60 * 60 * 1000)
-  this._timelineRangeStart = threeDaysAgo > oldest ? threeDaysAgo : oldest
+  const oneDayAgo = new Date(newest.getTime() - 24 * 60 * 60 * 1000)
+  this._timelineRangeStart = oneDayAgo > oldest ? oneDayAgo : oldest
   this._timelineRangeEnd = newest
   this._timelineOldest = oldest
   this._timelineCursor = new Date(this._timelineRangeStart.getTime())
@@ -350,4 +347,41 @@ function stepTimeline(direction) {
   this._updateTimelineCursorDisplay()
   this._renderTimelineFrame(this._timelineFrameIndex)
   this._timelineEventDebounce()
+}
+
+function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, opening) {
+  const frameCount = frameStatus?.frameCount || 0
+  const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
+    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible
+
+  if (frameStatus?.boundsRequired) {
+    this._toast("Zoom in or apply a region filter to load movement playback.")
+    return
+  }
+
+  if (frameCount > 0) {
+    const suffix = opening ? " — press play" : ""
+    this._toast(`Time travel: ${frameCount} movement frames loaded${suffix}`, "success")
+    return
+  }
+
+  if (hasEventPlayback) {
+    if ((eventCount || 0) > 0 || (situationCount || 0) > 0) {
+      const parts = []
+      if ((eventCount || 0) > 0) parts.push(`${eventCount} timeline events`)
+      if ((situationCount || 0) > 0) parts.push(`${situationCount} situation zones`)
+      this._toast(`Event playback ready: ${parts.join(" · ")}`)
+      return
+    }
+
+    if (frameStatus?.movementEnabled === false) {
+      this._toast("Event playback ready. Enable flights or ships if you also want movement snapshots.")
+      return
+    }
+
+    this._toast("No flight or ship snapshots in this range. Event playback is still available.")
+    return
+  }
+
+  this._toast("No playback data found for this time range", "error")
 }

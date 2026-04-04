@@ -496,7 +496,6 @@ export function applyFlightDetailMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeDetail = function() {
-    this.closeAnchoredDetail?.()
     this.detailPanelTarget.style.display = "none"
     this._focusedSelection = null
     this._renderSelectionTray()

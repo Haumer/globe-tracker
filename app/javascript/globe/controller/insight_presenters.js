@@ -32,6 +32,8 @@ export const INSIGHT_TYPE_ICONS = {
   conflict_pulse: "\u{1F4A5}",
   chokepoint_disruption: "\u2693",
   chokepoint_market_stress: "\u{1F4C8}",
+  supply_chain_vulnerability: "\u2699",
+  country_chokepoint_dependency: "\u26FD",
   convergence: "\u{1F310}",
 }
 
@@ -53,6 +55,8 @@ const INSIGHT_TYPE_LABELS = {
   conflict_pulse: "DEVELOPING",
   chokepoint_disruption: "CHOKEPOINT",
   chokepoint_market_stress: "CHOKEPOINT + MARKET",
+  supply_chain_vulnerability: "SUPPLY CHAIN",
+  country_chokepoint_dependency: "COUNTRY + ROUTE",
   convergence: "CONVERGENCE",
 }
 
@@ -100,6 +104,10 @@ export function renderInsightDetailHtml(controller, insight) {
     if (ents.conflict) items.push(`${ents.conflict.count || ents.conflict.events || ""} conflict events`)
     if (ents.outages?.length) items.push(`${ents.outages.length} internet outages`)
     if (ents.currency) items.push(`Currency: ${ents.currency.symbol} ${ents.currency.change_pct > 0 ? "+" : ""}${ents.currency.change_pct.toFixed(2)}%`)
+    if (ents.country) items.push(`Country: ${ents.country.name}`)
+    if (ents.sectors?.length) items.push(`Sector: ${ents.sectors[0].name} ${ents.sectors[0].share_pct}%`)
+    if (ents.dependencies?.length) items.push(`Dependency: ${ents.dependencies[0].commodity_name} (${ents.dependencies[0].dependency_score})`)
+    if (ents.exposures?.length) items.push(`Exposure: ${ents.exposures[0].commodity_name} via ${ents.exposures[0].chokepoint_name}`)
     if (ents.flight) items.push(`Flight ${ents.flight.callsign || ents.flight.icao24} (${ents.flight.squawk || "EMG"})`)
     if (ents.ship) items.push(`Ship: ${ents.ship.name || ents.ship.mmsi}`)
     if (ents.cable) items.push(`Cable: ${ents.cable.name}`)
@@ -242,6 +250,11 @@ function buildInsightChips(controller, insight) {
   if (entities.cross_layer?.internet_outage) chips += `<span class="ins-chip ins-chip--outage">outage: ${entities.cross_layer.internet_outage}</span>`
   if (entities.cross_layer?.fire_hotspots) chips += `<span class="ins-chip ins-chip--fire">${entities.cross_layer.fire_hotspots} fires</span>`
   if (entities.chokepoint) chips += `<span class="ins-chip ins-chip--cable">${entities.chokepoint.name} (${entities.chokepoint.status})</span>`
+  if (entities.country) chips += `<span class="ins-chip ins-chip--outage">${entities.country.name}</span>`
+  if (entities.sectors?.length) entities.sectors.forEach(sector => { chips += `<span class="ins-chip ins-chip--plant">${sector.name} ${sector.share_pct}%</span>` })
+  if (entities.dependencies?.length) entities.dependencies.forEach(dependency => { chips += `<span class="ins-chip ins-chip--outage">${dependency.commodity_name}${dependency.estimated ? " est." : ""}</span>` })
+  if (entities.modeled_inputs?.length) entities.modeled_inputs.forEach(input => { chips += `<span class="ins-chip ins-chip--plant">${input.input_name}${input.estimated ? " est." : ""}</span>` })
+  if (entities.exposures?.length) entities.exposures.forEach(exposure => { chips += `<span class="ins-chip ins-chip--cable">${exposure.chokepoint_name} ${exposure.exposure_score}</span>` })
   if (entities.ships?.total) chips += `<span class="ins-chip ins-chip--cable">${entities.ships.total} ships (${entities.ships.tankers || 0} tankers)</span>`
   if (entities.flows) Object.entries(entities.flows).forEach(([key, value]) => { if (value.pct) chips += `<span class="ins-chip ins-chip--outage">${value.pct}% world ${key}</span>` })
   if (entities.commodities?.length) entities.commodities.forEach(commodity => { if (commodity.change_pct) chips += `<span class="ins-chip ins-chip--${commodity.change_pct > 0 ? "fire" : "eq"}">${commodity.symbol} ${commodity.change_pct > 0 ? "+" : ""}${commodity.change_pct}%</span>` })

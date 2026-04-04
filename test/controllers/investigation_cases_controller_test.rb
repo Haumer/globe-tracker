@@ -244,7 +244,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Strait of Hormuz"
   end
 
-  test "GET /cases/:id surfaces nearby strike signals in the case workspace" do
+  test "GET /cases/:id surfaces nearby supporting signals in the case workspace" do
     investigation_case = @user.investigation_cases.create!(
       title: "Hormuz strike watch",
       status: "monitoring",
@@ -305,11 +305,47 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     get case_path(investigation_case)
 
     assert_response :success
-    assert_includes response.body, "Recent Strike Signals"
-    assert_includes response.body, "Strike detections trail live reporting"
+    assert_includes response.body, "Supporting Signals"
+    assert_includes response.body, "Strike Signals"
+    assert_includes response.body, "short-window corroboration"
     assert_includes response.body, "Thermal strike signal"
     assert_includes response.body, "Aqua"
-    assert_not_includes response.body, "No nearby strike signals are in the current 7-day scope."
+    assert_not_includes response.body, "No nearby supporting signals are in the current 7-day nearby scope."
+  end
+
+  test "GET /cases/:id renders resource context for pipeline focuses" do
+    Pipeline.create!(
+      pipeline_id: "pipe-001",
+      name: "Nord Stream 1",
+      pipeline_type: "gas",
+      status: "operational",
+      length_km: 1224,
+      country: "Germany"
+    )
+
+    investigation_case = @user.investigation_cases.create!(
+      title: "Pipeline pressure watch",
+      status: "monitoring",
+      severity: "medium",
+      summary: "Track flow risk against strategic energy infrastructure."
+    )
+    investigation_case.case_objects.create!(
+      object_kind: "pipeline",
+      object_identifier: "pipe-001",
+      title: "Nord Stream 1",
+      summary: "Strategic gas corridor",
+      object_type: "gas",
+      latitude: 54.1,
+      longitude: 12.1
+    )
+
+    get case_path(investigation_case)
+
+    assert_response :success
+    assert_includes response.body, "Resource Context"
+    assert_includes response.body, "Resource carrier"
+    assert_includes response.body, "Gas"
+    assert_includes response.body, "1,224 km"
   end
 
   test "PATCH /cases/:id updates status severity and assignee while preserving globe return state" do

@@ -155,6 +155,30 @@
           </div>
         </section>
 
+        <% if (resource_profile = workspace[:resource_profile]).present? %>
+          <section class="case-card case-card--workspace-focus">
+            <div class="case-card-head">
+              <h2><%= resource_profile[:title] %></h2>
+              <span><%= resource_profile[:subtitle] %></span>
+            </div>
+
+            <% if resource_profile[:summary].present? %>
+              <p class="case-copy case-copy--workspace"><%= resource_profile[:summary] %></p>
+            <% end %>
+
+            <% if resource_profile[:metrics].present? %>
+              <div class="case-workspace-metrics">
+                <% resource_profile[:metrics].each do |metric| %>
+                  <div class="case-workspace-metric">
+                    <span class="case-section-label"><%= metric[:label] %></span>
+                    <span class="case-workspace-metric-value"><%= metric[:value] %></span>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </section>
+        <% end %>
+
         <section class="case-card case-card--timeline">
           <div class="case-card-head">
             <h2>Case Timeline</h2>
@@ -195,56 +219,60 @@
         <% end %>
       </section>
 
-      <% if (strike_signals = workspace[:strike_signals]).present? %>
+      <% if (supporting_signals = workspace[:supporting_signals]).present? %>
         <section class="case-card case-card--workspace-support">
           <div class="case-card-head">
-            <h2>Recent Strike Signals</h2>
-            <span><%= strike_signals[:scope_label] %></span>
+            <h2>Supporting Signals</h2>
+            <span><%= supporting_signals[:scope_label] %></span>
           </div>
 
-          <p class="case-copy case-copy--workspace case-copy--signal-note">
-            Strike detections trail live reporting and work best as 7-day corroboration around the current focus.
-          </p>
+          <% supporting_signals[:groups].each do |group| %>
+            <div class="case-signal-group">
+              <div class="case-section-label"><%= group[:title] %></div>
 
-          <div class="case-signal-metrics">
-            <div class="case-workspace-metric">
-              <span class="case-section-label">Thermal / 7d</span>
-              <span class="case-workspace-metric-value"><%= strike_signals[:thermal_count] %></span>
-            </div>
-            <div class="case-workspace-metric">
-              <span class="case-section-label">Verified / 7d</span>
-              <span class="case-workspace-metric-value"><%= strike_signals[:verified_count] %></span>
-            </div>
-            <div class="case-workspace-metric">
-              <span class="case-section-label">Last Activity</span>
-              <span class="case-workspace-metric-value">
-                <%= strike_signals[:last_seen_at].present? ? "#{time_ago_in_words(strike_signals[:last_seen_at])} ago" : "None" %>
-              </span>
-            </div>
-          </div>
+              <% if group[:note].present? %>
+                <p class="case-copy case-copy--workspace case-copy--signal-note"><%= group[:note] %></p>
+              <% end %>
 
-          <% if strike_signals[:items].any? %>
-            <div class="case-signal-list">
-              <% strike_signals[:items].each do |item| %>
-                <article class="case-signal-item">
-                  <div class="case-signal-top">
-                    <span class="case-badge <%= investigation_case_signal_badge_class(item[:kind]) %>"><%= item[:kind_label] %></span>
-                    <% if item[:at].present? %>
-                      <span class="case-note-time"><%= time_ago_in_words(item[:at]) %> ago</span>
-                    <% end %>
+              <div class="case-signal-metrics">
+                <% group[:metrics].each do |metric| %>
+                  <div class="case-workspace-metric">
+                    <span class="case-section-label"><%= metric[:label] %></span>
+                    <span class="case-workspace-metric-value">
+                      <% if metric[:kind] == :time %>
+                        <%= metric[:value].present? ? "#{time_ago_in_words(metric[:value])} ago" : "None" %>
+                      <% else %>
+                        <%= metric[:value] %>
+                      <% end %>
+                    </span>
                   </div>
-                  <div class="case-signal-title"><%= item[:title] %></div>
-                  <% if item[:meta].present? %>
-                    <div class="case-signal-meta"><%= item[:meta] %></div>
+                <% end %>
+              </div>
+
+              <% if group[:items].any? %>
+                <div class="case-signal-list">
+                  <% group[:items].each do |item| %>
+                    <article class="case-signal-item">
+                      <div class="case-signal-top">
+                        <span class="case-badge <%= investigation_case_signal_badge_class(item[:kind]) %>"><%= item[:kind_label] %></span>
+                        <% if item[:at].present? %>
+                          <span class="case-note-time"><%= time_ago_in_words(item[:at]) %> ago</span>
+                        <% end %>
+                      </div>
+                      <div class="case-signal-title"><%= item[:title] %></div>
+                      <% if item[:meta].present? %>
+                        <div class="case-signal-meta"><%= item[:meta] %></div>
+                      <% end %>
+                      <% if item[:detail].present? %>
+                        <p class="case-copy case-copy--signal"><%= item[:detail] %></p>
+                      <% end %>
+                    </article>
                   <% end %>
-                  <% if item[:detail].present? %>
-                    <p class="case-copy case-copy--signal"><%= item[:detail] %></p>
-                  <% end %>
-                </article>
+                </div>
+              <% else %>
+                <div class="case-empty case-empty--inline">No nearby supporting signals are in the current <%= supporting_signals[:scope_label] %>.</div>
               <% end %>
             </div>
-          <% else %>
-            <div class="case-empty case-empty--inline">No nearby strike signals are in the current 7-day scope.</div>
           <% end %>
         </section>
       <% end %>

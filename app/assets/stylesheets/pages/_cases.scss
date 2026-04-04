@@ -407,6 +407,12 @@
   color: rgba(226, 232, 240, 0.7);
 }
 
+.case-signal-group + .case-signal-group {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
 .case-signal-list {
   display: grid;
   gap: 12px;

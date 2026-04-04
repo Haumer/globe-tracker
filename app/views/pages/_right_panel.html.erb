@@ -35,12 +35,11 @@
     <div class="insight-feed-header">
       <div class="insight-feed-title context-feed-title">
         <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
-        <span class="context-feed-title-text">Selected Context</span>
+        <span class="context-feed-title-text">Operational Context</span>
       </div>
     </div>
-    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">This pane joins the current selection into one operational view instead of splitting stories, insights, and strategic nodes across separate tabs.</div>
     <div class="insight-feed-list" data-globe-target="contextContent">
-      <div class="insight-empty">Select a story, insight, or strategic node to inspect related evidence here.</div>
+      <div class="context-empty">Click a map item to inspect the deeper context here.</div>
     </div>
   </div>
 
@@ -69,10 +68,9 @@
   <%# ── News pane ── %>
   <div class="rp-pane" data-rp-pane="news" data-globe-target="newsFeedPanel" role="region" aria-label="News feed">
     <div class="news-feed-header">
-      <span class="news-feed-title">NEWS <span style="font:600 9px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.7);letter-spacing:0.8px;">EXPERIMENTAL</span></span>
+      <span class="news-feed-title">NEWS</span>
       <span class="news-feed-count" data-globe-target="newsFeedCount">0 articles</span>
     </div>
-    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">Story grouping, flow arcs, and some tags are derived from reporting and may lag or remain uncertain.</div>
     <div class="nf-tabs" role="tablist">
       <button class="nf-tab nf-tab--active" data-action="click->globe#switchNewsTab" data-tab="articles" role="tab" aria-selected="true">ARTICLES</button>
       <button class="nf-tab" data-action="click->globe#switchNewsTab" data-tab="flows" role="tab" aria-selected="false">FLOWS</button>
@@ -128,10 +126,9 @@
   <%# ── Situations pane ── %>
   <div class="rp-pane" data-rp-pane="situations" role="region" aria-label="Conflict situations">
     <div class="sit-header">
-      <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> SITUATIONS <span style="font:600 9px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.7);letter-spacing:0.8px;">DERIVED</span></span>
+      <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> THEATERS</span>
       <span class="sit-count" data-globe-target="sitCount">0 zones</span>
     </div>
-    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">Situations are computed from recent reporting and supporting signals, not direct ground-truth conflict records.</div>
     <span class="rp-loading" data-globe-target="sitLoading" style="display:none;">Loading...</span>
     <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">No active situations detected.</p>
     <div class="sit-list" data-globe-target="sitList"></div>
@@ -140,10 +137,9 @@
   <%# ── Insights pane ── %>
   <div class="rp-pane" data-rp-pane="insights" role="region" aria-label="Cross-layer insights">
     <div class="insight-feed-header">
-      <span class="insight-feed-title"><i class="fa-solid fa-brain" aria-hidden="true"></i> CROSS-LAYER INSIGHTS <span style="font:600 9px 'JetBrains Mono',monospace;color:rgba(255,152,0,0.7);letter-spacing:0.8px;">EXPERIMENTAL</span></span>
+      <span class="insight-feed-title"><i class="fa-solid fa-brain" aria-hidden="true"></i> INSIGHTS</span>
       <span class="insight-feed-count" data-globe-target="insightFeedCount">0 insights</span>
     </div>
-    <div style="padding:0 12px 8px;font:400 10px/1.5 var(--gt-mono);color:rgba(200,210,225,0.45);">Insights are machine-derived correlations across layers and should be treated as leads for inspection.</div>
     <% if current_user&.admin? %>
     <button class="detail-track-btn" style="margin:8px 12px;background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;font:600 10px 'JetBrains Mono',monospace;letter-spacing:0.5px;" data-action="click->globe#loadBrief">
       <i class="fa-solid fa-file-lines" style="margin-right:4px;"></i>INTELLIGENCE BRIEF

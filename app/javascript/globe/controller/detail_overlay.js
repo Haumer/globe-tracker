@@ -57,6 +57,46 @@ function upperLabel(value) {
   return value ? `${value}`.replace(/_/g, " ").toUpperCase() : null
 }
 
+function shortLine(value, maxLength = 96) {
+  if (value == null) return null
+  const normalized = `${value}`.replace(/\s+/g, " ").trim()
+  if (!normalized) return null
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}\u2026`
+}
+
+function propertyValue(prop, currentTime) {
+  if (prop == null) return null
+  if (typeof prop.getValue === "function") {
+    try {
+      return prop.getValue(currentTime)
+    } catch {
+      return null
+    }
+  }
+  return prop
+}
+
+function nearFarScaleValue(nearFar, distance) {
+  if (!nearFar || !Number.isFinite(distance)) return 1
+  const near = Number(nearFar.near)
+  const nearValue = Number(nearFar.nearValue)
+  const far = Number(nearFar.far)
+  const farValue = Number(nearFar.farValue)
+  if (![near, nearValue, far, farValue].every(Number.isFinite)) return 1
+  if (distance <= near) return nearValue
+  if (distance >= far) return farValue
+  if (far <= near) return farValue
+  const t = (distance - near) / (far - near)
+  return nearValue + (farValue - nearValue) * t
+}
+
+function conflictPulseStroke(score) {
+  if (score >= 70) return "#f44336"
+  if (score >= 50) return "#ff9800"
+  return "#ffc107"
+}
+
 export function applyDetailOverlayMethods(GlobeController) {
   GlobeController.prototype._showCompactEntityDetail = function(kind, data, options = {}) {
     const payload = this._buildAnchoredDetailPayload(kind, data, options)
@@ -82,10 +122,17 @@ export function applyDetailOverlayMethods(GlobeController) {
       ...payload,
       hiddenSince: null,
     }
+    const stroke = payload.stroke || payload.accent || "#8bd8ff"
+    const strokeWidth = payload.strokeWidth || 2.25
     this.anchorOverlayTarget.style.display = ""
     this.anchorPanelTarget.style.display = ""
     this.anchorPanelTarget.dataset.mode = "anchored"
+    this.anchorOverlayTarget.style.setProperty("--anchor-accent", payload.accent || "#8bd8ff")
+    this.anchorOverlayTarget.style.setProperty("--anchor-stroke", stroke)
+    this.anchorOverlayTarget.style.setProperty("--anchor-border-width", `${strokeWidth}px`)
     this.anchorPanelTarget.style.setProperty("--anchor-accent", payload.accent || "#8bd8ff")
+    this.anchorPanelTarget.style.setProperty("--anchor-stroke", stroke)
+    this.anchorPanelTarget.style.setProperty("--anchor-border-width", `${strokeWidth}px`)
     this.anchorContentTarget.innerHTML = this._renderAnchoredDetailHtml(payload)
 
     this._refreshAnchoredDetailPosition(true)
@@ -99,15 +146,25 @@ export function applyDetailOverlayMethods(GlobeController) {
       this.anchorPanelTarget.style.left = ""
       this.anchorPanelTarget.style.top = ""
       this.anchorPanelTarget.dataset.mode = "anchored"
+      this.anchorPanelTarget.style.removeProperty("--anchor-accent")
+      this.anchorPanelTarget.style.removeProperty("--anchor-stroke")
+      this.anchorPanelTarget.style.removeProperty("--anchor-border-width")
     }
     if (this.hasAnchorOverlayTarget) {
       this.anchorOverlayTarget.style.display = "none"
+      this.anchorOverlayTarget.style.removeProperty("--anchor-accent")
+      this.anchorOverlayTarget.style.removeProperty("--anchor-stroke")
+      this.anchorOverlayTarget.style.removeProperty("--anchor-border-width")
     }
     if (this.hasAnchorLeaderTarget) {
       this.anchorLeaderTarget.style.display = "none"
     }
     if (this.hasAnchorLeaderPathTarget) {
       this.anchorLeaderPathTarget.setAttribute("d", "")
+    }
+    if (this.hasAnchorLeaderSocketTarget) {
+      this.anchorLeaderSocketTarget.style.display = "none"
+      this.anchorLeaderSocketTarget.setAttribute("r", "0")
     }
   }
 
@@ -122,9 +179,8 @@ export function applyDetailOverlayMethods(GlobeController) {
       ? `<div class="anchor-subtitle">${this._escapeHtml(payload.subtitle)}</div>`
       : ""
 
-    const facts = compactFacts(payload.facts || [], 2)
-    const factsHtml = facts.length
-      ? `<div class="anchor-facts">${facts.map(value => `<span>${this._escapeHtml(value)}</span>`).join('<span class="anchor-dot">&middot;</span>')}</div>`
+    const briefHtml = payload.brief
+      ? `<div class="anchor-brief">${this._escapeHtml(payload.brief)}</div>`
       : ""
 
     return `
@@ -134,7 +190,7 @@ export function applyDetailOverlayMethods(GlobeController) {
       </div>
       <div class="anchor-title">${this._escapeHtml(payload.title || kindLabel(payload.kind))}</div>
       ${subtitleHtml}
-      ${factsHtml}
+      ${briefHtml}
     `
   }
 
@@ -198,6 +254,95 @@ export function applyDetailOverlayMethods(GlobeController) {
     return { x: clamp(point.x, left + 24, right - 24), y: top }
   }
 
+  GlobeController.prototype._anchoredDetailOriginPoint = function(point, join, markerRadius = 0, overlap = 0) {
+    if (!point || !join) return point
+    if (!(markerRadius > 0)) return point
+
+    const dx = join.x - point.x
+    const dy = join.y - point.y
+    const distance = Math.hypot(dx, dy)
+    if (!Number.isFinite(distance) || distance <= 1) return point
+
+    const offset = Math.min(Math.max(0, markerRadius - overlap), Math.max(0, distance - 1))
+    return {
+      x: point.x + (dx / distance) * offset,
+      y: point.y + (dy / distance) * offset,
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailSocketCenter = function(point, join, markerRadius = 0, socketRadius = 0, overlap = 0) {
+    if (!point || !join) return point
+    if (!(socketRadius > 0)) return this._anchoredDetailOriginPoint(point, join, markerRadius, overlap)
+
+    const dx = join.x - point.x
+    const dy = join.y - point.y
+    const distance = Math.hypot(dx, dy)
+    if (!Number.isFinite(distance) || distance <= 1) return point
+
+    const edgeOffset = Math.max(0, markerRadius - socketRadius * 0.55)
+    const offset = Math.min(Math.max(0, edgeOffset), Math.max(0, distance - 1))
+    return {
+      x: point.x + (dx / distance) * offset,
+      y: point.y + (dy / distance) * offset,
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailLiveMarkerRadius = function(state) {
+    const fallback = state?.markerRadius || 0
+    const entity = state?.anchor?.entity
+    const billboard = entity?.billboard
+    const Cesium = window.Cesium
+    if (!billboard || !Cesium || !this.viewer?.camera) return fallback
+
+    const currentTime = this.viewer.clock?.currentTime
+    const width = toNumber(propertyValue(billboard.width, currentTime))
+    const height = toNumber(propertyValue(billboard.height, currentTime))
+    if (!(width > 0) || !(height > 0)) return fallback
+
+    const scale = toNumber(propertyValue(billboard.scale, currentTime)) || 1
+    const scaleByDistance = propertyValue(billboard.scaleByDistance, currentTime)
+
+    let distanceScale = 1
+    const cartesian = entity.position?.getValue?.(currentTime)
+    if (cartesian && this.viewer.camera.positionWC) {
+      const distance = Cesium.Cartesian3.distance(this.viewer.camera.positionWC, cartesian)
+      distanceScale = nearFarScaleValue(scaleByDistance, distance)
+    }
+
+    const displayedSize = Math.min(width, height) * scale * distanceScale
+    if (!(displayedSize > 0)) return fallback
+
+    const factor = state.kind === "conflict_pulse"
+      ? (24 / 52)
+      : state.kind === "strategic_situation"
+        ? 0.4
+        : 0.45
+
+    return displayedSize * factor
+  }
+
+  GlobeController.prototype._anchoredDetailMarkerOverlap = function(state) {
+    switch (state?.kind) {
+      case "conflict_pulse":
+        return 4.5
+      case "strategic_situation":
+        return 2.25
+      default:
+        return 1.5
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailSocketRadius = function(state) {
+    switch (state?.kind) {
+      case "conflict_pulse":
+        return 6
+      case "strategic_situation":
+        return 5.25
+      default:
+        return 0
+    }
+  }
+
   GlobeController.prototype._refreshAnchoredDetailPosition = function(force = false) {
     if (!this._anchoredDetailState || !this.hasAnchorPanelTarget) return
     if (!force && window.getComputedStyle(this.anchorPanelTarget).display === "none") return
@@ -206,6 +351,7 @@ export function applyDetailOverlayMethods(GlobeController) {
     const overlay = this.hasAnchorOverlayTarget ? this.anchorOverlayTarget : null
     const leader = this.hasAnchorLeaderTarget ? this.anchorLeaderTarget : null
     const leaderPath = this.hasAnchorLeaderPathTarget ? this.anchorLeaderPathTarget : null
+    const leaderSocket = this.hasAnchorLeaderSocketTarget ? this.anchorLeaderSocketTarget : null
 
     const mobile = window.innerWidth <= 960
     const state = this._anchoredDetailState
@@ -219,6 +365,10 @@ export function applyDetailOverlayMethods(GlobeController) {
       panel.style.display = "none"
       if (leader) leader.style.display = "none"
       if (leaderPath) leaderPath.setAttribute("d", "")
+      if (leaderSocket) {
+        leaderSocket.style.display = "none"
+        leaderSocket.setAttribute("r", "0")
+      }
     }
 
     if (mobile) {
@@ -228,6 +378,10 @@ export function applyDetailOverlayMethods(GlobeController) {
       panel.style.top = ""
       if (leader) leader.style.display = "none"
       if (leaderPath) leaderPath.setAttribute("d", "")
+      if (leaderSocket) {
+        leaderSocket.style.display = "none"
+        leaderSocket.setAttribute("r", "0")
+      }
       return
     }
 
@@ -274,7 +428,16 @@ export function applyDetailOverlayMethods(GlobeController) {
     }
 
     const join = this._anchoredDetailJoinPoint(point, placement, panelWidth, panelHeight)
-    if (pointDistance(point, join) > 168) {
+    const liveMarkerRadius = this._anchoredDetailLiveMarkerRadius(state)
+    const socketRadius = this._anchoredDetailSocketRadius(state)
+    const origin = this._anchoredDetailSocketCenter(
+      point,
+      join,
+      liveMarkerRadius,
+      socketRadius,
+      this._anchoredDetailMarkerOverlap(state)
+    )
+    if (pointDistance(origin, join) > 168) {
       const now = performance.now()
       state.hiddenSince ||= now
       markHidden()
@@ -294,8 +457,57 @@ export function applyDetailOverlayMethods(GlobeController) {
     if (!leader || !leaderPath) return
 
     leader.style.display = ""
-    const bendY = placement.vertical === "above" ? point.y - 12 : point.y + 12
-    leaderPath.setAttribute("d", `M ${Math.round(point.x)} ${Math.round(point.y)} L ${Math.round(point.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
+    const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+    leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
+    if (leaderSocket) {
+      if (socketRadius > 0) {
+        leaderSocket.style.display = ""
+        leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
+        leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)
+        leaderSocket.setAttribute("r", `${socketRadius}`)
+      } else {
+        leaderSocket.style.display = "none"
+        leaderSocket.setAttribute("r", "0")
+      }
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailMarkerStroke = function(kind, data) {
+    switch (kind) {
+      case "conflict_pulse":
+        return conflictPulseStroke(toNumber(data?.pulse_score) || 0)
+      case "strategic_situation": {
+        return {
+          critical: "#ff7043",
+          elevated: "#ffca28",
+          monitoring: "#26c6da",
+        }[data?.status] || "#26c6da"
+      }
+      case "insight":
+        return { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }[data?.severity] || "#8bd8ff"
+      default:
+        return null
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailMarkerRadius = function(kind, data) {
+    switch (kind) {
+      case "conflict_pulse": {
+        const score = toNumber(data?.pulse_score) || 0
+        const iconSize = score >= 70 ? 48 : score >= 50 ? 44 : 36
+        return Math.max(0, iconSize * 0.43 - 1)
+      }
+      case "strategic_situation":
+        return data?.status === "critical" ? 12.5 : 11
+      case "insight":
+        return 13
+      case "news":
+        return 10
+      case "chokepoint":
+        return 12
+      default:
+        return 0
+    }
   }
 
   GlobeController.prototype._anchoredDetailDefaultAltitude = function(kind, data) {
@@ -493,15 +705,23 @@ export function applyDetailOverlayMethods(GlobeController) {
       firstPresent(data?.status, data?.type_label, data?.event_type, data?.ship_type, data?.severity),
       firstPresent(data?.code, data?.symbol, data?.publisher_name, data?.source),
     ])
+    const genericBrief = shortLine(genericFacts.join(" · "))
 
-    const makePayload = ({ title, subtitle, facts = [], chips = [], accent }) => ({
+    const markerStroke = this._anchoredDetailMarkerStroke(kind, data)
+    const markerRadius = this._anchoredDetailMarkerRadius(kind, data)
+
+    const makePayload = ({ title, subtitle, brief, facts = [], chips = [], accent, stroke, strokeWidth }) => ({
       kind,
       title: title || genericTitle,
-      subtitle: subtitle || genericSubtitle,
+      subtitle: shortLine(subtitle || genericSubtitle, 84),
+      brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
       facts: compactFacts(facts.length ? facts : genericFacts),
       chips: chips.filter(Boolean).slice(0, 2),
       timeLabel,
       accent: accent || "#8bd8ff",
+      stroke: stroke || markerStroke || accent || "#8bd8ff",
+      strokeWidth: strokeWidth || 2.25,
+      markerRadius,
       anchor,
     })
 
@@ -610,13 +830,16 @@ export function applyDetailOverlayMethods(GlobeController) {
       }
       case "news": {
         const actors = Array.isArray(data?.actors) ? data.actors.map(actor => actor.name).filter(Boolean) : []
+        const location = firstPresent(data?.name, data?.location, data?.place, data?.publisher, data?.origin_source, "Reported event")
+        const claimType = data?.claim_event_type ? `${data.claim_event_type}`.replace(/_/g, " ") : null
+        const verification = data?.claim_verification_status ? `${data.claim_verification_status}`.replace(/_/g, " ") : null
         return makePayload({
           title: firstPresent(data?.title, data?.name, "News signal"),
-          subtitle: firstPresent(data?.name, data?.publisher, data?.origin_source, "Reported event"),
-          facts: [
-            firstPresent(data?.claim_event_type && `${data.claim_event_type}`.replace(/_/g, " "), actors.slice(0, 2).join(", ")),
-            firstPresent(data?.publisher, data?.source),
-          ],
+          subtitle: location,
+          brief: compactFacts([
+            firstPresent(claimType, actors.slice(0, 2).join(", ")),
+            firstPresent(verification, data?.publisher, data?.source),
+          ]).join(" · "),
           chips: [
             chip(firstPresent(data?.category, "News"), data?.threat === "high" ? "critical" : "accent"),
             chip(firstPresent(data?.claim_verification_status, data?.credibility), "neutral"),
@@ -718,11 +941,11 @@ export function applyDetailOverlayMethods(GlobeController) {
         const ships = toNumber(data?.ships_transiting ?? data?.ships_daily ?? data?.ships_nearby?.total)
         return makePayload({
           title: firstPresent(data?.name, "Chokepoint"),
-          subtitle: firstPresent(data?.status, data?.region, "Maritime chokepoint"),
-          facts: [
-            ships != null ? `${Math.round(ships)} ships` : null,
+          subtitle: firstPresent(data?.region, data?.status, "Maritime chokepoint"),
+          brief: compactFacts([
+            ships != null ? `${Math.round(ships)} ships nearby` : null,
             firstPresent(data?.risk_factors?.[0], data?.commodity_signals?.[0]?.symbol),
-          ],
+          ]).join(" · "),
           chips: [
             chip(firstPresent(data?.status, "Monitoring"), data?.status === "critical" ? "critical" : data?.status === "elevated" ? "warning" : "accent"),
             chip("Chokepoint", "neutral"),
@@ -769,31 +992,34 @@ export function applyDetailOverlayMethods(GlobeController) {
       case "strategic_situation": {
         return makePayload({
           title: firstPresent(data?.name, "Strategic situation"),
-          subtitle: firstPresent(data?.theater, data?.pressure_summary, "Strategic view"),
-          facts: [
+          subtitle: firstPresent(data?.theater, data?.country, "Strategic view"),
+          brief: compactFacts([
             data?.direct_cluster_count != null ? `${data.direct_cluster_count} corroborated clusters` : null,
-            firstPresent(data?.verification_status, data?.event_type),
-          ],
+            firstPresent(data?.pressure_summary, data?.verification_status, data?.event_type),
+          ]).join(" · "),
           chips: [
             chip("Situation", "warning"),
             chip(firstPresent(data?.event_type, data?.verification_status), "neutral"),
           ],
-          accent: "#ffab40",
+          accent: this._anchoredDetailMarkerStroke(kind, data) || "#ffab40",
         })
       }
       case "conflict_pulse": {
+        const stroke = conflictPulseStroke(toNumber(data?.pulse_score) || 0)
         return makePayload({
           title: firstPresent(data?.situation_name, data?.theater, data?.conflict_name, "Conflict theater"),
           subtitle: firstPresent(data?.theater, data?.country, "Conflict pulse"),
-          facts: [
+          brief: compactFacts([
             data?.pulse_score != null ? `Pulse ${Math.round(data.pulse_score)}` : null,
+            data?.count_24h != null ? `${data.count_24h} reports / 24h` : null,
             firstPresent(data?.escalation_trend, data?.top_headlines?.[0]),
-          ],
+          ]).join(" · "),
           chips: [
             chip(firstPresent(data?.escalation_trend, "Monitoring"), data?.escalation_trend === "surging" || data?.escalation_trend === "escalating" ? "critical" : "warning"),
             chip("Theater", "neutral"),
           ],
-          accent: data?.escalation_trend === "surging" || data?.escalation_trend === "escalating" ? "#ef5350" : "#ff9800",
+          accent: stroke,
+          stroke,
         })
       }
       case "hex_cell": {
@@ -812,10 +1038,10 @@ export function applyDetailOverlayMethods(GlobeController) {
         return makePayload({
           title: firstPresent(data?.conflict, data?.headline, "Conflict event"),
           subtitle: firstPresent(data?.country && data?.type_label ? `${data.country} · ${data.type_label}` : null, data?.location, "Conflict event"),
-          facts: [
+          brief: compactFacts([
             data?.deaths != null ? `${data.deaths} deaths` : null,
-            firstPresent(data?.date_start, data?.side_a && data?.side_b ? `${data.side_a} vs ${data.side_b}` : null),
-          ],
+            firstPresent(data?.side_a && data?.side_b ? `${data.side_a} vs ${data.side_b}` : null, data?.date_start),
+          ]).join(" · "),
           chips: [chip(firstPresent(data?.type_label, "Conflict"), "critical")],
           accent: "#f44336",
         })
@@ -864,22 +1090,27 @@ export function applyDetailOverlayMethods(GlobeController) {
         return makePayload({
           title: firstPresent(data?.name, data?.symbol, "Commodity"),
           subtitle: firstPresent(data?.region, data?.category, "Market signal"),
-          facts: [
+          brief: compactFacts([
             price != null ? `$${price.toFixed(data?.category === "currency" ? 4 : 2)}` : null,
             change != null ? `${change > 0 ? "+" : ""}${change.toFixed(2)}%` : null,
-          ],
+          ]).join(" · "),
           chips: [chip(firstPresent(data?.category, "Market"), change < 0 ? "critical" : change > 0 ? "accent" : "neutral")],
           accent: change < 0 ? "#ef5350" : change > 0 ? "#4caf50" : "#ffc107",
         })
       }
       case "insight": {
+        const theater = firstPresent(data?.entities?.theater?.name, data?.entities?.pulse?.theater, data?.location)
         return makePayload({
           title: firstPresent(data?.title, "Insight"),
-          subtitle: firstPresent(data?.summary, data?.category, "Derived insight"),
-          facts: [
-            data?.confidence != null ? `${Math.round(data.confidence * 100)}% confidence` : null,
-            firstPresent(data?.kind, data?.severity),
-          ],
+          subtitle: firstPresent(theater, data?.category, "Derived insight"),
+          brief: firstPresent(
+            data?.description,
+            data?.summary,
+            compactFacts([
+              data?.confidence != null ? `${Math.round(data.confidence * 100)}% confidence` : null,
+              firstPresent(data?.kind, data?.severity),
+            ]).join(" · ")
+          ),
           chips: [chip(firstPresent(data?.severity, "Insight"), data?.severity === "critical" ? "critical" : "accent")],
           accent: "#8bd8ff",
         })

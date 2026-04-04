@@ -18,6 +18,7 @@ export const GLOBE_TARGETS = [
   "anchorContent",
   "anchorLeader",
   "anchorLeaderPath",
+  "anchorLeaderSocket",
   "flightCount",
   "trailsToggle",
   "satStationsToggle",

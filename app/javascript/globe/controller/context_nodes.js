@@ -241,6 +241,7 @@ export function applyContextNodeMethods(GlobeController) {
     return {
       kind: "commodity",
       severity: item.change_pct != null && Math.abs(item.change_pct) >= 2 ? "high" : "medium",
+      statusLabel: item.change_pct > 0 ? "up" : item.change_pct < 0 ? "down" : item.category || "market",
       icon: "fa-chart-line",
       accentColor,
       eyebrow: "MARKET CONTEXT",
@@ -273,6 +274,8 @@ export function applyContextNodeMethods(GlobeController) {
     const color = categoryColors[ev.category] || "#90a4ae"
     const location = [...new Set((ev.name || "").split(",").map(part => part.trim()).filter(Boolean))].join(", ")
     const sourceName = (ev.publisher || ev.source || "").replace(/^GN:\s*/, "")
+    const claimType = ev.claim_event_type ? ev.claim_event_type.replace(/_/g, " ") : null
+    const verification = ev.claim_verification_status ? ev.claim_verification_status.replace(/_/g, " ") : null
     const actors = (ev.actors || []).map(actor => actor.role ? `${actor.name} (${actor.role.replace(/_/g, " ")})` : actor.name).filter(Boolean)
     const summaryBits = []
     if (ev.source_count) summaryBits.push(`${ev.source_count} sources`)
@@ -301,12 +304,13 @@ export function applyContextNodeMethods(GlobeController) {
     return {
       kind: "news",
       severity: ev.threat === "critical" ? "critical" : ev.threat === "high" ? "high" : "medium",
+      statusLabel: verification || ev.threat || ev.category || "news",
       icon: "fa-newspaper",
       accentColor: color,
       eyebrow: "NEWS CONTEXT",
       title: ev.title || ev.name || "Story cluster",
       subtitle: location || "Unknown location",
-      summary: summaryBits.join(" · "),
+      summary: [claimType, summaryBits.join(" · ")].filter(Boolean).join(" · ") || "Reporting cluster in view.",
       meta: [
         { label: "Category", value: ev.category || "other" },
         ev.cluster_confidence != null ? { label: "Cluster confidence", value: `${Math.round(ev.cluster_confidence * 100)}%` } : null,
@@ -385,11 +389,12 @@ export function applyContextNodeMethods(GlobeController) {
     return {
       kind: "insight",
       severity: insight.severity || "medium",
+      statusLabel: insight.severity || insight.type || "insight",
       icon: "fa-brain",
       accentColor: { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }[insight.severity || "medium"],
       eyebrow: "CROSS-LAYER INSIGHT",
       title: insight.title || "Insight",
-      subtitle: insight.type ? insight.type.replace(/_/g, " ") : "",
+      subtitle: theaterName || (insight.type ? insight.type.replace(/_/g, " ") : ""),
       summary: insight.description || "",
       meta: [
         insight.detected_at ? { label: "Detected", value: this._timeAgo(new Date(insight.detected_at)) } : null,
@@ -462,12 +467,13 @@ export function applyContextNodeMethods(GlobeController) {
     return {
       kind: "theater",
       severity: pulseScore >= 80 ? "critical" : pulseScore >= 60 ? "high" : pulseScore >= 40 ? "medium" : "low",
+      statusLabel: trend || (pulseScore ? `pulse ${pulseScore}` : "monitoring"),
       icon: "fa-layer-group",
       accentColor: pulseScore >= 80 ? "#f44336" : pulseScore >= 60 ? "#ff9800" : pulseScore >= 40 ? "#ffc107" : "#4fc3f7",
       eyebrow: "THEATER CONTEXT",
       title: theaterName,
       subtitle: theaterIdentifier && zone.situation_name ? zone.situation_name : "Regional pressure and corroborating signals",
-      summary: summaryBits.join(" · ") || "Durable relationships and supporting reporting for this theater.",
+      summary: summaryBits.join(" · ") || "Regional pressure and corroborating reporting in this theater.",
       meta: [
         pulseScore ? { label: "Pulse", value: `${pulseScore}` } : null,
         zone.story_count ? { label: "Stories", value: `${zone.story_count}` } : null,
@@ -514,6 +520,7 @@ export function applyContextNodeMethods(GlobeController) {
     return {
       kind: "chokepoint",
       severity: cp.status === "critical" ? "critical" : cp.status === "elevated" ? "high" : cp.status === "monitoring" ? "medium" : "low",
+      statusLabel: cp.status || "monitoring",
       icon: "fa-anchor",
       accentColor: { critical: "#f44336", elevated: "#ff9800", monitoring: "#ffc107", normal: "#4fc3f7" }[cp.status] || "#4fc3f7",
       eyebrow: "STRATEGIC NODE",

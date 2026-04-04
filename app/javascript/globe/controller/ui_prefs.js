@@ -1,3 +1,7 @@
+import { ADVANCED_LAYER_KEYS } from "./ui_registry"
+
+const ADVANCED_LAYER_SET = new Set(ADVANCED_LAYER_KEYS)
+
 export function applyUiPreferenceMethods(GlobeController) {
   GlobeController.prototype._savePrefs = function() {
     if (!this.signedInValue || !this.viewer) return
@@ -25,6 +29,7 @@ export function applyUiPreferenceMethods(GlobeController) {
       sidebar_collapsed: this.hasSidebarTarget && this.sidebarTarget.classList.contains("collapsed"),
       right_panel_closed: !!this._rightPanelUserClosed,
       layers: buildLayerPrefs.call(this),
+      enabled_layers: [...(this._enabledAdvancedLayers || [])],
       selected_countries: [...this.selectedCountries],
       airline_filter: [...this._airlineFilter],
       open_sections: openSectionsFor(this.element),
@@ -44,17 +49,22 @@ export function applyUiPreferenceMethods(GlobeController) {
 
   GlobeController.prototype._restorePrefs = function() {
     const prefs = this.savedPrefsValue
+    this._enabledAdvancedLayers = new Set(deriveEnabledLayers(prefs))
     if (!prefs || Object.keys(prefs).length === 0) return
     this._restoredPrefs = prefs
   }
 
   GlobeController.prototype._applyRestoredPrefs = function() {
     const prefs = this._restoredPrefs
-    if (!prefs) return
+    if (!prefs) {
+      this._syncLayerLibrary?.()
+      return
+    }
     this._restoredPrefs = null
 
     restoreCamera.call(this, prefs)
     restoreChromeState.call(this, prefs)
+    this._syncLayerLibrary?.()
     applyLayerPrefs.call(this, prefs.layers)
     restoreSelections.call(this, prefs)
 
@@ -71,6 +81,7 @@ export function applyUiPreferenceMethods(GlobeController) {
 function buildLayerPrefs() {
   return {
     flights: this.flightsVisible,
+    militaryFlights: this._milFlightsActive,
     trails: this.trailsVisible,
     ships: this.shipsVisible,
     borders: this.bordersVisible,
@@ -95,7 +106,7 @@ function buildLayerPrefs() {
     traffic: this.trafficVisible,
     notams: this.notamsVisible,
     insights: this.insightsVisible,
-    fireHotspots: false,
+    fireHotspots: this.fireHotspotsVisible,
     fireClusters: this.fireClustersVisible,
     strikeArcs: this._strikeArcsVisible,
     hexTheater: this._hexTheaterVisible,
@@ -156,6 +167,7 @@ function restoreChromeState(prefs) {
 
 function applyLayerPrefs(layers) {
   if (!layers) return
+  this._ensureAdvancedLayersEnabled?.(deriveEnabledLayersFromLayerPrefs(layers))
   const l = layers
 
   toggleIf.call(this, l.flights, "flightsToggle", "toggleFlights")
@@ -198,6 +210,8 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.traffic, "trafficToggle", "toggleTraffic")
   toggleIf.call(this, l.notams, "notamsToggle", "toggleNotams")
   toggleIf.call(this, l.insights, "insightsToggle", "toggleInsights")
+  toggleIf.call(this, l.militaryFlights, "militaryToggle", "toggleMilitaryFlightsFilter")
+  toggleIf.call(this, l.fireHotspots, "fireHotspotsToggle", "toggleFireHotspots")
 
   if (this.hasFireClustersToggleTarget) {
     const fireClustersEnabled = l.fireClusters !== false
@@ -272,4 +286,30 @@ function restoreWeather(layers) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function deriveEnabledLayers(prefs) {
+  if (!prefs || typeof prefs !== "object") return []
+
+  const enabled = new Set(Array(prefs.enabled_layers).map(String))
+
+  deriveEnabledLayersFromLayerPrefs(prefs.layers).forEach((key) => {
+    enabled.add(key)
+  })
+
+  return [...enabled]
+}
+
+function deriveEnabledLayersFromLayerPrefs(layers) {
+  if (!layers || typeof layers !== "object") return []
+
+  const enabled = Object.entries(layers)
+    .filter(([key, value]) => value === true && ADVANCED_LAYER_SET.has(key))
+    .map(([key]) => key)
+
+  if (layers.satCategories && typeof layers.satCategories === "object" && Object.values(layers.satCategories).some(Boolean)) {
+    enabled.push("satellites")
+  }
+
+  return [...new Set(enabled)]
 }

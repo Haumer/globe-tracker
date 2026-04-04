@@ -61,6 +61,7 @@ const TIMEOUT_PROPS = [
   "_timelineEventTimer",
   "_timelineLayerReloadTimer",
   "_polyHighlightTimer",
+  "_conflictPulseRefreshDebounce",
   "_toastTimer",
 ]
 
@@ -364,6 +365,9 @@ export function initializeCoreState(controller) {
   controller._alertData = []
   controller._alertUnseenCount = 0
   controller._selectedContext = null
+  controller._anchoredDetailState = null
+  controller._onAnchoredDetailPostRender = null
+  controller._onAnchoredDetailResize = null
   controller._ds = {}
   controller._backgroundRefreshRetryTimers = {}
   controller._backgroundRefreshRetryCounts = {}
@@ -381,7 +385,12 @@ export function wireCoreChrome(controller) {
     if (data.type === "earthquake" && controller.earthquakesVisible) {
       controller.fetchEarthquakes?.()
     } else if (data.type === "conflict_escalation" && controller.situationsVisible) {
-      controller._fetchConflictPulse?.()
+      clearTimeout(controller._conflictPulseRefreshDebounce)
+      controller._conflictPulseRefreshDebounce = setTimeout(() => {
+        if (controller.situationsVisible && !controller._timelineActive) {
+          controller._fetchConflictPulse?.()
+        }
+      }, 750)
     }
   }
 
@@ -428,6 +437,10 @@ export function teardownCore(controller) {
   if (controller._onBreakingEvent) {
     document.removeEventListener("globe:breaking-event", controller._onBreakingEvent)
   }
+  if (controller._onAnchoredDetailResize) {
+    window.removeEventListener("resize", controller._onAnchoredDetailResize)
+    controller._onAnchoredDetailResize = null
+  }
 
   if (controller._handler) controller._handler.destroy()
   if (controller._ytMessageCleanup) {
@@ -439,6 +452,12 @@ export function teardownCore(controller) {
   detachCameraMoveEndCallbacks(controller, viewer)
 
   if (viewer) {
+    if (controller._onAnchoredDetailPostRender) {
+      try {
+        viewer.scene?.postRender?.removeEventListener(controller._onAnchoredDetailPostRender)
+      } catch {}
+      controller._onAnchoredDetailPostRender = null
+    }
     try {
       viewer.destroy()
     } finally {

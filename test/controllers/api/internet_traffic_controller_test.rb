@@ -17,6 +17,8 @@ class Api::InternetTrafficControllerTest < ActionDispatch::IntegrationTest
     data = JSON.parse(response.body)
     assert_kind_of Array, data["traffic"]
     assert data["traffic"].any? { |t| t["code"] == "US" }
+    assert_equal "ready", response.headers["X-Source-Status"]
+    assert_equal "0", response.headers["X-Source-Configured"]
   end
 
   test "GET /api/internet_traffic with empty DB returns empty traffic" do
@@ -25,5 +27,7 @@ class Api::InternetTrafficControllerTest < ActionDispatch::IntegrationTest
 
     data = JSON.parse(response.body)
     assert_equal [], data["traffic"]
+    assert_equal "unconfigured", response.headers["X-Source-Status"]
+    assert_equal "0", response.headers["X-Source-Configured"]
   end
 end

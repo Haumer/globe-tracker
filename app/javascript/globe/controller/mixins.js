@@ -1,4 +1,5 @@
 import { applyCoreMethods } from "./core"
+import { applyDetailOverlayMethods } from "./detail_overlay"
 import { applyFlightMethods } from "./flights"
 import { applySelectionMethods } from "./selection"
 import { applySatelliteMethods } from "./satellites"
@@ -22,6 +23,7 @@ import { applyContextMethods } from "./context"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
+  applyDetailOverlayMethods(GlobeController)
   applyFlightMethods(GlobeController)
   applySelectionMethods(GlobeController)
   applySatelliteMethods(GlobeController)

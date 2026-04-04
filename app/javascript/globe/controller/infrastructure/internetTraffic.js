@@ -54,15 +54,24 @@ export function applyTrafficMethods(GlobeController) {
       const resp = await fetch("/api/internet_traffic")
       if (!resp.ok) return
       this._trafficData = await resp.json()
+      const sourceConfigured = resp.headers.get("X-Source-Configured") === "1"
       const hasData = (this._trafficData.traffic?.length || 0) > 0 || (this._trafficData.attack_pairs?.length || 0) > 0
       this._handleBackgroundRefresh(resp, "internet-traffic", hasData, () => {
         if (this.trafficVisible && !this._timelineActive) this.fetchTraffic()
       })
       this.renderTraffic()
+      if (!hasData) {
+        this._toast(
+          sourceConfigured ? "No internet traffic snapshot is loaded locally" : "Cloudflare Radar is not configured locally",
+          "error"
+        )
+        return
+      }
       this._markFresh("traffic")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet traffic:", e)
+      this._toast("Failed to load internet traffic", "error")
     }
   }
 

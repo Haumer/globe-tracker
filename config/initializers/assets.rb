@@ -1,7 +1,11 @@
 # Be sure to restart your server when you modify this file.
 
 # Version of your assets, change this if you want to expire all your assets.
-Rails.application.config.assets.version = "1.0"
+# In development, append a boot-scoped suffix so browser-cached digested assets
+# are refreshed on each Puma restart during UI iteration.
+base_asset_version = "1.0"
+dev_boot_suffix = Rails.env.development? ? ".dev-#{Process.pid}" : ""
+Rails.application.config.assets.version = "#{base_asset_version}#{dev_boot_suffix}"
 
 # Add additional assets to the asset load path.
 # Rails.application.config.assets.paths << Emoji.images_path

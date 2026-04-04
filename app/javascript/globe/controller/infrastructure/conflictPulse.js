@@ -65,19 +65,22 @@ export function applyConflictPulseMethods(GlobeController) {
 
       // Detect new surges — compare to previous state
       const prev = this._conflictPulsePrev || {}
+      const toastCandidates = []
       zones.forEach(zone => {
         const prevZone = prev[zone.cell_key]
         if (!prevZone && zone.escalation_trend === "surging") {
-          // Brand new surging zone
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         } else if (prevZone && prevZone.escalation_trend !== "surging" && zone.escalation_trend === "surging") {
-          // Escalated to surging
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         } else if (!prevZone && zone.pulse_score >= 70) {
-          // High-scoring new zone
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         }
       })
+
+      const nextToast = toastCandidates
+        .filter(zone => this._shouldToastConflictPulse(zone))
+        .sort((a, b) => (b.pulse_score || 0) - (a.pulse_score || 0))[0]
+      if (nextToast) this._toastConflictPulse(nextToast)
 
       // Cache current state for next comparison
       this._conflictPulsePrev = {}
@@ -95,6 +98,25 @@ export function applyConflictPulseMethods(GlobeController) {
     } catch (e) {
       console.warn("Conflict pulse fetch failed:", e)
     }
+  }
+
+  GlobeController.prototype._shouldToastConflictPulse = function(zone) {
+    if (!zone) return false
+    if (!this._conflictPulseToastSeen) this._conflictPulseToastSeen = new Map()
+
+    const ttl = 15 * 60 * 1000
+    const now = Date.now()
+    for (const [key, ts] of this._conflictPulseToastSeen.entries()) {
+      if (now - ts > ttl) this._conflictPulseToastSeen.delete(key)
+    }
+
+    const zoneKey = zone.cell_key || `${zone.situation_name || "zone"}:${zone.lat}:${zone.lng}`
+    const toastKey = `${zoneKey}:${zone.escalation_trend || "unknown"}`
+    const lastSeenAt = this._conflictPulseToastSeen.get(toastKey)
+    if (lastSeenAt && now - lastSeenAt < ttl) return false
+
+    this._conflictPulseToastSeen.set(toastKey, now)
+    return true
   }
 
   GlobeController.prototype._toastConflictPulse = function(zone) {

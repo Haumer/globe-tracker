@@ -1,6 +1,12 @@
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
+  dev_asset_headers = {
+    "Cache-Control" => "no-store, max-age=0, must-revalidate",
+    "Pragma" => "no-cache",
+    "Expires" => "0",
+  }
+
   config.action_mailer.default_url_options = { host: "http://localhost:3000" }
   # Settings specified here will take precedence over those in config/application.rb.
 
@@ -25,13 +31,12 @@ Rails.application.configure do
     config.action_controller.enable_fragment_cache_logging = true
 
     config.cache_store = :redis_cache_store, { url: "redis://localhost:6379/1" }
-    config.public_file_server.headers = {
-      "Cache-Control" => "public, max-age=#{2.days.to_i}"
-    }
+    config.public_file_server.headers = dev_asset_headers
   else
     config.action_controller.perform_caching = false
 
     config.cache_store = :null_store
+    config.public_file_server.headers = dev_asset_headers
   end
 
   # Store uploaded files on the local file system (see config/storage.yml for options).

@@ -1,6 +1,13 @@
 import { getConsumer } from "channels/consumer"
 
 let subscription = null
+const EVENT_TOAST_TTLS = {
+  earthquake: 2 * 60 * 1000,
+  conflict: 15 * 60 * 1000,
+  jamming: 5 * 60 * 1000,
+}
+const MAX_EVENT_TOASTS = 3
+const recentEventTimestamps = new Map()
 
 export function connectEventsChannel() {
   if (subscription) return
@@ -11,22 +18,21 @@ export function connectEventsChannel() {
     disconnected() {},
 
     received(data) {
-      if (data.type === "earthquake") {
-        showEventToast("earthquake", data)
-      } else if (data.type === "conflict_escalation") {
-        showEventToast("conflict", data)
-      } else if (data.type === "gps_jamming") {
-        showEventToast("jamming", data)
-      }
+      const kind = eventKindFor(data.type)
+      if (!kind) return
+      const gate = gateIncomingEvent(kind, data)
 
-      // Dispatch to globe controller for immediate data refresh
-      document.dispatchEvent(new CustomEvent("globe:breaking-event", { detail: data }))
+      if (gate.showToast) showEventToast(kind, data, gate.key)
+      if (gate.dispatch) {
+        document.dispatchEvent(new CustomEvent("globe:breaking-event", { detail: data }))
+      }
     },
   })
 }
 
-function showEventToast(kind, data) {
+function showEventToast(kind, data, eventKey = null) {
   const container = document.getElementById("alert-toasts") || createToastContainer()
+  removeExistingEventToast(container, eventKey)
 
   const configs = {
     earthquake: {
@@ -53,6 +59,8 @@ function showEventToast(kind, data) {
 
   const toast = document.createElement("div")
   toast.className = "alert-toast"
+  toast.dataset.toastSource = "events"
+  if (eventKey) toast.dataset.eventKey = eventKey
   toast.style.borderLeftColor = cfg.color
   toast.innerHTML = `
     <div class="alert-toast-icon" style="color:${cfg.color}"><i class="fa-solid ${cfg.icon}"></i></div>
@@ -78,6 +86,7 @@ function showEventToast(kind, data) {
   }
 
   container.appendChild(toast)
+  trimEventToasts(container)
   setTimeout(() => {
     toast.classList.add("alert-toast-fade")
     setTimeout(() => toast.remove(), 300)
@@ -96,6 +105,88 @@ function escapeHtml(str) {
   const div = document.createElement("div")
   div.textContent = str
   return div.innerHTML
+}
+
+function eventKindFor(type) {
+  if (type === "earthquake") return "earthquake"
+  if (type === "conflict_escalation") return "conflict"
+  if (type === "gps_jamming") return "jamming"
+  return null
+}
+
+function gateIncomingEvent(kind, payload) {
+  const key = buildEventKey(kind, payload)
+  if (!key) return { key: null, showToast: true, dispatch: true }
+
+  const now = Date.now()
+  pruneRecentEvents(now)
+  const ttl = EVENT_TOAST_TTLS[kind] || 2 * 60 * 1000
+  const lastSeenAt = recentEventTimestamps.get(key)
+
+  if (lastSeenAt && now - lastSeenAt < ttl) {
+    return { key, showToast: false, dispatch: false }
+  }
+
+  recentEventTimestamps.set(key, now)
+  return { key, showToast: true, dispatch: true }
+}
+
+function pruneRecentEvents(now = Date.now()) {
+  const maxTtl = Math.max(...Object.values(EVENT_TOAST_TTLS))
+  for (const [key, ts] of recentEventTimestamps.entries()) {
+    if (now - ts > maxTtl) recentEventTimestamps.delete(key)
+  }
+}
+
+function buildEventKey(kind, payload) {
+  const data = payload?.data || {}
+
+  if (kind === "conflict") {
+    const cellKey = normalizeKeyPart(data.cell_key)
+    if (cellKey) return `conflict:${cellKey}:${normalizeKeyPart(data.trend)}`
+    return [
+      "conflict",
+      normalizeKeyPart(data.situation),
+      normalizeKeyPart(data.theater),
+      normalizeKeyPart(data.trend),
+    ].join(":")
+  }
+
+  if (kind === "earthquake") {
+    const locationKey = data.id || `${roundCoord(data.lat)},${roundCoord(data.lng)}`
+    return `earthquake:${locationKey}:${normalizeKeyPart(data.mag)}`
+  }
+
+  if (kind === "jamming") {
+    return `jamming:${roundCoord(data.lat)},${roundCoord(data.lng)}:${normalizeKeyPart(data.level)}`
+  }
+
+  return null
+}
+
+function normalizeKeyPart(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "-")
+}
+
+function roundCoord(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return "na"
+  return number.toFixed(2)
+}
+
+function removeExistingEventToast(container, eventKey) {
+  if (!eventKey) return
+  Array.from(container.querySelectorAll(".alert-toast[data-toast-source='events']")).forEach(toast => {
+    if (toast.dataset.eventKey === eventKey) toast.remove()
+  })
+}
+
+function trimEventToasts(container) {
+  while (true) {
+    const toasts = Array.from(container.querySelectorAll(".alert-toast[data-toast-source='events']"))
+    if (toasts.length <= MAX_EVENT_TOASTS) return
+    toasts[0].remove()
+  }
 }
 
 export function disconnectEventsChannel() {

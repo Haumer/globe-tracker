@@ -74,6 +74,48 @@ class ObjectsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "entity context not found"
   end
 
+  test "object view tolerates legacy relationship evidence types" do
+    theater = OntologyEntity.create!(
+      canonical_key: "theater:legacy-theater",
+      entity_type: "theater",
+      canonical_name: "Legacy Theater",
+      metadata: { "cluster_count" => 2, "total_sources" => 5 }
+    )
+    chokepoint = OntologyEntity.create!(
+      canonical_key: "corridor:chokepoint:hormuz",
+      entity_type: "corridor",
+      canonical_name: "Strait of Hormuz",
+      metadata: { "description" => "Strategic energy corridor", "latitude" => 26.56, "longitude" => 56.27 }
+    )
+
+    relationship = OntologyRelationship.create!(
+      source_node: theater,
+      target_node: chokepoint,
+      relation_type: "economic_profile",
+      confidence: 0.82,
+      fresh_until: 2.hours.from_now,
+      derived_by: "test",
+      explanation: "Legacy profile evidence should not crash object view"
+    )
+    OntologyRelationshipEvidence.insert_all!([{
+      ontology_relationship_id: relationship.id,
+      evidence_type: "CountrySectorProfile",
+      evidence_id: 1773,
+      evidence_role: "sector_profile",
+      confidence: 0.82,
+      metadata: {},
+      created_at: Time.current,
+      updated_at: Time.current
+    }])
+
+    get object_view_path(kind: "chokepoint", id: "Strait of Hormuz")
+
+    assert_response :success
+    assert_includes response.body, "Strait of Hormuz"
+    assert_includes response.body, "Country sector profile"
+    assert_includes response.body, "legacy evidence"
+  end
+
   private
 
   def create_story_cluster(key, title)

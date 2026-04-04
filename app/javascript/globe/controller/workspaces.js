@@ -62,7 +62,7 @@ export function applyWorkspaceMethods(GlobeController) {
     // Layers
     if (ws.layers) {
       state.layers = Object.entries(ws.layers)
-        .filter(([k, v]) => v === true && k !== "satCategories" && k !== "showCivilian" && k !== "showMilitary")
+        .filter(([k, v]) => v === true && !!LAYER_REGISTRY_BY_KEY[k])
         .map(([k]) => k)
       if (ws.layers.satCategories) {
         state.satCategories = Object.entries(ws.layers.satCategories)
@@ -122,6 +122,10 @@ export function applyWorkspaceMethods(GlobeController) {
     let carto
     try { carto = this.viewer.camera.positionCartographic } catch { return { name } }
 
+    const layerPrefs = Object.fromEntries(
+      LAYER_REGISTRY.map(layer => [layer.key, !!this[layer.visibleProp]])
+    )
+
     return {
       name,
       camera_lat: Cesium.Math.toDegrees(carto.latitude),
@@ -153,7 +157,11 @@ export function applyWorkspaceMethods(GlobeController) {
         notams: this.notamsVisible,
         strikeArcs: this._strikeArcsVisible,
         hexTheater: this._hexTheaterVisible,
-        terrain: this.terrainEnabled || false,
+        fireClusters: this.fireClustersVisible,
+        weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
+        weatherOpacity: this._weatherOpacity || 0.6,
+        terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,
+        buildings: this.hasBuildingsSelectTarget ? this.buildingsSelectTarget.value : "off",
         showCivilian: this.showCivilian,
         showMilitary: this.showMilitary,
         satCategories: { ...this.satCategoryVisible },
@@ -235,14 +243,11 @@ export function applyWorkspaceMethods(GlobeController) {
       ["notamsVisible", "notamsToggle", "toggleNotams"],
     ]
 
-    for (const [visKey, targetKey, method] of layerToggles) {
-      if (this[visKey]) {
-        const hasTarget = "has" + targetKey.charAt(0).toUpperCase() + targetKey.slice(1) + "Target"
-        if (this[hasTarget]) {
-          this[targetKey + "Target"].checked = false
-        }
-        this[method]()
+      const hasTarget = "has" + layer.toggleTarget.charAt(0).toUpperCase() + layer.toggleTarget.slice(1) + "Target"
+      if (this[hasTarget]) {
+        this[`${layer.toggleTarget}Target`].checked = false
       }
+      this[layer.method]()
     }
 
     // Clear satellite categories
@@ -252,18 +257,6 @@ export function applyWorkspaceMethods(GlobeController) {
         const chip = this.element.querySelector(`.sb-chip[data-category="${cat}"]`)
         if (chip) chip.classList.remove("active")
       }
-    }
-
-    // Clear trails
-    if (this.trailsVisible && this.hasTrailsToggleTarget) {
-      this.trailsToggleTarget.checked = false
-      this.toggleTrails()
-    }
-
-    // Clear terrain
-    if (this.terrainEnabled && this.hasTerrainToggleTarget) {
-      this.terrainToggleTarget.checked = false
-      this.toggleTerrain()
     }
 
     this._syncQuickBar()

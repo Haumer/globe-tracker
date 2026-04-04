@@ -1,3 +1,5 @@
+import { LAYER_REGISTRY_BY_KEY } from "./controller/ui_registry"
+
 // ── Deep Links ──────────────────────────────────────────
 // Encode/decode globe state in URL hash for shareable views.
 //
@@ -187,6 +189,12 @@ export function applyDeepLink(controller, state) {
     })
   }
 
+  if (controller._ensureAdvancedLayersEnabled) {
+    const requestedLayers = [...(state.layers || [])]
+    if (state.satCategories?.length) requestedLayers.push("satellites")
+    controller._ensureAdvancedLayersEnabled(requestedLayers)
+  }
+
   // Apply layers — toggle on only the ones specified
   if (state.layers) {
     const toggleMap = {
@@ -220,15 +228,10 @@ export function applyDeepLink(controller, state) {
       const target = targetMap[layer]
       if (!method || !controller[method]) continue
 
-      // Check if already visible
-      const visKey = layer === "naturalEvents" ? "naturalEventsVisible"
-        : layer === "terrain" ? "terrainEnabled"
-        : layer + "Visible"
-      if (controller[visKey]) continue // already on
+      if (controller[config.visibleProp]) continue
 
-      // Set checkbox
-      const targetName = target + "Target"
-      const hasTarget = "has" + target.charAt(0).toUpperCase() + target.slice(1) + "Target"
+      const targetName = `${config.toggleTarget}Target`
+      const hasTarget = "has" + config.toggleTarget.charAt(0).toUpperCase() + config.toggleTarget.slice(1) + "Target"
       if (controller[hasTarget]) {
         controller[targetName].checked = true
       }

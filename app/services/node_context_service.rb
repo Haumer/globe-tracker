@@ -1,6 +1,12 @@
 class NodeContextService
   class UnsupportedNodeError < StandardError; end
   class NodeNotFoundError < StandardError; end
+  LEGACY_EVIDENCE_LABELS = {
+    "CountryChokepointExposure" => "Country chokepoint exposure",
+    "CountryCommodityDependency" => "Country commodity dependency",
+    "CountrySectorProfile" => "Country sector profile",
+    "SectorInputProfile" => "Sector input profile",
+  }.freeze
 
   class << self
     def resolve(kind:, id:)
@@ -105,7 +111,7 @@ class NodeContextService
             node: serialize_node(membership.ontology_entity),
           }
         end,
-        evidence: event.ontology_evidence_links.includes(:evidence).map do |link|
+        evidence: event.ontology_evidence_links.to_a.map do |link|
           serialize_evidence_link(link)
         end,
         relationships: serialize_relationships(event),
@@ -129,7 +135,7 @@ class NodeContextService
       relationships = node_relationship_records(entity)
 
       relationships.flat_map do |relationship|
-        relationship.ontology_relationship_evidences.includes(:evidence).map do |evidence_link|
+        relationship.ontology_relationship_evidences.to_a.map do |evidence_link|
           serialize_relationship_evidence(evidence_link)
         end
       end
@@ -139,8 +145,8 @@ class NodeContextService
     end
 
     def node_relationship_records(node)
-      node.outgoing_ontology_relationships.active.includes(ontology_relationship_evidences: :evidence).to_a +
-        node.incoming_ontology_relationships.active.includes(ontology_relationship_evidences: :evidence).to_a
+      node.outgoing_ontology_relationships.active.includes(:ontology_relationship_evidences).to_a +
+        node.incoming_ontology_relationships.active.includes(:ontology_relationship_evidences).to_a
     end
 
     def serialize_relationship(relationship, direction:)
@@ -152,7 +158,7 @@ class NodeContextService
         confidence: relationship.confidence.to_f.round(2),
         explanation: relationship.explanation,
         node: serialize_node(counterparty),
-        evidence: relationship.ontology_relationship_evidences.includes(:evidence).map do |evidence_link|
+        evidence: relationship.ontology_relationship_evidences.to_a.map do |evidence_link|
           serialize_relationship_evidence(evidence_link)
         end.first(4),
       }
@@ -312,7 +318,7 @@ class NodeContextService
     end
 
     def serialize_evidence_link(link)
-      payload = serialize_evidence(link.evidence)
+      payload = serialize_evidence_record_for_link(link)
       payload.merge(
         role: link.evidence_role,
         confidence: link.confidence.to_f.round(2)
@@ -320,11 +326,38 @@ class NodeContextService
     end
 
     def serialize_relationship_evidence(link)
-      payload = serialize_evidence(link.evidence)
+      payload = serialize_evidence_record_for_link(link)
       payload.merge(
         role: link.evidence_role,
         confidence: link.confidence.to_f.round(2)
       )
+    end
+
+    def serialize_evidence_record_for_link(link)
+      evidence = load_evidence_record(link.evidence_type, link.evidence_id)
+      return serialize_evidence(evidence) if evidence.present?
+
+      serialize_legacy_evidence_link(link)
+    end
+
+    def load_evidence_record(evidence_type, evidence_id)
+      klass = evidence_type.to_s.safe_constantize
+      return nil unless klass&.respond_to?(:find_by)
+
+      klass.find_by(id: evidence_id)
+    rescue StandardError
+      nil
+    end
+
+    def serialize_legacy_evidence_link(link)
+      type = link.evidence_type.to_s
+      label = LEGACY_EVIDENCE_LABELS.fetch(type, type.demodulize.underscore.humanize)
+      {
+        type: type.underscore,
+        id: link.evidence_id,
+        label: label,
+        meta: ["legacy evidence", "##{link.evidence_id}"].join(" · "),
+      }
     end
 
     def serialize_evidence(evidence)

@@ -27,6 +27,7 @@ class EventsChannel < ApplicationCable::Channel
 
   def self.conflict_escalation(zone)
     broadcast_event("conflict_escalation", {
+      cell_key: zone[:cell_key],
       situation: zone[:situation_name],
       theater: zone[:theater],
       pulse_score: zone[:pulse_score],

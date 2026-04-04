@@ -71,19 +71,22 @@ export function applyConflictPulseMethods(GlobeController) {
 
       // Detect new surges — compare to previous state
       const prev = this._conflictPulsePrev || {}
+      const toastCandidates = []
       zones.forEach(zone => {
         const prevZone = prev[zone.cell_key]
         if (!prevZone && zone.escalation_trend === "surging") {
-          // Brand new surging zone
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         } else if (prevZone && prevZone.escalation_trend !== "surging" && zone.escalation_trend === "surging") {
-          // Escalated to surging
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         } else if (!prevZone && zone.pulse_score >= 70) {
-          // High-scoring new zone
-          this._toastConflictPulse(zone)
+          toastCandidates.push(zone)
         }
       })
+
+      const nextToast = toastCandidates
+        .filter(zone => this._shouldToastConflictPulse(zone))
+        .sort((a, b) => (b.pulse_score || 0) - (a.pulse_score || 0))[0]
+      if (nextToast) this._toastConflictPulse(nextToast)
 
       // Cache current state for next comparison
       this._conflictPulsePrev = {}

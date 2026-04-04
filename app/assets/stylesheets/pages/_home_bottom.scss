@@ -7,7 +7,7 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  height: 40px;
+  height: var(--gt-bottom-strip-h);
   background: #0d0f13;
   border-top: 1px solid #1e2028;
   padding: 0 12px;
@@ -167,7 +167,7 @@
 // ─── Playback bar ── bottom timeline ────────────────────────────
 #timeline-bar {
   position: fixed;
-  bottom: 40px;
+  bottom: var(--gt-bottom-strip-h);
   left: 50%;
   transform: translateX(-50%);
   z-index: 58;

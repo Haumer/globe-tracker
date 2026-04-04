@@ -4,6 +4,7 @@ module Api
 
     def index
       snapshots = InternetTrafficSnapshot.latest_batch
+      configured = CloudflareRadarService.api_token.present?
 
       traffic = snapshots.map do |s|
         {
@@ -16,6 +17,8 @@ module Api
       end
 
       pairs = CloudflareRadarService.cached_attack_pairs
+      response.set_header("X-Source-Configured", configured ? "1" : "0")
+      response.set_header("X-Source-Status", traffic.any? || pairs.any? ? "ready" : (configured ? "empty" : "unconfigured"))
 
       render json: {
         traffic: traffic,

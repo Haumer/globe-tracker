@@ -22,6 +22,7 @@ import { applyContextMethods } from "globe/controller/context"
 
 export function applyGlobeControllerMixins(GlobeController) {
   applyCoreMethods(GlobeController)
+  applyDetailOverlayMethods(GlobeController)
   applyFlightMethods(GlobeController)
   applySelectionMethods(GlobeController)
   applySatelliteMethods(GlobeController)

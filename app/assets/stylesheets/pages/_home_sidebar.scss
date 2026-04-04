@@ -47,7 +47,7 @@
   position: fixed;
   top: 38px;
   left: 0;
-  bottom: 0;
+  bottom: var(--gt-bottom-strip-h);
   z-index: 55;
   width: var(--gt-sidebar-w);
   background: var(--gt-panel);
@@ -129,10 +129,11 @@
 
   // Layer rows — clickable toggle rows inside sections
   .sb-layer-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 14px;
+    padding: 7px 40px 7px 14px;
     cursor: pointer;
     transition: background 0.12s;
 
@@ -182,10 +183,27 @@
     color: var(--gt-text-dim);
   }
 
+  .sb-layer-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 6px;
+  }
+
+  .sb-layer-meta {
+    font: 400 9px var(--gt-mono);
+    color: rgba(200, 210, 225, 0.42);
+    line-height: 1.25;
+  }
+
   .sb-layer-dot {
     width: 6px;
     height: 6px;
     flex-shrink: 0;
+    margin-left: auto;
+    margin-right: 10px;
   }
 
   .sb-layer-status {
@@ -361,6 +379,92 @@
   height: 1px;
   background: var(--gt-border);
   margin: 6px 4px;
+}
+
+.sb-enabled-layer + .sb-enabled-layer {
+  margin-top: 2px;
+}
+
+.sb-workspace-empty,
+.sb-library-note {
+  margin: 4px 4px 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(216, 226, 240, 0.7);
+  font: 400 10px var(--gt-mono);
+  line-height: 1.45;
+}
+
+.sb-library-note strong {
+  color: var(--gt-text-bright);
+  font-weight: 600;
+}
+
+.sb-library-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.sb-library-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--gt-text-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--gt-text);
+  }
+
+  &[data-state="enabled"] {
+    border-color: rgba(79, 195, 247, 0.26);
+    background: rgba(79, 195, 247, 0.08);
+    color: var(--gt-text-bright);
+  }
+}
+
+.sb-library-icon {
+  width: 16px;
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.sb-library-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-library-name {
+  display: block;
+  font: 500 11px var(--gt-sans);
+}
+
+.sb-library-state {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(216, 226, 240, 0.7);
+}
+
+.sb-library-item[data-state="enabled"] .sb-library-state {
+  background: rgba(79, 195, 247, 0.16);
+  color: #8bd8ff;
 }
 
 // ── Active badge on section headers ─────────────────────────────

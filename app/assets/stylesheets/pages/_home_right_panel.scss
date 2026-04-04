@@ -3,7 +3,7 @@
   position: fixed;
   top: 42px;
   right: 12px;
-  bottom: 48px;
+  bottom: calc(var(--gt-bottom-strip-h) + 8px);
   z-index: 30;
   background: var(--gt-panel);
   backdrop-filter: var(--gt-blur);
@@ -733,6 +733,10 @@
   .insight-feed-title {
     color: #93c5fd;
   }
+
+  .insight-feed-list {
+    padding: 8px 10px 12px;
+  }
 }
 
 .context-feed-title {
@@ -951,6 +955,13 @@
   padding: 20px 14px;
   text-align: center;
   line-height: 1.5;
+}
+
+.context-empty {
+  font: 400 11px/1.55 var(--gt-mono);
+  color: rgba(184, 197, 214, 0.54);
+  padding: 20px 14px;
+  text-align: center;
 }
 
 .insight-card {

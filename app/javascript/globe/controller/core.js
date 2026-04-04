@@ -181,7 +181,7 @@ export function applyCoreMethods(GlobeController) {
           const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
-            if (this._handleEntityClick(entityId, picked)) return
+            if (this._handleEntityClick(entityId, picked, click.position)) return
           }
         }
       }
@@ -198,7 +198,7 @@ export function applyCoreMethods(GlobeController) {
       // Remaining entity types (news dots, conflict events, borders, etc.)
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
-        if (this._handleEntityClick(entityId, picked)) return
+        if (this._handleEntityClick(entityId, picked, click.position)) return
       }
 
       this.closeDetail()
@@ -237,6 +237,12 @@ export function applyCoreMethods(GlobeController) {
     }, Cesium.ScreenSpaceEventType.LEFT_UP)
 
     this._handler = handler
+
+    this._onAnchoredDetailPostRender = () => this._refreshAnchoredDetailPosition?.()
+    this.viewer.scene.postRender.addEventListener(this._onAnchoredDetailPostRender)
+
+    this._onAnchoredDetailResize = () => this._refreshAnchoredDetailPosition?.(true)
+    window.addEventListener("resize", this._onAnchoredDetailResize)
 
     // Create plane icon
     this.planeIcon = this.createPlaneIcon("#4fc3f7")

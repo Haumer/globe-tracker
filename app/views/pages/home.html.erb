@@ -60,6 +60,17 @@
 
   <%= render "pages/right_panel" %>
 
+  <div id="anchor-overlay" data-globe-target="anchorOverlay" style="display:none;" aria-hidden="true">
+    <svg id="anchor-leader" data-globe-target="anchorLeader" style="display:none;" aria-hidden="true">
+      <path data-globe-target="anchorLeaderPath"></path>
+      <circle data-globe-target="anchorLeaderSocket" style="display:none;"></circle>
+    </svg>
+    <div id="anchor-panel" data-globe-target="anchorPanel" style="display:none;" role="complementary" aria-label="Focused item">
+      <button class="anchor-close" data-action="click->globe#closeDetail" aria-label="Close focused item">&times;</button>
+      <div class="anchor-content" data-globe-target="anchorContent"></div>
+    </div>
+  </div>
+
   <%# ── Detail + Selection Stack ── bottom-right ──────────────── %>
   <div id="detail-stack">
     <div id="detail-panel" data-globe-target="detailPanel" style="display: none;" role="complementary" aria-label="Entity details">

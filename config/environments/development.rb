@@ -1,6 +1,12 @@
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
+  dev_asset_headers = {
+    "Cache-Control" => "no-store, max-age=0, must-revalidate",
+    "Pragma" => "no-cache",
+    "Expires" => "0",
+  }
+
   config.action_mailer.default_url_options = { host: "http://localhost:3000" }
   # Settings specified here will take precedence over those in config/application.rb.
 
@@ -25,13 +31,12 @@ Rails.application.configure do
     config.action_controller.enable_fragment_cache_logging = true
 
     config.cache_store = :redis_cache_store, { url: "redis://localhost:6379/1" }
-    config.public_file_server.headers = {
-      "Cache-Control" => "public, max-age=#{2.days.to_i}"
-    }
+    config.public_file_server.headers = dev_asset_headers
   else
     config.action_controller.perform_caching = false
 
     config.cache_store = :null_store
+    config.public_file_server.headers = dev_asset_headers
   end
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
@@ -72,6 +77,11 @@ Rails.application.configure do
 
   # Uncomment if you wish to allow Action Cable access from any origin.
   # config.action_cable.disable_request_forgery_protection = true
+  config.action_cable.mount_path = "/cable"
+  config.action_cable.allowed_request_origins = [
+    %r{\Ahttp://localhost:\d+\z},
+    %r{\Ahttp://127\.0\.0\.1:\d+\z},
+  ]
 
   # Raise error when a before_action's only/except options reference missing actions
   config.action_controller.raise_on_missing_callback_actions = true

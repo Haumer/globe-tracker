@@ -30,6 +30,6 @@ export function applyUiPanelMethods(GlobeController) {
     if (!this.hasRightPanelTarget) return
     const visible = this.rightPanelTarget.style.display !== "none"
     if (visible) this.closeRightPanel()
-    else this._showRightPanel(this._preferredRightPanelTab?.() || (this._selectedContext ? "context" : "situations"))
+    else this._showRightPanel("context")
   }
 }

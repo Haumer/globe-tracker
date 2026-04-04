@@ -71,6 +71,119 @@ function renderPinnedMapSection(controller, context) {
   `
 }
 
+function renderTheaterRailSection(controller, context) {
+  const zone = context?.zoneData || {}
+  const brief = context?.theaterBrief || {}
+  const derivedConfidence = controller._theaterDerivedConfidence
+    ? controller._theaterDerivedConfidence(zone)
+    : { level: "medium", rationale: "" }
+  const confidenceLevel = brief.confidence_level || derivedConfidence.level || "medium"
+  const confidenceLevelKey = `${confidenceLevel}`.trim().toLowerCase().replace(/\s+/g, "-")
+  const confidenceRationale = brief.confidence_rationale || derivedConfidence.rationale || ""
+  const assessment = brief.assessment
+    || (controller._theaterFallbackAssessment ? controller._theaterFallbackAssessment(zone) : null)
+    || context.summary
+    || "Live theater assessment unavailable."
+  const generatedAgo = context.theaterBriefGeneratedAt ? controller._timeAgo(new Date(context.theaterBriefGeneratedAt)) : null
+
+  let stateHtml = ""
+  if (context.theaterBriefStatus === "ready" && generatedAgo) {
+    stateHtml = `<div class="context-brief-state">Stored AI brief · ${controller._escapeHtml(generatedAgo)}</div>`
+  } else if (["loading", "pending"].includes(context.theaterBriefStatus)) {
+    stateHtml = '<div class="context-brief-state">Refreshing stored AI brief from current theater evidence…</div>'
+  } else if (context.theaterBriefStatus === "error") {
+    stateHtml = '<div class="context-brief-state context-brief-state--error">Stored AI brief unavailable. Showing live factual read.</div>'
+  }
+
+  const rows = [
+    zone.count_24h ? { label: "Reports / 24h", value: `${zone.count_24h}` } : null,
+    zone.source_count ? { label: "Sources", value: `${zone.source_count}` } : null,
+    zone.story_count ? { label: "Story clusters", value: `${zone.story_count}` } : null,
+    zone.detected_at ? { label: "Updated", value: controller._timeAgo(new Date(zone.detected_at)) } : null,
+  ].filter(Boolean)
+
+  return renderContextSection(controller, {
+    title: "Active read",
+    variant: "summary",
+    html: `
+      <div class="context-brief context-brief--summary">
+        <div class="context-brief-group">
+          <div class="context-brief-label">Current read</div>
+          <div class="context-brief-body">${controller._escapeHtml(assessment)}</div>
+        </div>
+        <div class="context-brief-confidence">
+          <span class="context-brief-confidence-level context-brief-confidence-level--${controller._escapeHtml(confidenceLevelKey)}">${controller._escapeHtml(confidenceLevel)} confidence</span>
+          ${confidenceRationale ? `<span class="context-brief-confidence-text">${controller._escapeHtml(confidenceRationale)}</span>` : ""}
+        </div>
+        ${stateHtml}
+      </div>
+    `,
+    rows,
+  })
+}
+
+function renderRecordedRailSection(controller, context) {
+  const node = context?.nodeContext?.node
+  const summary = node?.summary && node.summary !== context.summary ? `${node.summary}` : null
+  const rows = [
+    (context?.nodeContext?.memberships || []).length ? { label: "Actors", value: `${context.nodeContext.memberships.length}` } : null,
+    (context?.nodeContext?.evidence || []).length ? { label: "Evidence", value: `${context.nodeContext.evidence.length}` } : null,
+    (context?.nodeContext?.relationships || []).length ? { label: "Linked nodes", value: `${context.nodeContext.relationships.length}` } : null,
+  ].filter(Boolean)
+
+  if (!summary && !rows.length) return ""
+
+  return renderContextSection(controller, {
+    title: "Recorded context",
+    variant: "summary",
+    html: summary
+      ? `
+        <div class="context-brief context-brief--summary">
+          <div class="context-brief-group">
+            <div class="context-brief-label">Node record</div>
+            <div class="context-brief-body">${controller._escapeHtml(summary)}</div>
+          </div>
+        </div>
+      `
+      : "",
+    rows,
+  })
+}
+
+function primaryContextRailSection(controller, context) {
+  if (!context) return ""
+  if (context.kind === "theater") return renderTheaterRailSection(controller, context)
+  return renderRecordedRailSection(controller, context)
+}
+
+function primaryContextActions(controller, context) {
+  const actions = []
+
+  if (context.casePayload && controller._caseIntakePathForPayload) {
+    const casePath = controller._caseIntakePathForPayload(context.casePayload)
+    if (casePath) {
+      actions.push({
+        path: casePath,
+        icon: "fa-folder-open",
+        label: "Open case workspace",
+      })
+    }
+  }
+
+  const focusAction = (context.actions || []).find(action => action.lat != null && action.lng != null)
+  if (focusAction) {
+    actions.push({
+      ...focusAction,
+      label: focusAction.label === "Focus" ? "Focus map" : focusAction.label,
+    })
+  }
+
+  const externalAction = (context.actions || []).find(action => action.url || action.path)
+  if (externalAction) actions.push(externalAction)
+
+  return actions.slice(0, 3)
+}
+
 export function renderSelectedContext(controller, context) {
   const pinnedSection = renderPinnedMapSection(controller, context)
 
@@ -93,7 +206,7 @@ export function renderSelectedContext(controller, context) {
       `
     }
 
-    return '<div class="context-empty">Click a map item to inspect the deeper context, corroboration, and follow-on actions here.</div>'
+    return '<div class="context-empty">Click a map item to inspect its live context here. Deep analysis belongs in the case workspace.</div>'
   }
 
   const metaPills = (context.meta || [])
@@ -106,33 +219,10 @@ export function renderSelectedContext(controller, context) {
     `)
     .join("")
 
-  const sections = [
-    ...(context.sections || []),
-    ...controller._dynamicContextSections(context),
-    ...controller._durableContextSections(context),
-  ].map(section => renderContextSection(controller, section))
+  const sections = [primaryContextRailSection(controller, context)].filter(Boolean)
   if (pinnedSection) sections.push(pinnedSection)
 
-  const actionsList = [...(context.actions || [])]
-  if (context.casePayload && controller._caseIntakePathForPayload) {
-    const casePath = controller._caseIntakePathForPayload(context.casePayload)
-    if (casePath) {
-      actionsList.unshift({
-        path: casePath,
-        icon: "fa-folder-plus",
-        label: "Create case",
-      })
-    }
-  }
-  if (context.nodeRequest?.kind && context.nodeRequest?.id) {
-    actionsList.unshift({
-      path: objectViewUrlForNodeRequest(context.nodeRequest),
-      icon: "fa-table-cells-large",
-      label: "Open object view",
-    })
-  }
-
-  const actions = actionsList
+  const actions = primaryContextActions(controller, context)
     .map(action => renderContextAction(controller, action))
     .join("")
 
@@ -255,9 +345,6 @@ export function renderContextAction(controller, action) {
   return ""
 }
 
-function objectViewUrlForNodeRequest(nodeRequest) {
-  return `/objects/${encodeURIComponent(nodeRequest.kind)}/${encodeURIComponent(nodeRequest.id)}`
-}
 
 function renderContextItem(controller, item) {
   const itemBody = renderContextItemBody(controller, item)

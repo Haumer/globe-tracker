@@ -42,17 +42,14 @@
 }
 
 [data-rp-pane="context"] {
-  .insight-feed-header {
-    border-bottom: 1px solid rgba(96, 165, 250, 0.14);
-  }
-
-  .insight-feed-title {
-    color: #93c5fd;
-  }
-
   .insight-feed-list {
-    padding: 8px 10px 12px;
+    padding: 10px 10px 12px;
   }
+}
+
+.context-rail-list {
+  display: flex;
+  flex-direction: column;
 }
 
 [data-rp-pane="insights"] {

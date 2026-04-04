@@ -1,29 +1,17 @@
-const PERSISTENT_RIGHT_TABS = new Set(["context", "situations", "news", "insights"])
-
 export function applySituationalRightPanelMethods(GlobeController) {
+  GlobeController.prototype._rightPanelHasContext = function() {
+    return !!this._selectedContext || ((this._pinnedAnchoredDetails?.length || 0) > 0)
+  }
+
   GlobeController.prototype._rightPanelTabAvailability = function() {
     return {
-      context: !!this._selectedContext || ((this._pinnedAnchoredDetails?.length || 0) > 0),
-      entities: this.flightsVisible || this.shipsVisible || this.satellitesVisible,
-      news: this.newsVisible && this._newsData?.length > 0,
-      threats: !!this._threatsActive,
-      situations: this.situationsVisible && ((((this._conflictPulseZones?.length) || 0) > 0) || !!this._conflictPulseSnapshotStatus),
-      cameras: this.camerasVisible && (((this._webcamData?.length) || 0) > 0 || !!this._webcamCollectionStatus),
-      alerts: this.signedInValue && this._alertData?.length > 0,
-      insights: this.insightsVisible && ((((this._insightsData?.length) || 0) > 0) || !!this._insightSnapshotStatus),
+      context: this._rightPanelHasContext(),
     }
   }
 
   GlobeController.prototype._rightPanelTabVisibility = function(availability = this._rightPanelTabAvailability()) {
     return {
       context: true,
-      entities: availability.entities,
-      news: true,
-      threats: availability.threats,
-      situations: true,
-      cameras: availability.cameras,
-      alerts: availability.alerts,
-      insights: true,
     }
   }
 
@@ -32,44 +20,15 @@ export function applySituationalRightPanelMethods(GlobeController) {
   }
 
   GlobeController.prototype._currentRightPanelTab = function() {
-    if (!this.hasRightPanelTarget) return null
-    return this.rightPanelTarget.querySelector(".rp-pane--active")?.dataset.rpPane || null
+    return this._isRightPanelVisible() ? "context" : null
   }
 
-  GlobeController.prototype._setRightTabUpdated = function(tabKey, updated) {
-    if (!this.hasRightPanelTarget) return
-    const button = this.rightPanelTarget.querySelector(`.rp-tab[data-rp-tab="${tabKey}"]`)
-    if (!button) return
-    button.dataset.updated = updated ? "true" : "false"
-  }
+  GlobeController.prototype._setRightTabUpdated = function() {}
 
-  GlobeController.prototype._syncRightTabButton = function(tabKey, visible, hasContent) {
-    if (!this.hasRightPanelTarget) return
-    const button = this.rightPanelTarget.querySelector(`.rp-tab[data-rp-tab="${tabKey}"]`)
-    if (!button) return
+  GlobeController.prototype._syncRightTabButton = function() {}
 
-    button.style.display = visible ? "" : "none"
-    button.classList.toggle("rp-tab--empty", visible && !hasContent)
-    button.dataset.hasContent = hasContent ? "true" : "false"
-  }
-
-  GlobeController.prototype._preferredRightPanelTab = function(availability = this._rightPanelTabAvailability(), visibility = this._rightPanelTabVisibility(availability)) {
-    const candidates = [
-      this._lastRightPanelTab,
-      availability.context ? "context" : null,
-      "situations",
-      availability.news ? "news" : null,
-      availability.insights ? "insights" : null,
-      availability.entities ? "entities" : null,
-      availability.threats ? "threats" : null,
-      availability.cameras ? "cameras" : null,
-      availability.alerts ? "alerts" : null,
-      "news",
-      "insights",
-      "context",
-    ].filter(Boolean)
-
-    return candidates.find(tabKey => visibility[tabKey]) || "situations"
+  GlobeController.prototype._preferredRightPanelTab = function() {
+    return "context"
   }
 
   GlobeController.prototype._rightPanelWidth = function() {
@@ -78,16 +37,6 @@ export function applySituationalRightPanelMethods(GlobeController) {
 
   GlobeController.prototype._syncRightPanels = function() {
     const availability = this._rightPanelTabAvailability()
-    const visibility = this._rightPanelTabVisibility(availability)
-
-    this._syncRightTabButton("context", visibility.context, availability.context)
-    this._syncRightTabButton("entities", visibility.entities, availability.entities)
-    this._syncRightTabButton("news", visibility.news, availability.news)
-    this._syncRightTabButton("threats", visibility.threats, availability.threats)
-    this._syncRightTabButton("situations", visibility.situations, availability.situations)
-    this._syncRightTabButton("cameras", visibility.cameras, availability.cameras)
-    this._syncRightTabButton("alerts", visibility.alerts, availability.alerts)
-    this._syncRightTabButton("insights", visibility.insights, availability.insights)
 
     if (this._rightPanelUserClosed) {
       this._syncPanelToggle(false)
@@ -95,7 +44,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
       return
     }
 
-    const hasPanelContent = Object.values(availability).some(Boolean)
+    const hasPanelContent = !!availability.context
     const panelVisible = this._isRightPanelVisible()
     if (!panelVisible && !hasPanelContent) {
       this._syncPanelToggle(false)
@@ -105,14 +54,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
 
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
     this._syncPanelToggle(true)
-
-    const activePaneKey = this._currentRightPanelTab()
-    const activeTabHidden = activePaneKey ? !visibility[activePaneKey] : true
-
-    if (activeTabHidden) {
-      this._activateRightTab(this._preferredRightPanelTab(availability, visibility))
-    }
-
+    this._activateRightTab("context")
     this._repositionDetailStack(this._rightPanelWidth())
   }
 
@@ -124,30 +66,27 @@ export function applySituationalRightPanelMethods(GlobeController) {
   }
 
   GlobeController.prototype.switchRightTab = function(event) {
-    const tab = event.currentTarget.dataset.rpTab
-    this._activateRightTab(tab)
+    event?.preventDefault?.()
+    this._activateRightTab("context")
   }
 
   GlobeController.prototype._activateRightTab = function(tabKey) {
     if (!this.hasRightPanelTarget) return
-    this._lastRightPanelTab = tabKey
-    this.rightPanelTarget.querySelectorAll(".rp-tab").forEach(tab => tab.classList.remove("active"))
-    const button = this.rightPanelTarget.querySelector(`.rp-tab[data-rp-tab="${tabKey}"]`)
-    this.rightPanelTarget.querySelectorAll(".rp-tab").forEach(tab => tab.setAttribute("aria-selected", "false"))
-    if (button) {
-      button.classList.add("active")
-      button.setAttribute("aria-selected", "true")
-      button.dataset.updated = "false"
-    }
+    this._lastRightPanelTab = "context"
     this.rightPanelTarget.querySelectorAll(".rp-pane").forEach(pane => pane.classList.remove("rp-pane--active"))
-    const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="${tabKey}"]`)
+    const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="context"]`)
     if (pane) pane.classList.add("rp-pane--active")
   }
 
   GlobeController.prototype._showRightPanel = function(tabKey) {
+    if (!this._rightPanelHasContext()) {
+      this._syncRightPanels()
+      return
+    }
+
     this._rightPanelUserClosed = false
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
-    this._activateRightTab(tabKey || this._preferredRightPanelTab())
+    this._activateRightTab("context")
     this._syncRightPanels()
     this._syncPanelToggle(true)
   }

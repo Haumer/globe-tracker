@@ -32,6 +32,38 @@
   }
 }
 
+.right-panel-rail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.14);
+  flex-shrink: 0;
+}
+
+.right-panel-rail-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.right-panel-rail-kicker {
+  font: 700 8px/1 var(--gt-mono);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(147, 197, 253, 0.7);
+}
+
+.right-panel-rail-title {
+  font: 700 16px/1.05 var(--gt-mono);
+  letter-spacing: -0.25px;
+  color: rgba(244, 247, 252, 0.96);
+}
+
+.rp-support-panels[hidden] {
+  display: none !important;
+}
+
 // ─── Shared .detail-close for right-panel panes ─────────────────
 // Canonical definition — used by #entity-list-panel, #threats-panel,
 // [data-rp-pane="news"], #cam-feed-panel, and #detail-panel.
@@ -129,4 +161,3 @@
   text-align: center;
   margin: 0;
 }
-

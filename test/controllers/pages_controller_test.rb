@@ -6,6 +6,8 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_match(/selected context/i, response.body)
+    assert_includes response.body, "Live Context"
+    refute_includes response.body, "aria-label=\"Data panels\""
     assert_includes response.body, "data-rp-pane=\"context\""
     assert_includes response.body, "id=\"mobile-hud\""
     assert_includes response.body, "data-mobile-scene=\"2d\""

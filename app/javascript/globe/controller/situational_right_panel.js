@@ -3,7 +3,7 @@ const PERSISTENT_RIGHT_TABS = new Set(["context", "situations", "news", "insight
 export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype._rightPanelTabAvailability = function() {
     return {
-      context: !!this._selectedContext,
+      context: !!this._selectedContext || ((this._pinnedAnchoredDetails?.length || 0) > 0),
       entities: this.flightsVisible || this.shipsVisible || this.satellitesVisible,
       news: this.newsVisible && this._newsData?.length > 0,
       threats: !!this._threatsActive,
@@ -56,7 +56,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype._preferredRightPanelTab = function(availability = this._rightPanelTabAvailability(), visibility = this._rightPanelTabVisibility(availability)) {
     const candidates = [
       this._lastRightPanelTab,
-      this._selectedContext ? "context" : null,
+      availability.context ? "context" : null,
       "situations",
       availability.news ? "news" : null,
       availability.insights ? "insights" : null,

@@ -125,7 +125,20 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
     const markerStroke = this._anchoredDetailMarkerStroke(kind, data)
     const markerRadius = this._anchoredDetailMarkerRadius(kind, data)
 
-    const makePayload = ({ title, subtitle, brief, facts = [], chips = [], accent, stroke, strokeWidth, timeLabel: payloadTimeLabel = timeLabel }) => ({
+    const makePayload = ({
+      title,
+      subtitle,
+      brief,
+      facts = [],
+      chips = [],
+      accent,
+      stroke,
+      strokeWidth,
+      timeLabel: payloadTimeLabel = timeLabel,
+      nodeRequest = null,
+      casePath = null,
+      focusHeight = null,
+    }) => ({
       kind,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
@@ -138,6 +151,9 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       strokeWidth: strokeWidth || 2.25,
       markerRadius,
       anchor,
+      nodeRequest,
+      casePath,
+      focusHeight,
     })
 
     switch (kind) {
@@ -408,6 +424,18 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         const clusterCount = data?.direct_cluster_count != null
           ? `${data.direct_cluster_count} corroborated cluster${data.direct_cluster_count === 1 ? "" : "s"}`
           : null
+        const nodeRequest = data?.kind && data?.node_id
+          ? { kind: data.kind, id: data.node_id }
+          : data?.theater
+            ? { kind: "theater", id: data.theater }
+            : null
+        const casePath = data?.theater && this._caseSourcePayloadForTheater && this._caseIntakePathForPayload
+          ? this._caseIntakePathForPayload(this._caseSourcePayloadForTheater({
+              ...data,
+              theater: data.theater,
+              situation_name: data.name,
+            }))
+          : null
         return makePayload({
           title: firstPresent(data?.name, "Strategic situation"),
           subtitle: firstPresent(data?.theater, data?.country, "Strategic view"),
@@ -421,12 +449,19 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           ],
           accent: this._anchoredDetailMarkerStroke(kind, data) || "#ffab40",
           timeLabel: null,
+          nodeRequest,
+          casePath,
+          focusHeight: 1400000,
         })
       }
       case "conflict_pulse": {
         const stroke = conflictPulseStroke(toNumber(data?.pulse_score) || 0)
         const reportCount = data?.count_24h != null
           ? `${data.count_24h} report${data.count_24h === 1 ? "" : "s"} / 24h`
+          : null
+        const theaterIdentifier = firstPresent(data?.theater, data?.situation_name, data?.conflict_name)
+        const casePath = theaterIdentifier && this._caseSourcePayloadForTheater && this._caseIntakePathForPayload
+          ? this._caseIntakePathForPayload(this._caseSourcePayloadForTheater(data))
           : null
         return makePayload({
           title: firstPresent(data?.situation_name, data?.theater, data?.conflict_name, "Conflict theater"),
@@ -443,6 +478,9 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           accent: stroke,
           stroke,
           timeLabel: null,
+          nodeRequest: theaterIdentifier ? { kind: "theater", id: theaterIdentifier } : null,
+          casePath,
+          focusHeight: 1500000,
         })
       }
       case "hex_cell": {

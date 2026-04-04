@@ -18,8 +18,81 @@ function safeContextSeverity(context) {
   return context?.severity || "medium"
 }
 
+function nodeRequestKey(nodeRequest) {
+  if (!nodeRequest?.kind || !nodeRequest?.id) return null
+  return `${nodeRequest.kind}:${nodeRequest.id}`
+}
+
+function renderPinnedMapSection(controller, context) {
+  const activeKey = nodeRequestKey(context?.nodeRequest)
+  const pinnedStates = (controller._pinnedAnchoredDetails || [])
+    .filter(state => state?.anchorId)
+    .filter(state => nodeRequestKey(state.nodeRequest) !== activeKey)
+
+  if (!pinnedStates.length) return ""
+
+  const cards = pinnedStates.map(state => {
+    const anchorId = controller._escapeHtml(state.anchorId)
+    const eyebrow = controller._escapeHtml(state.chips?.[0]?.label || "Pinned")
+    const title = controller._escapeHtml(state.title || "Pinned item")
+    const subtitle = state.subtitle
+      ? `<div class="context-pinned-meta">${controller._escapeHtml(state.subtitle)}</div>`
+      : ""
+    const brief = state.brief
+      ? `<div class="context-pinned-brief">${controller._escapeHtml(state.brief)}</div>`
+      : ""
+    const caseAction = state.casePath
+      ? `<a class="context-action-btn" href="${controller._safeUrl(state.casePath)}">Case</a>`
+      : ""
+
+    return `
+      <article class="context-pinned-card">
+        <div class="context-pinned-eyebrow">${eyebrow}</div>
+        <div class="context-pinned-title">${title}</div>
+        ${subtitle}
+        ${brief}
+        <div class="context-pinned-actions">
+          <button type="button" class="context-action-btn" data-action="click->globe#focusPinnedAnchoredDetail" data-anchor-id="${anchorId}">Focus</button>
+          ${caseAction}
+          <button type="button" class="context-action-btn" data-action="click->globe#unpinAnchoredDetail" data-anchor-id="${anchorId}">Unpin</button>
+        </div>
+      </article>
+    `
+  }).join("")
+
+  return `
+    <section class="context-section context-section--pinned">
+      <div class="context-section-head">
+        <div class="context-section-title">Pinned on map</div>
+        <button type="button" class="context-section-clear" data-action="click->globe#unpinAllAnchoredDetails">Unpin all</button>
+      </div>
+      <div class="context-pinned-list">${cards}</div>
+    </section>
+  `
+}
+
 export function renderSelectedContext(controller, context) {
+  const pinnedSection = renderPinnedMapSection(controller, context)
+
   if (!context) {
+    if (pinnedSection) {
+      return `
+        <div class="context-shell context-shell--pinned-only" style="--context-accent:#93c5fd;">
+          <div class="context-overview">
+            <div class="context-kicker">
+              <span class="context-kicker-label">
+                <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
+                MAP CONTEXT
+              </span>
+            </div>
+            <div class="context-title">Pinned map context</div>
+            <div class="context-summary">No active selection. These pinned map cards stay linked to the globe until you unpin them or open one into focus.</div>
+          </div>
+          <div class="context-section-list">${pinnedSection}</div>
+        </div>
+      `
+    }
+
     return '<div class="context-empty">Click a map item to inspect the deeper context, corroboration, and follow-on actions here.</div>'
   }
 
@@ -37,7 +110,8 @@ export function renderSelectedContext(controller, context) {
     ...(context.sections || []),
     ...controller._dynamicContextSections(context),
     ...controller._durableContextSections(context),
-  ].map(section => renderContextSection(controller, section)).join("")
+  ].map(section => renderContextSection(controller, section))
+  if (pinnedSection) sections.push(pinnedSection)
 
   const actionsList = [...(context.actions || [])]
   if (context.casePayload && controller._caseIntakePathForPayload) {
@@ -83,7 +157,7 @@ export function renderSelectedContext(controller, context) {
         ${metaPills ? `<div class="context-meta">${metaPills}</div>` : ""}
         ${actions ? `<div class="context-actions">${actions}</div>` : ""}
       </div>
-      ${sections ? `<div class="context-section-list">${sections}</div>` : ""}
+      ${sections.length ? `<div class="context-section-list">${sections.join("")}</div>` : ""}
     </div>
   `
 }

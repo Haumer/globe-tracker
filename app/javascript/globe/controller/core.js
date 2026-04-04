@@ -242,10 +242,16 @@ export function applyCoreMethods(GlobeController) {
 
     this._handler = handler
 
-    this._onAnchoredDetailPostRender = () => this._refreshAnchoredDetailPosition?.()
+    this._onAnchoredDetailPostRender = () => {
+      this._refreshAnchoredDetailPosition?.()
+      this._refreshPinnedAnchoredDetailPositions?.()
+    }
     this.viewer.scene.postRender.addEventListener(this._onAnchoredDetailPostRender)
 
-    this._onAnchoredDetailResize = () => this._refreshAnchoredDetailPosition?.(true)
+    this._onAnchoredDetailResize = () => {
+      this._refreshAnchoredDetailPosition?.(true)
+      this._refreshPinnedAnchoredDetailPositions?.(true)
+    }
     window.addEventListener("resize", this._onAnchoredDetailResize)
 
     // Create plane icon

@@ -14,6 +14,7 @@ export const GLOBE_TARGETS = [
   "detailPanel",
   "detailContent",
   "anchorOverlay",
+  "anchorPins",
   "anchorPanel",
   "anchorContent",
   "anchorLeader",

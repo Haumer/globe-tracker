@@ -290,6 +290,103 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     }
   }
 
+  GlobeController.prototype._refreshPinnedAnchoredDetailPositions = function(force = false) {
+    const pinnedStates = this._pinnedAnchoredDetails || []
+    if (!pinnedStates.length) return
+
+    const mobile = window.innerWidth <= 960
+
+    pinnedStates.forEach(state => {
+      const elements = this._ensurePinnedAnchoredDetailElements?.(state)
+      if (!elements) return
+
+      const panel = elements.panel
+      const leader = elements.leader
+      const leaderPath = elements.leaderPath
+      const leaderSocket = elements.leaderSocket
+      const wrapper = elements.wrapper
+
+      const markHidden = () => {
+        panel.style.display = "none"
+        if (leader) leader.style.display = "none"
+        if (leaderPath) leaderPath.setAttribute("d", "")
+        if (leaderSocket) {
+          leaderSocket.style.display = "none"
+          leaderSocket.setAttribute("r", "0")
+        }
+      }
+
+      if (!force && window.getComputedStyle(panel).display === "none" && !mobile) {
+        // Continue anyway so off-screen pins can reappear when the camera moves back.
+      }
+
+      if (wrapper) wrapper.style.display = ""
+
+      if (mobile) {
+        markHidden()
+        return
+      }
+
+      const point = this._anchoredDetailScreenPoint(state.anchor)
+      if (!point || !this._anchoredDetailAnchorVisible(state.anchor, point)) {
+        markHidden()
+        return
+      }
+
+      panel.dataset.mode = "anchored"
+      panel.style.visibility = "hidden"
+      panel.style.left = "0px"
+      panel.style.top = "0px"
+      const panelRect = panel.getBoundingClientRect()
+      panel.style.visibility = ""
+
+      const panelWidth = panelRect.width || 248
+      const panelHeight = panelRect.height || 112
+      const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight)
+      if (!placement || placement.drift > 140) {
+        markHidden()
+        return
+      }
+
+      const join = this._anchoredDetailJoinPoint(point, placement, panelWidth, panelHeight)
+      const liveMarkerRadius = this._anchoredDetailLiveMarkerRadius(state)
+      const socketRadius = this._anchoredDetailSocketRadius(state)
+      const origin = this._anchoredDetailSocketCenter(
+        point,
+        join,
+        liveMarkerRadius,
+        socketRadius,
+        this._anchoredDetailMarkerOverlap(state)
+      )
+
+      if (pointDistance(origin, join) > 168) {
+        markHidden()
+        return
+      }
+
+      panel.style.left = `${Math.round(placement.left)}px`
+      panel.style.top = `${Math.round(placement.top)}px`
+      panel.style.display = ""
+
+      if (!leader || !leaderPath) return
+
+      leader.style.display = ""
+      const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+      leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
+      if (leaderSocket) {
+        if (socketRadius > 0) {
+          leaderSocket.style.display = ""
+          leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
+          leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)
+          leaderSocket.setAttribute("r", `${socketRadius}`)
+        } else {
+          leaderSocket.style.display = "none"
+          leaderSocket.setAttribute("r", "0")
+        }
+      }
+    })
+  }
+
   GlobeController.prototype._anchoredDetailProjectCartesian = function(cartesian, Cesium) {
     if (!cartesian || !this.viewer?.scene) return null
 

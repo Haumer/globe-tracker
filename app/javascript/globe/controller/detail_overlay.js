@@ -281,7 +281,7 @@ export function applyDetailOverlayMethods(GlobeController) {
     const distance = Math.hypot(dx, dy)
     if (!Number.isFinite(distance) || distance <= 1) return point
 
-    const edgeOffset = Math.max(0, markerRadius - socketRadius * 0.55)
+    const edgeOffset = Math.max(0, markerRadius + Math.max(0, overlap) + socketRadius * 0.45)
     const offset = Math.min(Math.max(0, edgeOffset), Math.max(0, distance - 1))
     return {
       x: point.x + (dx / distance) * offset,
@@ -326,9 +326,9 @@ export function applyDetailOverlayMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailMarkerOverlap = function(state) {
     switch (state?.kind) {
       case "conflict_pulse":
-        return 4.5
+        return 5.5
       case "strategic_situation":
-        return 2.25
+        return 3
       default:
         return 1.5
     }
@@ -337,9 +337,9 @@ export function applyDetailOverlayMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailSocketRadius = function(state) {
     switch (state?.kind) {
       case "conflict_pulse":
-        return 6
+        return 4.5
       case "strategic_situation":
-        return 5.25
+        return 4.25
       default:
         return 0
     }

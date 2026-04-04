@@ -63,6 +63,7 @@ const TIMEOUT_PROPS = [
   "_polyHighlightTimer",
   "_toastTimer",
   "_portDebounce",
+  "_theaterBriefPollTimer",
 ]
 
 const RAF_PROPS = [
@@ -373,6 +374,7 @@ export function initializeCoreState(controller) {
   controller._alertData = []
   controller._alertUnseenCount = 0
   controller._selectedContext = null
+  controller._theaterBriefCache = new Map()
   controller._ds = {}
   controller._backgroundRefreshRetryTimers = {}
   controller._backgroundRefreshRetryCounts = {}

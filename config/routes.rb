@@ -64,6 +64,7 @@ Rails.application.routes.draw do
     resources :military_bases, only: [:index]
     resources :commodities, only: [:index]
     resource :brief, only: [:show]
+    resource :theater_brief, only: [:show]
     resource :exports, only: [] do
       get :geojson
       get :csv

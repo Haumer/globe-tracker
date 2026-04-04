@@ -119,8 +119,8 @@ export function renderContextSection(controller, section) {
       <div class="context-section-title">${controller._escapeHtml(section.title || "Section")}</div>
       ${chips ? `<div class="context-chip-row">${chips}</div>` : ""}
       ${rows ? `<div class="context-rows">${rows}</div>` : ""}
-      ${items ? `<div class="context-items">${items}</div>` : ""}
       ${html ? `<div class="context-html">${html}</div>` : ""}
+      ${items ? `<div class="context-items">${items}</div>` : ""}
     </section>
   `
 }
@@ -138,7 +138,7 @@ export function renderContextItemBody(controller, item) {
   return `
     <div class="context-item-main">
       ${label}
-      <span class="ins-chip ins-chip--${controller._escapeHtml(item.badge.variant || "eq")}">${controller._escapeHtml(item.badge.label)}</span>
+      <span class="ins-chip context-item-badge ins-chip--${controller._escapeHtml(item.badge.variant || "eq")}">${controller._escapeHtml(item.badge.label)}</span>
     </div>
   `
 }

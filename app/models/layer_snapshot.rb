@@ -1,5 +1,5 @@
 class LayerSnapshot < ApplicationRecord
-  STATUSES = %w[ready error].freeze
+  STATUSES = %w[pending ready error].freeze
 
   validates :snapshot_type, :scope_key, presence: true
   validates :status, inclusion: { in: STATUSES }
@@ -10,5 +10,9 @@ class LayerSnapshot < ApplicationRecord
 
   def fresh?
     expires_at.present? && expires_at > Time.current
+  end
+
+  def pending?
+    status == "pending"
   end
 end

@@ -7,6 +7,11 @@ export function applyContextMethods(GlobeController) {
   applyContextSectionMethods(GlobeController)
 
   GlobeController.prototype._setSelectedContext = function(context) {
+    if (this._theaterBriefPollTimer) {
+      clearTimeout(this._theaterBriefPollTimer)
+      this._theaterBriefPollTimer = null
+    }
+
     this._selectedContext = context || null
     this._selectedContextRequestKey = context?.nodeRequest
       ? `${context.nodeRequest.kind}:${context.nodeRequest.id}`
@@ -16,9 +21,26 @@ export function applyContextMethods(GlobeController) {
       this._selectedContext.nodeContext = null
       this._loadSelectedContextNode(this._selectedContext.nodeRequest, this._selectedContextRequestKey)
     }
+    if (this._selectedContext?.kind === "theater") {
+      this._loadSelectedTheaterBrief(this._selectedContext)
+    }
     this._renderSelectedContext()
-    if (context) this._showRightPanel("context")
-    else if (this._syncRightPanels) this._syncRightPanels()
+    if (!context) {
+      this._setRightTabUpdated?.("context", false)
+      if (this._syncRightPanels) this._syncRightPanels()
+      return
+    }
+
+    const panelVisible = this._isRightPanelVisible?.()
+    const activeTab = this._currentRightPanelTab?.()
+
+    if (!panelVisible && !this._rightPanelUserClosed) {
+      this._showRightPanel("context")
+      return
+    }
+
+    this._setRightTabUpdated?.("context", activeTab !== "context")
+    if (this._syncRightPanels) this._syncRightPanels()
   }
 
   GlobeController.prototype._loadSelectedContextNode = async function(nodeRequest, requestKey) {
@@ -50,6 +72,82 @@ export function applyContextMethods(GlobeController) {
     if (!this.hasContextContentTarget) return
 
     this.contextContentTarget.innerHTML = renderSelectedContext(this, this._selectedContext)
+  }
+
+  GlobeController.prototype._theaterBriefCacheKey = function(context) {
+    const theater = context?.theaterIdentifier || context?.title
+    if (!theater) return null
+    const zone = context?.zoneData || {}
+    const signature = [
+      context?.zoneKey || "",
+      zone.pulse_score || 0,
+      zone.escalation_trend || "",
+      zone.count_24h || 0,
+      zone.source_count || 0,
+      zone.story_count || 0,
+      zone.spike_ratio || 0,
+      zone.detected_at || "",
+    ].join("::")
+    return `${theater}::${signature}`
+  }
+
+  GlobeController.prototype._applyTheaterBriefPayload = function(context, payload = {}) {
+    if (!context || context.kind !== "theater") return
+
+    context.theaterBriefStatus = payload.status || "error"
+    context.theaterBrief = payload.brief || null
+    context.theaterBriefGeneratedAt = payload.generated_at || null
+    context.theaterBriefProvider = payload.provider || null
+    context.theaterBriefError = payload.error || null
+    context.theaterBriefScopeKey = payload.scope_key || null
+    context.theaterBriefSourceContext = payload.source_context || null
+    if (this._hydrateTheaterContextSections) this._hydrateTheaterContextSections(context)
+  }
+
+  GlobeController.prototype._scheduleTheaterBriefRetry = function(context, cacheKey) {
+    if (this._theaterBriefPollTimer) clearTimeout(this._theaterBriefPollTimer)
+    this._theaterBriefPollTimer = setTimeout(() => {
+      if (this._selectedContext !== context) return
+      if (this._theaterBriefCacheKey(context) !== cacheKey) return
+      this._theaterBriefCache?.delete(cacheKey)
+      this._loadSelectedTheaterBrief(context)
+    }, 4000)
+  }
+
+  GlobeController.prototype._loadSelectedTheaterBrief = async function(context) {
+    const cacheKey = this._theaterBriefCacheKey(context)
+    if (!cacheKey || !context?.theaterIdentifier) return
+
+    const cached = this._theaterBriefCache?.get(cacheKey)
+    if (cached) {
+      this._applyTheaterBriefPayload(context, cached)
+      if (this._selectedContext === context) this._renderSelectedContext()
+      if (cached.status === "pending") this._scheduleTheaterBriefRetry(context, cacheKey)
+      return
+    }
+
+    context.theaterBriefStatus = "loading"
+    if (this._hydrateTheaterContextSections) this._hydrateTheaterContextSections(context)
+
+    try {
+      const params = new URLSearchParams({ theater: context.theaterIdentifier })
+      if (context.zoneKey) params.set("cell_key", context.zoneKey)
+
+      const resp = await fetch(`/api/theater_brief?${params.toString()}`)
+      const payload = resp.ok ? await resp.json() : { status: "error", error: `HTTP ${resp.status}` }
+
+      this._theaterBriefCache?.set(cacheKey, payload)
+      if (this._selectedContext !== context) return
+
+      this._applyTheaterBriefPayload(context, payload)
+      this._renderSelectedContext()
+
+      if (payload.status === "pending") this._scheduleTheaterBriefRetry(context, cacheKey)
+    } catch (_error) {
+      if (this._selectedContext !== context) return
+      this._applyTheaterBriefPayload(context, { status: "error", error: "Brief request failed" })
+      this._renderSelectedContext()
+    }
   }
 
   GlobeController.prototype._renderContextSection = function(section) {

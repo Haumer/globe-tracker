@@ -1,0 +1,24 @@
+// ─── Globe Tracker — Mission Control Aesthetic ──────────────────
+// Fonts: JetBrains Mono (data), DM Sans (headings)
+// Palette: deep void black, cold blue-steel accents, amber warnings
+
+:root {
+  --gt-void: rgba(6, 8, 13, 0.92);
+  --gt-panel: rgba(10, 13, 20, 0.88);
+  --gt-border: rgba(79, 195, 247, 0.08);
+  --gt-border-hover: rgba(79, 195, 247, 0.18);
+  --gt-text: rgba(200, 210, 225, 0.85);
+  --gt-text-dim: rgba(200, 210, 225, 0.35);
+  --gt-text-bright: rgba(230, 240, 255, 0.95);
+  --gt-accent: #4fc3f7;
+  --gt-accent-dim: rgba(79, 195, 247, 0.12);
+  --gt-amber: #ffa726;
+  --gt-red: #ef5350;
+  --gt-nav-h: 36px;
+  --gt-bottom-strip-h: 40px;
+  --gt-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --gt-sans: 'DM Sans', -apple-system, sans-serif;
+  --gt-sidebar-w: 270px;
+  --gt-glass-bg: rgba(10, 13, 20, 0.88);
+  --gt-blur: blur(20px);
+}

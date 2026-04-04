@@ -1,0 +1,36 @@
+// ─── Very small screens ─────────────────────────────────────────
+@media (max-width: 480px) {
+  #stats-bar .stat-cell:last-child {
+    display: none;
+  }
+
+  #mobile-hud {
+    left: 8px;
+    right: 8px;
+
+    .mh-dock {
+      left: 8px;
+      right: 8px;
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .mh-dock-btn {
+      min-height: 54px;
+      font-size: 8px;
+    }
+
+    .mh-scene-btn {
+      padding: 8px 12px;
+    }
+  }
+
+  #sidebar,
+  #right-panel,
+  #detail-stack,
+  #timeline-bar,
+  #bottom-strip {
+    left: 8px !important;
+    right: 8px !important;
+  }
+}

@@ -1,0 +1,97 @@
+// ─── News arc controls popover ──────────────────────────────────
+.arc-controls {
+  padding: 4px 10px 4px 28px;
+  margin-bottom: 2px;
+
+  .arc-controls-title {
+    font: 600 9px var(--gt-mono);
+    color: #ffab40;
+    letter-spacing: 1.2px;
+    margin-bottom: 6px;
+  }
+
+  .arc-mini-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font: 500 9px var(--gt-mono);
+    color: var(--gt-text-dim);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+
+    input[type="checkbox"] { display: none; }
+
+    input:checked ~ .arc-mini-track {
+      background: var(--gt-accent);
+      &::after { transform: translateX(10px); }
+    }
+
+    input:checked ~ span:last-child { color: var(--gt-text); }
+  }
+
+  .arc-mini-track {
+    position: relative;
+    width: 20px;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 6px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transition: transform 0.15s, background 0.15s;
+    }
+  }
+
+  .arc-mini-toggle input:checked ~ .arc-mini-track::after {
+    background: #fff;
+  }
+
+  .arc-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+
+    &:last-child { margin-bottom: 0; }
+
+    label:not(.arc-mini-toggle) {
+      font: 500 9px var(--gt-mono);
+      color: var(--gt-text-dim);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    select {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--gt-border);
+      border-radius: 4px;
+      color: var(--gt-text);
+      font: 500 10px var(--gt-mono);
+      padding: 3px 6px;
+      cursor: pointer;
+      outline: none;
+      max-width: 120px;
+
+      &:hover { border-color: var(--gt-border-hover); }
+      &:focus { border-color: rgba(255, 171, 64, 0.3); }
+
+      option {
+        background: #0a0d14;
+        color: var(--gt-text);
+      }
+    }
+  }
+}

@@ -18,13 +18,15 @@ class Api::ShipsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "GET /api/ships returns JSON array" do
-    get "/api/ships"
-    assert_response :success
+    with_env("AISSTREAM_API_KEY", nil) do
+      get "/api/ships"
+      assert_response :success
 
-    data = JSON.parse(response.body)
-    assert_kind_of Array, data
-    assert_equal "ready", response.headers["X-Source-Status"]
-    assert_equal "0", response.headers["X-Source-Configured"]
+      data = JSON.parse(response.body)
+      assert_kind_of Array, data
+      assert_equal "ready", response.headers["X-Source-Status"]
+      assert_equal "0", response.headers["X-Source-Configured"]
+    end
   end
 
   test "ships response contains expected fields" do
@@ -55,9 +57,31 @@ class Api::ShipsControllerTest < ActionDispatch::IntegrationTest
   test "empty ships response exposes unconfigured source status" do
     Ship.delete_all
 
-    get "/api/ships"
-    assert_response :success
-    assert_equal "unconfigured", response.headers["X-Source-Status"]
-    assert_equal "0", response.headers["X-Source-Configured"]
+    with_env("AISSTREAM_API_KEY", nil) do
+      get "/api/ships"
+      assert_response :success
+      assert_equal "unconfigured", response.headers["X-Source-Status"]
+      assert_equal "0", response.headers["X-Source-Configured"]
+    end
+  end
+
+  private
+
+  def with_env(key, value)
+    original = ENV[key]
+
+    if value.nil?
+      ENV.delete(key)
+    else
+      ENV[key] = value
+    end
+
+    yield
+  ensure
+    if original.nil?
+      ENV.delete(key)
+    else
+      ENV[key] = original
+    end
   end
 end

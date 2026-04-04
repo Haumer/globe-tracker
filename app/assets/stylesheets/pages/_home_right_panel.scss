@@ -689,7 +689,7 @@
   color: var(--gt-text);
 
   .insight-feed-header {
-    padding: 10px 12px 6px;
+    padding: 12px 14px 8px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -721,7 +721,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
-    padding: 2px 0;
+    padding: 4px 0;
   }
 }
 
@@ -755,20 +755,6 @@
   line-height: 1;
   letter-spacing: inherit;
   text-transform: uppercase;
-}
-
-.rp-pane-note {
-  padding: 0 12px 6px;
-  font: 500 9px/1.4 var(--gt-mono);
-  letter-spacing: 0.2px;
-}
-
-.rp-pane-note--context {
-  color: rgba(200, 210, 225, 0.44);
-}
-
-.rp-pane-note--situations {
-  color: rgba(200, 210, 225, 0.42);
 }
 
 .context-shell {
@@ -1986,13 +1972,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--gt-border);
 }
 
 .sit-title {
   font: 700 10px var(--gt-mono);
-  letter-spacing: 1.2px;
+  letter-spacing: 1.5px;
   color: var(--gt-text-dim);
 }
 
@@ -2004,7 +1990,7 @@
 .sit-list {
   overflow-y: auto;
   flex: 1;
-  padding: 2px 0;
+  padding: 4px 0;
 }
 
 // Theater group
@@ -2016,7 +2002,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   cursor: pointer;
   user-select: none;
 
@@ -2030,7 +2016,7 @@
 }
 
 .sit-theater-name {
-  font: 600 10px var(--gt-sans);
+  font: 600 11px var(--gt-sans);
   color: rgba(255, 152, 0, 0.7);
   letter-spacing: 0.3px;
   flex: 1;
@@ -2047,7 +2033,7 @@
 // Zone card
 .sit-zone {
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 0 10px;
+  padding: 0 12px;
   transition: background 0.15s;
 
   &:hover { background: rgba(255, 255, 255, 0.015); }
@@ -2057,19 +2043,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  padding: 7px 0;
   cursor: pointer;
   user-select: none;
 }
 
 .sit-zone-name {
-  font: 500 11px var(--gt-sans);
+  font: 500 12px var(--gt-sans);
   color: var(--gt-text);
   letter-spacing: -0.2px;
 }
 
 .sit-zone-score {
-  font: 600 10px var(--gt-mono);
+  font: 600 11px var(--gt-mono);
   letter-spacing: 0.3px;
   flex-shrink: 0;
 }
@@ -2082,20 +2068,20 @@
 
 // Summary state
 .sit-zone-summary {
-  padding: 0 0 6px;
+  padding: 0 0 8px;
 }
 
 .sit-zone-headline {
-  font: 400 10px var(--gt-sans);
+  font: 400 11px var(--gt-sans);
   color: rgba(200, 210, 225, 0.5);
-  line-height: 1.32;
-  margin-bottom: 1px;
+  line-height: 1.4;
+  margin-bottom: 2px;
 }
 
 .sit-zone-meta {
-  font: 400 8px var(--gt-mono);
+  font: 400 9px var(--gt-mono);
   color: var(--gt-text-dim);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .sit-zone-chips {
@@ -2105,8 +2091,8 @@
 }
 
 .sit-chip {
-  font: 500 8px var(--gt-mono);
-  padding: 1px 4px;
+  font: 500 9px var(--gt-mono);
+  padding: 1px 5px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--gt-text-dim);
@@ -2120,39 +2106,39 @@
 
 // Expanded state
 .sit-zone-detail {
-  padding: 0 0 8px;
+  padding: 0 0 10px;
 }
 
 .sit-zone-stats {
-  font: 400 9px var(--gt-mono);
+  font: 400 10px var(--gt-mono);
   color: var(--gt-text-dim);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .sit-section-label {
   font: 600 9px var(--gt-mono);
   letter-spacing: 1.5px;
   color: rgba(200, 210, 225, 0.2);
-  margin: 8px 0 5px;
+  margin: 10px 0 6px;
 }
 
 .sit-article {
   display: block;
   text-decoration: none;
-  padding: 3px 0;
+  padding: 4px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 
   &:hover { background: rgba(255, 255, 255, 0.02); }
 }
 
 .sit-article-title {
-  font: 400 10px var(--gt-sans);
+  font: 400 11px var(--gt-sans);
   color: rgba(220, 230, 245, 0.7);
   line-height: 1.35;
 }
 
 .sit-article-meta {
-  font: 400 8px var(--gt-mono);
+  font: 400 9px var(--gt-mono);
   color: var(--gt-text-dim);
   margin-top: 2px;
 }

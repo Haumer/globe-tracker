@@ -326,9 +326,9 @@ export function applyDetailOverlayMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailMarkerOverlap = function(state) {
     switch (state?.kind) {
       case "conflict_pulse":
-        return 3.5
+        return 0
       case "strategic_situation":
-        return 2.25
+        return 0
       default:
         return 1.5
     }
@@ -337,9 +337,9 @@ export function applyDetailOverlayMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailSocketRadius = function(state) {
     switch (state?.kind) {
       case "conflict_pulse":
-        return 3.75
+        return 0
       case "strategic_situation":
-        return 3.5
+        return 0
       default:
         return 0
     }

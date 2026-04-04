@@ -1,4 +1,5 @@
 import { applyCoreMethods } from "globe/controller/core"
+import { applyDetailOverlayMethods } from "globe/controller/detail_overlay"
 import { applyFlightMethods } from "globe/controller/flights"
 import { applySelectionMethods } from "globe/controller/selection"
 import { applySatelliteMethods } from "globe/controller/satellites"

@@ -117,13 +117,17 @@ export function applyCoreMethods(GlobeController) {
       this._applyRestoredPrefs()
     }
 
+    const hadSavedPrefs = this.savedPrefsValue && Object.keys(this.savedPrefsValue).length > 0
+    if (!deepLinkState && !hadSavedPrefs) {
+      this._applyDefaultPrimaryLayers?.()
+    }
+
     this._syncMobileChrome?.()
 
     // Track data freshness per layer
     this._layerFreshness = {}
 
     // Show onboarding for first-time users (no deep link, no saved prefs, no prior session)
-    const hadSavedPrefs = this.savedPrefsValue && Object.keys(this.savedPrefsValue).length > 0
     const hadSession = !!sessionStorage.getItem("globe_camera")
     if (!deepLinkState && !hadSavedPrefs && !hadSession) {
       this._maybeShowOnboarding()

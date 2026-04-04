@@ -1,0 +1,578 @@
+// ═══════════════════════════════════════════════════════════
+// Data Pipeline Schematic — Intelligence System Diagram
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-schematic {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 80px 40px 100px;
+}
+
+// ── Header ───────────────────────────────────────────────
+
+.pipeline-header {
+  text-align: center;
+  margin-bottom: 64px;
+}
+
+.pipeline-header-rule {
+  width: 1px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 auto 24px;
+}
+
+.pipeline-header-label {
+  font: 500 9px 'JetBrains Mono', monospace;
+  letter-spacing: 3px;
+  color: rgba(200, 210, 225, 0.2);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.pipeline-header-title {
+  font: 700 32px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.85);
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+  margin: 0 0 12px;
+}
+
+.pipeline-header-sub {
+  font: 400 12px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.25);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 420px;
+  display: inline-block;
+}
+
+// ── Flow Container ───────────────────────────────────────
+
+.pipeline-flow {
+  position: relative;
+}
+
+// ── Layer — shared structure ─────────────────────────────
+
+.pipeline-layer {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0 28px;
+  margin-bottom: 0;
+  position: relative;
+}
+
+// ── Spine (left rail) ────────────────────────────────────
+
+.pipeline-layer-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pipeline-layer-node {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: #0d0f14;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.pipeline-node-number {
+  font: 700 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.4);
+  letter-spacing: 0.5px;
+}
+
+.pipeline-layer-connector {
+  width: 1px;
+  flex: 1;
+  min-height: 24px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+// Per-layer node accent colors
+.pipeline-layer-node--sources {
+  border-color: rgba(100, 180, 255, 0.3);
+  .pipeline-node-number { color: rgba(100, 180, 255, 0.6); }
+}
+.pipeline-layer-node--polling {
+  border-color: rgba(255, 183, 77, 0.3);
+  .pipeline-node-number { color: rgba(255, 183, 77, 0.6); }
+}
+.pipeline-layer-node--normalization {
+  border-color: rgba(129, 199, 132, 0.3);
+  .pipeline-node-number { color: rgba(129, 199, 132, 0.6); }
+}
+.pipeline-layer-node--enrichment {
+  border-color: rgba(206, 147, 216, 0.3);
+  .pipeline-node-number { color: rgba(206, 147, 216, 0.6); }
+}
+.pipeline-layer-node--ontology {
+  border-color: rgba(79, 195, 247, 0.3);
+  .pipeline-node-number { color: rgba(79, 195, 247, 0.6); }
+}
+.pipeline-layer-node--intelligence {
+  border-color: rgba(239, 83, 80, 0.35);
+  .pipeline-node-number { color: rgba(239, 83, 80, 0.65); }
+}
+
+// ── Layer Content ────────────────────────────────────────
+
+.pipeline-layer-content {
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.pipeline-layer:last-child .pipeline-layer-content {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.pipeline-layer-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pipeline-layer-title {
+  font: 600 18px 'DM Sans', sans-serif;
+  color: rgba(220, 230, 245, 0.85);
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.pipeline-layer-count {
+  font: 500 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.25);
+  letter-spacing: 0.5px;
+}
+
+.pipeline-layer-desc {
+  font: 400 12px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.35);
+  line-height: 1.6;
+  margin: 0 0 20px;
+  max-width: 680px;
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(200, 210, 225, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 1 — DATA SOURCES
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-source-mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pipeline-source-group {
+  background: #0d0f14;
+  padding: 14px 16px;
+}
+
+.pipeline-source-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pipeline-source-group-icon {
+  font-size: 11px;
+  color: rgba(200, 210, 225, 0.25);
+}
+
+.pipeline-source-group-name {
+  font: 600 10px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(200, 210, 225, 0.35);
+}
+
+.pipeline-source-group-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pipeline-source-tag {
+  font: 400 10px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.45);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 7px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 2 — POLLING & INGESTION
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-job-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.pipeline-job {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  border-left: 2px solid transparent;
+}
+
+.pipeline-job--realtime { border-left-color: rgba(239, 83, 80, 0.5); }
+.pipeline-job--fast { border-left-color: rgba(255, 183, 77, 0.5); }
+.pipeline-job--medium { border-left-color: rgba(100, 180, 255, 0.4); }
+.pipeline-job--slow { border-left-color: rgba(200, 210, 225, 0.15); }
+
+.pipeline-job-name {
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.5);
+  letter-spacing: 0.2px;
+}
+
+.pipeline-job-interval {
+  font: 700 9px 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+}
+
+.pipeline-job--realtime .pipeline-job-interval { color: rgba(239, 83, 80, 0.7); }
+.pipeline-job--fast .pipeline-job-interval { color: rgba(255, 183, 77, 0.7); }
+.pipeline-job--medium .pipeline-job-interval { color: rgba(100, 180, 255, 0.6); }
+.pipeline-job--slow .pipeline-job-interval { color: rgba(200, 210, 225, 0.3); }
+
+.pipeline-tier-legend {
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pipeline-tier-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: 10px;
+
+  &:first-child { margin-left: 0; }
+}
+
+.pipeline-tier-dot--realtime { background: rgba(239, 83, 80, 0.6); }
+.pipeline-tier-dot--fast { background: rgba(255, 183, 77, 0.6); }
+.pipeline-tier-dot--medium { background: rgba(100, 180, 255, 0.5); }
+.pipeline-tier-dot--slow { background: rgba(200, 210, 225, 0.2); }
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 3 & 4 — SERVICE CARDS
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-service-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.pipeline-service-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.pipeline-service-card--compact {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.pipeline-service-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pipeline-service-name {
+  font: 500 11px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.6);
+  letter-spacing: 0.2px;
+}
+
+.pipeline-service-badge {
+  font: 700 8px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.pipeline-service-badge--ai {
+  color: rgba(206, 147, 216, 0.8);
+  background: rgba(206, 147, 216, 0.1);
+}
+
+.pipeline-service-ops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    font: 400 11px 'DM Sans', sans-serif;
+    color: rgba(200, 210, 225, 0.35);
+    line-height: 1.5;
+    padding-left: 12px;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 7px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(200, 210, 225, 0.12);
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: rgba(200, 210, 225, 0.45);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 5 — ONTOLOGY
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-ontology-diagram {
+  display: grid;
+  grid-template-columns: 1fr 60px 1fr;
+  gap: 0;
+  align-items: stretch;
+}
+
+.pipeline-ontology-sync-col,
+.pipeline-ontology-graph-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-ontology-sync-header,
+.pipeline-ontology-graph-header {
+  font: 600 9px 'JetBrains Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(200, 210, 225, 0.2);
+  margin-bottom: 4px;
+}
+
+.pipeline-ontology-sync {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  padding: 12px 14px;
+
+  code {
+    font: 500 10px 'JetBrains Mono', monospace;
+    color: rgba(79, 195, 247, 0.6);
+    display: block;
+    margin-bottom: 4px;
+  }
+}
+
+.pipeline-ontology-sync-detail {
+  font: 400 10px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.3);
+  line-height: 1.5;
+}
+
+.pipeline-ontology-arrow-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pipeline-ontology-arrows {
+  width: 60px;
+  height: 100%;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.pipeline-ontology-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-ontology-table {
+  background: rgba(79, 195, 247, 0.03);
+  border: 1px solid rgba(79, 195, 247, 0.08);
+  border-radius: 4px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  > i {
+    font-size: 12px;
+    color: rgba(79, 195, 247, 0.35);
+  }
+
+  > span:first-of-type {
+    font: 600 12px 'DM Sans', sans-serif;
+    color: rgba(220, 230, 245, 0.7);
+  }
+}
+
+.pipeline-ontology-table-types {
+  font: 400 10px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.3);
+  line-height: 1.5;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 6 — DERIVED INTELLIGENCE
+// ═══════════════════════════════════════════════════════════
+
+.pipeline-intel-engines {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.pipeline-intel-engine {
+  background: rgba(239, 83, 80, 0.02);
+  border: 1px solid rgba(239, 83, 80, 0.06);
+  border-radius: 4px;
+  padding: 18px 20px;
+}
+
+.pipeline-intel-engine-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pipeline-intel-engine-badge {
+  font: 700 8px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(239, 83, 80, 0.6);
+  background: rgba(239, 83, 80, 0.08);
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.pipeline-intel-engine-desc {
+  font: 400 11px 'DM Sans', sans-serif;
+  color: rgba(200, 210, 225, 0.35);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.pipeline-intel-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pipeline-intel-rule {
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(239, 83, 80, 0.5);
+  background: rgba(239, 83, 80, 0.05);
+  padding: 3px 8px;
+  border-radius: 2px;
+  letter-spacing: 0.2px;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Responsive
+// ═══════════════════════════════════════════════════════════
+
+@media (max-width: 900px) {
+  .pipeline-schematic {
+    padding: 60px 20px 80px;
+  }
+
+  .pipeline-layer {
+    grid-template-columns: 36px 1fr;
+    gap: 0 16px;
+  }
+
+  .pipeline-layer-node {
+    width: 30px;
+    height: 30px;
+  }
+
+  .pipeline-source-mosaic {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .pipeline-job-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-service-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-ontology-diagram {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .pipeline-ontology-arrow-col {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .pipeline-header-title {
+    font-size: 26px;
+  }
+
+  .pipeline-layer {
+    grid-template-columns: 28px 1fr;
+    gap: 0 12px;
+  }
+
+  .pipeline-source-mosaic {
+    grid-template-columns: 1fr;
+  }
+}

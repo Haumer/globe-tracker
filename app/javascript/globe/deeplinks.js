@@ -1,12 +1,10 @@
-import { LAYER_REGISTRY_BY_KEY } from "./controller/ui_registry"
+import { LAYER_REGISTRY_BY_KEY, isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 // ── Deep Links ──────────────────────────────────────────
 // Encode/decode globe state in URL hash for shareable views.
 //
 // Format: #lat,lng,height,heading,pitch|layer1,layer2,...|sat:cat1,cat2|mil:0|countries:US,DE
 // All sections after camera are optional.
-
-import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
 
 const LAYER_KEYS = [
   "flights", "trails", "ships", "borders", "cities", "airports",
@@ -226,12 +224,13 @@ export function applyDeepLink(controller, state) {
       if (isLayerTemporarilyDisabled(layer)) continue
       const method = toggleMap[layer]
       const target = targetMap[layer]
-      if (!method || !controller[method]) continue
+      if (!method || !target || !controller[method]) continue
 
-      if (controller[config.visibleProp]) continue
+      const visibleProp = LAYER_REGISTRY_BY_KEY[layer]?.visibleProp || (layer === "terrain" ? "terrainEnabled" : `${layer}Visible`)
+      if (controller[visibleProp]) continue
 
-      const targetName = `${config.toggleTarget}Target`
-      const hasTarget = "has" + config.toggleTarget.charAt(0).toUpperCase() + config.toggleTarget.slice(1) + "Target"
+      const targetName = `${target}Target`
+      const hasTarget = `has${target.charAt(0).toUpperCase()}${target.slice(1)}Target`
       if (controller[hasTarget]) {
         controller[targetName].checked = true
       }

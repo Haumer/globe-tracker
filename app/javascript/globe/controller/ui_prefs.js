@@ -68,6 +68,23 @@ export function applyUiPreferenceMethods(GlobeController) {
       this.sidebarTarget.classList.add("mobile-peek")
     }
   }
+
+  GlobeController.prototype._applyDefaultPrimaryLayers = function() {
+    const defaults = [
+      ["situationsToggle", "toggleSituations"],
+      ["insightsToggle", "toggleInsights"],
+      ["newsToggle", "toggleNews"],
+    ]
+
+    defaults.forEach(([targetBase, methodName]) => {
+      const hasTarget = `has${capitalize(targetBase)}Target`
+      if (!this[hasTarget]) return
+      const target = this[`${targetBase}Target`]
+      if (target.checked) return
+      target.checked = true
+      this[methodName]()
+    })
+  }
 }
 
 function buildLayerPrefs() {

@@ -5,6 +5,16 @@ export function applyConflictPulseMethods(GlobeController) {
   applyConflictPulseRenderingMethods(GlobeController)
   applyConflictPulseInteractionMethods(GlobeController)
 
+  GlobeController.prototype._shouldToastConflictPulse = function(zone) {
+    const key = `${zone?.cell_key || "unknown"}`
+    const now = Date.now()
+    this._conflictPulseToastSeenAt ||= {}
+
+    const lastSeenAt = this._conflictPulseToastSeenAt[key]
+    if (lastSeenAt && (now - lastSeenAt) < 20 * 60 * 1000) return false
+    return true
+  }
+
   GlobeController.prototype.toggleSituations = function() {
     this.situationsVisible = this.hasSituationsToggleTarget && this.situationsToggleTarget.checked
     this._strikeArcsVisible = this.hasStrikeArcsToggleTarget && this.strikeArcsToggleTarget.checked
@@ -107,6 +117,9 @@ export function applyConflictPulseMethods(GlobeController) {
   }
 
   GlobeController.prototype._toastConflictPulse = function(zone) {
+    this._conflictPulseToastSeenAt ||= {}
+    this._conflictPulseToastSeenAt[`${zone?.cell_key || "unknown"}`] = Date.now()
+
     const headline = zone.top_headlines?.[0] || "Developing situation detected"
     const trend = zone.escalation_trend.toUpperCase()
     const el = document.getElementById("gt-toast")

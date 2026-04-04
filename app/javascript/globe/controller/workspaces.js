@@ -1,4 +1,5 @@
-import { encodeState, applyDeepLink } from "globe/deeplinks"
+import { applyDeepLink } from "globe/deeplinks"
+import { LAYER_REGISTRY, LAYER_REGISTRY_BY_KEY } from "globe/controller/ui_registry"
 
 export function applyWorkspaceMethods(GlobeController) {
 
@@ -222,6 +223,7 @@ export function applyWorkspaceMethods(GlobeController) {
   GlobeController.prototype._clearAllLayers = function() {
     const layerToggles = [
       ["flightsVisible", "flightsToggle", "toggleFlights"],
+      ["trailsVisible", "trailsToggle", "toggleTrails"],
       ["shipsVisible", "shipsToggle", "toggleShips"],
       ["bordersVisible", "bordersToggle", "toggleBorders"],
       ["citiesVisible", "citiesToggle", "toggleCities"],
@@ -243,11 +245,15 @@ export function applyWorkspaceMethods(GlobeController) {
       ["notamsVisible", "notamsToggle", "toggleNotams"],
     ]
 
-      const hasTarget = "has" + layer.toggleTarget.charAt(0).toUpperCase() + layer.toggleTarget.slice(1) + "Target"
+    for (const [visibleProp, toggleTarget, methodName] of layerToggles) {
+      if (!this[visibleProp] || typeof this[methodName] !== "function") continue
+
+      const hasTarget = `has${toggleTarget.charAt(0).toUpperCase()}${toggleTarget.slice(1)}Target`
       if (this[hasTarget]) {
-        this[`${layer.toggleTarget}Target`].checked = false
+        this[`${toggleTarget}Target`].checked = false
       }
-      this[layer.method]()
+
+      this[methodName]()
     }
 
     // Clear satellite categories

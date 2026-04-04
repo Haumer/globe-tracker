@@ -38,6 +38,10 @@ export const QUICK_TOGGLE_MAP = Object.fromEntries(
   LAYER_REGISTRY.map(layer => [layer.key, { target: layer.toggleTarget, method: layer.method }])
 )
 
+export const LAYER_REGISTRY_BY_KEY = Object.fromEntries(
+  LAYER_REGISTRY.map(layer => [layer.key, layer])
+)
+
 export function layerRegistryEntry(layerKey) {
   return LAYER_REGISTRY.find(layer => layer.key === layerKey) || null
 }

@@ -47,4 +47,348 @@
       <div class="bento-footer-text">Source freshness, rights, methodology, and confidence vary by layer.</div>
     </div>
   </div>
+
+  <!-- ═══ DATA PIPELINE SCHEMATIC ═══ -->
+  <div class="pipeline-schematic">
+    <div class="pipeline-header">
+      <div class="pipeline-header-rule"></div>
+      <div class="pipeline-header-label">[02] PROCESSING PIPELINE</div>
+      <h2 class="pipeline-header-title">From raw feeds<br>to intelligence</h2>
+      <p class="pipeline-header-sub">Six stages transform <%= sources.size %> data sources into actionable, cross-correlated situational awareness.</p>
+    </div>
+
+    <div class="pipeline-flow">
+
+      <!-- ── LAYER 1: DATA SOURCES ── -->
+      <div class="pipeline-layer pipeline-layer--sources">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--sources">
+            <span class="pipeline-node-number">01</span>
+          </div>
+          <div class="pipeline-layer-connector"></div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Data Sources</h3>
+            <span class="pipeline-layer-count"><%= sources.size %> feeds</span>
+          </div>
+          <p class="pipeline-layer-desc">External APIs, open databases, and live streams across aviation, maritime, space, earth science, infrastructure, economics, and news.</p>
+          <div class="pipeline-source-mosaic">
+            <% domain_groups = {
+              "Aviation" => { icon: "fa-solid fa-plane", items: ["ADS-B Exchange", "OpenSky", "OpenAIP", "OurAirports"] },
+              "Maritime" => { icon: "fa-solid fa-ship", items: ["AIS Stream", "World Port Index", "UN/LOCODE"] },
+              "Space" => { icon: "fa-solid fa-satellite", items: ["CelesTrak", "UCS Satellites", "Classified Sat Intel"] },
+              "Earth Science" => { icon: "fa-solid fa-house-crack", items: ["USGS Earthquakes", "NASA FIRMS", "NASA EONET"] },
+              "News & OSINT" => { icon: "fa-solid fa-newspaper", items: ["GDELT", "RSS Mesh", "Multi-News APIs"] },
+              "Infrastructure" => { icon: "fa-solid fa-bolt", items: ["Cloudflare Radar", "IODA Outages", "TeleGeography", "GPS Interference"] },
+              "Security" => { icon: "fa-solid fa-crosshairs", items: ["UCDP Conflicts", "ACLED", "Military Classifier"] },
+              "Economics" => { icon: "fa-solid fa-chart-column", items: ["World Bank WDI", "IMF", "CEPII BACI", "OECD ICIO", "Alpha Vantage", "ECB"] },
+              "Energy" => { icon: "fa-solid fa-oil-well", items: ["Global Energy Monitor", "Power Plant DB", "JODI Oil & Gas"] },
+              "Visual" => { icon: "fa-solid fa-video", items: ["Windy Webcams", "YouTube Live", "NYC Traffic Cams"] },
+            } %>
+            <% domain_groups.each do |group_name, group| %>
+              <div class="pipeline-source-group">
+                <div class="pipeline-source-group-header">
+                  <i class="<%= group[:icon] %> pipeline-source-group-icon"></i>
+                  <span class="pipeline-source-group-name"><%= group_name %></span>
+                </div>
+                <div class="pipeline-source-group-items">
+                  <% group[:items].each do |item| %>
+                    <span class="pipeline-source-tag"><%= item %></span>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LAYER 2: POLLING & INGESTION ── -->
+      <div class="pipeline-layer pipeline-layer--polling">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--polling">
+            <span class="pipeline-node-number">02</span>
+          </div>
+          <div class="pipeline-layer-connector"></div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Polling & Ingestion</h3>
+            <span class="pipeline-layer-count">~30 jobs</span>
+          </div>
+          <p class="pipeline-layer-desc"><code>GlobalPollerService</code> orchestrates scheduled jobs at cadences from 15 seconds to 7 days, with circuit breakers and stale-data purging.</p>
+          <div class="pipeline-job-grid">
+            <% jobs = [
+              { name: "PollOpenskyJob", interval: "15s", tier: "realtime" },
+              { name: "PollAdsbMilitaryJob", interval: "15s", tier: "realtime" },
+              { name: "RefreshLiveTrainsJob", interval: "30s", tier: "realtime" },
+              { name: "RefreshEarthquakesJob", interval: "2m", tier: "fast" },
+              { name: "RefreshNewsJob", interval: "5m", tier: "fast" },
+              { name: "RefreshRssNewsJob", interval: "5m", tier: "fast" },
+              { name: "RefreshMultiNewsJob", interval: "5m", tier: "fast" },
+              { name: "EnrichNewsJob", interval: "5m", tier: "fast" },
+              { name: "RefreshConflictPulseSnapshotJob", interval: "5m", tier: "fast" },
+              { name: "RefreshOntologyRelationshipsJob", interval: "10m", tier: "medium" },
+              { name: "RefreshInsightsSnapshotJob", interval: "10m", tier: "medium" },
+              { name: "RefreshWeatherAlertsJob", interval: "10m", tier: "medium" },
+              { name: "RefreshCommodityPricesJob", interval: "1h", tier: "slow" },
+              { name: "RefreshSatellitesJob", interval: "6h", tier: "slow" },
+              { name: "RefreshSubmarineCablesJob", interval: "24h", tier: "slow" },
+              { name: "RefreshCountryIndicatorsJob", interval: "24h", tier: "slow" },
+            ] %>
+            <% jobs.each do |job| %>
+              <div class="pipeline-job pipeline-job--<%= job[:tier] %>">
+                <span class="pipeline-job-name"><%= job[:name] %></span>
+                <span class="pipeline-job-interval"><%= job[:interval] %></span>
+              </div>
+            <% end %>
+          </div>
+          <div class="pipeline-tier-legend">
+            <span class="pipeline-tier-dot pipeline-tier-dot--realtime"></span> Real-time (15–30s)
+            <span class="pipeline-tier-dot pipeline-tier-dot--fast"></span> Fast (2–5m)
+            <span class="pipeline-tier-dot pipeline-tier-dot--medium"></span> Medium (10m)
+            <span class="pipeline-tier-dot pipeline-tier-dot--slow"></span> Slow (1h–24h)
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LAYER 3: NORMALIZATION ── -->
+      <div class="pipeline-layer pipeline-layer--normalization">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--normalization">
+            <span class="pipeline-node-number">03</span>
+          </div>
+          <div class="pipeline-layer-connector"></div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Normalization</h3>
+            <span class="pipeline-layer-count">3 services</span>
+          </div>
+          <p class="pipeline-layer-desc">Raw records are cleaned, deduplicated, and scored for trust before entering the analytical pipeline.</p>
+          <div class="pipeline-service-cards">
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsNormalizationRecorder</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>URL canonicalization & deduplication</li>
+                <li>Publisher identity resolution</li>
+                <li>Source-kind classification (wire / publisher / aggregator / platform)</li>
+                <li>Origin-source detection (Reuters, AP, AFP wires)</li>
+              </ul>
+            </div>
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsScopeClassifier</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>Content-scope tagging per article</li>
+                <li>Scope-reason attribution</li>
+              </ul>
+            </div>
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsTrustScorer</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>Source reliability (wire 0.92 &rarr; platform 0.35)</li>
+                <li>Geo-confidence scoring (point 0.82 &rarr; unknown 0.0)</li>
+                <li>Composite claim confidence</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LAYER 4: ENRICHMENT & EXTRACTION ── -->
+      <div class="pipeline-layer pipeline-layer--enrichment">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--enrichment">
+            <span class="pipeline-node-number">04</span>
+          </div>
+          <div class="pipeline-layer-connector"></div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Enrichment & Extraction</h3>
+            <span class="pipeline-layer-count">6 classifiers</span>
+          </div>
+          <p class="pipeline-layer-desc">AI models and rule engines extract structured claims, classify assets, and cluster related stories across space and time.</p>
+          <div class="pipeline-service-cards">
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsEnrichmentService</code>
+                <span class="pipeline-service-badge pipeline-service-badge--ai">AI</span>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>LLM enrichment via OpenAI gpt-4.1-nano</li>
+                <li>Geocoding & location extraction</li>
+                <li>Category and theme tagging</li>
+              </ul>
+            </div>
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsClaimExtractor</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>Event family/type detection (conflict, diplomacy, economy, disaster&hellip;)</li>
+                <li>Actor role extraction (directional & participant strategies)</li>
+                <li>Confidence-weighted claim records</li>
+              </ul>
+            </div>
+            <div class="pipeline-service-card">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">NewsStoryClusterer</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li>Spatiotemporal clustering (family-specific windows 18h&ndash;72h)</li>
+                <li>Match threshold 0.67, max distance 250km</li>
+                <li>Multi-source verification status</li>
+              </ul>
+            </div>
+            <div class="pipeline-service-card pipeline-service-card--compact">
+              <div class="pipeline-service-card-header">
+                <code class="pipeline-service-name">Asset Classifiers</code>
+              </div>
+              <ul class="pipeline-service-ops">
+                <li><code>MilitaryClassifier</code> &mdash; flag military flights</li>
+                <li><code>SatelliteClassifier</code> &mdash; categorize orbital assets</li>
+                <li><code>ThreatClassifier</code> &mdash; threat-level scoring</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LAYER 5: ONTOLOGY GRAPH ── -->
+      <div class="pipeline-layer pipeline-layer--ontology">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--ontology">
+            <span class="pipeline-node-number">05</span>
+          </div>
+          <div class="pipeline-layer-connector"></div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Ontology Graph</h3>
+            <span class="pipeline-layer-count">3 sync services</span>
+          </div>
+          <p class="pipeline-layer-desc">Entities, events, and relationships are unified into a knowledge graph connecting actors, assets, places, and incidents.</p>
+
+          <div class="pipeline-ontology-diagram">
+            <div class="pipeline-ontology-sync-col">
+              <div class="pipeline-ontology-sync-header">Sync Services</div>
+              <div class="pipeline-ontology-sync">
+                <code>NewsOntologySyncService</code>
+                <div class="pipeline-ontology-sync-detail">sources &rarr; entities<br>actors &rarr; entities<br>story clusters &rarr; events</div>
+              </div>
+              <div class="pipeline-ontology-sync">
+                <code>OperationalOntologySyncService</code>
+                <div class="pipeline-ontology-sync-detail">flights &rarr; asset entities<br>ships &rarr; asset entities<br>outages &rarr; events</div>
+              </div>
+              <div class="pipeline-ontology-sync">
+                <code>OntologyRelationshipSyncService</code>
+                <div class="pipeline-ontology-sync-detail">Builds typed relationships<br>between graph nodes</div>
+              </div>
+            </div>
+
+            <div class="pipeline-ontology-arrow-col">
+              <div class="pipeline-ontology-arrows">
+                <svg viewBox="0 0 60 200" preserveAspectRatio="none">
+                  <path d="M5,30 C30,30 30,100 55,100" stroke="rgba(100,180,255,0.25)" stroke-width="1.5" fill="none"/>
+                  <path d="M5,100 C30,100 30,100 55,100" stroke="rgba(100,180,255,0.25)" stroke-width="1.5" fill="none"/>
+                  <path d="M5,170 C30,170 30,100 55,100" stroke="rgba(100,180,255,0.25)" stroke-width="1.5" fill="none"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="pipeline-ontology-graph-col">
+              <div class="pipeline-ontology-graph-header">Knowledge Graph</div>
+              <div class="pipeline-ontology-tables">
+                <div class="pipeline-ontology-table">
+                  <i class="fa-solid fa-circle-nodes"></i>
+                  <span>OntologyEntity</span>
+                  <span class="pipeline-ontology-table-types">actor, asset, source, place, corridor, theater, commodity</span>
+                </div>
+                <div class="pipeline-ontology-table">
+                  <i class="fa-solid fa-bolt"></i>
+                  <span>OntologyEvent</span>
+                  <span class="pipeline-ontology-table-types">conflict, infrastructure, disaster, diplomacy&hellip;</span>
+                </div>
+                <div class="pipeline-ontology-table">
+                  <i class="fa-solid fa-arrows-left-right"></i>
+                  <span>OntologyRelationship</span>
+                  <span class="pipeline-ontology-table-types">theater_pressure, flow_dependency, downstream_exposure, operational_activity, local_corroboration</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LAYER 6: DERIVED INTELLIGENCE ── -->
+      <div class="pipeline-layer pipeline-layer--intelligence">
+        <div class="pipeline-layer-spine">
+          <div class="pipeline-layer-node pipeline-layer-node--intelligence">
+            <span class="pipeline-node-number">06</span>
+          </div>
+        </div>
+        <div class="pipeline-layer-content">
+          <div class="pipeline-layer-heading">
+            <h3 class="pipeline-layer-title">Derived Intelligence</h3>
+            <span class="pipeline-layer-count">3 engines</span>
+          </div>
+          <p class="pipeline-layer-desc">Cross-layer correlation, convergence detection, and theater-level situational awareness — the final analytical products.</p>
+          <div class="pipeline-intel-engines">
+            <div class="pipeline-intel-engine">
+              <div class="pipeline-intel-engine-header">
+                <code class="pipeline-service-name">CrossLayerAnalyzer</code>
+                <span class="pipeline-intel-engine-badge">16 rules</span>
+              </div>
+              <div class="pipeline-intel-rules">
+                <% rules = %w[
+                  earthquake_infrastructure_threats
+                  jamming_flight_impacts
+                  conflict_military_surge
+                  cable_outage_correlations
+                  emergency_squawk_correlations
+                  ship_cable_proximity
+                  outage_conflict_blackout
+                  notam_military_correlations
+                  earthquake_pipeline_threats
+                  weather_flight_disruption
+                  conflict_pulse_hotspots
+                  chokepoint_disruptions
+                  chokepoint_market_stress
+                  supply_chain_vulnerabilities
+                  country_chokepoint_dependencies
+                  outage_currency_stress
+                ] %>
+                <% rules.each do |rule| %>
+                  <span class="pipeline-intel-rule"><%= rule %></span>
+                <% end %>
+              </div>
+            </div>
+            <div class="pipeline-intel-engine">
+              <div class="pipeline-intel-engine-header">
+                <code class="pipeline-service-name">ConvergenceDetector</code>
+                <span class="pipeline-intel-engine-badge">auto</span>
+              </div>
+              <p class="pipeline-intel-engine-desc">Automated spatiotemporal multi-layer hotspot detection. Grids the world into 2&deg; cells, scores by layer overlap and severity, generates narratives for high-scoring convergences.</p>
+            </div>
+            <div class="pipeline-intel-engine">
+              <div class="pipeline-intel-engine-header">
+                <code class="pipeline-service-name">ConflictPulseService</code>
+                <span class="pipeline-intel-engine-badge">theaters</span>
+              </div>
+              <p class="pipeline-intel-engine-desc">Conflict theater situational awareness with strategic chokepoint monitoring. Tracks named situations (Israel-Palestine, Eastern Ukraine Front&hellip;), weighted by source-tier credibility and multi-source confirmation.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .pipeline-flow -->
+  </div><!-- .pipeline-schematic -->
+
 </div>

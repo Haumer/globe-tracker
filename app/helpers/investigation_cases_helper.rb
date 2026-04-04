@@ -91,4 +91,60 @@ module InvestigationCasesHelper
       selected_id
     )
   end
+
+  def investigation_case_primary_object_view_href(case_object)
+    return unless case_object.present?
+    return unless investigation_case_object_viewable?(case_object)
+
+    object_view_path(kind: case_object.object_kind, id: case_object.object_identifier)
+  end
+
+  def investigation_case_primary_object_kind_label(case_object)
+    return "Object" unless case_object.present?
+
+    case_object.object_kind.to_s.tr("_", " ").titleize
+  end
+
+  def investigation_case_source_context_label(source_context)
+    trend = source_context[:escalation_trend].presence || source_context[:severity].presence
+    return nil if trend.blank?
+
+    trend.to_s.tr("_", " ").titleize
+  end
+
+  def investigation_case_theater_brief_state(workspace)
+    return nil unless workspace.present?
+
+    generated_at = workspace[:theater_brief_generated_at]
+    status = workspace[:theater_brief_status].presence || "idle"
+
+    case status
+    when "ready"
+      return "Stored AI brief · #{time_ago_in_words(generated_at)} ago" if generated_at.present?
+      "Stored AI brief"
+    when "pending", "loading"
+      "Refreshing stored AI brief"
+    when "error"
+      "Stored AI brief unavailable"
+    else
+      nil
+    end
+  end
+
+  def investigation_case_timeline_badge_class(kind)
+    "case-badge--#{kind.to_s.parameterize}"
+  end
+
+  def investigation_case_graph_item_href(item)
+    return unless item.present?
+
+    request =
+      if item[:node].present?
+        object_view_request_for_node(item[:node])
+      elsif item[:evidence].present?
+        object_view_request_for_evidence(item[:evidence])
+      end
+
+    object_view_href_for(request) if request.present?
+  end
 end

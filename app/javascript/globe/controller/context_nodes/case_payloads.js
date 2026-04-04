@@ -91,10 +91,15 @@ export function applyContextNodeCasePayloadMethods(GlobeController) {
       longitude: Number.isFinite(zone.lng) ? zone.lng : null,
       source_context: {
         severity,
+        cell_key: zone.cell_key,
         pulse_score: pulseScore,
         escalation_trend: zone.escalation_trend || zone.trend,
+        count_24h: zone.count_24h,
         story_count: zone.story_count,
         source_count: zone.source_count,
+        spike_ratio: zone.spike_ratio,
+        detected_at: zone.detected_at,
+        situation_name: zone.situation_name,
       },
     }
   }

@@ -259,6 +259,11 @@
   color: #fca5a5;
 }
 
+.case-badge--highlight {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+}
+
 .case-badge--note {
   background: rgba(96, 165, 250, 0.16);
   color: #93c5fd;
@@ -292,6 +297,165 @@
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 20px;
+}
+
+.case-grid--support {
+  margin-top: 20px;
+}
+
+.case-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.case-workspace-side {
+  display: grid;
+  gap: 20px;
+}
+
+.case-card--workspace-main,
+.case-card--workspace-support {
+  min-width: 0;
+}
+
+.case-workspace-copy {
+  font: 500 1.05rem/1.7 "DM Sans", sans-serif;
+  color: rgba(240, 245, 252, 0.9);
+}
+
+.case-workspace-block + .case-workspace-block {
+  margin-top: 18px;
+}
+
+.case-section-label,
+.case-workspace-metric span:first-child,
+.case-timeline-meta,
+.case-graph-item-meta,
+.case-workspace-state {
+  font: 600 10px "JetBrains Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.case-bullet-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.case-bullet-list li {
+  color: rgba(226, 232, 240, 0.82);
+  font: 500 0.98rem/1.55 "DM Sans", sans-serif;
+}
+
+.case-bullet-list--developments {
+  margin-top: 0;
+}
+
+.case-workspace-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.case-workspace-metric {
+  padding: 12px 13px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.case-workspace-metric-value {
+  display: block;
+  margin-top: 8px;
+  color: #f8fafc;
+  font: 700 1.18rem/1 "DM Sans", sans-serif;
+}
+
+.case-workspace-state {
+  margin-top: 16px;
+}
+
+.case-copy--workspace {
+  margin: 0;
+}
+
+.case-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.case-timeline-item {
+  padding: 14px 15px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.case-timeline-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.case-timeline-title {
+  margin-top: 10px;
+  color: #f8fafc;
+  font: 600 1rem/1.45 "DM Sans", sans-serif;
+}
+
+.case-timeline-meta {
+  margin-top: 8px;
+}
+
+.case-graph-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.case-graph-group {
+  min-width: 0;
+  padding: 14px 15px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.case-graph-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.case-graph-item {
+  display: block;
+  padding: 10px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.case-graph-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.case-graph-item--link {
+  text-decoration: none;
+}
+
+.case-graph-item-label {
+  color: #f8fafc;
+  font: 600 0.98rem/1.42 "DM Sans", sans-serif;
+}
+
+.case-graph-item-meta {
+  margin-top: 6px;
 }
 
 .case-form-grid {
@@ -402,7 +566,12 @@
 @media (max-width: 1024px) {
   .case-hero,
   .case-grid,
+  .case-workspace-grid,
   .case-intake-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .case-graph-grid {
     grid-template-columns: 1fr;
   }
 
@@ -423,6 +592,10 @@
   .case-empty,
   .case-intake-panel {
     padding: 18px;
+  }
+
+  .case-workspace-metrics {
+    grid-template-columns: 1fr;
   }
 
   .case-actions,

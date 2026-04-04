@@ -1,3 +1,8 @@
+<% workspace = @case_workspace %>
+<% primary_object = workspace&.dig(:primary_object) %>
+<% source_context = workspace&.dig(:source_context) || {} %>
+<% brief_state = investigation_case_theater_brief_state(workspace) %>
+
 <div class="case-shell">
   <section class="case-hero case-hero--detail">
     <div class="case-hero-main">
@@ -11,15 +16,31 @@
         <p class="case-summary"><%= @investigation_case.summary %></p>
       <% end %>
 
+      <div class="case-badges case-badges--hero">
+        <span class="case-badge <%= investigation_case_status_class(@investigation_case.status) %>"><%= investigation_case_status_label(@investigation_case.status) %></span>
+        <span class="case-badge <%= investigation_case_severity_class(@investigation_case.severity) %>"><%= investigation_case_severity_label(@investigation_case.severity) %></span>
+        <% if primary_object.present? %>
+          <span class="case-object-pill">Primary Focus</span>
+          <span class="case-object-pill case-object-pill--muted"><%= investigation_case_primary_object_kind_label(primary_object) %></span>
+          <% if (source_label = investigation_case_source_context_label(source_context)).present? %>
+            <span class="case-badge case-badge--highlight"><%= source_label %></span>
+          <% end %>
+        <% end %>
+      </div>
+
       <div class="case-meta-grid">
-        <div class="case-meta-card">
-          <span class="case-meta-label">Status</span>
-          <span class="case-meta-value"><%= investigation_case_status_label(@investigation_case.status) %></span>
-        </div>
-        <div class="case-meta-card">
-          <span class="case-meta-label">Severity</span>
-          <span class="case-meta-value"><%= investigation_case_severity_label(@investigation_case.severity) %></span>
-        </div>
+        <% if primary_object.present? %>
+          <div class="case-meta-card">
+            <span class="case-meta-label">Primary Focus</span>
+            <span class="case-meta-value"><%= primary_object.title %></span>
+          </div>
+        <% end %>
+        <% if source_context[:pulse_score].present? %>
+          <div class="case-meta-card">
+            <span class="case-meta-label">Pulse</span>
+            <span class="case-meta-value"><%= source_context[:pulse_score] %></span>
+          </div>
+        <% end %>
         <div class="case-meta-card">
           <span class="case-meta-label">Owner</span>
           <span class="case-meta-value"><%= @investigation_case.user.email %></span>
@@ -32,6 +53,12 @@
           <span class="case-meta-label">Last Updated</span>
           <span class="case-meta-value"><%= @investigation_case.updated_at.strftime("%Y-%m-%d %H:%M UTC") %></span>
         </div>
+        <% if brief_state.present? %>
+          <div class="case-meta-card">
+            <span class="case-meta-label">Brief State</span>
+            <span class="case-meta-value"><%= brief_state %></span>
+          </div>
+        <% end %>
       </div>
 
       <div class="case-actions">
@@ -51,10 +78,164 @@
         <div class="case-side-stat"><%= @case_notes.size %></div>
         <div class="case-side-meta">analyst updates and observations</div>
       </div>
+      <% if workspace.present? %>
+        <div class="case-side-block">
+          <div class="case-side-label">Linked Nodes</div>
+          <div class="case-side-stat"><%= Array(workspace.dig(:node_context, :relationships)).size %></div>
+          <div class="case-side-meta">durable graph relationships</div>
+        </div>
+      <% end %>
     </aside>
   </section>
 
-  <div class="case-grid">
+  <% if workspace.present? %>
+    <div class="case-workspace-grid">
+      <section class="case-card case-card--workspace-main">
+        <div class="case-card-head">
+          <h2>Operational Assessment</h2>
+          <span><%= primary_object.title %></span>
+        </div>
+
+        <div class="case-workspace-copy"><%= workspace[:assessment] %></div>
+
+        <% if workspace[:why_we_believe_it].any? %>
+          <div class="case-workspace-block">
+            <div class="case-section-label">Why This Read</div>
+            <ul class="case-bullet-list">
+              <% workspace[:why_we_believe_it].each do |item| %>
+                <li><%= item %></li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
+        <% if workspace[:watch_next].any? %>
+          <div class="case-workspace-block">
+            <div class="case-section-label">Watch Next</div>
+            <ul class="case-bullet-list">
+              <% workspace[:watch_next].each do |item| %>
+                <li><%= item %></li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      </section>
+
+      <div class="case-workspace-side">
+        <section class="case-card case-card--workspace-focus">
+          <div class="case-card-head">
+            <h2>Primary Focus</h2>
+            <span><%= investigation_case_primary_object_kind_label(primary_object) %></span>
+          </div>
+
+          <% if primary_object.summary.present? %>
+            <p class="case-copy case-copy--workspace"><%= primary_object.summary %></p>
+          <% end %>
+
+          <% if workspace[:metrics].any? %>
+            <div class="case-workspace-metrics">
+              <% workspace[:metrics].each do |metric| %>
+                <div class="case-workspace-metric">
+                  <span class="case-section-label"><%= metric[:label] %></span>
+                  <span class="case-workspace-metric-value"><%= metric[:value] %></span>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+
+          <% if brief_state.present? %>
+            <div class="case-workspace-state"><%= brief_state %></div>
+          <% end %>
+
+          <div class="case-inline-actions">
+            <%= link_to "Open On Globe", investigation_case_object_globe_href(primary_object), class: "case-inline-action case-inline-action--primary" %>
+            <% if (object_view_href = investigation_case_primary_object_view_href(primary_object)).present? %>
+              <%= link_to "Object View", object_view_href, class: "case-inline-action" %>
+            <% end %>
+          </div>
+        </section>
+
+        <section class="case-card case-card--timeline">
+          <div class="case-card-head">
+            <h2>Case Timeline</h2>
+            <span><%= workspace[:timeline_entries].size %></span>
+          </div>
+
+          <div class="case-timeline">
+            <% workspace[:timeline_entries].each do |entry| %>
+              <article class="case-timeline-item">
+                <div class="case-timeline-top">
+                  <span class="case-badge <%= investigation_case_timeline_badge_class(entry[:kind]) %>"><%= entry[:kind].to_s.titleize %></span>
+                  <span class="case-note-time"><%= entry[:at].strftime("%Y-%m-%d %H:%M UTC") %></span>
+                </div>
+                <div class="case-timeline-title"><%= entry[:title] %></div>
+                <% if entry[:meta].present? %>
+                  <div class="case-timeline-meta"><%= entry[:meta] %></div>
+                <% end %>
+              </article>
+            <% end %>
+          </div>
+        </section>
+      </div>
+
+      <section class="case-card case-card--workspace-support">
+        <div class="case-card-head">
+          <h2>Latest Developments</h2>
+          <span><%= workspace[:key_developments].size %></span>
+        </div>
+
+        <% if workspace[:key_developments].any? %>
+          <ul class="case-bullet-list case-bullet-list--developments">
+            <% workspace[:key_developments].each do |item| %>
+              <li><%= item %></li>
+            <% end %>
+          </ul>
+        <% else %>
+          <div class="case-empty case-empty--inline">No current developments are attached to this primary focus yet.</div>
+        <% end %>
+      </section>
+
+      <section class="case-card case-card--workspace-support">
+        <div class="case-card-head">
+          <h2>Durable Graph</h2>
+          <span><%= workspace[:graph_groups].sum { |group| group[:items].size } %></span>
+        </div>
+
+        <% if workspace[:graph_groups].any? %>
+          <div class="case-graph-grid">
+            <% workspace[:graph_groups].each do |group| %>
+              <section class="case-graph-group">
+                <div class="case-section-label"><%= group[:title] %></div>
+                <div class="case-graph-list">
+                  <% group[:items].each do |item| %>
+                    <% if (graph_href = investigation_case_graph_item_href(item)).present? %>
+                      <%= link_to graph_href, class: "case-graph-item case-graph-item--link" do %>
+                        <div class="case-graph-item-label"><%= item[:label] %></div>
+                        <% if item[:meta].present? %>
+                          <div class="case-graph-item-meta"><%= item[:meta] %></div>
+                        <% end %>
+                      <% end %>
+                    <% else %>
+                      <article class="case-graph-item">
+                        <div class="case-graph-item-label"><%= item[:label] %></div>
+                        <% if item[:meta].present? %>
+                          <div class="case-graph-item-meta"><%= item[:meta] %></div>
+                        <% end %>
+                      </article>
+                    <% end %>
+                  <% end %>
+                </div>
+              </section>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="case-empty case-empty--inline">Durable graph context has not been resolved for this focus yet.</div>
+        <% end %>
+      </section>
+    </div>
+  <% end %>
+
+  <div class="case-grid case-grid--support">
     <section class="case-card">
       <div class="case-card-head">
         <h2>Workflow</h2>

@@ -2,10 +2,10 @@ export function applyContextSectionMethods(GlobeController) {
   GlobeController.prototype._durableContextSections = function(context) {
     if (!context?.nodeRequest) return []
     if (context.nodeContextStatus === "loading") {
-      return [{ title: "Graph context", html: '<div class="insight-empty">Loading durable node context…</div>' }]
+      return [{ title: "Durable graph", html: '<div class="context-empty">Loading durable node context…</div>' }]
     }
     if (context.nodeContextStatus === "error") {
-      return [{ title: "Graph context", html: '<div class="insight-empty">Durable node context is unavailable for this selection.</div>' }]
+      return [{ title: "Durable graph", html: '<div class="context-empty">Durable node context is unavailable for this selection.</div>' }]
     }
     if (context.nodeContextStatus !== "ready" || !context.nodeContext) return []
 
@@ -14,7 +14,7 @@ export function applyContextSectionMethods(GlobeController) {
 
     if ((payload.memberships || []).length) {
       sections.push({
-        title: "Canonical actors",
+        title: "Actors",
         items: payload.memberships.map(membership => ({
           label: membership.node?.name || membership.role,
           meta: [membership.role, membership.confidence != null ? `${Math.round(membership.confidence * 100)}%` : null].filter(Boolean).join(" · "),
@@ -25,7 +25,7 @@ export function applyContextSectionMethods(GlobeController) {
 
     if ((payload.evidence || []).length) {
       sections.push({
-        title: "Durable evidence",
+        title: "Recorded evidence",
         items: payload.evidence.map(item => ({
           label: item.label,
           meta: [item.role, item.meta].filter(Boolean).join(" · "),
@@ -37,7 +37,7 @@ export function applyContextSectionMethods(GlobeController) {
 
     if ((payload.relationships || []).length) {
       sections.push({
-        title: "Relationships",
+        title: "Linked nodes",
         items: payload.relationships.map(rel => ({
           label: rel.node?.name || rel.relation_type,
           meta: [
@@ -92,7 +92,7 @@ export function applyContextSectionMethods(GlobeController) {
     const nearbyCameras = this._nearbyCamerasForContext(coords).slice(0, 4)
     if (nearbyCameras.length) {
       return {
-        title: "Nearby observation",
+        title: "Watch nearby",
         items: nearbyCameras.map(cam => {
           const badge = this._cameraModeBadge(cam)
           const distance = `${cam.distanceKm.toFixed(cam.distanceKm < 10 ? 1 : 0)} km`
@@ -115,7 +115,7 @@ export function applyContextSectionMethods(GlobeController) {
 
     if (!this.camerasVisible) {
       return {
-        title: "Nearby observation",
+        title: "Watch nearby",
         items: [{
           label: "Enable cameras",
           meta: "Show nearby live streams and webcam feeds around this location.",
@@ -238,9 +238,9 @@ export function applyContextSectionMethods(GlobeController) {
     )
     if (situationCount > 0) {
       items.push({
-        label: "Conflict Theaters",
-        meta: `${situationCount} nearby theater bubble or strategic situation marker${situationCount === 1 ? "" : "s"}`,
-        badge: { label: "THE", variant: "conf" },
+        label: "Situations",
+        meta: `${situationCount} nearby theater or strategic situation marker${situationCount === 1 ? "" : "s"}`,
+        badge: { label: "SIT", variant: "conf" },
         rpTab: "situations",
         lat: coords.lat,
         lng: coords.lng,
@@ -295,7 +295,7 @@ export function applyContextSectionMethods(GlobeController) {
     if (!renderedItems.length) return null
 
     return {
-      title: "Other layers here",
+      title: "Cross-check nearby",
       items: renderedItems,
     }
   }

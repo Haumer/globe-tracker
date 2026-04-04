@@ -1,0 +1,136 @@
+// ─── Workspace and region bars ────────────────────────────────
+.ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--gt-border);
+
+  .ws-select {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--gt-border);
+    border-radius: 4px;
+    color: var(--gt-text);
+    font: 10px var(--gt-mono);
+    padding: 4px 6px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    min-width: 0;
+
+    &:focus { border-color: var(--gt-accent); }
+
+    option {
+      background: #0a0d14;
+      color: var(--gt-text);
+    }
+  }
+
+  .ws-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--gt-border);
+    border-radius: 4px;
+    color: var(--gt-text-dim);
+    cursor: pointer;
+    transition: all 0.12s;
+    font-size: 11px;
+    flex-shrink: 0;
+
+    &:hover {
+      color: var(--gt-accent);
+      border-color: var(--gt-border-hover);
+    }
+  }
+}
+
+.region-bar {
+  padding: 8px 10px 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.region-select {
+  width: calc(100% - 36px);
+  margin-left: 36px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #ccc;
+  font: 500 10px var(--gt-mono);
+  padding: 5px 8px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+
+  &:focus { border-color: #4fc3f7; }
+
+  option,
+  optgroup {
+    background: #0a0d14;
+    color: #ccc;
+  }
+
+  optgroup {
+    font-weight: 600;
+    color: #888;
+  }
+}
+
+.region-active-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.region-track-form {
+  display: inline-flex;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.region-badge {
+  display: inline-block;
+  background: rgba(79, 195, 247, 0.12);
+  border: 1px solid rgba(79, 195, 247, 0.25);
+  color: #4fc3f7;
+  font: 600 9px var(--gt-mono);
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.region-desc {
+  font: 400 9px var(--gt-mono);
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.region-exit-btn {
+  background: none;
+  border: none;
+  color: #f44336;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+
+  &:hover { color: #ff7043; }
+}
+
+.sb-sheet-handle {
+  display: none;
+}

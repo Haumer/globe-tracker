@@ -1,0 +1,130 @@
+// ─── Detail stack and selection tray ───────────────────────────
+#detail-stack {
+  position: fixed;
+  bottom: 48px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+  transition: right 0.2s ease;
+
+  > * { pointer-events: auto; }
+}
+
+#selection-tray {
+  background: var(--gt-panel);
+  backdrop-filter: var(--gt-blur);
+  -webkit-backdrop-filter: var(--gt-blur);
+  color: var(--gt-text);
+  border-radius: 8px;
+  border: 1px solid var(--gt-border);
+  max-width: 320px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  animation: panel-in 0.15s ease-out;
+
+  .sel-tray-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 4px;
+  }
+
+  .sel-tray-title {
+    font: 600 9px var(--gt-mono);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--gt-text-dim);
+  }
+
+  .sel-tray-clear {
+    background: none;
+    border: none;
+    font: 500 9px var(--gt-mono);
+    color: var(--gt-text-dim);
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.12s;
+
+    &:hover { color: #ef5350; }
+  }
+
+  .sel-tray-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 10px 10px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .sel-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--gt-border);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    transition: all 0.15s;
+    font: 500 10px var(--gt-mono);
+    color: var(--gt-text-dim);
+    white-space: nowrap;
+
+    i { font-size: 9px; opacity: 0.7; }
+
+    &:hover {
+      border-color: var(--gt-border-hover);
+      color: var(--gt-text);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    &.sel-focused {
+      border-color: var(--gt-accent);
+      background: rgba(79, 195, 247, 0.12);
+      color: var(--gt-text-bright);
+
+      i {
+        opacity: 1;
+        color: var(--gt-accent);
+      }
+    }
+
+    &.sel-mil {
+      border-color: rgba(239, 83, 80, 0.3);
+
+      i { color: #ef5350; }
+
+      &.sel-focused {
+        border-color: #ef5350;
+        background: rgba(239, 83, 80, 0.12);
+      }
+    }
+  }
+
+  .sel-chip-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sel-chip-remove {
+    background: none;
+    border: none;
+    color: var(--gt-text-dim);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 0 2px;
+    opacity: 0.5;
+    transition: all 0.12s;
+
+    &:hover {
+      opacity: 1;
+      color: #ef5350;
+    }
+  }
+}

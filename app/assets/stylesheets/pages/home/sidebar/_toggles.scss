@@ -1,0 +1,76 @@
+// ── Sidebar toggles ────────────────────────────────────────────
+.sb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: 400 11px var(--gt-mono);
+  color: var(--gt-text-dim);
+  transition: color 0.12s, background 0.12s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--gt-text);
+  }
+
+  input[type="checkbox"] { display: none; }
+
+  input:checked ~ span { color: var(--gt-text); }
+
+  input:checked ~ .sb-toggle-track {
+    background: var(--gt-accent);
+
+    &::after { transform: translateX(12px); }
+  }
+
+  &.sb-indent { padding-left: 18px; }
+  &.sb-muted { opacity: 0.5; cursor: default; }
+}
+
+.sb-toggle-track {
+  position: relative;
+  width: 24px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 8px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    transition: transform 0.15s, background 0.15s;
+  }
+}
+
+.sb-toggle input:checked ~ .sb-toggle-track::after {
+  background: #fff;
+}
+
+.sb-with-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dot);
+  flex-shrink: 0;
+}
+
+.sb-mini-divider {
+  height: 1px;
+  background: var(--gt-border);
+  margin: 6px 4px;
+}

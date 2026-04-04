@@ -1,4 +1,20 @@
+import { encodeState } from "globe/deeplinks"
+
 export function applyContextNodeCasePayloadMethods(GlobeController) {
+  GlobeController.prototype._caseReturnToGlobePath = function(payload = {}) {
+    const params = new URLSearchParams()
+
+    if (payload?.object_kind && payload?.object_identifier) {
+      params.set("focus_kind", `${payload.object_kind}`)
+      params.set("focus_id", `${payload.object_identifier}`)
+      if (payload.title) params.set("focus_title", `${payload.title}`)
+    }
+
+    const hash = encodeState(this) || window.location.hash || ""
+    const query = params.toString()
+    return `/${query ? `?${query}` : ""}${hash}`
+  }
+
   GlobeController.prototype._caseIntakePathForPayload = function(payload = {}) {
     if (!payload?.object_kind || !payload?.object_identifier || !payload?.title) return null
 
@@ -13,6 +29,9 @@ export function applyContextNodeCasePayloadMethods(GlobeController) {
       if (value === undefined || value === null || value === "") return
       params.set(`source_object[source_context][${key}]`, `${value}`)
     })
+
+    const returnTo = this._caseReturnToGlobePath(payload)
+    if (returnTo) params.set("return_to", returnTo)
 
     return `/cases/new?${params.toString()}`
   }

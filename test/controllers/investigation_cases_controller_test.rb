@@ -11,6 +11,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
 
   test "GET /cases/new preloads source object intake" do
     get new_case_path, params: {
+      return_to: "/?focus_kind=theater&focus_id=Iran%20Theater#10,20,300000",
       source_object: {
         object_kind: "theater",
         object_identifier: "Iran Theater",
@@ -29,10 +30,13 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Iran Theater"
     assert_includes response.body, "Create New Case"
     assert_includes response.body, "Add To Existing Case"
+    assert_includes response.body, "Return To Globe"
+    assert_includes response.body, "return_to"
   end
 
-  test "POST /cases creates a case with a pinned source object" do
+  test "POST /cases creates a case with a pinned source object and preserves globe return state" do
     post cases_path, params: {
+      return_to: "/?focus_kind=chokepoint&focus_id=Strait%20of%20Hormuz#25.5,56.2,1400000",
       investigation_case: {
         title: "Hormuz monitoring",
         summary: "Track pressure on the corridor and supporting evidence.",
@@ -57,7 +61,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     }
 
     investigation_case = InvestigationCase.order(:id).last
-    assert_redirected_to case_path(investigation_case)
+    assert_redirected_to case_path(investigation_case, return_to: "/?focus_kind=chokepoint&focus_id=Strait%20of%20Hormuz#25.5,56.2,1400000")
     assert_equal "Hormuz monitoring", investigation_case.title
     assert_equal "high", investigation_case.severity
     assert_equal @other_user, investigation_case.assignee
@@ -81,7 +85,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     )
     investigation_case.case_notes.create!(user: @user, body: "Start with Hormuz, Bahrain, and Suez.")
 
-    get case_path(investigation_case)
+    get case_path(investigation_case), params: { return_to: "/?focus_kind=theater&focus_id=Iran%20Theater#12,43,1200000" }
 
     assert_response :success
     assert_includes response.body, "Iran theater watch"
@@ -89,9 +93,10 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Iran Theater"
     assert_includes response.body, "Start with Hormuz, Bahrain, and Suez."
     assert_includes response.body, "Add Note"
+    assert_includes response.body, "Return To Globe"
   end
 
-  test "PATCH /cases/:id updates status severity and assignee" do
+  test "PATCH /cases/:id updates status severity and assignee while preserving globe return state" do
     investigation_case = @user.investigation_cases.create!(
       title: "Iran theater watch",
       status: "open",
@@ -100,6 +105,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
     )
 
     patch case_path(investigation_case), params: {
+      return_to: "/?focus_kind=theater&focus_id=Iran%20Theater#12,43,1200000",
       investigation_case: {
         status: "escalated",
         severity: "critical",
@@ -108,7 +114,7 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
       }
     }
 
-    assert_redirected_to case_path(investigation_case)
+    assert_redirected_to case_path(investigation_case, return_to: "/?focus_kind=theater&focus_id=Iran%20Theater#12,43,1200000")
     investigation_case.reload
     assert_equal "escalated", investigation_case.status
     assert_equal "critical", investigation_case.severity

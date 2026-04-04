@@ -9,15 +9,16 @@ class InvestigationCaseNotesControllerTest < ActionDispatch::IntegrationTest
     sign_in @user
   end
 
-  test "POST /cases/:id/notes creates a note" do
+  test "POST /cases/:id/notes creates a note and preserves globe return state" do
     post case_notes_path(@investigation_case), params: {
+      return_to: "/?focus_kind=theater&focus_id=Energy%20watch#18,52,900000",
       investigation_case_note: {
         body: "Monitor Brent, LNG, and Red Sea exposure.",
         kind: "decision",
       }
     }
 
-    assert_redirected_to case_path(@investigation_case)
+    assert_redirected_to case_path(@investigation_case, return_to: "/?focus_kind=theater&focus_id=Energy%20watch#18,52,900000")
     assert_equal 1, @investigation_case.case_notes.count
     assert_equal "Monitor Brent, LNG, and Red Sea exposure.", @investigation_case.case_notes.first.body
     assert_equal "decision", @investigation_case.case_notes.first.kind

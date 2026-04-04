@@ -59,6 +59,15 @@ module InvestigationCasesHelper
     root_path(options)
   end
 
+  def investigation_case_return_globe_href(return_to = nil)
+    return root_path if return_to.blank?
+
+    value = return_to.to_s
+    return root_path unless value.start_with?("/") && !value.start_with?("//")
+
+    value
+  end
+
   def investigation_case_source_hidden_fields(source_object)
     return "".html_safe if source_object.blank?
 

@@ -36,7 +36,7 @@
 
       <div class="case-actions">
         <%= link_to "All Cases", cases_path, class: "case-action" %>
-        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+        <%= link_to "Return To Globe", investigation_case_return_globe_href(@return_to_globe), class: "case-action case-action--primary" %>
       </div>
     </div>
 
@@ -78,6 +78,7 @@
           <%= form.label :summary, "Working summary" %>
           <%= form.text_area :summary, rows: 4 %>
         </div>
+        <%= hidden_field_tag :return_to, @return_to_globe if @return_to_globe.present? %>
         <div class="case-note-actions">
           <%= form.submit "Update Case", class: "case-action case-action--primary" %>
         </div>
@@ -139,6 +140,7 @@
           <%= form.label :kind, "Note type" %>
           <%= form.select :kind, options_for_select(investigation_case_note_kind_options, "note") %>
         </div>
+        <%= hidden_field_tag :return_to, @return_to_globe if @return_to_globe.present? %>
         <%= form.text_area :body, rows: 5, placeholder: "Capture analyst context, next steps, or what changed in this situation." %>
         <div class="case-note-actions">
           <%= form.submit "Add Note", class: "case-action case-action--primary" %>

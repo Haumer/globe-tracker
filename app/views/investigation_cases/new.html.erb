@@ -19,7 +19,7 @@
 
       <div class="case-actions">
         <%= link_to "All Cases", cases_path, class: "case-action" %>
-        <%= link_to "Open Globe", root_path, class: "case-action case-action--primary" %>
+        <%= link_to "Return To Globe", investigation_case_return_globe_href(@return_to_globe), class: "case-action case-action--primary" %>
       </div>
     </div>
 
@@ -61,6 +61,7 @@
           <%= form.text_area :summary, rows: 4, placeholder: "Why does this matter, what changed, and what should be tracked next?" %>
         </div>
         <%= investigation_case_source_hidden_fields(@source_object) %>
+        <%= hidden_field_tag :return_to, @return_to_globe if @return_to_globe.present? %>
         <div class="case-note-actions">
           <%= form.submit "Create Case", class: "case-action case-action--primary" %>
         </div>
@@ -83,6 +84,7 @@
           <% @source_object.fetch(:source_context, {}).each do |key, value| %>
             <%= hidden_field_tag "case_object[source_context][#{key}]", value if value.present? %>
           <% end %>
+          <%= hidden_field_tag "case_object[return_to]", @return_to_globe if @return_to_globe.present? %>
           <div class="case-note-actions">
             <%= submit_tag "Add Object To Case", class: "case-action" %>
           </div>

@@ -9,7 +9,7 @@ class InvestigationCaseObjectsControllerTest < ActionDispatch::IntegrationTest
     sign_in @user
   end
 
-  test "POST /case_objects adds an object to an existing case" do
+  test "POST /case_objects adds an object to an existing case and preserves globe return state" do
     post case_objects_path, params: {
       case_object: {
         investigation_case_id: @investigation_case.id,
@@ -18,6 +18,7 @@ class InvestigationCaseObjectsControllerTest < ActionDispatch::IntegrationTest
         title: "Suez Canal",
         summary: "Critical trade corridor",
         object_type: "corridor",
+        return_to: "/?focus_kind=chokepoint&focus_id=Suez%20Canal#30.0,32.5,1100000",
         source_context: {
           relationship_count: "3",
           evidence_count: "2",
@@ -25,7 +26,7 @@ class InvestigationCaseObjectsControllerTest < ActionDispatch::IntegrationTest
       }
     }
 
-    assert_redirected_to case_path(@investigation_case)
+    assert_redirected_to case_path(@investigation_case, return_to: "/?focus_kind=chokepoint&focus_id=Suez%20Canal#30.0,32.5,1100000")
     assert_equal 1, @investigation_case.case_objects.count
     assert_equal "Suez Canal", @investigation_case.case_objects.first.title
   end

@@ -12,6 +12,7 @@ class InvestigationCasesController < ApplicationController
 
   def new
     @source_object = source_object_payload
+    @return_to_globe = normalized_return_to
     @available_cases = current_user.investigation_cases.includes(:assignee).recent.limit(10)
     @investigation_case = current_user.investigation_cases.build(
       title: default_case_title(@source_object),
@@ -25,6 +26,7 @@ class InvestigationCasesController < ApplicationController
   end
 
   def show
+    @return_to_globe = normalized_return_to
     @case_objects = @investigation_case.case_objects
     @case_notes = @investigation_case.case_notes.includes(:user)
     @case_note = @investigation_case.case_notes.build
@@ -39,9 +41,10 @@ class InvestigationCasesController < ApplicationController
     attach_source_object(@investigation_case, source_object_params)
 
     if @investigation_case.save
-      redirect_to case_path(@investigation_case), notice: "Case created."
+      redirect_to case_path(@investigation_case, return_to: normalized_return_to), notice: "Case created."
     else
       @source_object = source_object_payload
+      @return_to_globe = normalized_return_to
       @available_cases = current_user.investigation_cases.includes(:assignee).recent.limit(10)
       set_assignable_users
       @meta_title = "New Case | GlobeTracker"
@@ -52,8 +55,9 @@ class InvestigationCasesController < ApplicationController
 
   def update
     if @investigation_case.update(investigation_case_update_params)
-      redirect_to case_path(@investigation_case), notice: "Case updated."
+      redirect_to case_path(@investigation_case, return_to: normalized_return_to), notice: "Case updated."
     else
+      @return_to_globe = normalized_return_to
       @case_objects = @investigation_case.case_objects
       @case_notes = @investigation_case.case_notes.includes(:user)
       @case_note = @investigation_case.case_notes.build
@@ -116,6 +120,14 @@ class InvestigationCasesController < ApplicationController
 
   def set_assignable_users
     @assignable_users = User.order(:email)
+  end
+
+  def normalized_return_to
+    value = params[:return_to].to_s
+    return nil if value.blank?
+    return nil unless value.start_with?("/") && !value.start_with?("//")
+
+    value
   end
 
   def default_case_title(source_object)

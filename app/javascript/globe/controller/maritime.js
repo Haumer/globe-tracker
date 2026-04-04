@@ -17,15 +17,24 @@ export function applyMaritimeMethods(GlobeController) {
       if (!response.ok) return
 
       let ships = await response.json()
+      const sourceConfigured = response.headers.get("X-Source-Configured") === "1"
 
       if (this.hasActiveFilter()) {
         ships = ships.filter(s => s.latitude && s.longitude && this.pointPassesFilter(s.latitude, s.longitude))
       }
 
       this.renderShips(ships)
+      if (ships.length === 0) {
+        this._toast(
+          sourceConfigured ? "No recent ship positions in this local workspace" : "AIS stream is not configured locally",
+          sourceConfigured ? "error" : "error"
+        )
+        return
+      }
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch ships:", e)
+      this._toast("Failed to load ships", "error")
     }
   }
 

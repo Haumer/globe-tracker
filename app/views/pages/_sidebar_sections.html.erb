@@ -243,7 +243,7 @@
     </div>
     <div class="sb-section-body" role="region">
       <% if user_signed_in? %>
-        <div class="sb-library-note">Layers you add appear above in <strong>Additional Layers</strong>. Presets and region profiles can reveal layers there too.</div>
+        <div class="sb-library-note">Adding a layer reveals it above in <strong>Additional Layers</strong> and turns it on. Presets and region profiles can reveal layers there too.</div>
         <div class="sb-library-grid">
           <% advanced_layers.each do |layer| %>
             <% enabled = enabled_layer_keys.include?(layer[:key]) %>

@@ -23,6 +23,8 @@ class Api::ShipsControllerTest < ActionDispatch::IntegrationTest
 
     data = JSON.parse(response.body)
     assert_kind_of Array, data
+    assert_equal "ready", response.headers["X-Source-Status"]
+    assert_equal "0", response.headers["X-Source-Configured"]
   end
 
   test "ships response contains expected fields" do
@@ -48,5 +50,14 @@ class Api::ShipsControllerTest < ActionDispatch::IntegrationTest
     data = JSON.parse(response.body)
     mmsis = data.map { |s| s["mmsi"] }
     assert_not_includes mmsis, "211000002"
+  end
+
+  test "empty ships response exposes unconfigured source status" do
+    Ship.delete_all
+
+    get "/api/ships"
+    assert_response :success
+    assert_equal "unconfigured", response.headers["X-Source-Status"]
+    assert_equal "0", response.headers["X-Source-Configured"]
   end
 end

@@ -15,6 +15,7 @@ export function applyUiLayerLibraryMethods(GlobeController) {
       this._disableAdvancedLayer(key)
     } else {
       this._enabledAdvancedLayers.add(key)
+      this._activateAdvancedLayer(key)
     }
 
     openAdditionalLayersSection(this)
@@ -83,6 +84,22 @@ export function applyUiLayerLibraryMethods(GlobeController) {
     if (this[hasTarget]) this[targetName].checked = false
     this[config.method]()
   }
+
+  GlobeController.prototype._activateAdvancedLayer = function(key) {
+    if (key === "satellites") {
+      activateDefaultSatelliteCategories.call(this)
+      return
+    }
+
+    const layer = LAYER_REGISTRY_BY_KEY[key]
+    const config = QUICK_TOGGLE_MAP[key]
+    if (!layer || !config || this[layer.visibleProp]) return
+
+    const targetName = `${config.target}Target`
+    const hasTarget = `has${capitalize(config.target)}Target`
+    if (this[hasTarget]) this[targetName].checked = true
+    this[config.method]()
+  }
 }
 
 function disableSatelliteCategories() {
@@ -91,6 +108,26 @@ function disableSatelliteCategories() {
   Object.keys(this.satCategoryVisible).forEach((category) => {
     if (!this.satCategoryVisible[category]) return
     this.toggleSatCategory({ target: { dataset: { category }, checked: false } })
+  })
+
+  this.element.querySelectorAll(".sb-chip[data-category]").forEach((chip) => {
+    const category = chip.dataset.category
+    chip.classList.toggle("active", !!this.satCategoryVisible[category])
+    chip.setAttribute("aria-pressed", String(!!this.satCategoryVisible[category]))
+  })
+
+  this._updateSatBadge()
+}
+
+function activateDefaultSatelliteCategories() {
+  if (!this.satCategoryVisible) return
+
+  const anySat = Object.values(this.satCategoryVisible).some(Boolean)
+  if (anySat) return
+
+  const defaults = ["stations", "gps-ops", "weather", "military"]
+  defaults.forEach((category) => {
+    this.toggleSatCategory({ target: { dataset: { category }, checked: true } })
   })
 
   this.element.querySelectorAll(".sb-chip[data-category]").forEach((chip) => {

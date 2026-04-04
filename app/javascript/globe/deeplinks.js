@@ -1,4 +1,4 @@
-import { LAYER_REGISTRY_BY_KEY, isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+import { LAYER_REGISTRY_BY_KEY, isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 // ── Deep Links ──────────────────────────────────────────
 // Encode/decode globe state in URL hash for shareable views.

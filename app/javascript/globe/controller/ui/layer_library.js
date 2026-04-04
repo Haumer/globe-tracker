@@ -1,4 +1,4 @@
-import { ADVANCED_LIBRARY_KEYS, LAYER_REGISTRY_BY_KEY, QUICK_TOGGLE_MAP } from "globe/controller/ui_registry"
+import { ADVANCED_LIBRARY_KEYS, LAYER_REGISTRY_BY_KEY, QUICK_TOGGLE_MAP } from "globe/controller/ui/registry"
 
 const ADVANCED_LIBRARY_SET = new Set(ADVANCED_LIBRARY_KEYS)
 

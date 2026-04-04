@@ -1,6 +1,6 @@
 import { COUNTRY_CENTROIDS } from "globe/country_centroids"
 import { cachedColor, getDataSource } from "globe/utils"
-import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 export function applyShippingLanesMethods(GlobeController) {
   GlobeController.prototype.getShippingLanesDataSource = function() { return getDataSource(this.viewer, this._ds, "shippingLanes") }

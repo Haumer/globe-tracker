@@ -1,4 +1,4 @@
-import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 export function applyUiPreferenceMethods(GlobeController) {
   GlobeController.prototype._savePrefs = function() {

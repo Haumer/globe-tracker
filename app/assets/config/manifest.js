@@ -2,7 +2,6 @@
 //= link_directory ../stylesheets .css
 //= link application.js
 //= link_tree ../../javascript .js
-//= link globe/controller/ui_mobile.js
 //= link_tree ../../../vendor/javascript .js
 //= link popper.js
 //= link bootstrap.min.js

@@ -1,5 +1,5 @@
 import { applyDeepLink } from "globe/deeplinks"
-import { LAYER_REGISTRY, LAYER_REGISTRY_BY_KEY } from "globe/controller/ui_registry"
+import { LAYER_REGISTRY, LAYER_REGISTRY_BY_KEY } from "globe/controller/ui/registry"
 
 export function applyWorkspaceMethods(GlobeController) {
 

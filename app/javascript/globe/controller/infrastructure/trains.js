@@ -1,5 +1,5 @@
 import { getDataSource, createTrainIcon, LABEL_DEFAULTS } from "globe/utils"
-import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 const TRAIN_COLORS = {
   // High-speed / long distance

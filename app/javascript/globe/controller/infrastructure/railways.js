@@ -1,5 +1,5 @@
 import { getDataSource, cachedColor } from "globe/utils"
-import { isLayerTemporarilyDisabled } from "globe/controller/ui_registry"
+import { isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 function railwayColor(railway) {
   return railway.electrified === 1

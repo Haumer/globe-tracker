@@ -1,18 +1,36 @@
-<h2>Forgot your password?</h2>
+<div class="auth-shell">
+  <div class="auth-layout">
+    <section class="auth-panel">
+      <p class="auth-eyebrow">Recovery</p>
+      <h1 class="auth-title">Reset access without losing your workspace context.</h1>
+      <p class="auth-copy">Password recovery should be operationally boring. Request a reset link and get back into your saved layers, cases, and alerts.</p>
 
-<%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post }) do |f| %>
-  <%= f.error_notification %>
+      <ul class="auth-feature-list">
+        <li class="auth-feature-item"><i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i><span>The reset link is sent to the email attached to your operator account.</span></li>
+        <li class="auth-feature-item"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Changing your password does not affect saved workspaces or investigation data.</span></li>
+      </ul>
+    </section>
 
-  <div class="form-inputs">
-    <%= f.input :email,
-                required: true,
-                autofocus: true,
-                input_html: { autocomplete: "email" } %>
+    <section class="auth-card">
+      <p class="auth-card-kicker">Password Reset</p>
+      <h2 class="auth-card-title">Request a reset link</h2>
+      <p class="auth-card-copy">Enter the account email and we’ll send reset instructions.</p>
+
+      <%= render "devise/shared/error_messages", resource: resource %>
+
+      <%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
+        <%= f.input :email,
+                    required: true,
+                    autofocus: true,
+                    label: "Account email",
+                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
+
+        <div class="auth-actions">
+          <%= f.button :submit, "Send reset link", class: "auth-submit" %>
+        </div>
+      <% end %>
+
+      <%= render "devise/shared/links" %>
+    </section>
   </div>
-
-  <div class="form-actions">
-    <%= f.button :submit, "Send me password reset instructions" %>
-  </div>
-<% end %>
-
-<%= render "devise/shared/links" %>
+</div>

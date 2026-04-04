@@ -18,6 +18,7 @@ module Api
         :camera_lat, :camera_lng, :camera_height, :camera_heading, :camera_pitch,
         :sidebar_collapsed,
         layers: {},
+        enabled_layers: [],
         selected_countries: [],
         airline_filter: [],
         open_sections: []

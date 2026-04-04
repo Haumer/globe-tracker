@@ -60,6 +60,7 @@ export function applyUiQuickBarMethods(GlobeController) {
     if (this.hasSituationOptionsTarget) this.situationOptionsTarget.style.display = this.situationsVisible ? "" : "none"
     if (this._weatherPanelBuilt) this._showWeatherPanel(this.weatherVisible)
 
+    this._syncLayerLibrary?.()
     this._updateSectionCounts()
     this._renderActiveLayerPills()
     this._updateSidebarBadge()

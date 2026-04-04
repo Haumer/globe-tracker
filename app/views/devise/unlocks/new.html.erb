@@ -1,19 +1,32 @@
-<h2>Resend unlock instructions</h2>
+<div class="auth-shell">
+  <div class="auth-layout">
+    <section class="auth-panel">
+      <p class="auth-eyebrow">Account Unlock</p>
+      <h1 class="auth-title">Restore access when the account has been locked out.</h1>
+      <p class="auth-copy">If Devise locked the account after repeated attempts, request a clean unlock email and continue from there.</p>
+    </section>
 
-<%= simple_form_for(resource, as: resource_name, url: unlock_path(resource_name), html: { method: :post }) do |f| %>
-  <%= f.error_notification %>
-  <%= f.full_error :unlock_token %>
+    <section class="auth-card">
+      <p class="auth-card-kicker">Unlock</p>
+      <h2 class="auth-card-title">Send unlock email</h2>
+      <p class="auth-card-copy">Enter the account email and we’ll resend unlock instructions.</p>
 
-  <div class="form-inputs">
-    <%= f.input :email,
-                required: true,
-                autofocus: true,
-                input_html: { autocomplete: "email" } %>
+      <%= render "devise/shared/error_messages", resource: resource %>
+
+      <%= simple_form_for(resource, as: resource_name, url: unlock_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
+        <%= f.full_error :unlock_token %>
+        <%= f.input :email,
+                    required: true,
+                    autofocus: true,
+                    label: "Email",
+                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
+
+        <div class="auth-actions">
+          <%= f.button :submit, "Resend unlock", class: "auth-submit" %>
+        </div>
+      <% end %>
+
+      <%= render "devise/shared/links" %>
+    </section>
   </div>
-
-  <div class="form-actions">
-    <%= f.button :submit, "Resend unlock instructions" %>
-  </div>
-<% end %>
-
-<%= render "devise/shared/links" %>
+</div>

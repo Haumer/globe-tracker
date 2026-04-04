@@ -1,10 +1,12 @@
-export const LAYER_REGISTRY = [
+const PRIMARY_LAYER_SET = new Set(["situations", "insights", "news"])
+
+const BASE_LAYER_REGISTRY = [
   { key: "flights", toggleTarget: "flightsToggle", method: "toggleFlights", visibleProp: "flightsVisible", qlTarget: "qlFlights", section: "tracking", pill: { label: "FLT", color: "#4fc3f7" } },
   { key: "ships", toggleTarget: "shipsToggle", method: "toggleShips", visibleProp: "shipsVisible", qlTarget: "qlShips", section: "tracking", pill: { label: "AIS", color: "#26c6da" } },
   { key: "trains", toggleTarget: "trainsToggle", method: "toggleTrains", visibleProp: "trainsVisible", qlTarget: "qlTrains", section: "tracking", pill: { label: "TRAIN", color: "#e53935" } },
   { key: "notams", toggleTarget: "notamsToggle", method: "toggleNotams", visibleProp: "notamsVisible", qlTarget: "qlNotams", section: "tracking", pill: { label: "NOTAM", color: "#ffab40" } },
   { key: "earthquakes", toggleTarget: "earthquakesToggle", method: "toggleEarthquakes", visibleProp: "earthquakesVisible", qlTarget: "qlEarthquakes", section: "events", pill: { label: "EQ", color: "#ff5252" } },
-  { key: "events", toggleTarget: "naturalEventsToggle", method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents", section: "events", pill: { label: "EVT", color: "#ff9800" } },
+  { key: "naturalEvents", toggleTarget: "naturalEventsToggle", method: "toggleNaturalEvents", visibleProp: "naturalEventsVisible", qlTarget: "qlEvents", section: "events", pill: { label: "EVT", color: "#ff9800" } },
   { key: "fireHotspots", toggleTarget: "fireHotspotsToggle", method: "toggleFireHotspots", visibleProp: "fireHotspotsVisible", qlTarget: "qlFireHotspots", section: "events", pill: { label: "FIRE", color: "#ff6d00" } },
   { key: "weather", toggleTarget: "weatherToggle", method: "toggleWeather", visibleProp: "weatherVisible", qlTarget: "qlWeather", section: "events", pill: { label: "WX", color: "#64b5f6" } },
   { key: "conflicts", toggleTarget: "conflictsToggle", method: "toggleConflicts", visibleProp: "conflictsVisible", qlTarget: "qlConflicts", section: "events", pill: { label: "WAR", color: "#ef5350" } },
@@ -31,6 +33,20 @@ export const LAYER_REGISTRY = [
   { key: "borders", toggleTarget: "bordersToggle", method: "toggleBorders", visibleProp: "bordersVisible", qlTarget: "qlBorders", section: "map", pill: { label: "BDR", color: "#ffd54f" } },
   { key: "terrain", toggleTarget: "terrainToggle", method: "toggleTerrain", visibleProp: "terrainEnabled", qlTarget: "qlTerrain", section: "map", pill: null },
 ]
+
+export const PRIMARY_LAYER_KEYS = [...PRIMARY_LAYER_SET]
+export const ADVANCED_LAYER_KEYS = BASE_LAYER_REGISTRY.map(layer => layer.key).filter(key => !PRIMARY_LAYER_SET.has(key))
+export const ADVANCED_LIBRARY_KEYS = [...ADVANCED_LAYER_KEYS, "satellites"]
+
+export const LAYER_REGISTRY = BASE_LAYER_REGISTRY.map(layer => ({
+  ...layer,
+  surfacedByDefault: PRIMARY_LAYER_SET.has(layer.key),
+  advanced: !PRIMARY_LAYER_SET.has(layer.key),
+}))
+
+export const LAYER_REGISTRY_BY_KEY = Object.fromEntries(
+  LAYER_REGISTRY.map(layer => [layer.key, layer])
+)
 
 export const QUICK_TOGGLE_MAP = Object.fromEntries(
   LAYER_REGISTRY.map(layer => [layer.key, { target: layer.toggleTarget, method: layer.method }])

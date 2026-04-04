@@ -1,35 +1,69 @@
-<h2>Edit <%= resource_name.to_s.humanize %></h2>
+<div class="auth-shell">
+  <div class="auth-layout auth-layout--settings">
+    <section class="auth-panel">
+      <p class="auth-eyebrow">Account Settings</p>
+      <h1 class="auth-title">Manage the identity behind your workspace.</h1>
+      <p class="auth-copy">Email, password, and confirmation state all live here. This is the control surface for the operator account, not another default Devise form dump.</p>
 
-<%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put }) do |f| %>
-  <%= f.error_notification %>
+      <ul class="auth-feature-list">
+        <li class="auth-feature-item"><i class="fa-solid fa-user-lock" aria-hidden="true"></i><span>Changing credentials does not remove saved workspaces, cases, or layer preferences.</span></li>
+        <li class="auth-feature-item"><i class="fa-solid fa-envelope-open-text" aria-hidden="true"></i><span>Email changes require reconfirmation before the new address becomes active.</span></li>
+        <li class="auth-feature-item"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>Account deletion is permanent. Treat it as a deliberate cleanup action, not a navigation shortcut.</span></li>
+      </ul>
+    </section>
 
-  <div class="form-inputs">
-    <%= f.input :email, required: true, autofocus: true %>
+    <section class="auth-card">
+      <p class="auth-card-kicker">Profile</p>
+      <h2 class="auth-card-title">Update account details</h2>
+      <p class="auth-card-copy">Keep the account current and re-authenticate changes with your existing password.</p>
 
-    <% if devise_mapping.confirmable? && resource.pending_reconfirmation? %>
-      <p>Currently waiting confirmation for: <%= resource.unconfirmed_email %></p>
-    <% end %>
+      <%= render "devise/shared/error_messages", resource: resource %>
 
-    <%= f.input :password,
-                hint: "leave it blank if you don't want to change it",
-                required: false,
-                input_html: { autocomplete: "new-password" } %>
-    <%= f.input :password_confirmation,
-                required: false,
-                input_html: { autocomplete: "new-password" } %>
-    <%= f.input :current_password,
-                hint: "we need your current password to confirm your changes",
-                required: true,
-                input_html: { autocomplete: "current-password" } %>
+      <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "auth-form" }) do |f| %>
+        <%= f.input :email,
+                    required: true,
+                    autofocus: true,
+                    label: "Email",
+                    input_html: { class: "auth-field", autocomplete: "email", placeholder: "operator@globetracker" } %>
+
+        <% if devise_mapping.confirmable? && resource.pending_reconfirmation? %>
+          <p class="auth-inline-note">Pending confirmation for <strong><%= resource.unconfirmed_email %></strong>.</p>
+        <% end %>
+
+        <%= f.input :password,
+                    hint: "Leave blank if the password is not changing.",
+                    required: false,
+                    label: "New password",
+                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Optional new password" } %>
+        <%= f.input :password_confirmation,
+                    required: false,
+                    label: "Confirm new password",
+                    input_html: { class: "auth-field", autocomplete: "new-password", placeholder: "Repeat new password" } %>
+        <%= f.input :current_password,
+                    hint: "Required to verify account changes.",
+                    required: true,
+                    label: "Current password",
+                    input_html: { class: "auth-field", autocomplete: "current-password", placeholder: "Current password" } %>
+
+        <div class="auth-actions">
+          <%= f.button :submit, "Save changes", class: "auth-submit" %>
+        </div>
+      <% end %>
+
+      <div class="auth-section">
+        <h3 class="auth-section-title">Danger Zone</h3>
+        <p class="auth-section-copy">Delete the account only if you want to remove operator access entirely.</p>
+        <div class="auth-actions">
+          <%= button_to "Delete account",
+                        registration_path(resource_name),
+                        data: { turbo_confirm: "Delete this account permanently?" },
+                        method: :delete,
+                        class: "auth-danger-btn",
+                        form_class: "auth-danger-form" %>
+        </div>
+      </div>
+
+      <%= link_to "Back to workspace", root_path, class: "auth-link auth-back-link" %>
+    </section>
   </div>
-
-  <div class="form-actions">
-    <%= f.button :submit, "Update" %>
-  </div>
-<% end %>
-
-<h3>Cancel my account</h3>
-
-<div>Unhappy? <%= button_to "Cancel my account", registration_path(resource_name), data: { confirm: "Are you sure?", turbo_confirm: "Are you sure?" }, method: :delete %></div>
-
-<%= link_to "Back", :back %>
+</div>

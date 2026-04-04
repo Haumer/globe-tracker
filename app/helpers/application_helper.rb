@@ -1,4 +1,42 @@
 module ApplicationHelper
+  PRIMARY_SIDEBAR_LAYER_DEFS = [
+    { key: "situations", label: "Conflict Theaters", icon: "fa-solid fa-wave-square", color: "#ff7043", target: "qlSituations" },
+    { key: "insights", label: "Insights", icon: "fa-solid fa-brain", color: "#26c6da", target: "qlInsights" },
+    { key: "news", label: "News", icon: "fa-solid fa-newspaper", color: "#ff9800", target: "qlNews" },
+  ].freeze
+
+  ADVANCED_SIDEBAR_LIBRARY_DEFS = [
+    { key: "flights", label: "Flights", icon: "fa-solid fa-plane", color: "#4fc3f7", target: "qlFlights" },
+    { key: "ships", label: "Ships", icon: "fa-solid fa-ship", color: "#26c6da", target: "qlShips" },
+    { key: "satellites", label: "Satellite Categories", icon: "fa-solid fa-satellite", color: "#ab47bc", target: "qlSatellites" },
+    { key: "earthquakes", label: "Earthquakes", icon: "fa-solid fa-house-crack", color: "#ff7043", target: "qlEarthquakes" },
+    { key: "naturalEvents", label: "Natural Events", icon: "fa-solid fa-bolt", color: "#66bb6a", target: "qlEvents" },
+    { key: "fireHotspots", label: "Fire Hotspots", icon: "fa-solid fa-fire", color: "#ff5722", target: "qlFireHotspots" },
+    { key: "weather", label: "Weather", icon: "fa-solid fa-cloud-sun-rain", color: "#1e88e5", target: "qlWeather" },
+    { key: "conflicts", label: "Armed Conflicts", icon: "fa-solid fa-crosshairs", color: "#f44336", target: "qlConflicts" },
+    { key: "traffic", label: "Internet Traffic", icon: "fa-solid fa-globe", color: "#69f0ae", target: "qlTraffic" },
+    { key: "outages", label: "Internet Outages", icon: "fa-solid fa-wifi", color: "#e040fb", target: "qlOutages" },
+    { key: "gpsJamming", label: "GPS Jamming", icon: "fa-solid fa-satellite-dish", color: "#f44336", target: "qlGpsJamming" },
+    { key: "chokepoints", label: "Shipping Chokepoints", icon: "fa-solid fa-anchor", color: "#4fc3f7", target: "qlChokepoints" },
+    { key: "trains", label: "Live Trains", icon: "fa-solid fa-train-subway", color: "#e53935", target: "qlTrains" },
+    { key: "notams", label: "NOTAMs / TFRs", icon: "fa-solid fa-ban", color: "#ef5350", target: "qlNotams" },
+    { key: "militaryFlights", label: "Military Flights", icon: "fa-solid fa-jet-fighter", color: "#ef5350", target: "qlMilitaryFlights" },
+    { key: "airbases", label: "Airbases", icon: "fa-solid fa-tower-observation", color: "#ff7043", target: "qlAirbases" },
+    { key: "militaryBases", label: "Military Bases", icon: "fa-solid fa-shield-halved", color: "#ff5252", target: "qlMilitaryBases" },
+    { key: "navalVessels", label: "Naval Vessels", icon: "fa-solid fa-ship", color: "#42a5f5", target: "qlNavalVessels" },
+    { key: "strikes", label: "Strikes", icon: "fa-solid fa-crosshairs", color: "#e040fb", target: "qlStrikes" },
+    { key: "cables", label: "Submarine Cables", icon: "fa-solid fa-network-wired", color: "#00bcd4", target: "qlCables" },
+    { key: "pipelines", label: "Pipelines", icon: "fa-solid fa-oil-well", color: "#ff6d00", target: "qlPipelines" },
+    { key: "railways", label: "Railways", icon: "fa-solid fa-train", color: "#90a4ae", target: "qlRailways" },
+    { key: "powerPlants", label: "Power Plants", icon: "fa-solid fa-plug", color: "#ffc107", target: "qlPowerPlants" },
+    { key: "cameras", label: "Webcams", icon: "fa-solid fa-video", color: "#29b6f6", target: "qlCameras" },
+    { key: "financial", label: "Markets", icon: "fa-solid fa-chart-line", color: "#66bb6a", target: "qlFinancial" },
+    { key: "cities", label: "Cities", icon: "fa-solid fa-city", color: "#ffd54f", target: "qlCities" },
+    { key: "airports", label: "Airports", icon: "fa-solid fa-tower-broadcast", color: "#81c784", target: "qlAirports" },
+    { key: "borders", label: "Borders", icon: "fa-solid fa-map", color: "#4fc3f7", target: "qlBorders" },
+    { key: "terrain", label: "3D Terrain", icon: "fa-solid fa-mountain", color: "#a1887f", target: "qlTerrain" },
+  ].freeze
+
   def meta_title
     meta_tags[:title]
   end
@@ -84,6 +122,34 @@ module ApplicationHelper
         concat tag.span(label)
       end
     end
+  end
+
+  def sidebar_primary_layers
+    PRIMARY_SIDEBAR_LAYER_DEFS
+  end
+
+  def sidebar_advanced_library_layers
+    ADVANCED_SIDEBAR_LIBRARY_DEFS
+  end
+
+  def enabled_sidebar_library_layers(user = current_user)
+    prefs = user&.preferences || {}
+    layer_prefs = prefs["layers"].is_a?(Hash) ? prefs["layers"] : {}
+    enabled = Array(prefs["enabled_layers"]).map(&:to_s)
+
+    layer_prefs.each do |key, value|
+      enabled << key.to_s if value == true
+    end
+
+    sat_categories = layer_prefs["satCategories"]
+    enabled << "satellites" if sat_categories.is_a?(Hash) && sat_categories.values.any?
+
+    allowed = sidebar_advanced_library_layers.map { |layer| layer[:key] }
+    enabled.uniq.select { |key| allowed.include?(key) }
+  end
+
+  def sidebar_advanced_library_layers_by_key
+    @sidebar_advanced_library_layers_by_key ||= sidebar_advanced_library_layers.index_by { |layer| layer[:key] }
   end
 
   private

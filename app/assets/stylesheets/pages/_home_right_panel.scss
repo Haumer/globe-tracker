@@ -3,7 +3,7 @@
   position: fixed;
   top: 42px;
   right: 12px;
-  bottom: 48px;
+  bottom: calc(var(--gt-bottom-strip-h) + 8px);
   z-index: 30;
   background: var(--gt-panel);
   backdrop-filter: var(--gt-blur);

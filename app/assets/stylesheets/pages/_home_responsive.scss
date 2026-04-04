@@ -66,6 +66,17 @@
   }
 
   // 5. Detail stack as full-width bottom sheet
+  #anchor-leader {
+    display: none !important;
+  }
+  #anchor-panel {
+    left: 8px !important;
+    right: 8px;
+    top: auto !important;
+    bottom: 44px;
+    width: auto;
+    max-width: none;
+  }
   #detail-stack {
     right: 0 !important;
     left: 0;

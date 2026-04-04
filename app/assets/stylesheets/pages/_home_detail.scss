@@ -1,3 +1,166 @@
+// ─── Anchored Detail Overlay ──────────────────────────────────
+#anchor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  pointer-events: none;
+}
+
+#anchor-leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+
+  path {
+    fill: none;
+    stroke: color-mix(in srgb, var(--anchor-accent, #8bd8ff) 78%, white 22%);
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.35));
+  }
+}
+
+#anchor-panel {
+  --anchor-accent: #8bd8ff;
+  position: fixed;
+  width: calc(100vw - 24px);
+  max-width: 248px;
+  min-height: 84px;
+  padding: 10px 12px 10px;
+  border-radius: 14px;
+  background: rgba(8, 11, 18, 0.92);
+  border: 1px solid color-mix(in srgb, var(--anchor-accent, #8bd8ff) 34%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--gt-text);
+  backdrop-filter: var(--gt-blur);
+  -webkit-backdrop-filter: var(--gt-blur);
+  pointer-events: auto;
+  animation: panel-in 0.18s ease-out;
+
+  &[data-mode="docked"] {
+    left: 12px !important;
+    right: 12px;
+    bottom: calc(var(--gt-bottom-strip-h) + 12px);
+    top: auto !important;
+    width: auto;
+  }
+}
+
+.anchor-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 238, 247, 0.58);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(245, 248, 252, 0.92);
+  }
+}
+
+.anchor-content {
+  display: grid;
+  gap: 6px;
+  padding-right: 20px;
+}
+
+.anchor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.anchor-chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.anchor-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font: 700 9px var(--gt-mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.anchor-chip--neutral {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(215, 226, 240, 0.74);
+}
+
+.anchor-chip--accent {
+  background: rgba(79, 195, 247, 0.14);
+  color: #8bd8ff;
+  border-color: rgba(79, 195, 247, 0.26);
+}
+
+.anchor-chip--warning {
+  background: rgba(255, 171, 64, 0.14);
+  color: #ffbf6d;
+  border-color: rgba(255, 171, 64, 0.24);
+}
+
+.anchor-chip--critical {
+  background: rgba(239, 83, 80, 0.14);
+  color: #ff8a80;
+  border-color: rgba(239, 83, 80, 0.24);
+}
+
+.anchor-time {
+  font: 600 10px var(--gt-mono);
+  letter-spacing: 0.8px;
+  color: rgba(215, 226, 240, 0.58);
+  white-space: nowrap;
+}
+
+.anchor-title {
+  font: 700 18px/1.08 var(--gt-mono);
+  color: rgba(245, 248, 252, 0.96);
+  letter-spacing: -0.2px;
+}
+
+.anchor-subtitle {
+  font: 500 10px/1.35 var(--gt-mono);
+  color: rgba(232, 238, 247, 0.76);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.anchor-facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font: 500 9px/1.45 var(--gt-mono);
+  color: rgba(200, 210, 225, 0.56);
+}
+
+.anchor-dot {
+  color: rgba(200, 210, 225, 0.28);
+}
+
 // ─── Detail + Selection Stack ─────────────────────────────────
 #detail-stack {
   position: fixed;

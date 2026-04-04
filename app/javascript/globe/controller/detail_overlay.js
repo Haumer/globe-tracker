@@ -127,6 +127,7 @@ export function applyDetailOverlayMethods(GlobeController) {
     this.anchorOverlayTarget.style.display = ""
     this.anchorPanelTarget.style.display = ""
     this.anchorPanelTarget.dataset.mode = "anchored"
+    this.anchorPanelTarget.dataset.kind = payload.kind || ""
     this.anchorOverlayTarget.style.setProperty("--anchor-accent", payload.accent || "#8bd8ff")
     this.anchorOverlayTarget.style.setProperty("--anchor-stroke", stroke)
     this.anchorOverlayTarget.style.setProperty("--anchor-border-width", `${strokeWidth}px`)
@@ -146,6 +147,7 @@ export function applyDetailOverlayMethods(GlobeController) {
       this.anchorPanelTarget.style.left = ""
       this.anchorPanelTarget.style.top = ""
       this.anchorPanelTarget.dataset.mode = "anchored"
+      delete this.anchorPanelTarget.dataset.kind
       this.anchorPanelTarget.style.removeProperty("--anchor-accent")
       this.anchorPanelTarget.style.removeProperty("--anchor-stroke")
       this.anchorPanelTarget.style.removeProperty("--anchor-border-width")
@@ -710,14 +712,14 @@ export function applyDetailOverlayMethods(GlobeController) {
     const markerStroke = this._anchoredDetailMarkerStroke(kind, data)
     const markerRadius = this._anchoredDetailMarkerRadius(kind, data)
 
-    const makePayload = ({ title, subtitle, brief, facts = [], chips = [], accent, stroke, strokeWidth }) => ({
+    const makePayload = ({ title, subtitle, brief, facts = [], chips = [], accent, stroke, strokeWidth, timeLabel: payloadTimeLabel = timeLabel }) => ({
       kind,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
       brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
       facts: compactFacts(facts.length ? facts : genericFacts),
       chips: chips.filter(Boolean).slice(0, 2),
-      timeLabel,
+      timeLabel: payloadTimeLabel,
       accent: accent || "#8bd8ff",
       stroke: stroke || markerStroke || accent || "#8bd8ff",
       strokeWidth: strokeWidth || 2.25,
@@ -990,36 +992,44 @@ export function applyDetailOverlayMethods(GlobeController) {
         })
       }
       case "strategic_situation": {
+        const clusterCount = data?.direct_cluster_count != null
+          ? `${data.direct_cluster_count} corroborated cluster${data.direct_cluster_count === 1 ? "" : "s"}`
+          : null
         return makePayload({
           title: firstPresent(data?.name, "Strategic situation"),
           subtitle: firstPresent(data?.theater, data?.country, "Strategic view"),
           brief: compactFacts([
-            data?.direct_cluster_count != null ? `${data.direct_cluster_count} corroborated clusters` : null,
+            clusterCount,
             firstPresent(data?.pressure_summary, data?.verification_status, data?.event_type),
-          ]).join(" · "),
+          ]).join(" • "),
           chips: [
             chip("Situation", "warning"),
             chip(firstPresent(data?.event_type, data?.verification_status), "neutral"),
           ],
           accent: this._anchoredDetailMarkerStroke(kind, data) || "#ffab40",
+          timeLabel: null,
         })
       }
       case "conflict_pulse": {
         const stroke = conflictPulseStroke(toNumber(data?.pulse_score) || 0)
+        const reportCount = data?.count_24h != null
+          ? `${data.count_24h} report${data.count_24h === 1 ? "" : "s"} / 24h`
+          : null
         return makePayload({
           title: firstPresent(data?.situation_name, data?.theater, data?.conflict_name, "Conflict theater"),
           subtitle: firstPresent(data?.theater, data?.country, "Conflict pulse"),
           brief: compactFacts([
             data?.pulse_score != null ? `Pulse ${Math.round(data.pulse_score)}` : null,
-            data?.count_24h != null ? `${data.count_24h} reports / 24h` : null,
-            firstPresent(data?.escalation_trend, data?.top_headlines?.[0]),
-          ]).join(" · "),
+            reportCount,
+            firstPresent(data?.top_headlines?.[0], data?.country),
+          ]).join(" • "),
           chips: [
             chip(firstPresent(data?.escalation_trend, "Monitoring"), data?.escalation_trend === "surging" || data?.escalation_trend === "escalating" ? "critical" : "warning"),
             chip("Theater", "neutral"),
           ],
           accent: stroke,
           stroke,
+          timeLabel: null,
         })
       }
       case "hex_cell": {

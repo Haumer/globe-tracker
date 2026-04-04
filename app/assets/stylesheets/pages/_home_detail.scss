@@ -62,6 +62,62 @@
   }
 }
 
+#anchor-panel[data-kind="conflict_pulse"],
+#anchor-panel[data-kind="strategic_situation"] {
+  width: calc(100vw - 28px);
+  max-width: 520px;
+  min-height: 148px;
+  padding: 14px 18px 16px;
+  border-radius: 24px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-close,
+#anchor-panel[data-kind="strategic_situation"] .anchor-close {
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-content,
+#anchor-panel[data-kind="strategic_situation"] .anchor-content {
+  gap: 10px;
+  padding-right: 40px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-chip-row,
+#anchor-panel[data-kind="strategic_situation"] .anchor-chip-row {
+  gap: 10px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-chip,
+#anchor-panel[data-kind="strategic_situation"] .anchor-chip {
+  min-height: 38px;
+  padding: 0 16px;
+  font: 700 12px var(--gt-mono);
+  letter-spacing: 1.15px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-title,
+#anchor-panel[data-kind="strategic_situation"] .anchor-title {
+  font: 700 28px/1.04 var(--gt-mono);
+  letter-spacing: -0.55px;
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-subtitle,
+#anchor-panel[data-kind="strategic_situation"] .anchor-subtitle {
+  font: 600 13px/1.35 var(--gt-mono);
+  letter-spacing: 0.55px;
+  color: rgba(214, 226, 240, 0.86);
+}
+
+#anchor-panel[data-kind="conflict_pulse"] .anchor-brief,
+#anchor-panel[data-kind="strategic_situation"] .anchor-brief {
+  font: 600 11px/1.45 var(--gt-mono);
+  color: rgba(186, 198, 214, 0.72);
+}
+
 .anchor-close {
   position: absolute;
   top: 8px;

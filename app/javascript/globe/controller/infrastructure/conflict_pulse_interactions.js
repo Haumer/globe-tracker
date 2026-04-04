@@ -26,16 +26,17 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
     this.showStrategicSituationDetail(item)
   }
 
-  GlobeController.prototype.showConflictPulseDetail = function(zone) {
+  GlobeController.prototype.showConflictPulseDetail = function(zone, options = {}) {
     if (this._buildTheaterContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildTheaterContext(zone))
     }
+    if (this._showCompactEntityDetail?.("conflict_pulse", zone, { picked: options.picked })) return
     this.detailContentTarget.innerHTML = renderConflictPulseDetailHtml(this, zone)
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("conflict", zone.lat, zone.lng)
   }
 
-  GlobeController.prototype.showStrategicSituationDetail = function(item) {
+  GlobeController.prototype.showStrategicSituationDetail = function(item, options = {}) {
     if (item?.kind && item?.node_id && this._focusContextNode) {
       this._focusContextNode(
         { kind: item.kind, id: item.node_id },
@@ -45,6 +46,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
         }
       )
     }
+    if (this._showCompactEntityDetail?.("strategic_situation", item, { picked: options.picked })) return
     this.detailContentTarget.innerHTML = renderStrategicSituationDetailHtml(this, item)
     this.detailPanelTarget.style.display = ""
   }

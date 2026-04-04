@@ -256,56 +256,56 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const key = decodeURIComponent(id)
         const data = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key)
         if (!data) return false
-        this.showStrategicSituationDetail(data)
+        this.showStrategicSituationDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-strat-lbl-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key)
         if (!data) return false
-        this.showStrategicSituationDetail(data)
+        this.showStrategicSituationDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-strat-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._strategicSituationData?.find(item => `${item.id || item.node_id || item.name}` === key)
         if (!data) return false
-        this.showStrategicSituationDetail(data)
+        this.showStrategicSituationDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-core-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
         if (!data) return false
-        this.showConflictPulseDetail(data)
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-pulse-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
         if (!data) return false
-        this.showConflictPulseDetail(data)
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-ring-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
         if (!data) return false
-        this.showConflictPulseDetail(data)
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-lbl-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
         if (!data) return false
-        this.showConflictPulseDetail(data)
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-", skip: [], handler: (id) => {
         const key = decodeURIComponent(id)
         const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
         if (!data) return false
-        this.showConflictPulseDetail(data)
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "conf-ring-", skip: [], handler: (id) => {

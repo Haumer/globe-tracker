@@ -15,15 +15,13 @@ module Api
       # ── FIRMS thermal detections ──────────────────────────────
       hotspots = FireHotspot.recent
         .where(high_confidence_hotspot_sql)
+        .where(conflict_hotspot_sql)
         .where("frp > 10 OR brightness > 340 OR daynight = 'N'")
         .order(acq_datetime: :desc)
-
-      in_conflict = hotspots.select do |h|
-        CONFLICT_COUNTRIES.any? { |_, b| b[:lat].cover?(h.latitude) && b[:lng].cover?(h.longitude) }
-      end
+        .limit(5000)
 
       industrial_sites = load_industrial_sites
-      firms_strikes = in_conflict.reject { |h| near_industrial?(h, industrial_sites) }
+      firms_strikes = hotspots.reject { |h| near_industrial?(h, industrial_sites) }
 
       # ── GeoConfirmed verified events ──────────────────────────
       gc_events = GeoconfirmedEvent
@@ -201,6 +199,21 @@ module Api
         confidence IN ('high', 'h', 'nominal', 'n')
         OR (#{numeric_confidence_guard} AND CAST(confidence AS INTEGER) >= 50)
       SQL
+    end
+
+    def conflict_hotspot_sql
+      @conflict_hotspot_sql ||= CONFLICT_COUNTRIES.values.map { |bounds|
+        FireHotspot.send(
+          :sanitize_sql_array,
+          [
+            "(latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?)",
+            bounds[:lat].begin,
+            bounds[:lat].end,
+            bounds[:lng].begin,
+            bounds[:lng].end,
+          ]
+        )
+      }.join(" OR ")
     end
   end
 end

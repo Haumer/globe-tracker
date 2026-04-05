@@ -8,23 +8,60 @@ function anchoredStateById(controller, anchorId) {
   return controller._anchoredDetailState || null
 }
 
-function anchoredExternalEmbed(state) {
-  if (state?._gcEmbedUrl) {
-    return { url: state._gcEmbedUrl, id: state._gcEmbedId }
-  }
-
-  if (state?._strikeEmbedUrl) {
-    return { url: state._strikeEmbedUrl, id: state._strikeEmbedId }
-  }
-
-  return null
-}
-
 function shouldPreserveAnchoredHtml(state) {
-  return !!(state?._gcEmbedLoaded || state?._strikeEmbedLoaded || state?._strikeMediaPersistent)
+  return !!state?._strikeMediaPersistent
 }
 
 export function applyDetailOverlayDisplayMethods(GlobeController) {
+  GlobeController.prototype._anchoredDetailNow = function() {
+    const highResNow = window.performance?.now?.()
+    if (Number.isFinite(highResNow)) return highResNow
+
+    const coarseNow = Date.now()
+    return Number.isFinite(coarseNow) ? coarseNow : 0
+  }
+
+  GlobeController.prototype._anchoredDetailDismissGuardMs = function(kind) {
+    return kind ? 420 : 0
+  }
+
+  GlobeController.prototype._anchoredDetailInteractivityWarmMs = function(kind) {
+    return kind ? 180 : 0
+  }
+
+  GlobeController.prototype._resetAnchoredDetailInteractivity = function() {
+    this._anchoredDetailInteractionToken = (this._anchoredDetailInteractionToken || 0) + 1
+    if (!this.hasAnchorPanelTarget) return
+
+    this.anchorPanelTarget.style.removeProperty("pointer-events")
+    delete this.anchorPanelTarget.dataset.warming
+  }
+
+  GlobeController.prototype._warmAnchoredDetailInteractivity = function(delayMs) {
+    if (!this.hasAnchorPanelTarget) return
+
+    this._resetAnchoredDetailInteractivity()
+    if (!(delayMs > 0)) return
+
+    const token = this._anchoredDetailInteractionToken
+    this.anchorPanelTarget.style.pointerEvents = "none"
+    this.anchorPanelTarget.dataset.warming = "true"
+
+    setTimeout(() => {
+      if (token !== this._anchoredDetailInteractionToken) return
+      if (!this._anchoredDetailState) return
+      this.anchorPanelTarget.style.removeProperty("pointer-events")
+      delete this.anchorPanelTarget.dataset.warming
+    }, delayMs)
+  }
+
+  GlobeController.prototype._anchoredDetailDismissGuardActive = function(options = {}) {
+    if (options.force || options.explicit) return false
+
+    const dismissGuardUntil = this._anchoredDetailState?.dismissGuardUntil
+    return Number.isFinite(dismissGuardUntil) && this._anchoredDetailNow() < dismissGuardUntil
+  }
+
   GlobeController.prototype._showCompactEntityDetail = function(kind, data, options = {}) {
     const payload = this._buildAnchoredDetailPayload(kind, data, options)
     if (!payload) return false
@@ -45,10 +82,12 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
   GlobeController.prototype._showAnchoredDetail = function(payload) {
     if (!this.hasAnchorOverlayTarget || !this.hasAnchorPanelTarget || !this.hasAnchorContentTarget) return
 
+    const dismissGuardMs = this._anchoredDetailDismissGuardMs(payload.kind)
+    const interactivityWarmMs = this._anchoredDetailInteractivityWarmMs(payload.kind)
     this._anchoredDetailState = {
       ...payload,
       anchorId: "active",
-      hiddenSince: null,
+      dismissGuardUntil: this._anchoredDetailNow() + dismissGuardMs,
       pinned: false,
     }
 
@@ -65,18 +104,13 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this.anchorPanelTarget.style.setProperty("--anchor-accent", payload.accent || "#8bd8ff")
     this.anchorPanelTarget.style.setProperty("--anchor-stroke", stroke)
     this.anchorPanelTarget.style.setProperty("--anchor-border-width", `${strokeWidth}px`)
+    this._warmAnchoredDetailInteractivity(interactivityWarmMs)
     this.anchorContentTarget.innerHTML = this._renderAnchoredDetailHtml(this._anchoredDetailState)
 
     this._refreshAnchoredDetailPosition(true)
     this._renderSelectedContext?.()
     this._requestRender?.()
 
-    const embed = anchoredExternalEmbed(this._anchoredDetailState)
-    if (embed && !shouldPreserveAnchoredHtml(this._anchoredDetailState)) {
-      if (this._anchoredDetailState._gcEmbedUrl) this._anchoredDetailState._gcEmbedLoaded = true
-      if (this._anchoredDetailState._strikeEmbedUrl) this._anchoredDetailState._strikeEmbedLoaded = true
-      setTimeout(() => this._loadXEmbed?.(embed.url, embed.id), 100)
-    }
   }
 
   GlobeController.prototype._refreshAnchoredDetailContent = function() {
@@ -174,7 +208,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
 
     const existing = this._findPinnedAnchoredDetailMatch(source)
     if (existing) {
-      this.closeAnchoredDetail()
+      this.closeAnchoredDetail({ force: true })
       this.focusPinnedAnchoredDetail({ currentTarget: { dataset: { anchorId: existing.anchorId } } })
       this._toast?.("Already pinned on map")
       return
@@ -183,7 +217,6 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     const pinnedState = {
       ...source,
       anchorId: this._nextPinnedAnchoredDetailId(),
-      hiddenSince: null,
       pinned: true,
     }
 
@@ -191,7 +224,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this._pinnedAnchoredDetails ||= []
     this._pinnedAnchoredDetails.push(pinnedState)
     this._ensurePinnedAnchoredDetailElements(pinnedState)
-    this.closeAnchoredDetail()
+    this.closeAnchoredDetail({ force: true })
 
     if (this.hasAnchorOverlayTarget) this.anchorOverlayTarget.style.display = ""
     this._refreshPinnedAnchoredDetailPositions?.(true)
@@ -272,12 +305,16 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this._showRightPanel?.("context")
   }
 
-  GlobeController.prototype.closeAnchoredDetail = function() {
+  GlobeController.prototype.closeAnchoredDetail = function(options = {}) {
+    if (this._anchoredDetailDismissGuardActive(options)) return false
+
     this._anchoredDetailState = null
+    this._resetAnchoredDetailInteractivity()
     if (this.hasAnchorPanelTarget) {
       this.anchorPanelTarget.style.display = "none"
       this.anchorPanelTarget.style.left = ""
       this.anchorPanelTarget.style.top = ""
+      this.anchorPanelTarget.style.removeProperty("--anchor-panel-scale")
       this.anchorPanelTarget.dataset.mode = "anchored"
       this.anchorPanelTarget.dataset.pinned = "false"
       delete this.anchorPanelTarget.dataset.kind
@@ -301,6 +338,8 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       this.anchorLeaderSocketTarget.style.display = "none"
       this.anchorLeaderSocketTarget.setAttribute("r", "0")
     }
+
+    return true
   }
 
   GlobeController.prototype._renderAnchoredDetailHtml = function(payload) {
@@ -350,44 +389,46 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       const geoUrls = gc.geoUrls || []
       const xUrl = srcUrls.find(u => u.includes("x.com/") || u.includes("twitter.com/"))
       const otherUrls = srcUrls.filter(u => u !== xUrl)
-
-      const embedId = `gc-embed-${anchorId}`
-      const embedSlot = xUrl ? `<div id="${embedId}" class="anchor-gc-embed"></div>` : ""
+      const [primaryGeoUrl, ...extraGeoUrls] = geoUrls
 
       const linkHtml = (url) => {
         const label = this._urlLabel?.(url) || url.substring(0, 30)
         const icon = this._urlIcon?.(url) || "fa-solid fa-link"
-        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i> ${this._escapeHtml(label)}</a>`
+        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i><span>${this._escapeHtml(label)}</span></a>`
       }
 
+      const primaryActions = []
+      if (xUrl) {
+        primaryActions.push(`<a href="${this._safeUrl(xUrl)}" target="_blank" rel="noopener" class="anchor-gc-link anchor-gc-link--primary"><i class="fa-brands fa-x-twitter"></i><span>Open on X</span></a>`)
+      }
+      if (primaryGeoUrl) {
+        const label = this._urlLabel?.(primaryGeoUrl) || "Map"
+        primaryActions.push(`<a href="${this._safeUrl(primaryGeoUrl)}" target="_blank" rel="noopener" class="anchor-gc-link anchor-gc-link--geo anchor-gc-link--action"><i class="fa-solid fa-map-pin"></i><span>${this._escapeHtml(label)}</span></a>`)
+      }
+
+      const primaryActionsHtml = primaryActions.length
+        ? `<div class="anchor-gc-links anchor-gc-links--row">${primaryActions.join("")}</div>`
+        : ""
       const srcHtml = otherUrls.length ? `<div class="anchor-gc-links">${otherUrls.slice(0, 4).map(linkHtml).join("")}</div>` : ""
-      const geoHtml = geoUrls.length ? `<div class="anchor-gc-links anchor-gc-links--geo">${geoUrls.slice(0, 3).map(u => {
+      const geoHtml = extraGeoUrls.length ? `<div class="anchor-gc-links anchor-gc-links--geo">${extraGeoUrls.slice(0, 2).map(u => {
         const label = this._urlLabel?.(u) || "Map"
-        return `<a href="${this._safeUrl(u)}" target="_blank" rel="noopener" class="anchor-gc-link anchor-gc-link--geo"><i class="fa-solid fa-map-pin"></i> ${this._escapeHtml(label)}</a>`
+        return `<a href="${this._safeUrl(u)}" target="_blank" rel="noopener" class="anchor-gc-link anchor-gc-link--geo"><i class="fa-solid fa-map-pin"></i><span>${this._escapeHtml(label)}</span></a>`
       }).join("")}</div>` : ""
 
-      mediaExtraHtml = `${embedSlot}${srcHtml}${geoHtml}`
-
-      // Store embed URL for one-time load after initial show
-      if (xUrl) {
-        payload._gcEmbedUrl = xUrl
-        payload._gcEmbedId = embedId
-      }
+      mediaExtraHtml = `${primaryActionsHtml}${srcHtml}${geoHtml}`
     }
 
     if (payload.kind === "strike" && payload._strikeData) {
       const strike = payload._strikeData
-      const media = this._strikeMediaDescriptor?.(strike)
       const gcMatch = strike.gcMatch || null
       const sourceUrls = [
         ...(Array.isArray(gcMatch?.source_urls) ? gcMatch.source_urls : []),
         gcMatch?.source_url,
       ].filter(Boolean)
-      const otherUrls = media?.url ? sourceUrls.filter(url => url !== media.url) : sourceUrls
       const linkHtml = (url) => {
         const label = this._urlLabel?.(url) || url.substring(0, 30)
         const icon = this._urlIcon?.(url) || "fa-solid fa-link"
-        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i> ${this._escapeHtml(label)}</a>`
+        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i><span>${this._escapeHtml(label)}</span></a>`
       }
 
       const confidenceText = strike.strikeConfidence === "verified"
@@ -402,26 +443,11 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
           </div>`
         : ""
 
-      let mediaHtml = ""
-      if (media?.kind === "youtube" && media.embedUrl) {
-        payload._strikeMediaPersistent = true
-        mediaHtml = `<div class="anchor-strike-media"><iframe class="anchor-strike-frame" src="${this._safeUrl(media.embedUrl)}" title="${this._escapeHtml(payload.title || "Strike media")}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`
-      } else if (media?.kind === "video" && media.url) {
-        payload._strikeMediaPersistent = true
-        mediaHtml = `<div class="anchor-strike-media"><video class="anchor-strike-video" src="${this._safeUrl(media.url)}" controls playsinline muted preload="metadata"></video></div>`
-      } else if (media?.kind === "tweet" && media.url) {
-        payload._strikeMediaPersistent = true
-        const embedId = `strike-embed-${anchorId}`
-        mediaHtml = `<div id="${embedId}" class="anchor-gc-embed"></div>`
-        payload._strikeEmbedUrl = media.url
-        payload._strikeEmbedId = embedId
-      }
-
-      const linksHtml = otherUrls.length
-        ? `<div class="anchor-gc-links">${otherUrls.slice(0, 3).map(linkHtml).join("")}</div>`
+      const linksHtml = sourceUrls.length
+        ? `<div class="anchor-gc-links">${sourceUrls.slice(0, 3).map(linkHtml).join("")}</div>`
         : ""
 
-      mediaExtraHtml = `${corroborationHtml}${mediaHtml}${linksHtml}${mediaExtraHtml}`
+      mediaExtraHtml = `${corroborationHtml}${linksHtml}${mediaExtraHtml}`
     }
 
     return `

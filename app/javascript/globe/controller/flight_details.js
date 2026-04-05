@@ -495,8 +495,21 @@ export function applyFlightDetailMethods(GlobeController) {
     if (btn) btn.textContent = label
   }
 
-  GlobeController.prototype.closeDetail = function() {
-    this.closeAnchoredDetail?.()
+  GlobeController.prototype.closeDetail = function(event) {
+    const explicitClose = event?.currentTarget?.classList?.contains("anchor-close") ||
+      event?.currentTarget?.classList?.contains("detail-close")
+
+    if (this._anchoredDetailDismissGuardActive?.({ explicit: explicitClose })) {
+      if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+      return
+    }
+
+    const closedAnchoredDetail = this.closeAnchoredDetail?.({ explicit: explicitClose })
+    if (closedAnchoredDetail === false) {
+      if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+      return
+    }
+
     this.detailPanelTarget.style.display = "none"
     this._focusedSelection = null
     this._renderSelectionTray()

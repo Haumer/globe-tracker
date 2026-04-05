@@ -256,6 +256,7 @@ export function initializeCoreState(controller) {
   controller.strikesVisible = false
   controller._strikeDetections = []
   controller._strikeEntities = []
+  controller._gcDetections = []
   controller.weatherVisible = false
   controller._weatherActiveLayers = {}
   controller._weatherImageryLayers = {}
@@ -375,6 +376,9 @@ export function initializeCoreState(controller) {
   controller._alertUnseenCount = 0
   controller._selectedContext = null
   controller._theaterBriefCache = new Map()
+  controller._anchoredDetailState = null
+  controller._pinnedAnchoredDetails = []
+  controller._pinnedAnchoredDetailSeq = 0
   controller._ds = {}
   controller._backgroundRefreshRetryTimers = {}
   controller._backgroundRefreshRetryCounts = {}

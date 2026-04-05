@@ -10,6 +10,10 @@ export function applyCoreMethods(GlobeController) {
   applyCoreEntityClickMethods(GlobeController)
 
   GlobeController.prototype.connect = function() {
+    if (this._handler || (!this._destroyed && this.viewer)) {
+      teardownCore(this)
+    }
+
     this._destroyed = false
     initializeCoreState(this)
     wireCoreChrome(this)
@@ -51,6 +55,29 @@ export function applyCoreMethods(GlobeController) {
   }
 
   GlobeController.prototype.initViewer = function() {
+    if (this._handler) {
+      try {
+        this._handler.destroy()
+      } catch {}
+      this._handler = null
+    }
+    if (this._onAnchoredDetailResize) {
+      window.removeEventListener("resize", this._onAnchoredDetailResize)
+      this._onAnchoredDetailResize = null
+    }
+    if (this._onAnchoredDetailPostRender && this.viewer?.scene?.postRender?.removeEventListener) {
+      try {
+        this.viewer.scene.postRender.removeEventListener(this._onAnchoredDetailPostRender)
+      } catch {}
+      this._onAnchoredDetailPostRender = null
+    }
+    if (this.viewer && !this._destroyed && typeof this.viewer.destroy === "function") {
+      try {
+        this.viewer.destroy()
+      } catch {}
+      this.viewer = null
+    }
+
     const Cesium = window.Cesium
 
     Cesium.Ion.defaultAccessToken = this.cesiumTokenValue
@@ -182,7 +209,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
+          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked, click.position)) return

@@ -1,16 +1,5 @@
 import { getDataSource, cachedColor, LABEL_DEFAULTS } from "globe/utils"
 
-let _twitterWidgetsLoaded = false
-function ensureTwitterWidgets() {
-  if (_twitterWidgetsLoaded) return
-  _twitterWidgetsLoaded = true
-  const s = document.createElement("script")
-  s.src = "https://platform.twitter.com/widgets.js"
-  s.async = true
-  s.charset = "utf-8"
-  document.head.appendChild(s)
-}
-
 function createStrikeIcon(confidence) {
   const size = 28
   const canvas = document.createElement("canvas")
@@ -425,14 +414,13 @@ export function applyStrikesMethods(GlobeController) {
     const geoUrls = gc.geoUrls || []
     const sourceCount = srcUrls.length
 
-    // Find the first X/Twitter URL for embedding
     const xUrl = srcUrls.find(u => u.includes("x.com/") || u.includes("twitter.com/"))
-    // Remaining source links (exclude the embedded one)
     const otherSrcUrls = srcUrls.filter(u => u !== xUrl)
-
-    const embedHtml = xUrl ? `
-      <div id="gc-embed-container" style="margin:10px 0;max-width:100%;overflow:hidden;border-radius:6px;">
-        <div style="font:400 9px var(--gt-mono);color:rgba(200,210,225,0.25);padding:8px 0 4px;">Loading post...</div>
+    const primarySourceHtml = xUrl ? `
+      <div style="margin:10px 0 6px;">
+        <a href="${this._safeUrl(xUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(255,152,0,0.22);background:rgba(255,152,0,0.09);font:600 9px var(--gt-mono);letter-spacing:0.7px;color:#ffbf6d;text-decoration:none;text-transform:uppercase;">
+          <i class="fa-brands fa-x-twitter"></i> Open source on X
+        </a>
       </div>
     ` : ""
 
@@ -519,7 +507,7 @@ export function applyStrikesMethods(GlobeController) {
           <span class="detail-value">${timeStr}</span>
         </div>` : ""}
       </div>
-      ${embedHtml}
+      ${primarySourceHtml}
       ${sourcesHtml}
       ${geoHtml}
       ${firmsHtml}
@@ -528,9 +516,6 @@ export function applyStrikesMethods(GlobeController) {
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
-
-    // Load X embed
-    if (xUrl) this._loadXEmbed(xUrl)
 
     this._fetchConnections("geoconfirmed_event", gc.lat, gc.lng)
   }
@@ -557,33 +542,12 @@ export function applyStrikesMethods(GlobeController) {
   GlobeController.prototype._loadXEmbed = async function(url, containerId) {
     const container = document.getElementById(containerId || "gc-embed-container")
     if (!container) return
+    this._renderXEmbedFallback?.(url, container)
+  }
 
-    try {
-      const resp = await fetch(`https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true&dnt=true&theme=dark&maxwidth=320`)
-      if (!resp.ok) {
-        container.innerHTML = `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" style="font:400 10px var(--gt-mono);color:#ff9800;text-decoration:none;"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>View post on X</a>`
-        return
-      }
-      const data = await resp.json()
-      container.innerHTML = data.html
-
-      // Load Twitter widgets.js and render
-      ensureTwitterWidgets()
-      const self = this
-      const renderEmbed = () => {
-        if (window.twttr && window.twttr.widgets) {
-          window.twttr.widgets.load(container).then(() => {
-            // Reposition anchored window after embed inflates
-            self._refreshAnchoredDetailPosition?.(true)
-          })
-        } else {
-          setTimeout(renderEmbed, 200)
-        }
-      }
-      renderEmbed()
-    } catch {
-      container.innerHTML = `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" style="font:400 10px var(--gt-mono);color:#ff9800;text-decoration:none;"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>View post on X</a>`
-    }
+  GlobeController.prototype._renderXEmbedFallback = function(url, container) {
+    if (!container) return
+    container.innerHTML = `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" style="font:400 10px var(--gt-mono);color:#ff9800;text-decoration:none;"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>View post on X</a>`
   }
 
   // ── URL helpers ────────────────────────────────────────────

@@ -10,20 +10,44 @@ import {
 } from "globe/controller/detail_overlay/shared"
 
 export function applyDetailOverlayGeometryMethods(GlobeController) {
+  GlobeController.prototype._anchoredDetailScaleBounds = function(state) {
+    switch (state?.kind) {
+      case "strike":
+      case "geoconfirmed":
+        return { nearHeight: 100000, farHeight: 4000000, minScale: 0.58 }
+      case "conflict_pulse":
+      case "strategic_situation":
+        return { nearHeight: 180000, farHeight: 6500000, minScale: 0.76 }
+      default:
+        return { nearHeight: 140000, farHeight: 5000000, minScale: 0.68 }
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailScale = function(state) {
+    const height = toNumber(this.viewer?.camera?.positionCartographic?.height)
+    if (!(height > 0)) return 1
+
+    const { nearHeight, farHeight, minScale } = this._anchoredDetailScaleBounds(state)
+    const nearLog = Math.log10(Math.max(1, nearHeight))
+    const farLog = Math.log10(Math.max(nearHeight + 1, farHeight))
+    const heightLog = Math.log10(Math.max(1, height))
+    const progress = clamp((heightLog - nearLog) / Math.max(0.0001, farLog - nearLog), 0, 1)
+    return Number((1 - (1 - minScale) * progress).toFixed(3))
+  }
+
+  GlobeController.prototype._applyAnchoredDetailScale = function(panel, state, options = {}) {
+    if (!panel) return 1
+
+    const scale = options.mobile ? 1 : this._anchoredDetailScale(state)
+    panel.style.setProperty("--anchor-panel-scale", `${scale}`)
+    return scale
+  }
+
   GlobeController.prototype._anchoredDetailAllowsExtendedBounds = function(state) {
     return ["geoconfirmed", "strike"].includes(state?.kind)
   }
 
   GlobeController.prototype._anchoredDetailPlacementTolerance = function(state) {
-    if (state?.kind === "strike") {
-      return {
-        maxHorizontalDrift: 72,
-        maxVerticalDrift: 120,
-        maxPlacementDrift: 420,
-        maxJoinDistance: 560,
-      }
-    }
-
     if (state?.kind === "geoconfirmed") {
       return {
         maxHorizontalDrift: 48,
@@ -38,6 +62,18 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       maxVerticalDrift: 20,
       maxPlacementDrift: 140,
       maxJoinDistance: 168,
+    }
+  }
+
+  GlobeController.prototype._anchoredDetailFallbackPlacement = function(panelWidth, panelHeight, point = null) {
+    const preferredLeft = point ? point.x - panelWidth / 2 : window.innerWidth - panelWidth - 24
+    const preferredTop = point ? point.y - panelHeight - 36 : 72
+
+    return {
+      left: clamp(preferredLeft, 14, Math.max(14, window.innerWidth - panelWidth - 14)),
+      top: clamp(preferredTop, 54, Math.max(54, window.innerHeight - panelHeight - 56)),
+      vertical: "above",
+      drift: 0,
     }
   }
 
@@ -204,24 +240,13 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
     const mobile = window.innerWidth <= 960
     const state = this._anchoredDetailState
-    const livePoint = this._anchoredDetailScreenPoint(state.anchor)
-    const point = livePoint || null
+    const point = this._anchoredDetailScreenPoint(state.anchor)
 
     if (overlay) overlay.style.display = ""
     panel.style.display = ""
-
-    const markHidden = () => {
-      panel.style.display = "none"
-      if (leader) leader.style.display = "none"
-      if (leaderPath) leaderPath.setAttribute("d", "")
-      if (leaderSocket) {
-        leaderSocket.style.display = "none"
-        leaderSocket.setAttribute("r", "0")
-      }
-    }
+    this._applyAnchoredDetailScale(panel, state, { mobile })
 
     if (mobile) {
-      state.hiddenSince = null
       panel.dataset.mode = "docked"
       panel.style.left = ""
       panel.style.top = ""
@@ -234,28 +259,6 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       return
     }
 
-    if (!point) {
-      const now = performance.now()
-      state.hiddenSince ||= now
-      markHidden()
-      if (now - state.hiddenSince > 220) {
-        this.closeAnchoredDetail()
-      }
-      return
-    }
-
-    if (!this._anchoredDetailAnchorVisible(state.anchor, point)) {
-      const now = performance.now()
-      state.hiddenSince ||= now
-      markHidden()
-      if (now - state.hiddenSince > 220) {
-        this.closeAnchoredDetail()
-      }
-      return
-    }
-
-    state.hiddenSince = null
-
     panel.dataset.mode = "anchored"
     panel.style.visibility = "hidden"
     panel.style.left = "0px"
@@ -266,13 +269,28 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const panelWidth = panelRect.width || 248
     const panelHeight = panelRect.height || 112
     const tolerance = this._anchoredDetailPlacementTolerance(state)
-    const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
+    const anchorVisible = !!point && this._anchoredDetailAnchorVisible(state.anchor, point)
+    let placement = anchorVisible ? this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance) : null
     if (!placement || placement.drift > tolerance.maxPlacementDrift) {
-      const now = performance.now()
-      state.hiddenSince ||= now
-      markHidden()
-      if (now - state.hiddenSince > 220) {
-        this.closeAnchoredDetail()
+      placement = state._lastPlacement || this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point)
+    }
+
+    const left = placement.left
+    const top = placement.top
+    state._lastPlacement = { left, top, vertical: placement.vertical }
+
+    panel.style.left = `${Math.round(left)}px`
+    panel.style.top = `${Math.round(top)}px`
+    panel.style.display = ""
+
+    if (!leader || !leaderPath) return
+
+    if (!anchorVisible) {
+      leader.style.display = "none"
+      leaderPath.setAttribute("d", "")
+      if (leaderSocket) {
+        leaderSocket.style.display = "none"
+        leaderSocket.setAttribute("r", "0")
       }
       return
     }
@@ -287,30 +305,18 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       socketRadius,
       this._anchoredDetailMarkerOverlap(state)
     )
-    if (pointDistance(origin, join) > tolerance.maxJoinDistance) {
-      const now = performance.now()
-      state.hiddenSince ||= now
-      markHidden()
-      if (now - state.hiddenSince > 220) {
-        this.closeAnchoredDetail()
-      }
-      return
+    const joinTooLong = pointDistance(origin, join) > tolerance.maxJoinDistance
+
+    if (joinTooLong) {
+      leader.style.display = "none"
+      leaderPath.setAttribute("d", "")
+    } else {
+      leader.style.display = ""
+      const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+      leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
     }
-
-    const left = placement.left
-    const top = placement.top
-
-    panel.style.left = `${Math.round(left)}px`
-    panel.style.top = `${Math.round(top)}px`
-    panel.style.display = ""
-
-    if (!leader || !leaderPath) return
-
-    leader.style.display = ""
-    const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
-    leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
     if (leaderSocket) {
-      if (socketRadius > 0) {
+      if (!joinTooLong && socketRadius > 0) {
         leaderSocket.style.display = ""
         leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
         leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)
@@ -366,6 +372,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       }
 
       panel.dataset.mode = "anchored"
+      this._applyAnchoredDetailScale(panel, state, { mobile })
       panel.style.visibility = "hidden"
       panel.style.left = "0px"
       panel.style.top = "0px"
@@ -375,10 +382,9 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       const panelWidth = panelRect.width || 248
       const panelHeight = panelRect.height || 112
       const tolerance = this._anchoredDetailPlacementTolerance(state)
-      const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
+      let placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
       if (!placement || placement.drift > tolerance.maxPlacementDrift) {
-        markHidden()
-        return
+        placement = this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point)
       }
 
       const join = this._anchoredDetailJoinPoint(point, placement, panelWidth, panelHeight)
@@ -392,10 +398,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
         this._anchoredDetailMarkerOverlap(state)
       )
 
-      if (pointDistance(origin, join) > tolerance.maxJoinDistance) {
-        markHidden()
-        return
-      }
+      const joinTooLong = pointDistance(origin, join) > tolerance.maxJoinDistance
 
       panel.style.left = `${Math.round(placement.left)}px`
       panel.style.top = `${Math.round(placement.top)}px`
@@ -403,11 +406,16 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
       if (!leader || !leaderPath) return
 
-      leader.style.display = ""
-      const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
-      leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
+      if (joinTooLong) {
+        leader.style.display = "none"
+        leaderPath.setAttribute("d", "")
+      } else {
+        leader.style.display = ""
+        const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+        leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
+      }
       if (leaderSocket) {
-        if (socketRadius > 0) {
+        if (!joinTooLong && socketRadius > 0) {
           leaderSocket.style.display = ""
           leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
           leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)
@@ -485,9 +493,12 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const parsed = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(parsed.getTime())) return null
 
+    const year = parsed.getUTCFullYear()
+    const month = (parsed.getUTCMonth() + 1).toString().padStart(2, "0")
+    const day = parsed.getUTCDate().toString().padStart(2, "0")
     const hours = parsed.getUTCHours().toString().padStart(2, "0")
     const minutes = parsed.getUTCMinutes().toString().padStart(2, "0")
-    return `${hours}:${minutes} UTC`
+    return `${year}-${month}-${day} ${hours}:${minutes} UTC`
   }
 
   GlobeController.prototype._anchoredDetailAnchor = function(kind, data, options = {}) {

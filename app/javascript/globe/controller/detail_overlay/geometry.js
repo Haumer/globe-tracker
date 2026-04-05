@@ -14,6 +14,33 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     return ["geoconfirmed", "strike"].includes(state?.kind)
   }
 
+  GlobeController.prototype._anchoredDetailPlacementTolerance = function(state) {
+    if (state?.kind === "strike") {
+      return {
+        maxHorizontalDrift: 72,
+        maxVerticalDrift: 120,
+        maxPlacementDrift: 420,
+        maxJoinDistance: 560,
+      }
+    }
+
+    if (state?.kind === "geoconfirmed") {
+      return {
+        maxHorizontalDrift: 48,
+        maxVerticalDrift: 72,
+        maxPlacementDrift: 300,
+        maxJoinDistance: 320,
+      }
+    }
+
+    return {
+      maxHorizontalDrift: 28,
+      maxVerticalDrift: 20,
+      maxPlacementDrift: 140,
+      maxJoinDistance: 168,
+    }
+  }
+
   GlobeController.prototype._anchoredDetailAnchorVisible = function(anchor, point) {
     if (!point) return false
 
@@ -30,7 +57,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     return true
   }
 
-  GlobeController.prototype._anchoredDetailPlacement = function(point, panelWidth, panelHeight) {
+  GlobeController.prototype._anchoredDetailPlacement = function(point, panelWidth, panelHeight, options = {}) {
     const bounds = {
       left: 14,
       right: window.innerWidth - 14,
@@ -38,8 +65,8 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       bottom: window.innerHeight - 56,
     }
     const gapY = 36
-    const maxHorizontalDrift = 28
-    const maxVerticalDrift = 20
+    const maxHorizontalDrift = options.maxHorizontalDrift ?? 28
+    const maxVerticalDrift = options.maxVerticalDrift ?? 20
     const candidates = [
       { left: point.x - panelWidth / 2, top: point.y - panelHeight - gapY, vertical: "above" },
       { left: point.x - panelWidth / 2, top: point.y + gapY, vertical: "below" },
@@ -238,9 +265,9 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
     const panelWidth = panelRect.width || 248
     const panelHeight = panelRect.height || 112
-    const maxDrift = this._anchoredDetailAllowsExtendedBounds(state) ? 300 : 140
-    const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight)
-    if (!placement || placement.drift > maxDrift) {
+    const tolerance = this._anchoredDetailPlacementTolerance(state)
+    const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
+    if (!placement || placement.drift > tolerance.maxPlacementDrift) {
       const now = performance.now()
       state.hiddenSince ||= now
       markHidden()
@@ -260,8 +287,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       socketRadius,
       this._anchoredDetailMarkerOverlap(state)
     )
-    const maxJoinDist = this._anchoredDetailAllowsExtendedBounds(state) ? 320 : 168
-    if (pointDistance(origin, join) > maxJoinDist) {
+    if (pointDistance(origin, join) > tolerance.maxJoinDistance) {
       const now = performance.now()
       state.hiddenSince ||= now
       markHidden()
@@ -348,8 +374,9 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
       const panelWidth = panelRect.width || 248
       const panelHeight = panelRect.height || 112
-      const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight)
-      if (!placement || placement.drift > 140) {
+      const tolerance = this._anchoredDetailPlacementTolerance(state)
+      const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
+      if (!placement || placement.drift > tolerance.maxPlacementDrift) {
         markHidden()
         return
       }
@@ -365,7 +392,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
         this._anchoredDetailMarkerOverlap(state)
       )
 
-      if (pointDistance(origin, join) > 168) {
+      if (pointDistance(origin, join) > tolerance.maxJoinDistance) {
         markHidden()
         return
       }

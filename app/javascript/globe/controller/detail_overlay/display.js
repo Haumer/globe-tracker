@@ -8,6 +8,22 @@ function anchoredStateById(controller, anchorId) {
   return controller._anchoredDetailState || null
 }
 
+function anchoredExternalEmbed(state) {
+  if (state?._gcEmbedUrl) {
+    return { url: state._gcEmbedUrl, id: state._gcEmbedId }
+  }
+
+  if (state?._strikeEmbedUrl) {
+    return { url: state._strikeEmbedUrl, id: state._strikeEmbedId }
+  }
+
+  return null
+}
+
+function shouldPreserveAnchoredHtml(state) {
+  return !!(state?._gcEmbedLoaded || state?._strikeEmbedLoaded || state?._strikeMediaPersistent)
+}
+
 export function applyDetailOverlayDisplayMethods(GlobeController) {
   GlobeController.prototype._showCompactEntityDetail = function(kind, data, options = {}) {
     const payload = this._buildAnchoredDetailPayload(kind, data, options)
@@ -54,16 +70,25 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this._refreshAnchoredDetailPosition(true)
     this._renderSelectedContext?.()
     this._requestRender?.()
+
+    const embed = anchoredExternalEmbed(this._anchoredDetailState)
+    if (embed && !shouldPreserveAnchoredHtml(this._anchoredDetailState)) {
+      if (this._anchoredDetailState._gcEmbedUrl) this._anchoredDetailState._gcEmbedLoaded = true
+      if (this._anchoredDetailState._strikeEmbedUrl) this._anchoredDetailState._strikeEmbedLoaded = true
+      setTimeout(() => this._loadXEmbed?.(embed.url, embed.id), 100)
+    }
   }
 
   GlobeController.prototype._refreshAnchoredDetailContent = function() {
     if (this._anchoredDetailState && this.hasAnchorContentTarget) {
-      this.anchorContentTarget.innerHTML = this._renderAnchoredDetailHtml(this._anchoredDetailState)
+      if (!shouldPreserveAnchoredHtml(this._anchoredDetailState)) {
+        this.anchorContentTarget.innerHTML = this._renderAnchoredDetailHtml(this._anchoredDetailState)
+      }
     }
 
     ;(this._pinnedAnchoredDetails || []).forEach(state => {
       const content = state?._elements?.content
-      if (content) content.innerHTML = this._renderAnchoredDetailHtml(state)
+      if (content && !shouldPreserveAnchoredHtml(state)) content.innerHTML = this._renderAnchoredDetailHtml(state)
     })
 
     this._renderSelectedContext?.()
@@ -318,6 +343,87 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       ? `<div class="anchor-actions">${actionParts.join("")}</div>`
       : ""
 
+    let mediaExtraHtml = ""
+    if (payload.kind === "geoconfirmed" && payload._gcData) {
+      const gc = payload._gcData
+      const srcUrls = gc.sourceUrls || []
+      const geoUrls = gc.geoUrls || []
+      const xUrl = srcUrls.find(u => u.includes("x.com/") || u.includes("twitter.com/"))
+      const otherUrls = srcUrls.filter(u => u !== xUrl)
+
+      const embedId = `gc-embed-${anchorId}`
+      const embedSlot = xUrl ? `<div id="${embedId}" class="anchor-gc-embed"></div>` : ""
+
+      const linkHtml = (url) => {
+        const label = this._urlLabel?.(url) || url.substring(0, 30)
+        const icon = this._urlIcon?.(url) || "fa-solid fa-link"
+        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i> ${this._escapeHtml(label)}</a>`
+      }
+
+      const srcHtml = otherUrls.length ? `<div class="anchor-gc-links">${otherUrls.slice(0, 4).map(linkHtml).join("")}</div>` : ""
+      const geoHtml = geoUrls.length ? `<div class="anchor-gc-links anchor-gc-links--geo">${geoUrls.slice(0, 3).map(u => {
+        const label = this._urlLabel?.(u) || "Map"
+        return `<a href="${this._safeUrl(u)}" target="_blank" rel="noopener" class="anchor-gc-link anchor-gc-link--geo"><i class="fa-solid fa-map-pin"></i> ${this._escapeHtml(label)}</a>`
+      }).join("")}</div>` : ""
+
+      mediaExtraHtml = `${embedSlot}${srcHtml}${geoHtml}`
+
+      // Store embed URL for one-time load after initial show
+      if (xUrl) {
+        payload._gcEmbedUrl = xUrl
+        payload._gcEmbedId = embedId
+      }
+    }
+
+    if (payload.kind === "strike" && payload._strikeData) {
+      const strike = payload._strikeData
+      const media = this._strikeMediaDescriptor?.(strike)
+      const gcMatch = strike.gcMatch || null
+      const sourceUrls = [
+        ...(Array.isArray(gcMatch?.source_urls) ? gcMatch.source_urls : []),
+        gcMatch?.source_url,
+      ].filter(Boolean)
+      const otherUrls = media?.url ? sourceUrls.filter(url => url !== media.url) : sourceUrls
+      const linkHtml = (url) => {
+        const label = this._urlLabel?.(url) || url.substring(0, 30)
+        const icon = this._urlIcon?.(url) || "fa-solid fa-link"
+        return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i> ${this._escapeHtml(label)}</a>`
+      }
+
+      const confidenceText = strike.strikeConfidence === "verified"
+        ? "GeoConfirmed corroboration matches this thermal detection."
+        : strike.clusterSize > 0
+          ? `${strike.clusterSize + 1} nearby detections support this strike signal.`
+          : "Single thermal signal pending stronger corroboration."
+      const corroborationHtml = gcMatch || confidenceText
+        ? `<div class="anchor-strike-note">
+            ${gcMatch?.title ? `<div class="anchor-strike-note-title">${this._escapeHtml(gcMatch.title)}</div>` : ""}
+            <div class="anchor-strike-note-body">${this._escapeHtml(gcMatch?.description || confidenceText)}</div>
+          </div>`
+        : ""
+
+      let mediaHtml = ""
+      if (media?.kind === "youtube" && media.embedUrl) {
+        payload._strikeMediaPersistent = true
+        mediaHtml = `<div class="anchor-strike-media"><iframe class="anchor-strike-frame" src="${this._safeUrl(media.embedUrl)}" title="${this._escapeHtml(payload.title || "Strike media")}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`
+      } else if (media?.kind === "video" && media.url) {
+        payload._strikeMediaPersistent = true
+        mediaHtml = `<div class="anchor-strike-media"><video class="anchor-strike-video" src="${this._safeUrl(media.url)}" controls playsinline muted preload="metadata"></video></div>`
+      } else if (media?.kind === "tweet" && media.url) {
+        payload._strikeMediaPersistent = true
+        const embedId = `strike-embed-${anchorId}`
+        mediaHtml = `<div id="${embedId}" class="anchor-gc-embed"></div>`
+        payload._strikeEmbedUrl = media.url
+        payload._strikeEmbedId = embedId
+      }
+
+      const linksHtml = otherUrls.length
+        ? `<div class="anchor-gc-links">${otherUrls.slice(0, 3).map(linkHtml).join("")}</div>`
+        : ""
+
+      mediaExtraHtml = `${corroborationHtml}${mediaHtml}${linksHtml}${mediaExtraHtml}`
+    }
+
     return `
       <div class="anchor-head">
         <div class="anchor-chip-row">${chipsHtml}</div>
@@ -326,6 +432,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       <div class="anchor-title">${this._escapeHtml(payload.title || kindLabel(payload.kind))}</div>
       ${subtitleHtml}
       ${briefHtml}
+      ${mediaExtraHtml}
       ${actionsHtml}
     `
   }

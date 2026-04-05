@@ -10,6 +10,10 @@ import {
 } from "globe/controller/detail_overlay/shared"
 
 export function applyDetailOverlayGeometryMethods(GlobeController) {
+  GlobeController.prototype._anchoredDetailAllowsExtendedBounds = function(state) {
+    return ["geoconfirmed", "strike"].includes(state?.kind)
+  }
+
   GlobeController.prototype._anchoredDetailAnchorVisible = function(anchor, point) {
     if (!point) return false
 
@@ -234,8 +238,9 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
     const panelWidth = panelRect.width || 248
     const panelHeight = panelRect.height || 112
+    const maxDrift = this._anchoredDetailAllowsExtendedBounds(state) ? 300 : 140
     const placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight)
-    if (!placement || placement.drift > 140) {
+    if (!placement || placement.drift > maxDrift) {
       const now = performance.now()
       state.hiddenSince ||= now
       markHidden()
@@ -255,7 +260,8 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       socketRadius,
       this._anchoredDetailMarkerOverlap(state)
     )
-    if (pointDistance(origin, join) > 168) {
+    const maxJoinDist = this._anchoredDetailAllowsExtendedBounds(state) ? 320 : 168
+    if (pointDistance(origin, join) > maxJoinDist) {
       const now = performance.now()
       state.hiddenSince ||= now
       markHidden()
@@ -498,6 +504,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
         "commodity",
         "fire_hotspot",
         "fire_cluster",
+        "geoconfirmed",
       ].includes(kind),
     }
 

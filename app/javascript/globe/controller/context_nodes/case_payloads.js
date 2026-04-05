@@ -103,4 +103,38 @@ export function applyContextNodeCasePayloadMethods(GlobeController) {
       },
     }
   }
+
+  GlobeController.prototype._caseSourcePayloadForStrike = function(strike = {}) {
+    const identifier = strike.id || strike.external_id || [strike.lat, strike.lng, strike.time].filter(Boolean).join(":")
+    if (!identifier) return null
+
+    const isVerified = strike.strikeConfidence === "verified"
+    const sourceUrls = Array.isArray(strike?.gcMatch?.source_urls) ? strike.gcMatch.source_urls : []
+
+    return {
+      object_kind: "strike",
+      object_identifier: `${identifier}`,
+      title: isVerified ? (strike.gcMatch?.title || "Verified strike") : "Strike detection",
+      summary: [
+        strike.gcMatch?.region || strike.location_name,
+        strike.satellite,
+        strike.time ? this._timeAgo(new Date(strike.time)) : null,
+      ].filter(Boolean).join(" · "),
+      object_type: "strike",
+      latitude: Number.isFinite(strike.lat) ? strike.lat : null,
+      longitude: Number.isFinite(strike.lng) ? strike.lng : null,
+      source_context: {
+        severity: isVerified ? "high" : "medium",
+        strike_confidence: strike.strikeConfidence,
+        frp: strike.frp,
+        brightness: strike.brightness,
+        satellite: strike.satellite,
+        instrument: strike.instrument,
+        gc_region: strike.gcMatch?.region,
+        gc_source_url: strike.gcMatch?.source_url,
+        gc_source_count: sourceUrls.length || null,
+        detected_at: strike.time,
+      },
+    }
+  }
 }

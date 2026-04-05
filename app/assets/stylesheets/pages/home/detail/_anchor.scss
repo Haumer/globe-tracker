@@ -82,6 +82,12 @@
   border-radius: 18px;
 }
 
+#anchor-panel[data-kind="strike"],
+.anchor-panel[data-kind="strike"] {
+  width: auto;
+  max-width: 320px;
+}
+
 #anchor-panel[data-kind="conflict_pulse"] .anchor-close,
 #anchor-panel[data-kind="strategic_situation"] .anchor-close,
 .anchor-panel[data-kind="conflict_pulse"] .anchor-close,
@@ -290,4 +296,101 @@
     border-color: rgba(79, 195, 247, 0.3);
     color: #d4f4ff;
   }
+}
+
+// ── GeoConfirmed embed & links ─────────────────────────
+
+.anchor-gc-embed {
+  margin: 6px 0;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+
+  // Constrain Twitter embed width
+  .twitter-tweet {
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+.anchor-gc-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+}
+
+.anchor-gc-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.55);
+  text-decoration: none;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  i {
+    color: #ff9800;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  &:hover {
+    color: rgba(200, 210, 225, 0.85);
+  }
+}
+
+.anchor-gc-link--geo {
+  color: rgba(200, 210, 225, 0.35);
+
+  i {
+    color: rgba(200, 210, 225, 0.25);
+  }
+
+  &:hover {
+    color: rgba(200, 210, 225, 0.6);
+  }
+}
+
+.anchor-strike-note {
+  display: grid;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.anchor-strike-note-title {
+  font: 700 9px var(--gt-mono);
+  color: rgba(236, 242, 250, 0.9);
+  letter-spacing: 0.4px;
+}
+
+.anchor-strike-note-body {
+  font: 500 9px/1.45 var(--gt-mono);
+  color: rgba(186, 198, 214, 0.68);
+}
+
+.anchor-strike-media {
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(2, 4, 9, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.anchor-strike-frame,
+.anchor-strike-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #05070d;
 }

@@ -40,6 +40,10 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         return 13
       case "news":
         return 10
+      case "strike":
+        return 12
+      case "geoconfirmed":
+        return 10
       case "chokepoint":
         return 12
       default:
@@ -70,6 +74,8 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       case "strike":
       case "conflict_event":
         return 3200
+      case "geoconfirmed":
+        return 0
       case "earthquake":
       case "natural_event":
       case "weather_alert":
@@ -395,18 +401,52 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         })
       }
       case "strike": {
-        return makePayload({
-          title: firstPresent(data?.name, data?.title, "Strike detection"),
-          subtitle: firstPresent(data?.location_name, data?.country, data?.confidence_label, "Maritime incident"),
+        const isVerified = data?.strikeConfidence === "verified"
+        const confidenceLabel = isVerified
+          ? "Verified"
+          : data?.strikeConfidence
+            ? `${data.strikeConfidence}`.replace(/_/g, " ")
+            : null
+        const casePayload = this._caseSourcePayloadForStrike?.(data)
+        const result = makePayload({
+          title: isVerified ? firstPresent(data?.gcMatch?.title, data?.name, data?.title, "Verified strike") : firstPresent(data?.name, data?.title, "Strike detection"),
+          subtitle: firstPresent(data?.gcMatch?.region, data?.location_name, data?.country, "Potential strike"),
+          brief: compactFacts([
+            data?.frp != null ? `${Number(data.frp).toFixed(0)} MW FRP` : null,
+            firstPresent(data?.satellite, data?.instrument),
+            data?.clusterSize ? `${data.clusterSize + 1} detections nearby` : null,
+          ]).join(" • "),
           facts: [
             firstPresent(data?.classification, data?.event_type, data?.satellite),
-            firstPresent(data?.status, data?.confidence_label),
+            firstPresent(confidenceLabel, data?.status, data?.confidence_label),
           ],
           chips: [
-            chip(firstPresent(data?.severity, data?.classification, "Strike"), data?.severity === "critical" ? "critical" : "warning"),
+            chip(isVerified ? "Verified" : "Strike", isVerified ? "accent" : "warning"),
+            confidenceLabel ? chip(confidenceLabel, "neutral") : null,
           ],
-          accent: "#ff7043",
+          accent: isVerified ? "#4caf50" : "#e040fb",
+          casePath: casePayload && this._caseIntakePathForPayload ? this._caseIntakePathForPayload(casePayload) : null,
         })
+        result._strikeData = data
+        return result
+      }
+      case "geoconfirmed": {
+        const srcCount = Array.isArray(data?.sourceUrls) ? data.sourceUrls.length : 0
+        const result = makePayload({
+          title: firstPresent(data?.description, data?.title, "GeoConfirmed event"),
+          subtitle: firstPresent(data?.region, "Verified geolocation"),
+          facts: [
+            srcCount ? `${srcCount} source${srcCount !== 1 ? "s" : ""}` : null,
+            firstPresent(data?.region),
+          ],
+          chips: [
+            chip("Verified", "success"),
+            chip("GeoConfirmed", "neutral"),
+          ],
+          accent: "#ff9800",
+        })
+        result._gcData = data
+        return result
       }
       case "strike_arc": {
         return makePayload({

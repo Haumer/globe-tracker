@@ -58,10 +58,20 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showEarthquakeDetail(data)
         return true
       }},
+      { prefix: "gc-", skip: [], handler: (id) => {
+        const data = this._gcDetections?.find(gc => gc.id === id)
+        if (!data) return false
+        if (this._showCompactEntityDetail) {
+          this._showCompactEntityDetail("geoconfirmed", data, { id })
+        } else {
+          this.showGeoconfirmedDetail(data)
+        }
+        return true
+      }},
       { prefix: "strike-ring-", skip: [], handler: (id) => {
         const data = this._strikeDetections?.find(strike => strike.id === id)
         if (!data) return false
-        this.showStrikeDetail(data)
+        this.showStrikeDetail(data, { id, picked })
         return true
       }},
       { prefix: "milflt-", skip: [], handler: (id) => {
@@ -73,7 +83,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "strike-", skip: [], handler: (id) => {
         const data = this._strikeDetections?.find(strike => strike.id === id)
         if (!data) return false
-        this.showStrikeDetail(data)
+        this.showStrikeDetail(data, { id, picked })
         return true
       }},
       { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {

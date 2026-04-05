@@ -10,6 +10,7 @@ module Api
     # Proximity for FIRMS <-> GeoConfirmed correlation
     GC_MATCH_RADIUS_DEG = 0.3  # ~33km
     GC_MATCH_WINDOW = 48.hours
+    MAX_FIRMS_CANDIDATES = 1500
 
     def index
       # ── FIRMS thermal detections ──────────────────────────────
@@ -18,7 +19,7 @@ module Api
         .where(conflict_hotspot_sql)
         .where("frp > 10 OR brightness > 340 OR daynight = 'N'")
         .order(acq_datetime: :desc)
-        .limit(5000)
+        .limit(MAX_FIRMS_CANDIDATES)
 
       industrial_sites = load_industrial_sites
       firms_strikes = hotspots.reject { |h| near_industrial?(h, industrial_sites) }
@@ -140,6 +141,7 @@ module Api
       @industrial_sites ||= begin
         industrial_fuels = %w[Gas Oil Petcoke Cogeneration]
         plants = PowerPlant.where(primary_fuel: industrial_fuels)
+          .where(conflict_hotspot_sql)
           .where.not(latitude: nil, longitude: nil)
           .pluck(:latitude, :longitude)
 

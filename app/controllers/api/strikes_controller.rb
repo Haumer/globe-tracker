@@ -11,6 +11,8 @@ module Api
     GC_MATCH_RADIUS_DEG = 0.3  # ~33km
     GC_MATCH_WINDOW = 48.hours
     MAX_FIRMS_CANDIDATES = 1500
+    CLUSTER_SPATIAL_BUCKET_DEG = 0.5
+    CLUSTER_TIME_BUCKET_SECONDS = 7200
 
     def index
       # ── FIRMS thermal detections ──────────────────────────────
@@ -31,13 +33,15 @@ module Api
         .to_a
 
       # ── Temporal clustering for FIRMS ─────────────────────────
+      cluster_index = build_cluster_index(firms_strikes)
+
       firms_strikes.each do |h|
-        cluster = firms_strikes.count do |other|
+        cluster = cluster_neighbors_for(cluster_index, h).count do |other|
           next false if other.equal?(h)
-          (h.latitude - other.latitude).abs < 0.5 &&
-            (h.longitude - other.longitude).abs < 0.5 &&
+          (h.latitude - other.latitude).abs < CLUSTER_SPATIAL_BUCKET_DEG &&
+            (h.longitude - other.longitude).abs < CLUSTER_SPATIAL_BUCKET_DEG &&
             h.acq_datetime && other.acq_datetime &&
-            (h.acq_datetime - other.acq_datetime).abs < 7200
+            (h.acq_datetime - other.acq_datetime).abs < CLUSTER_TIME_BUCKET_SECONDS
         end
         h.define_singleton_method(:cluster_size) { cluster }
       end
@@ -187,6 +191,36 @@ module Api
         .where(category: %w[conflict terror])
         .where.not(latitude: nil)
         .pluck(:latitude, :longitude)
+    end
+
+    def build_cluster_index(hotspots)
+      hotspots.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |hotspot, index|
+        next if hotspot.acq_datetime.nil?
+
+        index[cluster_bucket_for(hotspot)] << hotspot
+      end
+    end
+
+    def cluster_neighbors_for(index, hotspot)
+      return [] if hotspot.acq_datetime.nil?
+
+      lat_bucket, lng_bucket, time_bucket = cluster_bucket_for(hotspot)
+
+      (lat_bucket - 1..lat_bucket + 1).flat_map do |lat|
+        (lng_bucket - 1..lng_bucket + 1).flat_map do |lng|
+          (time_bucket - 1..time_bucket + 1).flat_map do |time|
+            index[[lat, lng, time]]
+          end
+        end
+      end
+    end
+
+    def cluster_bucket_for(hotspot)
+      [
+        (hotspot.latitude / CLUSTER_SPATIAL_BUCKET_DEG).floor,
+        (hotspot.longitude / CLUSTER_SPATIAL_BUCKET_DEG).floor,
+        hotspot.acq_datetime.to_i / CLUSTER_TIME_BUCKET_SECONDS,
+      ]
     end
 
     def high_confidence_hotspot_sql

@@ -24,7 +24,7 @@ module ApplicationHelper
     { key: "airbases", label: "Airbases", icon: "fa-solid fa-tower-observation", color: "#ff7043", target: "qlAirbases" },
     { key: "militaryBases", label: "Military Bases", icon: "fa-solid fa-shield-halved", color: "#ff5252", target: "qlMilitaryBases" },
     { key: "navalVessels", label: "Naval Vessels", icon: "fa-solid fa-ship", color: "#42a5f5", target: "qlNavalVessels" },
-    { key: "strikes", label: "Strikes", icon: "fa-solid fa-crosshairs", color: "#e040fb", target: "qlStrikes" },
+    { key: "strikes", label: "Strike Signals", icon: "fa-solid fa-crosshairs", color: "#e040fb", target: "qlStrikes" },
     { key: "cables", label: "Submarine Cables", icon: "fa-solid fa-network-wired", color: "#00bcd4", target: "qlCables" },
     { key: "pipelines", label: "Pipelines", icon: "fa-solid fa-oil-well", color: "#ff6d00", target: "qlPipelines" },
     { key: "railways", label: "Railways", icon: "fa-solid fa-train", color: "#90a4ae", target: "qlRailways" },

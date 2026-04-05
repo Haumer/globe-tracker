@@ -37,6 +37,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelinePausedIntervals = {
       flight: !!this.flightInterval,
       ship: !!this.shipInterval,
+      strikes: !!this._strikesInterval,
       gpsJamming: !!this._gpsJammingInterval,
       news: !!this._newsInterval,
       events: !!this._eventsInterval,
@@ -93,6 +94,12 @@ export function applyTimelineControlMethods(GlobeController) {
     if (this.outagesVisible) {
       this.fetchOutages()
       this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
+    }
+    if (this.strikesVisible) {
+      this.fetchStrikes()
+      this._strikesInterval = setInterval(() => {
+        if (this.strikesVisible) this.fetchStrikes()
+      }, 300000)
     }
     if (this.situationsVisible && this._fetchConflictPulse) {
       this._fetchConflictPulse()
@@ -305,6 +312,7 @@ function autoEnablePlaybackLayers() {
 function clearLiveIntervals() {
   if (this.flightInterval) { clearInterval(this.flightInterval); this.flightInterval = null }
   if (this.shipInterval) { clearInterval(this.shipInterval); this.shipInterval = null }
+  if (this._strikesInterval) { clearInterval(this._strikesInterval); this._strikesInterval = null }
   if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
   if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
   if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
@@ -322,6 +330,7 @@ function restoreHiddenSources() {
   if (this.gpsJammingVisible) activeDs.add("gpsJamming")
   if (this.newsVisible) activeDs.add("news")
   if (this.outagesVisible) activeDs.add("outages")
+  if (this.strikesVisible) activeDs.add("strikes")
   if (this.trailsVisible) activeDs.add("trails")
 
   for (const name of this._timelineHiddenSources) {
@@ -352,7 +361,7 @@ function stepTimeline(direction) {
 function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, opening) {
   const frameCount = frameStatus?.frameCount || 0
   const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
-    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible
+    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible || this.strikesVisible
 
   if (frameStatus?.boundsRequired) {
     this._toast("Zoom in or apply a region filter to load movement playback.")

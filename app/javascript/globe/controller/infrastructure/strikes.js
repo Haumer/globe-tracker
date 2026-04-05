@@ -77,6 +77,24 @@ function createGeoconfirmedIcon() {
   return canvas.toDataURL()
 }
 
+function strikeDetectionKind(strike) {
+  if (strike?.detectionKind) return strike.detectionKind
+  if (strike?.strikeConfidence === "verified" || strike?.gcMatch) return "verified_strike"
+  return "heat_signature"
+}
+
+function isVerifiedStrike(strike) {
+  return strikeDetectionKind(strike) === "verified_strike"
+}
+
+function normalizedStrikeConfidence(strike) {
+  if (strike?.strikeConfidence === "verified") return "verified"
+  if (strike?.strikeConfidence === "high") return "high"
+  if (strike?.strikeConfidence === "medium") return "medium"
+  if (strike?.strikeConfidence === "low") return "low"
+  return isVerifiedStrike(strike) ? "verified" : "low"
+}
+
 const SAT_NORAD = {
   "Suomi NPP": 37849, "NOAA-20": 43013, "NOAA-21": 54234,
   "Terra": 25994, "Aqua": 27424,
@@ -90,22 +108,27 @@ export function applyStrikesMethods(GlobeController) {
   GlobeController.prototype.toggleStrikes = function() {
     this.strikesVisible = this.hasStrikesToggleTarget && this.strikesToggleTarget.checked
     if (this.strikesVisible) {
-      this.fetchStrikes()
-      if (!this._strikesInterval) {
-        this._strikesInterval = setInterval(() => {
-          if (this.strikesVisible) this.fetchStrikes()
-        }, 300000)
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchStrikes()
+        if (!this._strikesInterval) {
+          this._strikesInterval = setInterval(() => {
+            if (this.strikesVisible) this.fetchStrikes()
+          }, 300000)
+        }
       }
     } else {
       this._clearStrikeEntities()
       if (this._strikesInterval) { clearInterval(this._strikesInterval); this._strikesInterval = null }
+      if (this._timelineActive) this._timelineOnLayerToggle?.()
     }
     this._syncQuickBar()
     this._savePrefs()
   }
 
   GlobeController.prototype.fetchStrikes = async function() {
-    this._toast("Loading strike detections...")
+    this._toast("Loading strike signals...")
     try {
       const resp = await fetch("/api/strikes")
       if (!resp.ok) return
@@ -119,6 +142,7 @@ export function applyStrikesMethods(GlobeController) {
           confidence: r[4], satellite: r[5], instrument: r[6],
           frp: r[7], daynight: r[8], time: r[9],
           strikeConfidence: r[10] || "low", clusterSize: r[11] || 0,
+          detectionKind: r[12] ? "verified_strike" : "heat_signature",
         }))
         this._gcDetections = []
       } else {
@@ -128,11 +152,13 @@ export function applyStrikesMethods(GlobeController) {
           frp: r[7], daynight: r[8], time: r[9],
           strikeConfidence: r[10] || "low", clusterSize: r[11] || 0,
           gcMatch: r[12] || null,
+          detectionKind: r[13] || (r[12] ? "verified_strike" : "heat_signature"),
         }))
         this._gcDetections = (data.geoconfirmed || []).map(r => ({
           id: r[0], lat: r[1], lng: r[2], title: r[3],
           region: r[4], time: r[5], sourceUrls: r[6] || [],
           description: r[7], geoUrls: r[8] || [],
+          detectionKind: "verified_strike",
         }))
       }
 
@@ -163,12 +189,13 @@ export function applyStrikesMethods(GlobeController) {
         if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(s.lat, s.lng)) return
 
         const frp = s.frp || 1
-        const isVerified = s.strikeConfidence === "verified"
+        const isVerified = isVerifiedStrike(s)
+        const confidence = normalizedStrikeConfidence(s)
         const color = isVerified ? verifiedColor : firmsColor
-        const confScale = isVerified ? 1.4 : s.strikeConfidence === "high" ? 1.3 : s.strikeConfidence === "medium" ? 1.0 : 0.7
+        const confScale = isVerified ? 1.4 : confidence === "high" ? 1.3 : confidence === "medium" ? 1.0 : 0.7
 
         // Glow ring
-        if (frp > 10 && s.strikeConfidence !== "low") {
+        if (frp > 10 && confidence !== "low") {
           const ring = dataSource.entities.add({
             id: `strike-ring-${s.id}`,
             position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 0),
@@ -188,7 +215,7 @@ export function applyStrikesMethods(GlobeController) {
         }
 
         if (!this._strikeIcons) this._strikeIcons = {}
-        const iconKey = s.strikeConfidence
+        const iconKey = isVerified ? "verified" : confidence
         if (!this._strikeIcons[iconKey]) this._strikeIcons[iconKey] = createStrikeIcon(iconKey)
 
         const entity = dataSource.entities.add({
@@ -311,16 +338,18 @@ export function applyStrikesMethods(GlobeController) {
       </div>
     ` : ""
 
-    const isVerified = s.strikeConfidence === "verified"
+    const isVerified = isVerifiedStrike(s)
+    const confidence = s.strikeConfidence
     const confColor = isVerified ? "#4caf50" : "#e040fb"
-    const confLabel = isVerified ? "VERIFIED — GeoConfirmed + satellite thermal detection" :
-      s.strikeConfidence === "high" ? "HIGH CONFIDENCE — clustered detections + news corroboration" :
-      s.strikeConfidence === "medium" ? ("MEDIUM CONFIDENCE — " + (s.clusterSize >= 2 ? "clustered detections" : "news reports nearby")) :
-      "LOW CONFIDENCE — isolated thermal anomaly"
+    const confLabel = isVerified ? "VERIFIED STRIKE — GeoConfirmed report + satellite heat signature" :
+      confidence === "high" ? "HIGH CONFIDENCE HEAT SIGNATURE — clustered thermal detections + nearby conflict reporting" :
+      confidence === "medium" ? ("MEDIUM CONFIDENCE HEAT SIGNATURE — " + (s.clusterSize >= 2 ? "clustered thermal detections" : "nearby conflict reporting")) :
+      confidence === "low" ? "LOW CONFIDENCE HEAT SIGNATURE — isolated thermal anomaly" :
+      "THERMAL SIGNATURE — NASA FIRMS satellite heat detection"
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${confColor};">
-        <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>${isVerified ? "Verified Strike" : "Possible Strike"}
+        <i class="fa-solid fa-crosshairs" style="margin-right:6px;"></i>${isVerified ? "Verified Strike" : "Heat Signature"}
       </div>
       <div style="margin:4px 0 8px;padding:4px 8px;background:rgba(${isVerified ? "76,175,80" : "224,64,251"},0.1);border:1px solid rgba(${isVerified ? "76,175,80" : "224,64,251"},0.3);border-radius:4px;font:500 9px var(--gt-mono);color:${confColor};letter-spacing:0.5px;">
         ${confLabel}
@@ -356,7 +385,7 @@ export function applyStrikesMethods(GlobeController) {
       ${infraHtml}
       ${satLink}
       ${newsHtml}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: NASA FIRMS (${this._escapeHtml(s.instrument || "VIIRS")} on ${this._escapeHtml(s.satellite || "Unknown")})${isVerified ? " + GeoConfirmed" : ""}</div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: NASA FIRMS heat detection (${this._escapeHtml(s.instrument || "VIIRS")} on ${this._escapeHtml(s.satellite || "Unknown")})${isVerified ? " + GeoConfirmed" : ""}</div>
       ${this._connectionsPlaceholder()}
     `
     this.detailPanelTarget.style.display = ""
@@ -455,7 +484,7 @@ export function applyStrikesMethods(GlobeController) {
 
     const firmsHtml = nearbyFirms.length > 0 ? `
       <div style="margin-top:10px;padding:6px 8px;background:rgba(224,64,251,0.06);border:1px solid rgba(224,64,251,0.15);border-radius:4px;">
-        <div style="font:600 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;margin-bottom:4px;">SATELLITE THERMAL DETECTIONS NEARBY</div>
+        <div style="font:600 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;margin-bottom:4px;">SATELLITE HEAT SIGNATURES NEARBY</div>
         ${nearbyFirms.map(s => {
           const sTime = s.time ? this._timeAgo(new Date(s.time)) : ""
           return `<div style="font:400 10px var(--gt-mono);color:rgba(200,210,225,0.6);margin:2px 0;">
@@ -486,7 +515,7 @@ export function applyStrikesMethods(GlobeController) {
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:#ff9800;">
-        <i class="fa-solid fa-location-dot" style="margin-right:6px;"></i>GeoConfirmed Event
+        <i class="fa-solid fa-location-dot" style="margin-right:6px;"></i>GeoConfirmed Report
       </div>
       <div style="margin:4px 0 6px;padding:4px 8px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);border-radius:4px;font:500 9px var(--gt-mono);color:#ff9800;letter-spacing:0.5px;">
         VERIFIED GEOLOCATION · ${sourceCount} source${sourceCount !== 1 ? "s" : ""} · ${this._escapeHtml(gc.region || "")}

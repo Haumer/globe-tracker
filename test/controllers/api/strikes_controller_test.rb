@@ -35,10 +35,13 @@ class Api::StrikesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     body = JSON.parse(response.body)
-    firms_ids = body.fetch("firms").map { |entry| entry[0] }
+    firms = body.fetch("firms")
+    firms_ids = firms.map { |entry| entry[0] }
+    numeric_confidence_entry = firms.find { |entry| entry[0] == "fire-numeric-confidence" }
 
     assert_includes firms_ids, "fire-numeric-confidence"
     assert_not_includes firms_ids, "fire-low-text-confidence"
+    assert_equal "heat_signature", numeric_confidence_entry[13]
     assert_equal [], body.fetch("geoconfirmed")
   end
 end

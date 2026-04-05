@@ -1,12 +1,6 @@
 <%= render "devise/shared/auth_shell",
-           eyebrow: "Secure Access",
-           title: "Resume your watchfloor",
-           subtitle: "Sign in to return to saved alerts, active watches, and case work without losing globe context.",
-           signal: {
-             label: "Session posture",
-             value: "AUTH",
-             detail: "A signed-in session unlocks case creation, pinned evidence, and analyst-specific alerts."
-           } do %>
+           eyebrow: "Sign in",
+           title: "Welcome back" do %>
   <%= simple_form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "auth-form" }) do |f| %>
     <%= render "devise/shared/error_messages", resource: resource %>
 
@@ -14,15 +8,23 @@
       <%= f.input :email,
                   required: false,
                   autofocus: true,
-                  input_html: { autocomplete: "email" } %>
+                  label: "Email",
+                  input_html: { autocomplete: "email", placeholder: "you@example.com" } %>
       <%= f.input :password,
                   required: false,
+                  label: "Password",
                   input_html: { autocomplete: "current-password" } %>
-      <%= f.input :remember_me, as: :boolean if devise_mapping.rememberable? %>
     </div>
 
+    <% if devise_mapping.rememberable? %>
+      <label class="auth-remember">
+        <%= f.input_field :remember_me, as: :boolean %>
+        <span>Remember me</span>
+      </label>
+    <% end %>
+
     <div class="auth-form-actions">
-      <%= f.button :submit, "Log in", class: "auth-submit" %>
+      <%= f.button :submit, "Sign in", class: "auth-submit" %>
     </div>
   <% end %>
 

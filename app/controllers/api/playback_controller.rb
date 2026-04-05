@@ -2,6 +2,8 @@ module Api
   class PlaybackController < ApplicationController
     skip_before_action :authenticate_user!
 
+    STRIKE_TIMELINE_WINDOW = 7.days
+
     # GET /api/playback?from=ISO8601&to=ISO8601&type=flight|ship|all&lamin=&lamax=&lomin=&lomax=
     def index
       from = parse_time(params[:from]) || 1.hour.ago
@@ -94,11 +96,17 @@ module Api
           Earthquake.minimum(:event_time),    Earthquake.maximum(:event_time),
           NaturalEvent.minimum(:event_date),  NaturalEvent.maximum(:event_date),
           NewsEvent.minimum(:published_at),   NewsEvent.maximum(:published_at),
+          FireHotspot.minimum(:acq_datetime), FireHotspot.maximum(:acq_datetime),
           GpsJammingSnapshot.minimum(:recorded_at), GpsJammingSnapshot.maximum(:recorded_at),
           InternetOutage.minimum(:started_at),      InternetOutage.maximum(:started_at),
           WeatherAlert.minimum(:onset),       WeatherAlert.maximum(:onset),
           Notam.minimum(:effective_start),    Notam.maximum(:effective_start),
         ].compact.each { |t| time_points << t }
+
+        geoconfirmed_oldest = [GeoconfirmedEvent.minimum(:posted_at), GeoconfirmedEvent.minimum(:event_time)].compact.min
+        geoconfirmed_newest = [GeoconfirmedEvent.maximum(:posted_at), GeoconfirmedEvent.maximum(:event_time)].compact.max
+        time_points << geoconfirmed_oldest if geoconfirmed_oldest
+        time_points << geoconfirmed_newest if geoconfirmed_newest
 
         global_oldest = time_points.min
         global_newest = time_points.max
@@ -118,6 +126,8 @@ module Api
             earthquakes: Earthquake.count,
             natural_events: NaturalEvent.count,
             news: NewsEvent.count,
+            heat_signatures: FireHotspot.count,
+            geoconfirmed: GeoconfirmedEvent.count,
             gps_jamming: GpsJammingSnapshot.count,
             outages: InternetOutage.count,
             weather_alerts: WeatherAlert.count,
@@ -133,10 +143,9 @@ module Api
     def events
       from = parse_time(params[:from]) || 1.hour.ago
       to = parse_time(params[:to]) || Time.current
-      max_range = current_user ? 7.days : 24.hours
-      from = [from, to - max_range].max
-
       types = params[:types]&.split(",")&.map(&:strip)
+      max_range = max_event_range_for(types)
+      from = [from, to - max_range].max
 
       scope = TimelineEvent.in_range(from, to)
       scope = scope.of_type(types) if types.present?
@@ -144,7 +153,8 @@ module Api
       bounds = parse_bounds
       scope = scope.within_bounds(bounds) if bounds.size == 4
 
-      timeline_events = scope.order(:recorded_at).limit(2000).includes(:eventable)
+      limit = types.present? && (types & %w[fire geoconfirmed]).any? ? 5000 : 2000
+      timeline_events = scope.order(:recorded_at).limit(limit).includes(:eventable)
 
       render json: timeline_events.filter_map { |te| timeline_event_json(te) }
     end
@@ -186,6 +196,29 @@ module Api
       }
 
       case te.event_type
+      when "fire"
+        fire = te.eventable
+        base.merge(
+          external_id: fire.external_id,
+          brightness: fire.brightness,
+          confidence: fire.confidence,
+          satellite: fire.satellite,
+          instrument: fire.instrument,
+          frp: fire.frp,
+          daynight: fire.daynight,
+          detectionKind: "heat_signature",
+        )
+      when "geoconfirmed"
+        gc = te.eventable
+        base.merge(
+          external_id: gc.external_id,
+          title: gc.title,
+          region: gc.map_region,
+          description: clean_geoconfirmed_description(gc.description),
+          sourceUrls: gc.source_urls || [],
+          geoUrls: gc.geolocation_urls || [],
+          detectionKind: "verified_strike",
+        )
       when "earthquake"
         eq = te.eventable
         base.merge(title: eq.title, mag: eq.magnitude, depth: eq.depth, url: eq.url, magType: eq.magnitude_type)
@@ -223,6 +256,28 @@ module Api
       Time.parse(str)
     rescue ArgumentError
       nil
+    end
+
+    def max_event_range_for(types)
+      requested_types = Array(types)
+      return STRIKE_TIMELINE_WINDOW if (requested_types & %w[fire geoconfirmed]).any?
+
+      current_user ? 7.days : 24.hours
+    end
+
+    def clean_geoconfirmed_description(desc)
+      return nil if desc.blank?
+
+      desc.gsub(/<[^>]+>/, "\n")
+          .split(/\n+/)
+          .map(&:strip)
+          .reject(&:blank?)
+          .reject { |line| line.start_with?("http") }
+          .reject { |line| line.match?(/\A(Source|Geolocation|More images|gear ID)/i) }
+          .first(3)
+          .join(" ")
+          .truncate(300)
+          .presence
     end
 
     def snapshot_json(s)

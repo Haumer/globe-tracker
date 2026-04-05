@@ -101,6 +101,8 @@ class GeoconfirmedRefreshService
         GeoconfirmedEvent.upsert_all(batch, unique_by: :external_id)
         total += batch.size
       end
+
+      record_timeline_events(records.map { |record| record[:external_id] })
       total
     end
 
@@ -262,6 +264,35 @@ class GeoconfirmedRefreshService
       Time.at(timestamp_ms / 1000.0).utc
     rescue
       nil
+    end
+
+    def record_timeline_events(external_ids)
+      return if external_ids.blank?
+
+      now = Time.current
+      inserted = GeoconfirmedEvent.where(external_id: external_ids)
+                                  .where.not(latitude: nil, longitude: nil)
+                                  .select(:id, :latitude, :longitude, :posted_at, :event_time, :fetched_at)
+
+      rows = inserted.filter_map do |record|
+        recorded_at = record.posted_at || record.event_time || record.fetched_at || now
+        next unless recorded_at
+
+        {
+          event_type: "geoconfirmed",
+          eventable_type: "GeoconfirmedEvent",
+          eventable_id: record.id,
+          latitude: record.latitude,
+          longitude: record.longitude,
+          recorded_at: recorded_at,
+          created_at: now,
+          updated_at: now,
+        }
+      end
+
+      TimelineEvent.upsert_all(rows, unique_by: [:eventable_type, :eventable_id]) if rows.any?
+    rescue => e
+      Rails.logger.error("GeoconfirmedRefreshService timeline recording error: #{e.message}")
     end
   end
 end

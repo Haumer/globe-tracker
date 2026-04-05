@@ -6,6 +6,8 @@ class FirmsRefreshService
   include TimelineRecorder
   include RefreshableDataService
 
+  RETENTION_WINDOW = 7.days
+
   SOURCES = {
     "VIIRS_SNPP_NRT" => "Suomi NPP",
     "VIIRS_NOAA20_NRT" => "NOAA-20",
@@ -43,7 +45,10 @@ class FirmsRefreshService
   end
 
   def after_upsert(records)
-    FireHotspot.where("acq_datetime < ?", 72.hours.ago).delete_all
+    stale_scope = FireHotspot.where("acq_datetime < ?", RETENTION_WINDOW.ago)
+    stale_ids = stale_scope.pluck(:id)
+    TimelineEvent.where(eventable_type: "FireHotspot", eventable_id: stale_ids).delete_all if stale_ids.any?
+    stale_scope.delete_all
   end
 
   def timeline_config

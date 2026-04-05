@@ -114,7 +114,7 @@ class NearbySupportingSignalsService
     {
       key: "strikes",
       title: "Strike Signals",
-      note: "Strike detections trail live reporting and work best as short-window corroboration around the current focus.",
+      note: "Heat signatures trail live reporting and work best as short-window corroboration around the current focus.",
       aggregate: {
         thermal_count: thermal_count,
         verified_count: verified_count,

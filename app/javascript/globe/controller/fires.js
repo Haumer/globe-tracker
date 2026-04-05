@@ -430,13 +430,13 @@ export function applyFiresMethods(GlobeController) {
     const isStrike = f.strike
     const titleColor = isStrike ? "#e040fb" : "#ff5722"
     const titleIcon = isStrike ? "fa-crosshairs" : "fa-fire"
-    const titleText = isStrike ? "Possible Strike" : "Active Fire / Hotspot"
+    const titleText = isStrike ? "Heat Signature" : "Active Fire / Hotspot"
 
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:${titleColor};">
         <i class="fa-solid ${titleIcon}" style="margin-right:6px;"></i>${titleText}
       </div>
-      ${isStrike ? `<div style="margin:4px 0 8px;padding:4px 8px;background:rgba(224,64,251,0.1);border:1px solid rgba(224,64,251,0.3);border-radius:4px;font:500 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;">THERMAL ANOMALY IN ACTIVE CONFLICT ZONE</div>` : ""}
+      ${isStrike ? `<div style="margin:4px 0 8px;padding:4px 8px;background:rgba(224,64,251,0.1);border:1px solid rgba(224,64,251,0.3);border-radius:4px;font:500 9px var(--gt-mono);color:#e040fb;letter-spacing:0.5px;">THERMAL SIGNAL IN ACTIVE CONFLICT ZONE</div>` : ""}
       <div class="detail-country">${f.lat.toFixed(3)}°, ${f.lng.toFixed(3)}°</div>
       <div class="detail-grid">
         <div class="detail-field">

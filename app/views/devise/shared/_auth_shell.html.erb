@@ -1,55 +1,11 @@
-<% hero_eyebrow = local_assigns[:hero_eyebrow].presence || "GlobeTracker Access Layer" %>
-<% hero_title = local_assigns[:hero_title].presence || "Secure entry into the live intelligence workspace." %>
-<% hero_copy = local_assigns[:hero_copy].presence || "Authenticated sessions unlock saved watches, object views, durable cases, and analyst-specific workflow on the globe." %>
-<% highlights = Array(local_assigns[:highlights].presence || [
-  "Track conflict theaters, flights, infrastructure, and news in one surface.",
-  "Move from live context into durable object views without losing geographic focus.",
-  "Pin evidence into cases and keep notes, severity, and assignee state together."
-]) %>
-<% signal = local_assigns[:signal].presence || {
-  label: "Workspace",
-  value: "LIVE",
-  detail: "Case workflow, alerts, and object context all sit behind the same authenticated session."
-} %>
-
 <div class="auth-shell">
-  <section class="auth-hero">
-    <div class="auth-hero-grid" aria-hidden="true"></div>
-    <p class="auth-hero-eyebrow"><%= hero_eyebrow %></p>
-    <h1 class="auth-hero-title"><%= hero_title %></h1>
-    <p class="auth-hero-copy"><%= hero_copy %></p>
-
-    <div class="auth-signal-card">
-      <p class="auth-signal-label"><%= signal[:label] %></p>
-      <div class="auth-signal-row">
-        <strong class="auth-signal-value"><%= signal[:value] %></strong>
-        <span class="auth-signal-pulse"></span>
-      </div>
-      <p class="auth-signal-detail"><%= signal[:detail] %></p>
-    </div>
-
-    <div class="auth-highlight-list">
-      <% highlights.each_with_index do |item, index| %>
-        <article class="auth-highlight">
-          <span class="auth-highlight-index"><%= format("%02d", index + 1) %></span>
-          <p><%= item %></p>
-        </article>
-      <% end %>
-    </div>
-
-    <div class="auth-status-bar">
-      <span>Cases</span>
-      <span>Object Views</span>
-      <span>Alerts</span>
-      <span>Live Globe</span>
-    </div>
-  </section>
-
   <section class="auth-panel">
     <div class="auth-panel-inner">
       <p class="auth-panel-eyebrow"><%= eyebrow %></p>
       <h2 class="auth-panel-title"><%= title %></h2>
-      <p class="auth-panel-copy"><%= subtitle %></p>
+      <% if local_assigns[:subtitle].present? %>
+        <p class="auth-panel-copy"><%= subtitle %></p>
+      <% end %>
       <%= yield %>
     </div>
   </section>

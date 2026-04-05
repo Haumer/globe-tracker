@@ -1,12 +1,6 @@
 <%= render "devise/shared/auth_shell",
-           eyebrow: "New Operator",
-           title: "Create an analyst account",
-           subtitle: "Open a GlobeTracker workspace for cases, object views, live alerts, and saved watchlists.",
-           signal: {
-             label: "Provisioning",
-             value: "NEW",
-             detail: "New accounts drop into the same live workspace used for investigation and monitoring."
-           } do %>
+           eyebrow: "Create account",
+           title: "Get started" do %>
   <%= simple_form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "auth-form" }) do |f| %>
     <%= render "devise/shared/error_messages", resource: resource %>
 
@@ -14,13 +8,16 @@
       <%= f.input :email,
                   required: true,
                   autofocus: true,
-                  input_html: { autocomplete: "email" } %>
+                  label: "Email",
+                  input_html: { autocomplete: "email", placeholder: "you@example.com" } %>
       <%= f.input :password,
                   required: true,
+                  label: "Password",
                   hint: ("#{@minimum_password_length} characters minimum" if @minimum_password_length),
                   input_html: { autocomplete: "new-password" } %>
       <%= f.input :password_confirmation,
                   required: true,
+                  label: "Confirm password",
                   input_html: { autocomplete: "new-password" } %>
     </div>
 

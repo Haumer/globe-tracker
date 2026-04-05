@@ -108,6 +108,7 @@ module Api
           confidence_label,    # 10
           h.cluster_size,      # 11
           gc_info,             # 12: geoconfirmed match (or nil)
+          gc_corroborated ? "verified_strike" : "heat_signature", # 13
         ]
       end
 

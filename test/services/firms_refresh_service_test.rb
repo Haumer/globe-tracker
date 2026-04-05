@@ -46,4 +46,35 @@ class FirmsRefreshServiceTest < ActiveSupport::TestCase
     assert FirmsRefreshService::SOURCES.key?("VIIRS_SNPP_NRT")
     assert FirmsRefreshService::SOURCES.key?("MODIS_NRT")
   end
+
+  test "after_upsert keeps seven days of hotspots and clears stale timeline rows" do
+    stale = FireHotspot.create!(
+      external_id: "stale-fire",
+      latitude: 35.7,
+      longitude: 51.4,
+      acq_datetime: 8.days.ago,
+      fetched_at: Time.current
+    )
+    stale_timeline = TimelineEvent.create!(
+      event_type: "fire",
+      eventable: stale,
+      latitude: stale.latitude,
+      longitude: stale.longitude,
+      recorded_at: stale.acq_datetime
+    )
+
+    recent = FireHotspot.create!(
+      external_id: "recent-fire",
+      latitude: 35.8,
+      longitude: 51.5,
+      acq_datetime: 6.days.ago,
+      fetched_at: Time.current
+    )
+
+    @service.send(:after_upsert, [])
+
+    assert_not FireHotspot.exists?(stale.id)
+    assert_not TimelineEvent.exists?(stale_timeline.id)
+    assert FireHotspot.exists?(recent.id)
+  end
 end

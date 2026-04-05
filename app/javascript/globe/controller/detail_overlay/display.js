@@ -433,11 +433,11 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
         return `<a href="${this._safeUrl(url)}" target="_blank" rel="noopener" class="anchor-gc-link"><i class="${icon}"></i><span>${this._escapeHtml(label)}</span></a>`
       }
 
-      const confidenceText = strike.strikeConfidence === "verified"
-        ? "GeoConfirmed corroboration matches this thermal detection."
+      const confidenceText = strike.strikeConfidence === "verified" || strike.detectionKind === "verified_strike"
+        ? "GeoConfirmed corroboration matches this heat signature."
         : strike.clusterSize > 0
-          ? `${strike.clusterSize + 1} nearby detections support this strike signal.`
-          : "Single thermal signal pending stronger corroboration."
+          ? `${strike.clusterSize + 1} nearby detections support this heat signature.`
+          : "Single heat signature pending stronger corroboration."
       const corroborationHtml = gcMatch || confidenceText
         ? `<div class="anchor-strike-note">
             ${gcMatch?.title ? `<div class="anchor-strike-note-title">${this._escapeHtml(gcMatch.title)}</div>` : ""}

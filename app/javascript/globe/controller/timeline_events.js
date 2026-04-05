@@ -1,38 +1,51 @@
 import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
+const GENERAL_TIMELINE_WINDOW_MS = 3600000
+const STRIKE_TIMELINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineUpdateEvents = async function() {
     if (!this._timelineActive) return
 
     const cursor = this._timelineCursor
-    const windowMs = 3600000
-    const from = new Date(cursor.getTime() - windowMs).toISOString()
-    const to = new Date(cursor.getTime() + windowMs).toISOString()
-    const types = []
-    if (this.earthquakesVisible) types.push("earthquake")
-    if (this.naturalEventsVisible) types.push("natural_event")
-    if (this.newsVisible) types.push("news")
-    if (this.gpsJammingVisible) types.push("gps_jamming")
-    if (this.outagesVisible) types.push("internet_outage")
-    if (types.length === 0) {
+    const generalTypes = []
+    if (this.earthquakesVisible) generalTypes.push("earthquake")
+    if (this.naturalEventsVisible) generalTypes.push("natural_event")
+    if (this.newsVisible) generalTypes.push("news")
+    if (this.gpsJammingVisible) generalTypes.push("gps_jamming")
+    if (this.outagesVisible) generalTypes.push("internet_outage")
+
+    const strikeTypes = this.strikesVisible ? ["fire", "geoconfirmed"] : []
+
+    if (generalTypes.length === 0 && strikeTypes.length === 0) {
       this._timelineEventCount = 0
       getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
+      this._strikeDetections = []
+      this._gcDetections = []
+      this._clearStrikeEntities?.()
       return 0
     }
 
-    let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
     const bounds = this.hasActiveFilter() ? this.getFilterBounds() : (getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds)
-    if (bounds) {
-      url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
-    }
 
     try {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`Timeline events request failed with ${response.status}`)
-      const events = await response.json()
-      this._timelineEventCount = Array.isArray(events) ? events.length : 0
-      this._renderUnifiedTimelineEvents(events)
+      const generalPromise = fetchTimelineEventSet({
+        from: new Date(cursor.getTime() - GENERAL_TIMELINE_WINDOW_MS).toISOString(),
+        to: new Date(cursor.getTime() + GENERAL_TIMELINE_WINDOW_MS).toISOString(),
+        types: generalTypes,
+        bounds,
+      })
+      const strikePromise = fetchTimelineEventSet({
+        from: new Date(cursor.getTime() - STRIKE_TIMELINE_WINDOW_MS).toISOString(),
+        to: cursor.toISOString(),
+        types: strikeTypes,
+        bounds,
+      })
+
+      const [events, strikeEvents] = await Promise.all([generalPromise, strikePromise])
+      this._timelineEventCount = (Array.isArray(events) ? events.length : 0) + (Array.isArray(strikeEvents) ? strikeEvents.length : 0)
+      this._renderUnifiedTimelineEvents(events, strikeEvents)
       this._updateStats()
       return this._timelineEventCount
     } catch (error) {
@@ -77,7 +90,7 @@ export function applyTimelineEventMethods(GlobeController) {
     }
   }
 
-  GlobeController.prototype._renderUnifiedTimelineEvents = function(events) {
+  GlobeController.prototype._renderUnifiedTimelineEvents = function(events, strikeEvents = []) {
     getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
     const byType = {}
     events.forEach(event => {
@@ -165,6 +178,27 @@ export function applyTimelineEventMethods(GlobeController) {
       this._outageData = outageEvents
       this._renderOutages({ summary: outageEvents, events: outageEvents })
     }
+
+    if (this.strikesVisible) {
+      const cursorMs = this._timelineCursor?.getTime() || Date.now()
+      const oldestStrikeMs = cursorMs - STRIKE_TIMELINE_WINDOW_MS
+
+      this._strikeDetections = strikeEvents
+        .filter(event => event?.type === "fire")
+        .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
+        .map(event => timelineFireToStrikeDetection(event))
+
+      this._gcDetections = strikeEvents
+        .filter(event => event?.type === "geoconfirmed")
+        .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
+        .map(event => timelineGeoconfirmedToDetection(event))
+
+      this.renderStrikes()
+    } else if (this._timelineActive) {
+      this._strikeDetections = []
+      this._gcDetections = []
+      this._clearStrikeEntities?.()
+    }
   }
 }
 
@@ -197,4 +231,57 @@ function gpsJammingCursorDistance(event, cursorMs) {
 function gpsJammingEventTime(event) {
   const eventMs = event?.time ? new Date(event.time).getTime() : Number.NaN
   return Number.isFinite(eventMs) ? eventMs : Number.NEGATIVE_INFINITY
+}
+
+async function fetchTimelineEventSet({ from, to, types, bounds }) {
+  if (!types.length) return []
+
+  let url = `/api/playback/events?from=${from}&to=${to}&types=${types.join(",")}`
+  if (bounds) {
+    url += `&lamin=${bounds.lamin}&lamax=${bounds.lamax}&lomin=${bounds.lomin}&lomax=${bounds.lomax}`
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Timeline events request failed with ${response.status}`)
+  const events = await response.json()
+  return Array.isArray(events) ? events : []
+}
+
+function timelineStrikeWindowContains(event, fromMs, toMs) {
+  const eventMs = event?.time ? new Date(event.time).getTime() : Number.NaN
+  return Number.isFinite(eventMs) && eventMs >= fromMs && eventMs <= toMs
+}
+
+function timelineFireToStrikeDetection(event) {
+  return {
+    id: event.external_id || `timeline-fire-${event.id}`,
+    lat: event.lat,
+    lng: event.lng,
+    brightness: event.brightness,
+    confidence: event.confidence,
+    satellite: event.satellite,
+    instrument: event.instrument,
+    frp: event.frp,
+    daynight: event.daynight,
+    time: event.time,
+    strikeConfidence: null,
+    clusterSize: 0,
+    gcMatch: null,
+    detectionKind: "heat_signature",
+  }
+}
+
+function timelineGeoconfirmedToDetection(event) {
+  return {
+    id: event.external_id || `timeline-gc-${event.id}`,
+    lat: event.lat,
+    lng: event.lng,
+    title: event.title,
+    region: event.region,
+    time: event.time,
+    sourceUrls: event.sourceUrls || [],
+    description: event.description,
+    geoUrls: event.geoUrls || [],
+    detectionKind: "verified_strike",
+  }
 }

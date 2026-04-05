@@ -108,24 +108,25 @@ export function applyContextNodeCasePayloadMethods(GlobeController) {
     const identifier = strike.id || strike.external_id || [strike.lat, strike.lng, strike.time].filter(Boolean).join(":")
     if (!identifier) return null
 
-    const isVerified = strike.strikeConfidence === "verified"
+    const isVerified = strike?.detectionKind === "verified_strike" || strike.strikeConfidence === "verified" || !!strike.gcMatch
     const sourceUrls = Array.isArray(strike?.gcMatch?.source_urls) ? strike.gcMatch.source_urls : []
 
     return {
       object_kind: "strike",
       object_identifier: `${identifier}`,
-      title: isVerified ? (strike.gcMatch?.title || "Verified strike") : "Strike detection",
+      title: isVerified ? (strike.gcMatch?.title || "Verified strike") : "Heat signature",
       summary: [
         strike.gcMatch?.region || strike.location_name,
         strike.satellite,
         strike.time ? this._timeAgo(new Date(strike.time)) : null,
       ].filter(Boolean).join(" · "),
-      object_type: "strike",
+      object_type: isVerified ? "strike" : "heat_signature",
       latitude: Number.isFinite(strike.lat) ? strike.lat : null,
       longitude: Number.isFinite(strike.lng) ? strike.lng : null,
       source_context: {
         severity: isVerified ? "high" : "medium",
         strike_confidence: strike.strikeConfidence,
+        detection_kind: strike.detectionKind || (isVerified ? "verified_strike" : "heat_signature"),
         frp: strike.frp,
         brightness: strike.brightness,
         satellite: strike.satellite,

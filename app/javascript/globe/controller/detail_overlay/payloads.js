@@ -11,6 +11,27 @@ import {
 export function applyDetailOverlayPayloadMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailMarkerStroke = function(kind, data) {
     switch (kind) {
+      case "earthquake": {
+        const mag = toNumber(data?.mag ?? data?.magnitude) || 0
+        if (mag < 3) return "#66bb6a"
+        if (mag < 4) return "#ffa726"
+        if (mag < 5) return "#ff7043"
+        if (mag < 6) return "#ef5350"
+        return "#d50000"
+      }
+      case "natural_event":
+        return this.eonetCategoryIcons?.[data?.categoryId]?.color || "#78909c"
+      case "news":
+        return {
+          conflict: "#f44336",
+          unrest: "#ff9800",
+          disaster: "#ff5722",
+          health: "#e91e63",
+          economy: "#ffc107",
+          diplomacy: "#4caf50",
+          cyber: "#7c4dff",
+          other: "#90a4ae",
+        }[data?.category] || "#90a4ae"
       case "conflict_pulse":
         return conflictPulseStroke(toNumber(data?.pulse_score) || 0)
       case "strategic_situation": {
@@ -22,8 +43,14 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       }
       case "insight":
         return { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }[data?.severity] || "#8bd8ff"
+      case "airport":
+        return data?.military ? "#ef5350" : "#ffd54f"
+      case "fire_hotspot":
+        return data?.strike ? "#e040fb" : (this._isHighConfidenceFire?.(data) ? "#f44336" : "#ff9800")
+      case "fire_cluster":
+        return data?.strikeCount > 0 ? "#e040fb" : "#ff7043"
       default:
-        return null
+        return firstPresent(data?.markerStroke, data?.markerColor, data?.accentColor, data?.color)
     }
   }
 
@@ -401,7 +428,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         })
       }
       case "strike": {
-        const isVerified = data?.strikeConfidence === "verified"
+        const isVerified = data?.detectionKind === "verified_strike" || data?.strikeConfidence === "verified" || !!data?.gcMatch
         const confidenceLabel = isVerified
           ? "Verified"
           : data?.strikeConfidence
@@ -409,8 +436,8 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
             : null
         const casePayload = this._caseSourcePayloadForStrike?.(data)
         const result = makePayload({
-          title: isVerified ? firstPresent(data?.gcMatch?.title, data?.name, data?.title, "Verified strike") : firstPresent(data?.name, data?.title, "Strike detection"),
-          subtitle: firstPresent(data?.gcMatch?.region, data?.location_name, data?.country, "Potential strike"),
+          title: isVerified ? firstPresent(data?.gcMatch?.title, data?.name, data?.title, "Verified strike") : firstPresent(data?.name, data?.title, "Heat signature"),
+          subtitle: firstPresent(data?.gcMatch?.region, data?.location_name, data?.country, isVerified ? "Verified strike" : "Thermal detection"),
           brief: compactFacts([
             data?.frp != null ? `${Number(data.frp).toFixed(0)} MW FRP` : null,
             firstPresent(data?.satellite, data?.instrument),
@@ -421,7 +448,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
             firstPresent(confidenceLabel, data?.status, data?.confidence_label),
           ],
           chips: [
-            chip(isVerified ? "Verified" : "Strike", isVerified ? "accent" : "warning"),
+            chip(isVerified ? "Verified strike" : "Heat signature", isVerified ? "accent" : "warning"),
             confidenceLabel ? chip(confidenceLabel, "neutral") : null,
           ],
           accent: isVerified ? "#4caf50" : "#e040fb",

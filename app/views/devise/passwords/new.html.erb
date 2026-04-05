@@ -1,12 +1,7 @@
 <%= render "devise/shared/auth_shell",
-           eyebrow: "Credential Recovery",
-           title: "Reset access",
-           subtitle: "Send a reset link to the operator email on file and re-enter the workspace without manual intervention.",
-           signal: {
-             label: "Recovery",
-             value: "RESET",
-             detail: "Password resets preserve your analyst account, watchlists, alerts, and case ownership."
-           } do %>
+           eyebrow: "Reset password",
+           title: "Forgot your password?",
+           subtitle: "Enter your email and we'll send a reset link." do %>
   <%= simple_form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "auth-form" }) do |f| %>
     <%= render "devise/shared/error_messages", resource: resource %>
 
@@ -14,11 +9,12 @@
       <%= f.input :email,
                   required: true,
                   autofocus: true,
-                  input_html: { autocomplete: "email" } %>
+                  label: "Email",
+                  input_html: { autocomplete: "email", placeholder: "you@example.com" } %>
     </div>
 
     <div class="auth-form-actions">
-      <%= f.button :submit, "Send reset instructions", class: "auth-submit" %>
+      <%= f.button :submit, "Send reset link", class: "auth-submit" %>
     </div>
   <% end %>
 

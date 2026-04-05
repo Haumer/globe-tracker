@@ -14,7 +14,7 @@ module Api
     def index
       # ── FIRMS thermal detections ──────────────────────────────
       hotspots = FireHotspot.recent
-        .where("confidence IN ('high', 'h', 'nominal', 'n') OR CAST(confidence AS INTEGER) >= 50")
+        .where(high_confidence_hotspot_sql)
         .where("frp > 10 OR brightness > 340 OR daynight = 'N'")
         .order(acq_datetime: :desc)
 
@@ -187,6 +187,20 @@ module Api
         .where(category: %w[conflict terror])
         .where.not(latitude: nil)
         .pluck(:latitude, :longitude)
+    end
+
+    def high_confidence_hotspot_sql
+      numeric_confidence_guard = case ActiveRecord::Base.connection.adapter_name.downcase
+      when /postgres/
+        "confidence ~ '^[0-9]+$'"
+      else
+        "confidence <> '' AND confidence NOT GLOB '*[^0-9]*'"
+      end
+
+      <<~SQL.squish
+        confidence IN ('high', 'h', 'nominal', 'n')
+        OR (#{numeric_confidence_guard} AND CAST(confidence AS INTEGER) >= 50)
+      SQL
     end
   end
 end

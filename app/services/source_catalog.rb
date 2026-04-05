@@ -40,6 +40,7 @@ class SourceCatalog
         { icon: "fa-solid fa-cubes",            title: "USGS Minerals",         status: "FREE",       status_class: "free",       link: "https://pubs.usgs.gov/publication/mcs2025" },
         { icon: "fa-solid fa-chart-line",       title: "Alpha Vantage",         status: "API",        link: "https://alphavantage.co" },
         { icon: "fa-solid fa-coins",            title: "European Central Bank", status: "FREE",       status_class: "free",       link: "https://ecb.europa.eu" },
+        { icon: "fa-solid fa-location-dot",     title: "GeoConfirmed",          status: "LIVE",       status_class: "live",       link: "https://geoconfirmed.org" },
       ]
     end
   end

@@ -81,7 +81,7 @@
               "Earth Science" => { icon: "fa-solid fa-house-crack", items: ["USGS Earthquakes", "NASA FIRMS", "NASA EONET"] },
               "News & OSINT" => { icon: "fa-solid fa-newspaper", items: ["GDELT", "RSS Mesh", "Multi-News APIs"] },
               "Infrastructure" => { icon: "fa-solid fa-bolt", items: ["Cloudflare Radar", "IODA Outages", "TeleGeography", "GPS Interference"] },
-              "Security" => { icon: "fa-solid fa-crosshairs", items: ["UCDP Conflicts", "ACLED", "Military Classifier"] },
+              "Security" => { icon: "fa-solid fa-crosshairs", items: ["UCDP Conflicts", "ACLED", "GeoConfirmed", "Military Classifier"] },
               "Economics" => { icon: "fa-solid fa-chart-column", items: ["World Bank WDI", "IMF", "CEPII BACI", "OECD ICIO", "Alpha Vantage", "ECB"] },
               "Energy" => { icon: "fa-solid fa-oil-well", items: ["Global Energy Monitor", "Power Plant DB", "JODI Oil & Gas"] },
               "Visual" => { icon: "fa-solid fa-video", items: ["Windy Webcams", "YouTube Live", "NYC Traffic Cams"] },
@@ -133,6 +133,7 @@
               { name: "RefreshWeatherAlertsJob", interval: "10m", tier: "medium" },
               { name: "RefreshCommodityPricesJob", interval: "1h", tier: "slow" },
               { name: "RefreshSatellitesJob", interval: "6h", tier: "slow" },
+              { name: "RefreshGeoconfirmedJob", interval: "6h", tier: "slow" },
               { name: "RefreshSubmarineCablesJob", interval: "24h", tier: "slow" },
               { name: "RefreshCountryIndicatorsJob", interval: "24h", tier: "slow" },
             ] %>

@@ -56,6 +56,7 @@ class GlobalPollerService
     { job: RecheckStaleCamerasJob, every: 1.hour, offset: 20.minutes },
     { job: GenerateBriefJob, every: 1.hour, offset: 50.minutes, conditional: :brief_missing? },
     { job: RefreshAcledJob, every: 6.hours, offset: 0.minutes },
+    { job: RefreshGeoconfirmedJob, every: 6.hours, offset: 15.minutes },
     { job: RefreshConflictEventsJob, every: 6.hours, offset: 30.minutes },
     { job: RefreshSatellitesJob, every: 6.hours, offset: 60.minutes },
     { job: RefreshAirportsJob, every: 12.hours, offset: 0.minutes },

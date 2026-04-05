@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_01_123000) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_05_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -411,6 +411,30 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_01_123000) do
     t.string "message_type"
     t.index ["icao24"], name: "index_flights_on_icao24", unique: true
     t.index ["source", "updated_at"], name: "idx_flights_source_updated"
+  end
+
+  create_table "geoconfirmed_events", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.string "map_region", null: false
+    t.string "folder_path"
+    t.string "title"
+    t.text "description"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.datetime "event_time"
+    t.string "icon_key"
+    t.text "source_urls", default: [], array: true
+    t.text "geolocation_urls", default: [], array: true
+    t.datetime "fetched_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.datetime "posted_at"
+    t.index ["event_time"], name: "index_geoconfirmed_events_on_event_time"
+    t.index ["external_id"], name: "index_geoconfirmed_events_on_external_id", unique: true
+    t.index ["fetched_at"], name: "index_geoconfirmed_events_on_fetched_at"
+    t.index ["latitude", "longitude"], name: "index_geoconfirmed_events_on_latitude_and_longitude"
+    t.index ["map_region"], name: "index_geoconfirmed_events_on_map_region"
+    t.index ["posted_at"], name: "index_geoconfirmed_events_on_posted_at"
   end
 
   create_table "gps_jamming_snapshots", force: :cascade do |t|

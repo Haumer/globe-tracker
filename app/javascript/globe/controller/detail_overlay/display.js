@@ -84,6 +84,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
 
     const dismissGuardMs = this._anchoredDetailDismissGuardMs(payload.kind)
     const interactivityWarmMs = this._anchoredDetailInteractivityWarmMs(payload.kind)
+    const mobile = window.innerWidth <= 960
     this._anchoredDetailState = {
       ...payload,
       anchorId: "active",
@@ -94,7 +95,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     const stroke = payload.stroke || payload.accent || "#8bd8ff"
     const strokeWidth = payload.strokeWidth || 2.25
     this.anchorOverlayTarget.style.display = ""
-    this.anchorPanelTarget.style.display = ""
+    this.anchorPanelTarget.style.display = "none"
     this.anchorPanelTarget.dataset.mode = "anchored"
     this.anchorPanelTarget.dataset.kind = payload.kind || ""
     this.anchorPanelTarget.dataset.pinned = "false"
@@ -104,6 +105,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this.anchorPanelTarget.style.setProperty("--anchor-accent", payload.accent || "#8bd8ff")
     this.anchorPanelTarget.style.setProperty("--anchor-stroke", stroke)
     this.anchorPanelTarget.style.setProperty("--anchor-border-width", `${strokeWidth}px`)
+    this._applyAnchoredDetailScale?.(this.anchorPanelTarget, this._anchoredDetailState, { mobile })
     this._warmAnchoredDetailInteractivity(interactivityWarmMs)
     this.anchorContentTarget.innerHTML = this._renderAnchoredDetailHtml(this._anchoredDetailState)
 

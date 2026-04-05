@@ -3,7 +3,6 @@ import {
   clampRectPosition,
   firstPresent,
   nearFarScaleValue,
-  pointDistance,
   propertyValue,
   toNumber,
   validPoint,
@@ -14,7 +13,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     switch (state?.kind) {
       case "strike":
       case "geoconfirmed":
-        return { nearHeight: 100000, farHeight: 4000000, minScale: 0.58 }
+        return { nearHeight: 120000, farHeight: 6500000, minScale: 0.76 }
       case "conflict_pulse":
       case "strategic_situation":
         return { nearHeight: 180000, farHeight: 6500000, minScale: 0.76 }
@@ -45,6 +44,10 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
   GlobeController.prototype._anchoredDetailAllowsExtendedBounds = function(state) {
     return ["geoconfirmed", "strike"].includes(state?.kind)
+  }
+
+  GlobeController.prototype._anchoredDetailOffscreenGraceMs = function() {
+    return 180
   }
 
   GlobeController.prototype._anchoredDetailPlacementTolerance = function(state) {
@@ -170,6 +173,22 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     }
   }
 
+  GlobeController.prototype._anchoredDetailConnectorOrigin = function(state, point, join, markerRadius = 0, socketRadius = 0) {
+    if (!point || !join) return point
+
+    if (state?.kind === "strike" || state?.kind === "geoconfirmed") {
+      return point
+    }
+
+    return this._anchoredDetailSocketCenter(
+      point,
+      join,
+      markerRadius,
+      socketRadius,
+      this._anchoredDetailMarkerOverlap(state)
+    )
+  }
+
   GlobeController.prototype._anchoredDetailLiveMarkerRadius = function(state) {
     const fallback = state?.markerRadius || 0
     const entity = state?.anchor?.entity
@@ -230,17 +249,41 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
   GlobeController.prototype._refreshAnchoredDetailPosition = function(force = false) {
     if (!this._anchoredDetailState || !this.hasAnchorPanelTarget) return
-    if (!force && window.getComputedStyle(this.anchorPanelTarget).display === "none") return
 
     const panel = this.anchorPanelTarget
     const overlay = this.hasAnchorOverlayTarget ? this.anchorOverlayTarget : null
     const leader = this.hasAnchorLeaderTarget ? this.anchorLeaderTarget : null
     const leaderPath = this.hasAnchorLeaderPathTarget ? this.anchorLeaderPathTarget : null
     const leaderSocket = this.hasAnchorLeaderSocketTarget ? this.anchorLeaderSocketTarget : null
+    const hideLeader = () => {
+      if (leader) leader.style.display = "none"
+      if (leaderPath) leaderPath.setAttribute("d", "")
+      if (leaderSocket) {
+        leaderSocket.style.display = "none"
+        leaderSocket.setAttribute("r", "0")
+      }
+    }
 
     const mobile = window.innerWidth <= 960
     const state = this._anchoredDetailState
     const point = this._anchoredDetailScreenPoint(state.anchor)
+    const anchorVisible = !!point && this._anchoredDetailAnchorVisible(state.anchor, point)
+
+    if (anchorVisible && validPoint(point)) {
+      state._lastScreenPoint = { x: point.x, y: point.y }
+      state._offscreenSince = null
+    } else {
+      const now = this._anchoredDetailNow?.() || window.performance?.now?.() || Date.now()
+      if (!Number.isFinite(state._offscreenSince)) state._offscreenSince = now
+      panel.style.display = "none"
+      hideLeader()
+      if (now - state._offscreenSince >= this._anchoredDetailOffscreenGraceMs()) {
+        this.closeAnchoredDetail?.({ force: true })
+        return
+      }
+
+      return
+    }
 
     if (overlay) overlay.style.display = ""
     panel.style.display = ""
@@ -269,10 +312,9 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const panelWidth = panelRect.width || 248
     const panelHeight = panelRect.height || 112
     const tolerance = this._anchoredDetailPlacementTolerance(state)
-    const anchorVisible = !!point && this._anchoredDetailAnchorVisible(state.anchor, point)
     let placement = anchorVisible ? this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance) : null
     if (!placement || placement.drift > tolerance.maxPlacementDrift) {
-      placement = state._lastPlacement || this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point)
+      placement = state._lastPlacement || this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point || state._lastScreenPoint)
     }
 
     const left = placement.left
@@ -285,38 +327,16 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
     if (!leader || !leaderPath) return
 
-    if (!anchorVisible) {
-      leader.style.display = "none"
-      leaderPath.setAttribute("d", "")
-      if (leaderSocket) {
-        leaderSocket.style.display = "none"
-        leaderSocket.setAttribute("r", "0")
-      }
-      return
-    }
-
     const join = this._anchoredDetailJoinPoint(point, placement, panelWidth, panelHeight)
     const liveMarkerRadius = this._anchoredDetailLiveMarkerRadius(state)
     const socketRadius = this._anchoredDetailSocketRadius(state)
-    const origin = this._anchoredDetailSocketCenter(
-      point,
-      join,
-      liveMarkerRadius,
-      socketRadius,
-      this._anchoredDetailMarkerOverlap(state)
-    )
-    const joinTooLong = pointDistance(origin, join) > tolerance.maxJoinDistance
+    const origin = this._anchoredDetailConnectorOrigin(state, point, join, liveMarkerRadius, socketRadius)
 
-    if (joinTooLong) {
-      leader.style.display = "none"
-      leaderPath.setAttribute("d", "")
-    } else {
-      leader.style.display = ""
-      const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
-      leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
-    }
+    leader.style.display = ""
+    const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+    leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
     if (leaderSocket) {
-      if (!joinTooLong && socketRadius > 0) {
+      if (socketRadius > 0) {
         leaderSocket.style.display = ""
         leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
         leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)
@@ -366,7 +386,8 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       }
 
       const point = this._anchoredDetailScreenPoint(state.anchor)
-      if (!point || !this._anchoredDetailAnchorVisible(state.anchor, point)) {
+      const anchorVisible = !!point && this._anchoredDetailAnchorVisible(state.anchor, point)
+      if (!anchorVisible) {
         markHidden()
         return
       }
@@ -384,21 +405,14 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       const tolerance = this._anchoredDetailPlacementTolerance(state)
       let placement = this._anchoredDetailPlacement(point, panelWidth, panelHeight, tolerance)
       if (!placement || placement.drift > tolerance.maxPlacementDrift) {
-        placement = this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point)
+        placement = state._lastPlacement || this._anchoredDetailFallbackPlacement(panelWidth, panelHeight, point)
       }
+      state._lastPlacement = { left: placement.left, top: placement.top, vertical: placement.vertical }
 
       const join = this._anchoredDetailJoinPoint(point, placement, panelWidth, panelHeight)
       const liveMarkerRadius = this._anchoredDetailLiveMarkerRadius(state)
       const socketRadius = this._anchoredDetailSocketRadius(state)
-      const origin = this._anchoredDetailSocketCenter(
-        point,
-        join,
-        liveMarkerRadius,
-        socketRadius,
-        this._anchoredDetailMarkerOverlap(state)
-      )
-
-      const joinTooLong = pointDistance(origin, join) > tolerance.maxJoinDistance
+      const origin = this._anchoredDetailConnectorOrigin(state, point, join, liveMarkerRadius, socketRadius)
 
       panel.style.left = `${Math.round(placement.left)}px`
       panel.style.top = `${Math.round(placement.top)}px`
@@ -406,16 +420,11 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
       if (!leader || !leaderPath) return
 
-      if (joinTooLong) {
-        leader.style.display = "none"
-        leaderPath.setAttribute("d", "")
-      } else {
-        leader.style.display = ""
-        const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
-        leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
-      }
+      leader.style.display = ""
+      const bendY = placement.vertical === "above" ? origin.y - 12 : origin.y + 12
+      leaderPath.setAttribute("d", `M ${Math.round(origin.x)} ${Math.round(origin.y)} L ${Math.round(origin.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(bendY)} L ${Math.round(join.x)} ${Math.round(join.y)}`)
       if (leaderSocket) {
-        if (!joinTooLong && socketRadius > 0) {
+        if (socketRadius > 0) {
           leaderSocket.style.display = ""
           leaderSocket.setAttribute("cx", `${Math.round(origin.x)}`)
           leaderSocket.setAttribute("cy", `${Math.round(origin.y)}`)

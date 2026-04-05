@@ -83,4 +83,63 @@ class StrikeAnchorProbeTest < ApplicationSystemTestCase
       })()
     JS
   end
+
+  test "strike anchor closes once offscreen grace has elapsed" do
+    visit root_path
+
+    if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
+      find("#onboarding-dismiss").click
+    end
+
+    page.execute_script(<<~JS)
+      (() => {
+        const element = document.querySelector('[data-controller="globe"]')
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(element, "globe")
+
+        const strike = {
+          id: "probe-strike-3",
+          lat: 32.08,
+          lng: 34.78,
+          strikeConfidence: "high",
+          title: "Probe strike offscreen",
+          satellite: "VIIRS",
+          frp: 25,
+          clusterSize: 1,
+        }
+
+        controller._showCompactEntityDetail("strike", strike, { id: strike.id })
+      })()
+    JS
+
+    assert_selector "#anchor-panel", visible: true, wait: 5
+
+    page.execute_script(<<~JS)
+      (() => {
+        const element = document.querySelector('[data-controller="globe"]')
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(element, "globe")
+        const original = controller._anchoredDetailScreenPoint.bind(controller)
+        controller._anchoredDetailState._offscreenSince = controller._anchoredDetailNow() - 500
+        controller._anchoredDetailScreenPoint = () => null
+        controller._refreshAnchoredDetailPosition(true)
+        controller._anchoredDetailScreenPoint = original
+      })()
+    JS
+
+    assert_no_selector "#anchor-panel", visible: true, wait: 2
+
+    assert_equal true, page.evaluate_script(<<~JS)
+      (() => {
+        const element = document.querySelector('[data-controller="globe"]')
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(element, "globe")
+        return !controller._anchoredDetailState
+      })()
+    JS
+
+    assert_equal false, page.evaluate_script(<<~JS)
+      (() => {
+        const panel = document.querySelector('#anchor-panel')
+        return window.getComputedStyle(panel).display !== "none"
+      })()
+    JS
+  end
 end

@@ -1,0 +1,885 @@
+reporter_iso2,reporter_iso3,reporter_name,partner_iso2,partner_iso3,partner_name,flow_direction,commodity_key,commodity_name,hs_code,period_start,period_end,period_type,trade_value_usd,quantity,quantity_unit,source,dataset,release_version
+,ISR,Israel,,NLD,Netherlands,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,11000.0,109151.054,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,SWE,Sweden,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,455553.61,4362150.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,591654.98,3854880.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,AUS,Australia,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,814.37,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,3175.6,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,iron_ore,Iron Ore,2601,2026-02-01,2026-02-28,month,3519.1,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,USA,USA,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,9803000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,402000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,AUT,Austria,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,3897.91,4.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CAN,Canada,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,198.85,6.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1173.77,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,2213.79,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,370.12,8.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,37143.05,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISL,Iceland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,5747.13,970.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISR,Israel,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,43733.75,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,10926.86,29.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KOR,Rep. of Korea,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,367.4,2.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MYS,Malaysia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,6963.32,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,32827.9,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IND,India,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,263.11,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,17601.05,112.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,4574.09,4.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,20568.65,176.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,11354.86,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,CZE,Czechia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,7000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,5000.0,11.243,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,36000.0,80.948,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1414000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,13000.0,29.231,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HUN,Hungary,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,3000.0,6.746,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,114000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,7640000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,4681000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,2311000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,31000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,6139000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,678000.0,1524.528,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1000.0,2.249,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ROU,Romania,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1000.0,2.249,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,44000.0,98.937,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,4303000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,67000.0,150.654,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,3663000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,363000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,42000.0,94.44,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,ITA,Italy,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1870.32,10.68,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,246.44,2.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,S19,"Other Asia, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,1139.27,4.01,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,2932.18,12.8,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,653.47,6.696,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,AUT,Austria,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,156000.0,350.776,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,209000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,972000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,CHN,China,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,111448.29,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FRA,France,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,2941.26,6.45,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-02-01,2026-02-28,month,659.33,1.16,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,ESP,Spain,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,11643.68,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWZ,Eswatini,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1985.89,41.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,278866.99,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,122904.6,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,THA,Thailand,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1627508.08,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,TUR,Türkiye,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3517.24,80.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,177197.5,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,645948.5,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,TUN,Tunisia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,8000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,330000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,28083000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4231000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,AUS,Australia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1126.96,3.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,AUT,Austria,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,60245.25,17095.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BEL,Belgium,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,6195.82,120.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BRA,Brazil,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2565.73,12.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BGR,Bulgaria,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,33375.45,484.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KHM,Cambodia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,122.68,5.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CAN,Canada,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4459.25,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2873055.65,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CRI,Costa Rica,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,21338.45,20.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HRV,Croatia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1376.91,10.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CZE,Czechia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,16060.82,521.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,978310.16,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,EST,Estonia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,38890.49,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,19114.63,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,414750.37,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,962455.51,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,11242.11,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HUN,Hungary,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,34244.1,262.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IDN,Indonesia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,7691.01,50.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IRL,Ireland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,857.47,6.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISR,Israel,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,6162.38,24.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,58875.03,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,JPN,Japan,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,93061.44,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2828753.14,42863.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LVA,Latvia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,17079.42,2499.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LTU,Lithuania,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2127.8,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MYS,Malaysia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,10070179.3,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MLT,Malta,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3661.97,1005.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MEX,Mexico,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,97582.13,126668.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,5322011.91,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MAR,Morocco,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3692.9,1664.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,84694.15,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,PHL,Philippines,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1739334.1,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,218806.48,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,PRT,Portugal,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3860.19,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ROU,Romania,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,75533.96,9.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IND,India,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2703.45,8.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SGP,Singapore,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,235170.96,10426.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SVK,Slovakia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,397.81,3.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,VNM,Viet Nam,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,363251.52,1161.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SVN,Slovenia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,6031.14,40.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ZAF,South Africa,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,17774.5,99.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,THA,Thailand,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3049.24,424.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARE,United Arab Emirates,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,7831.32,9999.999,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,TUR,Türkiye,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3091.08,5.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GBR,United Kingdom,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,9186.93,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,648126.76,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,436829.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,AUT,Austria,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,80000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3505000.0,2346852.657,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,21000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,35000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,19172000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,110000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HRV,Croatia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,44000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DNK,Denmark,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,54000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,EST,Estonia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,34000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1867000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4007000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1738000.0,1046403.684,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IDN,Indonesia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,39000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2007000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,132000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,455000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,61131000.0,48349638.222,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LVA,Latvia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,19468000.0,10171221.714,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MLT,Malta,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,63000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,265000.0,143692.576,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,44494000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MAR,Morocco,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3000.0,3318.989,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,454000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,8165000.0,4744846.791,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PRT,Portugal,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,30000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,261000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1873000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2809000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVN,Slovenia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,129000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,187000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4002000.0,3035544.007,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,6000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,GIN,Guinea,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,45.78,0.72,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,52895.47,271.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,HUN,Hungary,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2142.9,5.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ITA,Italy,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,28799.51,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,42775.58,470.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4452.75,16.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MYS,Malaysia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,179864.25,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MEX,Mexico,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,95570.23,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,176543.3,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,NLD,Netherlands,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,941.13,4.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,NZL,New Zealand,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1292.81,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,NOR,Norway,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,80881.82,166.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,65.06,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PHL,Philippines,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,4270.37,43.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,POL,Poland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,852.86,4.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,VNM,Viet Nam,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,116691.04,428.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ZAF,South Africa,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,5815.92,6.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,9413.34,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SWE,Sweden,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1144.1,8.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHE,Switzerland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,37647.47,43.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,40570.6,27.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,590905.3,7071.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CPV,Cabo Verde,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,14877.24,24.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2499011.87,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CRI,Costa Rica,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,470.41,2.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CZE,Czechia,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,2095.13,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FIN,Finland,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,5381.79,4.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FRA,France,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,42304.2,3.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,43297.59,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARG,Argentina,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,6118.72,24.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUT,Austria,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,3620.31,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BEL,Belgium,import,semiconductors,Semiconductors,8542,2026-02-01,2026-02-28,month,1738.95,21.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,CZE,Czechia,import,copper,Copper,7404,2026-02-01,2026-02-28,month,5111.18,117.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,copper,Copper,7404,2026-02-01,2026-02-28,month,477093.11,50460.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,copper,Copper,7404,2026-02-01,2026-02-28,month,6879423.12,532632.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISL,Iceland,import,copper,Copper,7404,2026-02-01,2026-02-28,month,110776.7,162315.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,PER,Peru,import,copper,Copper,7404,2026-02-01,2026-02-28,month,352979.84,25500.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,copper,Copper,7404,2026-02-01,2026-02-28,month,5580492.38,825585.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,copper,Copper,7404,2026-02-01,2026-02-28,month,1218615.18,102458.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,BRA,Brazil,import,copper,Copper,7404,2026-02-01,2026-02-28,month,600561.37,50474.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHL,Chile,import,copper,Copper,7404,2026-02-01,2026-02-28,month,15410.87,6155.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,NLD,Netherlands,import,lng,Liquefied Natural Gas,271111,2026-02-01,2026-02-28,month,6202504.72,8367983.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,lng,Liquefied Natural Gas,271111,2026-02-01,2026-02-28,month,127142.01,152860.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,lng,Liquefied Natural Gas,271111,2026-02-01,2026-02-28,month,1166173.69,2060441.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,AUS,Australia,import,lng,Liquefied Natural Gas,271111,2026-02-01,2026-02-28,month,57865066.26,108416135.57,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,FIN,Finland,import,lng,Liquefied Natural Gas,271111,2026-02-01,2026-02-28,month,211647.13,253106.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,30687.25,40089.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,16648.9,30060.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,CHN,China,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,296009.07,661879.99,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CZE,Czechia,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,3240.05,425.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,196997.25,144280.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,IND,India,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,1830.42,1000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,3068.28,171.36,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,254.32,3.5,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,BEL,Belgium,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,95000.0,140823.944,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,AUS,Australia,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,376597.82,533599.968,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BOL,Bolivia (Plurinational State of),import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,417265.54,1218000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,fertilizer,Fertilizer,3104,2026-02-01,2026-02-28,month,4901704.85,12300961.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,BEL,Belgium,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,10060.5,1075.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,173.15,23.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,54169.8,23423.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,5367050.58,4885478.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,152225.4,88521.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,73871.79,24471.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IRL,Ireland,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,256.64,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,4870.22,380.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LTU,Lithuania,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,95500.94,73904.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,578836.79,267833.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,81535.84,48016.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SVN,Slovenia,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,2097.49,830.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,245172.0,296701.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,THA,Thailand,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,290217.98,618420.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,61600.42,26117.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,81230.62,37909.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,RUS,Russian Federation,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,144871.77,119999.993,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ZAF,South Africa,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,36455.13,12631.17,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,718050.61,180764.951,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GBR,United Kingdom,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,119025.86,22245.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,172177.8,8062.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,URY,Uruguay,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,73920.0,23040.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,454269.97,331999.982,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,AUS,Australia,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,87000.0,39208.482,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,641000.0,625234.94,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,147000.0,162726.787,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,10000.0,2676.92,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,35000.0,11930.943,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,2000.0,535.384,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,49000.0,54242.262,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,145000.0,111659.935,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,94000.0,33580.138,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,235000.0,85231.205,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,124000.0,82823.94,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,FIN,Finland,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,248399.99,167999.99,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,46311.64,11334.5,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,830.0,3.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,80280.0,40000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MYS,Malaysia,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,172500.0,150000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MEX,Mexico,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,84112.87,13485.4,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,94588.57,41909.15,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,POL,Poland,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,232581.45,672000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PRT,Portugal,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,30325.88,1000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BEL,Belgium,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,37000.0,20000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,150973.38,144200.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,fertilizer,Fertilizer,3105,2026-02-01,2026-02-28,month,14913679.46,20973298.754,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,NLD,Netherlands,import,copper,Copper,7402,2026-02-01,2026-02-28,month,257.16,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,NOR,Norway,import,copper,Copper,7402,2026-02-01,2026-02-28,month,13187.57,267.431,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GBR,United Kingdom,import,copper,Copper,7402,2026-02-01,2026-02-28,month,1900.93,20.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,ITA,Italy,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,1333.75,698.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,JOR,Jordan,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,596.03,108.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LTU,Lithuania,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,469939.61,1879482.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,1823059.7,6592190.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,3929203.74,14132747.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,CAN,Canada,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,1000.0,3540.386,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,32532000.0,122200686.943,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UKR,Ukraine,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,193000.0,724970.263,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,DNK,Denmark,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,54161.34,129440.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,338690.81,507165.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,532397.71,1260760.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,1333577.77,4441670.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,ARG,Argentina,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,33778592.34,136463528.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUT,Austria,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,474.87,16.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,wheat,Wheat,1001,2026-02-01,2026-02-28,month,5203814.38,18377400.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,ITA,Italy,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,38000.0,50028.93,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,30000.0,39496.524,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,7801000.0,10985792.294,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,DNK,Denmark,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,5106.69,280.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,211647.13,253106.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,5417.14,294.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,9294.04,125.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,10233.44,190.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,6204617.57,8368361.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,1331306.09,1200903.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,6776.49,47.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,1170610.89,2060727.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,DEU,Germany,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,21126.99,173.113,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GRC,Greece,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,70691.98,17100.001,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,41715.52,14383.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,211.64,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,28162661.5,62264320.432,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,CHN,China,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,40000.0,53029.784,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,33749000.0,47087122.306,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,47000.0,70397.707,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,ARG,Argentina,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,95533151.9,388217254.987,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUS,Australia,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,57865066.26,108416135.57,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,gas_nat,Natural Gas,2711,2026-02-01,2026-02-28,month,85815.75,50496.309,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARG,Argentina,import,lng,Liquefied Natural Gas,271121,2026-02-01,2026-02-28,month,77803847.95,336431868.005,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,POL,Poland,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,328872.42,385974.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,2591926.17,3426281.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,USA,USA,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,3515.94,618.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,URY,Uruguay,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,65280.0,22848.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,475.79,186.719,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,CHN,China,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,1490000.0,3369672.395,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,43000.0,123342.455,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,8000.0,17807.378,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,75000.0,166666.671,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,5000.0,11122.211,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,1000.0,1180.855,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,76000.0,94807.694,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,149000.0,331111.119,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,EGY,Egypt,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,3608000.0,8031127.357,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UZB,Uzbekistan,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,251000.0,557777.792,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,BEL,Belgium,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,538.56,40.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,14405.96,8940.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,140205.96,186000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,1597566.8,3081173.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KEN,Kenya,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,107.42,11.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,3839.08,2172.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,CHN,China,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,2278665.19,5176428.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ECU,Ecuador,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,305964.49,173350.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FRA,France,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,445221.01,675000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,23785.07,12303.137,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,RUS,Russian Federation,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,3334320.0,8000000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SAU,Saudi Arabia,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,74.02,3.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,IND,India,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,24730.0,10000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,VNM,Viet Nam,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,87951.53,160001.32,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,9880.73,1389.816,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARG,Argentina,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,1160617.5,2337500.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,106126.67,9002.4,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRN,Brunei Darussalam,import,fertilizer,Fertilizer,3102,2026-02-01,2026-02-28,month,9908519.92,21370550.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,GBR,United Kingdom,import,copper,Copper,7408,2026-02-01,2026-02-28,month,19064.37,662.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,copper,Copper,7408,2026-02-01,2026-02-28,month,304.39,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,copper,Copper,7408,2026-02-01,2026-02-28,month,57000.0,2566.938,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,copper,Copper,7408,2026-02-01,2026-02-28,month,5000.0,351.302,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JOR,Jordan,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1019000.0,93477.879,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PER,Peru,import,copper,Copper,7408,2026-02-01,2026-02-28,month,48000.0,4403.276,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,copper,Copper,7408,2026-02-01,2026-02-28,month,336000.0,30822.932,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1310000.0,132006.366,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,copper,Copper,7408,2026-02-01,2026-02-28,month,2609000.0,239336.394,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1000.0,91.735,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,copper,Copper,7408,2026-02-01,2026-02-28,month,387000.0,35058.286,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UZB,Uzbekistan,import,copper,Copper,7408,2026-02-01,2026-02-28,month,531000.0,48711.24,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,BRA,Brazil,import,copper,Copper,7408,2026-02-01,2026-02-28,month,754.23,34.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CAN,Canada,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1814.84,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1370.32,12.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,copper,Copper,7408,2026-02-01,2026-02-28,month,1501779.24,103304.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,copper,Copper,7408,2026-02-01,2026-02-28,month,2225654.17,168176.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,copper,Copper,7408,2026-02-01,2026-02-28,month,426830.63,23795.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,copper,Copper,7408,2026-02-01,2026-02-28,month,615.05,8.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,VNM,Viet Nam,import,copper,Copper,7408,2026-02-01,2026-02-28,month,7794.15,346.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,copper,Copper,7408,2026-02-01,2026-02-28,month,9335296.84,680065.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,copper,Copper,7408,2026-02-01,2026-02-28,month,366.67,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,NLD,Netherlands,import,copper,Copper,7408,2026-02-01,2026-02-28,month,8642.74,319.923,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,copper,Copper,7408,2026-02-01,2026-02-28,month,295579.81,20428.68,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,TUR,Türkiye,import,copper,Copper,7408,2026-02-01,2026-02-28,month,137211.62,10301.9,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,AUT,Austria,import,copper,Copper,7408,2026-02-01,2026-02-28,month,58000.0,5320.625,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,copper,Copper,7408,2026-02-01,2026-02-28,month,226000.0,17809.368,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,copper,Copper,7408,2026-02-01,2026-02-28,month,2000.0,195.856,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GEO,Georgia,import,copper,Copper,7408,2026-02-01,2026-02-28,month,785000.0,72011.909,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,copper,Copper,7408,2026-02-01,2026-02-28,month,3697000.0,371532.975,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,CAN,Canada,import,copper,Copper,7408,2026-02-01,2026-02-28,month,106179.09,3007.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,copper,Copper,7408,2026-02-01,2026-02-28,month,18601.32,1689.01,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FRA,France,import,copper,Copper,7408,2026-02-01,2026-02-28,month,22420.34,376.923,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,DEU,Germany,import,helium,Helium,280429,2026-02-01,2026-02-28,month,4757.58,69.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,helium,Helium,280429,2026-02-01,2026-02-28,month,4128.53,113.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,helium,Helium,280429,2026-02-01,2026-02-28,month,1219.85,28.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,QAT,Qatar,import,helium,Helium,280429,2026-02-01,2026-02-28,month,12198.12,643.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,helium,Helium,280429,2026-02-01,2026-02-28,month,73155.38,4214.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,helium,Helium,280429,2026-02-01,2026-02-28,month,4038.04,38.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ARE,United Arab Emirates,import,helium,Helium,280429,2026-02-01,2026-02-28,month,4342.01,2.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,helium,Helium,280429,2026-02-01,2026-02-28,month,57927.38,2530.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,helium,Helium,280429,2026-02-01,2026-02-28,month,4543.37,5.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,CHN,China,import,helium,Helium,280429,2026-02-01,2026-02-28,month,376000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,helium,Helium,280429,2026-02-01,2026-02-28,month,57000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,helium,Helium,280429,2026-02-01,2026-02-28,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,helium,Helium,280429,2026-02-01,2026-02-28,month,89000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,helium,Helium,280429,2026-02-01,2026-02-28,month,1877000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,CHN,China,import,helium,Helium,280429,2026-02-01,2026-02-28,month,27323.51,827.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CZE,Czechia,import,helium,Helium,280429,2026-02-01,2026-02-28,month,1481.3,3.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,helium,Helium,280429,2026-02-01,2026-02-28,month,45989.97,2524.0,m³,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,USA,USA,import,helium,Helium,280429,2026-02-01,2026-02-28,month,1408.26,0.1,m³,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,DZA,Algeria,import,helium,Helium,280429,2026-02-01,2026-02-28,month,3128000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,CHL,Chile,import,copper,Copper,2603,2026-02-01,2026-02-28,month,3508.1,38.41,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,copper,Copper,2603,2026-02-01,2026-02-28,month,1069.41,27.88,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,COL,Colombia,import,copper,Copper,2603,2026-02-01,2026-02-28,month,143.12,1.7,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,copper,Copper,2603,2026-02-01,2026-02-28,month,328.65,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,copper,Copper,2603,2026-02-01,2026-02-28,month,5343128.6,381628.61,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GBR,United Kingdom,import,copper,Copper,2603,2026-02-01,2026-02-28,month,162.93,5.16,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,copper,Copper,2603,2026-02-01,2026-02-28,month,1215.1,18.754,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,USA,USA,import,copper,Copper,2603,2026-02-01,2026-02-28,month,1000.0,413.854,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,BOL,Bolivia (Plurinational State of),import,copper,Copper,2603,2026-02-01,2026-02-28,month,278435.08,29805.44,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,copper,Copper,2603,2026-02-01,2026-02-28,month,139940.92,6000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,copper,Copper,2603,2026-02-01,2026-02-28,month,3228.05,214.077,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,fertilizer,Fertilizer,3103,2026-02-01,2026-02-28,month,95726.05,11422.4,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MEX,Mexico,import,fertilizer,Fertilizer,3103,2026-02-01,2026-02-28,month,853365.0,1500000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,_X ,"Areas, nes",import,oil_crude,Crude Oil,2709,2026-02-01,2026-02-28,month,544422000.0,986556524.939,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,ARG,Argentina,import,oil_crude,Crude Oil,2709,2026-02-01,2026-02-28,month,238061383.15,495046302.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,oil_crude,Crude Oil,2709,2026-02-01,2026-02-28,month,128712657.03,270477438.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ECU,Ecuador,import,oil_crude,Crude Oil,2709,2026-02-01,2026-02-28,month,76386671.45,175832734.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,AND,Andorra,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,56298.75,3664.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,AUS,Australia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,42774.19,1383.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,AUT,Austria,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,14342.32,495.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BEL,Belgium,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,20904331.66,27071473.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BGR,Bulgaria,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,17254.76,7399.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CAN,Canada,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,82893.73,20306.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,13577.22,837.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CRI,Costa Rica,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,2982.24,16.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HRV,Croatia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,12089.86,880.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CZE,Czechia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,10181.61,1194.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,3906832.16,4523612.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,EST,Estonia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,77870.22,32878.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FIN,Finland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,947210.26,412938.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1579714.03,433983.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GEO,Georgia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,292.89,10.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,2539817.61,541212.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HUN,Hungary,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,206.58,10.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IDN,Indonesia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1474.92,90.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IRL,Ireland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,222.36,36.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISR,Israel,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,597.18,306.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,353299.38,62702.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,JPN,Japan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,33616.82,1240.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KOR,Rep. of Korea,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,69119.54,3564.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LVA,Latvia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,111701.47,16979.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LTU,Lithuania,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,35204.7,4883.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MYS,Malaysia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1591.95,21.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MEX,Mexico,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,405.96,7.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,S19,"Other Asia, nes",import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,970.74,14.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,92677508.72,123097553.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,387898.86,130051.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,PRT,Portugal,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,904.39,16.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,QAT,Qatar,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,30407.63,23880.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ROU,Romania,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,4812.75,280.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SRB,Serbia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,68832.08,18786.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ESP,Spain,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,34145.25,5877.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,99132934.76,110371800.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,181480.99,35052.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,THA,Thailand,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,2089.66,132.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ARE,United Arab Emirates,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,69562.91,20506.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,TUR,Türkiye,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,25647.65,2772.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,EGY,Egypt,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,3084.64,260.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,2327678.63,3118781.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,41476927.46,18674253.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,TUR,Türkiye,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,864939.76,265374.277,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,UKR,Ukraine,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,287714.24,98547.63,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,GBR,United Kingdom,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,390190.16,25053.914,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,414298263.15,560836964.374,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,URY,Uruguay,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,621.23,8.56,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,54248585.44,73501135.937,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,AZE,Azerbaijan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,166000.0,84632.454,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1011000.0,519122.296,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,281000.0,143263.371,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,51000.0,26001.537,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CPV,Cabo Verde,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,7000.0,3568.838,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,81000.0,41296.559,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,3000.0,1529.502,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,3000.0,1529.502,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,635000.0,324455.142,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,902000.0,615168.84,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,791000.0,403278.743,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,112000.0,57101.415,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,410000.0,209031.965,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,28000.0,17065.231,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JOR,Jordan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,88000.0,44865.397,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,91000.0,46394.9,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LVA,Latvia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,92000.0,46904.734,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,42000.0,21413.031,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,248000.0,126438.847,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ROU,Romania,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,77000.0,39257.223,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,13274000.0,6767537.332,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,198000.0,137747.741,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1000.0,509.834,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVK,Slovakia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,3000.0,1529.502,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVN,Slovenia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,10000.0,5098.341,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,232000.0,118281.502,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,88000.0,44865.397,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,179000.0,91260.297,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,9000.0,4588.507,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1810000.0,922799.651,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,467000.0,238092.507,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UKR,Ukraine,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,12000.0,6118.009,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1793000.0,2222761.68,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,391000.0,204497.202,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UZB,Uzbekistan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,146000.0,74435.773,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,48795000.0,55708892.691,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,ECU,Ecuador,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,499.47,13.52,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FRA,France,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,424631.62,71924.272,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,692043.77,119637.246,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ITA,Italy,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,21255.47,1016.138,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,8373884.84,12022409.275,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,49812811.78,74957773.21,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,LTU,Lithuania,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,70743.72,14880.21,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MEX,Mexico,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,322211.08,94679.77,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,S19,"Other Asia, nes",import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,538.87,6.877,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,NLD,Netherlands,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,149936.67,54555.146,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,NOR,Norway,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,214.0,20000.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PAN,Panama,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,8769176.55,9971274.109,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PRY,Paraguay,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1761.92,63.56,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PER,Peru,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,4101150.64,6293043.696,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,IND,India,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,221854.89,159043.921,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SGP,Singapore,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1043300.11,584183.995,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,256886.41,52050.795,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SWE,Sweden,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,52933.45,5087.51,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,THA,Thailand,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,14897.8,1164.823,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARE,United Arab Emirates,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,751096.05,327877.212,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BOL,Bolivia (Plurinational State of),import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1454.34,34.3,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,936520.85,341427.049,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,101954.99,10283.351,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHL,Chile,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,42.52,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,310471.79,190736.853,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,COL,Colombia,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,273072.39,49089.553,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CRI,Costa Rica,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,5596.15,34.58,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DNK,Denmark,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,5963.03,182.185,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DOM,Dominican Rep.,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,539.47,7.24,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARG,Argentina,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,1373791.05,1510158.44,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUT,Austria,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,760.91,80.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BEL,Belgium,import,oil_refined,Refined Petroleum,2710,2026-02-01,2026-02-28,month,241629.39,30705.852,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,CHN,China,import,copper,Copper,7403,2026-02-01,2026-02-28,month,54044.62,2220.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,copper,Copper,7403,2026-02-01,2026-02-28,month,66778.27,24683.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,copper,Copper,7403,2026-02-01,2026-02-28,month,989096.15,73220.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,copper,Copper,7403,2026-02-01,2026-02-28,month,510.66,3.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IND,India,import,copper,Copper,7403,2026-02-01,2026-02-28,month,197.91,7.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ESP,Spain,import,copper,Copper,7403,2026-02-01,2026-02-28,month,707645.47,63788.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,copper,Copper,7403,2026-02-01,2026-02-28,month,2229.57,22.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,copper,Copper,7403,2026-02-01,2026-02-28,month,3894.88,6.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,PER,Peru,import,copper,Copper,7403,2026-02-01,2026-02-28,month,51.75,1.62,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PRT,Portugal,import,copper,Copper,7403,2026-02-01,2026-02-28,month,33005.09,1988.2,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,DEU,Germany,import,copper,Copper,7403,2026-02-01,2026-02-28,month,7000.0,647.043,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,copper,Copper,7403,2026-02-01,2026-02-28,month,38000.0,4905.23,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,copper,Copper,7403,2026-02-01,2026-02-28,month,2000.0,184.869,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,copper,Copper,7403,2026-02-01,2026-02-28,month,2000.0,260.538,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,BEL,Belgium,import,copper,Copper,7403,2026-02-01,2026-02-28,month,1406.37,32.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,ARG,Argentina,import,copper,Copper,7403,2026-02-01,2026-02-28,month,423420.56,36255.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,copper,Copper,7403,2026-02-01,2026-02-28,month,1385.83,12.023,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,COL,Colombia,import,copper,Copper,7403,2026-02-01,2026-02-28,month,112.9,1.0,kg,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,NOR,Norway,,TUR,Türkiye,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,5015.78,250.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,GBR,United Kingdom,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,118555.38,41407.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,USA,USA,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,235943.37,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,ISR,Israel,,SWE,Sweden,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,351000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,722000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,329000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,197000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2662000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,17000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,NOR,Norway,,AUS,Australia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,4716.82,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,AUT,Austria,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,8149.11,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BEL,Belgium,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2674.09,108.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BRA,Brazil,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,35796.87,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,BGR,Bulgaria,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2488.19,13.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CAN,Canada,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,156193.32,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHN,China,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,853048.92,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CZE,Czechia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,44785.58,282.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DNK,Denmark,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,421124.36,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DOM,Dominican Rep.,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,755.28,3.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,EST,Estonia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,543.47,250.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,FRA,France,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,60518.81,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,DEU,Germany,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,942099.39,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1105.75,9515.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,HUN,Hungary,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,349995.51,509963.742,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IDN,Indonesia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,535.63,15.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IRL,Ireland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,7403.14,50.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ISR,Israel,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2386.31,9300.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ITA,Italy,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,11766.46,1195.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,JPN,Japan,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,203822.05,207477.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,333659.46,75673.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LVA,Latvia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,518.7,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,LTU,Lithuania,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,60926.86,350.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MYS,Malaysia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,137165.94,614033.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MEX,Mexico,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,150689.24,7499.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,165503.03,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,MAR,Morocco,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,3334.9,173.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,NLD,Netherlands,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,14123.41,44.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,PHL,Philippines,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,103951.31,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,POL,Poland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,151031.66,14425.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ROU,Romania,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,178.16,1.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,IND,India,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2063.11,599.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SGP,Singapore,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,608.05,3102.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SVK,Slovakia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2461.65,14.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,VNM,Viet Nam,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,27989.24,128496.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SVN,Slovenia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1022.57,21.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,ESP,Spain,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,6077.64,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,SWE,Sweden,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,504064.17,3446.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,CHE,Switzerland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,4314.11,8012.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,NOR,Norway,,THA,Thailand,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,122514.21,153689.0,u,un_comtrade,comtrade_hs_monthly,2026-03-23T13:32:56.44
+,CHL,Chile,,GBR,United Kingdom,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1694.9,3982.041,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,USA,USA,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,92162.25,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,53284.77,13072.564,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,ASM,American Samoa,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUS,Australia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,3000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,80000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,47000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,12000.0,187716.278,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,77000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,10364000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,7000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HRV,Croatia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,9000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,32000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DNK,Denmark,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DOM,Dominican Rep.,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,15000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,475000.0,1146825.178,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2279000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,76000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HUN,Hungary,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,31000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,93000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,47000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1715000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,116000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,223000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LUX,Luxembourg,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,442000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,74000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,552000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MAR,Morocco,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,8000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,72000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NZL,New Zealand,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,79000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,340000.0,1690028.483,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PRT,Portugal,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,8000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ROU,Romania,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,16000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,63000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2095000.0,257866.085,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVK,Slovakia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,7000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,78000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVN,Slovenia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,6000.0,95.095,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,CHL,Chile,,ISR,Israel,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1255.36,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ITA,Italy,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,23388.32,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,JPN,Japan,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,30281.31,177.963,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,36942.12,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MYS,Malaysia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1814.04,610.311,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,MEX,Mexico,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2133.38,284.532,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,23890.01,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,PHL,Philippines,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1335.47,83.011,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,POL,Poland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,999.29,105.705,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ROU,Romania,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,937.64,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,IND,India,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1273.04,8.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SGP,Singapore,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,46.37,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,VNM,Viet Nam,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,3690.17,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ZAF,South Africa,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,70560.98,30528.782,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ESP,Spain,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,45646.92,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,SWE,Sweden,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,45080.84,10394.044,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHE,Switzerland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,17628.74,111.821,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,THA,Thailand,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,4018.06,25026.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,TUN,Tunisia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,414.04,200.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,TUR,Türkiye,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,920.44,5.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,BRA,Brazil,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,17626.38,141.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CAN,Canada,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,802.71,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CHN,China,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2395114.12,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,CZE,Czechia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,12827.42,11.599,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,FIN,Finland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,1452.13,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,DEU,Germany,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,51922.75,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,2563.75,11649.549,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,HUN,Hungary,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,44942.82,23.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,IRL,Ireland,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,22047.26,12.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,ARG,Argentina,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,3191.93,37.0,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUS,Australia,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,20311.82,0.0,N/A,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,CHL,Chile,,AUT,Austria,import,semiconductors,Semiconductors,8541,2026-02-01,2026-02-28,month,3518.69,1445.697,u,un_comtrade,comtrade_hs_monthly,2026-03-28T14:05:09.9633333
+,ISR,Israel,,FRA,France,import,wheat,Wheat,1001,2026-01-01,2026-01-31,month,2168000.0,8143707.405,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,wheat,Wheat,1001,2026-01-01,2026-01-31,month,1000.0,3540.386,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,wheat,Wheat,1001,2026-01-01,2026-01-31,month,44563000.0,167393004.188,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,iron_ore,Iron Ore,2601,2026-01-01,2026-01-31,month,8000.0,79382.585,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,oil_crude,Crude Oil,2709,2026-01-01,2026-01-31,month,611831000.0,1108709540.044,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AZE,Azerbaijan,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,149000.0,75965.275,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,2000.0,1019.668,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,997000.0,615762.301,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,96000.0,48944.07,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,34000.0,17334.358,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,204000.0,104006.149,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,26000.0,13255.686,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,1000.0,509.834,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,7000.0,3568.838,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,466000.0,238318.685,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,1891000.0,1389351.717,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,153000.0,78004.611,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HUN,Hungary,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,31000.0,15804.856,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,14000.0,17441.844,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,333000.0,169774.742,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,44000.0,22432.699,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,213000.0,108594.655,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LVA,Latvia,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,84000.0,42826.061,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,159000.0,81063.616,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,443000.0,280321.372,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,1000.0,509.834,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,12971000.0,6613057.611,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,174000.0,88711.127,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,9000.0,4588.507,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVN,Slovenia,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,8000.0,4078.672,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ZAF,South Africa,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,16000.0,8157.345,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,104000.0,53022.742,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,108000.0,55062.079,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,123000.0,62709.59,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,1107000.0,564386.306,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,452000.0,230444.996,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,1290000.0,1551940.432,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,998000.0,509550.405,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,oil_refined,Refined Petroleum,2710,2026-01-01,2026-01-31,month,60762000.0,75667709.483,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,68000.0,95870.0,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,12144000.0,17353817.432,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,7000.0,10484.765,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,21000.0,27647.567,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,41000.0,53978.582,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,1184000.0,1719886.865,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,45000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,gas_nat,Natural Gas,2711,2026-01-01,2026-01-31,month,4000.0,5945.615,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,helium,Helium,280429,2026-01-01,2026-01-31,month,123000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,helium,Helium,280429,2026-01-01,2026-01-31,month,62000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,helium,Helium,280429,2026-01-01,2026-01-31,month,25000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,RUS,Russian Federation,import,helium,Helium,280429,2026-01-01,2026-01-31,month,81000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,helium,Helium,280429,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,helium,Helium,280429,2026-01-01,2026-01-31,month,5000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,helium,Helium,280429,2026-01-01,2026-01-31,month,1551000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,helium,Helium,280429,2026-01-01,2026-01-31,month,359000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AZE,Azerbaijan,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,739000.0,1644956.518,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,19000.0,42222.223,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,353000.0,919949.918,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,21000.0,46744.367,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,61000.0,135781.255,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,120000.0,266666.673,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,120000.0,267110.666,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,1000.0,2225.922,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NOR,Norway,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,47000.0,134816.172,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,53000.0,62585.309,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVK,Slovakia,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,86000.0,246684.91,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,2420000.0,5377777.912,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,85000.0,189203.388,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TKM,Turkmenistan,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,1385000.0,3082902.27,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,EGY,Egypt,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,3529000.0,7855279.502,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,1000.0,2225.922,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UZB,Uzbekistan,import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,262000.0,582222.237,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,fertilizer,Fertilizer,3102,2026-01-01,2026-01-31,month,29000.0,64551.744,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,fertilizer,Fertilizer,3103,2026-01-01,2026-01-31,month,1000.0,1923.472,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,fertilizer,Fertilizer,3104,2026-01-01,2026-01-31,month,42000.0,62259.007,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,fertilizer,Fertilizer,3104,2026-01-01,2026-01-31,month,246000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,fertilizer,Fertilizer,3104,2026-01-01,2026-01-31,month,2000.0,2964.715,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,82000.0,81540.543,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,67000.0,30195.038,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,5000.0,2253.361,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,98000.0,108484.525,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,5000.0,1338.46,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,24000.0,10816.133,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,13000.0,13457.892,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,2000.0,535.384,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,98000.0,100347.563,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,851000.0,772296.746,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,1000.0,267.692,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,592000.0,612851.681,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,32000.0,14421.511,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,fertilizer,Fertilizer,3105,2026-01-01,2026-01-31,month,188000.0,86400.485,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,copper,Copper,7402,2026-01-01,2026-01-31,month,49000.0,4673.939,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,copper,Copper,7402,2026-01-01,2026-01-31,month,81000.0,7726.307,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,copper,Copper,7403,2026-01-01,2026-01-31,month,10000.0,948.104,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,copper,Copper,7403,2026-01-01,2026-01-31,month,13000.0,1335.911,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,copper,Copper,7403,2026-01-01,2026-01-31,month,23000.0,2206.697,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,copper,Copper,7408,2026-01-01,2026-01-31,month,80000.0,7338.793,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,copper,Copper,7408,2026-01-01,2026-01-31,month,93000.0,8509.873,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,copper,Copper,7408,2026-01-01,2026-01-31,month,795000.0,79627.134,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,copper,Copper,7408,2026-01-01,2026-01-31,month,7000.0,315.238,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,copper,Copper,7408,2026-01-01,2026-01-31,month,11000.0,938.869,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JOR,Jordan,import,copper,Copper,7408,2026-01-01,2026-01-31,month,683000.0,62654.947,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,copper,Copper,7408,2026-01-01,2026-01-31,month,5000.0,489.64,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,copper,Copper,7408,2026-01-01,2026-01-31,month,29000.0,2839.909,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,copper,Copper,7408,2026-01-01,2026-01-31,month,3000.0,293.784,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,copper,Copper,7408,2026-01-01,2026-01-31,month,34000.0,3118.987,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,copper,Copper,7408,2026-01-01,2026-01-31,month,1000.0,97.928,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,copper,Copper,7408,2026-01-01,2026-01-31,month,253000.0,23208.934,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,copper,Copper,7408,2026-01-01,2026-01-31,month,1000.0,91.735,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,copper,Copper,7408,2026-01-01,2026-01-31,month,6779000.0,581512.899,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,copper,Copper,7408,2026-01-01,2026-01-31,month,8000.0,733.879,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,copper,Copper,7408,2026-01-01,2026-01-31,month,609000.0,55522.97,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,UZB,Uzbekistan,import,copper,Copper,7408,2026-01-01,2026-01-31,month,489000.0,44858.374,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,87000.0,195.625,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BGR,Bulgaria,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,86000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,2000.0,4.497,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,1055000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,4000.0,8.994,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,767000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,3118000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,4000.0,8.994,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IDN,Indonesia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,1000.0,2.249,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,305000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,61000.0,137.163,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,8347000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,2600000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,3961000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,20000.0,44.971,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,1467000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,334000.0,751.021,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,1000.0,2.249,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,21000.0,47.22,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TLS,Timor-Leste,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,1000.0,2.249,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,61000.0,137.163,kg,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,3364000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,78000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,2434000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,478000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,4309000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,17001000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductor_equipment,Semiconductor Manufacturing Equipment,8486,2026-01-01,2026-01-31,month,612000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,145000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,46000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,10308000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,37000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,152000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SLV,El Salvador,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1432000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2284000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,161000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HUN,Hungary,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,35000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,33000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,119000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1958000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,224000.0,1792521.514,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,183000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2205000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,199000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,963000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MAR,Morocco,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,446000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,448000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,8000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PRT,Portugal,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,35000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ROU,Romania,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,45000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1244000.0,111858.467,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVK,Slovakia,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,201000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SVN,Slovenia,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ESP,Spain,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,5000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,300000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2413000.0,17529738.078,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MKD,North Macedonia,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,3000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,295000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,5213000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8541,2026-01-01,2026-01-31,month,137000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,AUT,Austria,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,35000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,BEL,Belgium,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2800000.0,1800611.286,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CAN,Canada,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,69000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHN,China,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,14836000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,COL,Colombia,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CRI,Costa Rica,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,230000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CYP,Cyprus,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,64000.0,41381.542,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CZE,Czechia,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,26000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DNK,Denmark,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,69000.0,62851.245,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FIN,Finland,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,30000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,FRA,France,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,666000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,DEU,Germany,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,5843000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GRC,Greece,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,HKG,"China, Hong Kong SAR",import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,1651000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IDN,Indonesia,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,12000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IRL,Ireland,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ITA,Italy,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,76000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,JPN,Japan,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,646000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,KOR,Rep. of Korea,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,76041000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,LTU,Lithuania,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MYS,Malaysia,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,15107000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MLT,Malta,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,4000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MEX,Mexico,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,189000.0,172499.473,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,S19,"Other Asia, nes",import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,42149000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,MAR,Morocco,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,16000.0,14968.38,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,NLD,Netherlands,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,5070000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PHL,Philippines,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,6480000.0,4181154.455,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,POL,Poland,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,PRT,Portugal,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,67000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ROU,Romania,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,1000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,IND,India,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,26000.0,19878.94,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SGP,Singapore,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,565000.0,348674.939,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,VNM,Viet Nam,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2221000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ZAF,South Africa,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,2000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,SWE,Sweden,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,50000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,CHE,Switzerland,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,269000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,THA,Thailand,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,3579000.0,2757124.103,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,ARE,United Arab Emirates,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,35000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,TUR,Türkiye,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,11000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,GBR,United Kingdom,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,854000.0,542792.502,u,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,USA,USA,import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,42150000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"
+,ISR,Israel,,_X ,"Areas, nes",import,semiconductors,Semiconductors,8542,2026-01-01,2026-01-31,month,9242000.0,0.0,N/A,un_comtrade,comtrade_hs_monthly,"Wednesday, April 1, 2026"

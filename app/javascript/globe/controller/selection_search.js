@@ -191,6 +191,27 @@ export function applySelectionSearchMethods(GlobeController) {
       }
     }
 
+    if (this.navalVesselsVisible) {
+      for (const [mmsi, s] of this._navalShipData) {
+        if (results.length >= MAX) break
+        const name = (s.name || "").toLowerCase()
+        const mmsiStr = `${mmsi}`.toLowerCase()
+        if (name.includes(q) || mmsiStr.includes(q)) {
+          results.push({
+            type: "naval_vessel",
+            icon: "fa-ship",
+            color: "#42a5f5",
+            name: s.name || mmsi,
+            detail: s.flag || "Naval vessel",
+            lat: s.latitude,
+            lng: s.longitude,
+            alt: 100000,
+            id: `${mmsi}`,
+          })
+        }
+      }
+    }
+
     const localSatIds = new Set()
     for (const s of this.satelliteData) {
       if (results.length >= MAX) break
@@ -219,6 +240,7 @@ export function applySelectionSearchMethods(GlobeController) {
     if (this.airportsVisible) {
       for (const [icao, ap] of Object.entries(this._airportDb)) {
         if (results.length >= MAX) break
+        if (ap.military) continue
         if (icao.toLowerCase().includes(q) || ap.name.toLowerCase().includes(q)) {
           results.push({
             type: "airport",
@@ -325,6 +347,10 @@ export function applySelectionSearchMethods(GlobeController) {
       this.toggleFlightSelection(r.id)
       const f = this.flightData.get(r.id)
       if (f) this.showDetail(r.id, f)
+    } else if (r.type === "naval_vessel" && r.id) {
+      this.toggleShipSelection(r.id)
+      const ship = this._resolveShipRecord?.(r.id)
+      if (ship) this._showShipLikeDetail?.(ship)
     } else if (r.type === "earthquake" && r.data) {
       this.showEarthquakeDetail(r.data)
     } else if (r.type === "power_plant" && r.data) {

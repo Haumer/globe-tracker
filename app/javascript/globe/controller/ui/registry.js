@@ -11,7 +11,7 @@ export const LAYER_REGISTRY = [
   { key: "situations", toggleTarget: "situationsToggle", method: "toggleSituations", visibleProp: "situationsVisible", qlTarget: "qlSituations", section: "events", pill: { label: "THE", color: "#ff7043" } },
   { key: "news", toggleTarget: "newsToggle", method: "toggleNews", visibleProp: "newsVisible", qlTarget: "qlNews", section: "events", pill: { label: "NEWS", color: "#7c4dff" } },
   { key: "insights", toggleTarget: "insightsToggle", method: "toggleInsights", visibleProp: "insightsVisible", qlTarget: "qlInsights", section: "events", pill: { label: "INS", color: "#26c6da" } },
-  { key: "militaryFlights", toggleTarget: "militaryToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "_milFlightsActive", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },
+  { key: "militaryFlights", toggleTarget: "militaryFlightsToggle", method: "toggleMilitaryFlightsFilter", visibleProp: "_milFlightsActive", qlTarget: "qlMilitaryFlights", section: "military", pill: { label: "MIL", color: "#ef5350" } },
   { key: "airbases", toggleTarget: "airbasesToggle", method: "toggleAirbases", visibleProp: "airbasesVisible", qlTarget: "qlAirbases", section: "military", pill: { label: "ABASE", color: "#ff7043" } },
   { key: "militaryBases", toggleTarget: "militaryBasesToggle", method: "toggleMilitaryBases", visibleProp: "militaryBasesVisible", qlTarget: "qlMilitaryBases", section: "military", pill: { label: "BASE", color: "#ff5252" } },
   { key: "navalVessels", toggleTarget: "navalVesselsToggle", method: "toggleNavalVessels", visibleProp: "navalVesselsVisible", qlTarget: "qlNavalVessels", section: "military", pill: { label: "NAVY", color: "#42a5f5" } },

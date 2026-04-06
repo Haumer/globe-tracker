@@ -168,6 +168,7 @@ export const GLOBE_TARGETS = [
   "qlStrikes",
   "militaryBasesToggle",
   "qlMilitaryBases",
+  "militaryFlightsToggle",
   "airbasesToggle",
   "qlAirbases",
   "navalVesselsToggle",

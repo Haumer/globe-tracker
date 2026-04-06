@@ -54,6 +54,57 @@ class Api::ShipsControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes mmsis, "211000002"
   end
 
+  test "civilian filter excludes naval vessels" do
+    Ship.create!(
+      mmsi: "211000003",
+      name: "USS Example",
+      ship_type: 35,
+      latitude: 54.1,
+      longitude: 10.1,
+      speed: 14.0,
+      heading: 90,
+      updated_at: Time.current,
+    )
+
+    get "/api/ships", params: { filter: "civilian", lamin: 53.0, lamax: 55.0, lomin: 9.0, lomax: 11.0 }
+    data = JSON.parse(response.body)
+    mmsis = data.map { |s| s["mmsi"] }
+
+    assert_includes mmsis, "211000001"
+    assert_not_includes mmsis, "211000003"
+  end
+
+  test "naval filter includes ships by type and callsign pattern" do
+    Ship.create!(
+      mmsi: "211000004",
+      name: "USS Example",
+      ship_type: 70,
+      latitude: 54.2,
+      longitude: 10.2,
+      speed: 12.0,
+      heading: 45,
+      updated_at: Time.current,
+    )
+    Ship.create!(
+      mmsi: "211000005",
+      name: "Coast Patrol",
+      ship_type: 55,
+      latitude: 54.3,
+      longitude: 10.3,
+      speed: 10.0,
+      heading: 135,
+      updated_at: Time.current,
+    )
+
+    get "/api/ships", params: { filter: "naval", lamin: 53.0, lamax: 55.0, lomin: 9.0, lomax: 11.0 }
+    data = JSON.parse(response.body)
+    mmsis = data.map { |s| s["mmsi"] }
+
+    assert_includes mmsis, "211000004"
+    assert_includes mmsis, "211000005"
+    assert_not_includes mmsis, "211000001"
+  end
+
   test "empty ships response exposes unconfigured source status" do
     Ship.delete_all
 

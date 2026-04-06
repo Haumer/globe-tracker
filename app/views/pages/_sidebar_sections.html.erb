@@ -6,6 +6,8 @@
 <%# Hidden layer toggles — controlled programmatically, must stay in Stimulus scope %>
 <div style="display:none;" aria-hidden="true">
   <input type="checkbox" data-globe-target="flightsToggle" data-action="change->globe#toggleFlights">
+  <input type="checkbox" data-globe-target="civilianToggle" data-action="change->globe#toggleFlightFilter" checked>
+  <input type="checkbox" data-globe-target="militaryToggle" data-action="change->globe#toggleFlightFilter" checked>
   <input type="checkbox" data-globe-target="shipsToggle" data-action="change->globe#toggleShips">
   <input type="checkbox" data-globe-target="citiesToggle" data-action="change->globe#toggleCities">
   <input type="checkbox" data-globe-target="airportsToggle" data-action="change->globe#toggleAirports">
@@ -17,6 +19,8 @@
   <input type="checkbox" data-globe-target="gpsJammingToggle" data-action="change->globe#toggleGpsJamming">
   <input type="checkbox" data-globe-target="newsToggle" data-action="change->globe#toggleNews">
   <input type="checkbox" data-globe-target="cablesToggle" data-action="change->globe#toggleCables">
+  <input type="checkbox" data-globe-target="portsToggle" data-action="change->globe#togglePorts">
+  <input type="checkbox" data-globe-target="shippingLanesToggle" data-action="change->globe#toggleShippingLanes">
   <input type="checkbox" data-globe-target="pipelinesToggle" data-action="change->globe#togglePipelines">
   <input type="checkbox" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
   <input type="checkbox" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
@@ -35,6 +39,7 @@
   <input type="checkbox" data-globe-target="railwaysToggle" data-action="change->globe#toggleRailways">
   <input type="checkbox" data-globe-target="trainsToggle" data-action="change->globe#toggleTrains">
   <input type="checkbox" data-globe-target="militaryBasesToggle" data-action="change->globe#toggleMilitaryBases">
+  <input type="checkbox" data-globe-target="militaryFlightsToggle" data-action="change->globe#toggleMilitaryFlightsFilter">
   <input type="checkbox" data-globe-target="airbasesToggle" data-action="change->globe#toggleAirbases">
   <input type="checkbox" data-globe-target="navalVesselsToggle" data-action="change->globe#toggleNavalVessels">
 </div>
@@ -123,11 +128,22 @@
 
       <% advanced_layers.each do |layer| %>
         <div class="sb-enabled-layer" data-enabled-layer-row="<%= layer[:key] %>" style="<%= enabled_layer_keys.include?(layer[:key]) ? '' : 'display:none;' %>">
-          <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="<%= layer[:key] %>" data-globe-target="<%= layer[:target] %>">
+          <div class="sb-layer-row <%= 'sb-disabled' if layer[:disabled] %>" data-action="click->globe#quickToggle" data-layer="<%= layer[:key] %>" data-globe-target="<%= layer[:target] %>">
             <i class="<%= layer[:icon] %> sb-layer-icon" style="color: <%= layer[:color] %>;"></i>
             <div class="sb-layer-copy">
-              <span class="sb-layer-name"><%= layer[:label] %></span>
+              <div class="sb-layer-title">
+                <span class="sb-layer-name"><%= layer[:label] %></span>
+                <% if layer[:tag].present? %>
+                  <span class="sb-layer-pill"><%= layer[:tag] %></span>
+                <% end %>
+              </div>
+              <% if layer[:meta].present? %>
+                <span class="sb-layer-meta"><%= layer[:meta] %></span>
+              <% end %>
             </div>
+            <% if layer[:disabled] %>
+              <span class="sb-layer-status">Soon</span>
+            <% end %>
             <span class="sb-layer-dot"></span>
           </div>
 
@@ -135,8 +151,6 @@
           <% when "flights" %>
             <div class="sb-sub-options" data-globe-target="flightSubOptions" style="display:none;">
               <div class="sb-mini-divider"></div>
-              <%= globe_toggle target: "civilianToggle", action: "toggleFlightFilter", label: "Civilian", dot: "#4fc3f7", checked: true %>
-              <%= globe_toggle target: "militaryToggle", action: "toggleFlightFilter", label: "Military", dot: "#ef5350", checked: true %>
               <%= globe_toggle target: "trailsToggle", action: "toggleTrails", label: "Flight Trails" %>
               <div class="sb-airline-filter" data-globe-target="airlineFilter" style="display:none;">
                 <div class="sb-filter-label">AIRLINES</div>
@@ -245,21 +259,30 @@
     </div>
     <div class="sb-section-body" role="region">
       <% if user_signed_in? %>
-        <div class="sb-library-note">Adding a layer reveals it above in <strong>Additional Layers</strong> and turns it on. Presets and region profiles can reveal layers there too.</div>
+        <div class="sb-library-note">Adding a layer reveals it above in <strong>Additional Layers</strong> and turns it on. Military-specific layers stay separate from civilian and general layers. Disabled items remain visible so upcoming feeds do not disappear from the catalog.</div>
         <div class="sb-library-grid">
           <% advanced_layers.each do |layer| %>
             <% enabled = enabled_layer_keys.include?(layer[:key]) %>
             <button type="button"
-                    class="sb-library-item <%= 'active' if enabled %>"
+                    class="sb-library-item <%= 'active' if enabled %> <%= 'is-disabled' if layer[:disabled] %>"
                     data-layer-enable-key="<%= layer[:key] %>"
-                    data-state="<%= enabled ? 'enabled' : 'available' %>"
+                    data-state="<%= enabled ? 'enabled' : layer[:disabled] ? 'disabled' : 'available' %>"
                     data-action="click->globe#toggleLayerEnablement"
-                    aria-pressed="<%= enabled %>">
+                    aria-pressed="<%= enabled %>"
+                    aria-disabled="<%= layer[:disabled] ? 'true' : 'false' %>">
               <i class="<%= layer[:icon] %> sb-library-icon" style="color: <%= layer[:color] %>;"></i>
               <span class="sb-library-copy">
-                <span class="sb-library-name"><%= layer[:label] %></span>
+                <span class="sb-library-title">
+                  <span class="sb-library-name"><%= layer[:label] %></span>
+                  <% if layer[:tag].present? %>
+                    <span class="sb-library-pill"><%= layer[:tag] %></span>
+                  <% end %>
+                </span>
+                <% if layer[:meta].present? %>
+                  <span class="sb-library-meta"><%= layer[:meta] %></span>
+                <% end %>
               </span>
-              <span class="sb-library-state" data-layer-library-state><%= enabled ? "Enabled" : "Add" %></span>
+              <span class="sb-library-state" data-layer-library-state><%= enabled ? "Enabled" : layer[:disabled] ? "Soon" : "Add" %></span>
             </button>
           <% end %>
         </div>

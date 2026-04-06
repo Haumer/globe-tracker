@@ -1,4 +1,4 @@
-import { ADVANCED_LIBRARY_KEYS, LAYER_REGISTRY_BY_KEY, QUICK_TOGGLE_MAP } from "globe/controller/ui/registry"
+import { ADVANCED_LIBRARY_KEYS, LAYER_REGISTRY_BY_KEY, QUICK_TOGGLE_MAP, isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
 
 const ADVANCED_LIBRARY_SET = new Set(ADVANCED_LIBRARY_KEYS)
 
@@ -8,6 +8,10 @@ export function applyUiLayerLibraryMethods(GlobeController) {
 
     const key = event.currentTarget.dataset.layerEnableKey
     if (!key || !ADVANCED_LIBRARY_SET.has(key)) return
+    if (isLayerTemporarilyDisabled(key)) {
+      this._toast?.("Layer temporarily disabled during cleanup")
+      return
+    }
 
     this._enabledAdvancedLayers ||= new Set()
 
@@ -31,7 +35,7 @@ export function applyUiLayerLibraryMethods(GlobeController) {
     let changed = false
 
     layerKeys.forEach((key) => {
-      if (!ADVANCED_LIBRARY_SET.has(key) || this._enabledAdvancedLayers.has(key)) return
+      if (!ADVANCED_LIBRARY_SET.has(key) || this._enabledAdvancedLayers.has(key) || isLayerTemporarilyDisabled(key)) return
       this._enabledAdvancedLayers.add(key)
       changed = true
     })
@@ -52,13 +56,17 @@ export function applyUiLayerLibraryMethods(GlobeController) {
 
     this.element.querySelectorAll("[data-layer-enable-key]").forEach((button) => {
       const key = button.dataset.layerEnableKey
-      const active = this._enabledAdvancedLayers.has(key)
-      button.classList.toggle("active", active)
+      const disabled = isLayerTemporarilyDisabled(key)
+      if (disabled) this._enabledAdvancedLayers.delete(key)
+      const active = !disabled && this._enabledAdvancedLayers.has(key)
+      button.classList.toggle("active", active && !disabled)
+      button.classList.toggle("is-disabled", disabled)
       button.setAttribute("aria-pressed", String(active))
-      button.dataset.state = active ? "enabled" : "available"
+      button.setAttribute("aria-disabled", String(disabled))
+      button.dataset.state = active ? "enabled" : disabled ? "disabled" : "available"
 
       const state = button.querySelector("[data-layer-library-state]")
-      if (state) state.textContent = active ? "Enabled" : "Add"
+      if (state) state.textContent = active ? "Enabled" : disabled ? "Soon" : "Add"
     })
 
     const emptyState = this.element.querySelector("[data-advanced-empty-state]")

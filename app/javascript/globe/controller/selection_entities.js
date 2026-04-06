@@ -242,7 +242,7 @@ export function applySelectionEntityMethods(GlobeController) {
     }
 
     for (const mmsi of this.selectedShips) {
-      const s = this.shipData.get(mmsi)
+      const s = this._resolveShipRecord?.(mmsi)
       const name = s?.name || mmsi
       const focused = this._focusedSelection?.type === "ship" && this._focusedSelection?.id === mmsi
       html += `<div class="sel-chip${focused ? " sel-focused" : ""}" data-action="click->globe#focusSelection" data-sel-type="ship" data-sel-id="${mmsi}">
@@ -283,10 +283,10 @@ export function applySelectionEntityMethods(GlobeController) {
         return
       }
     } else if (type === "ship") {
-      const s = this.shipData.get(id)
+      const s = this._resolveShipRecord?.(id)
       if (s) {
-        this._flyToCoordinates?.(s.longitude, s.latitude, 100000, { duration: 1.0 })
-        this.showShipDetail(s)
+        this._flyToCoordinates?.(s.currentLng || s.longitude, s.currentLat || s.latitude, 100000, { duration: 1.0 })
+        this._showShipLikeDetail?.(s)
         return
       }
     } else if (type === "sat") {
@@ -446,11 +446,11 @@ export function applySelectionEntityMethods(GlobeController) {
         return Cesium.Cartesian3.fromDegrees(fd.currentLng, fd.currentLat, fd.currentAlt)
       }, false)
     } else if (type === "ship") {
-      dataSource = getDataSource(this.viewer, this._ds, "ships")
+      dataSource = this._shipSelectionDataSource?.(id) || getDataSource(this.viewer, this._ds, "ships")
       positionProp = new Cesium.CallbackProperty(() => {
-        const sd = this.shipData.get(id)
+        const sd = this._resolveShipRecord?.(id)
         if (!sd) return Cesium.Cartesian3.fromDegrees(0, 0, 0)
-        return Cesium.Cartesian3.fromDegrees(sd.currentLng, sd.currentLat, 0)
+        return Cesium.Cartesian3.fromDegrees(sd.currentLng || sd.longitude, sd.currentLat || sd.latitude, 0)
       }, false)
     } else if (type === "sat") {
       dataSource = this.getSatellitesDataSource()
@@ -519,9 +519,9 @@ export function applySelectionEntityMethods(GlobeController) {
 
   GlobeController.prototype.flyToShip = function(event) {
     const mmsi = event.currentTarget.dataset.mmsi
-    const s = this.shipData.get(mmsi)
+    const s = this._resolveShipRecord?.(mmsi)
     if (s && s.latitude && s.longitude) {
-      this._flyToCoordinates?.(s.longitude, s.latitude, 100000, { duration: 1.0 })
+      this._flyToCoordinates?.(s.currentLng || s.longitude, s.currentLat || s.latitude, 100000, { duration: 1.0 })
     }
   }
 

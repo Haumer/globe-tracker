@@ -181,6 +181,13 @@
     color: var(--gt-text-dim);
   }
 
+  .sb-layer-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
   .sb-layer-copy {
     flex: 1;
     min-width: 0;
@@ -194,6 +201,18 @@
     font: 400 9px var(--gt-mono);
     color: rgba(200, 210, 225, 0.42);
     line-height: 1.25;
+  }
+
+  .sb-layer-pill {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(239, 83, 80, 0.14);
+    border: 1px solid rgba(239, 83, 80, 0.28);
+    color: #ff8a80;
+    font: 700 8px var(--gt-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .sb-layer-dot {

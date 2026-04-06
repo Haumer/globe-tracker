@@ -30,6 +30,7 @@ export function applyConflictPulseMethods(GlobeController) {
     } else {
       this._stopConflictPulse({ clearData: true })
     }
+    if (this.insightsVisible && this._renderInsightMarkers) this._renderInsightMarkers()
     this._updateStats()
     this._syncQuickBar()
     this._savePrefs()

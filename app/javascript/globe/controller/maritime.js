@@ -6,12 +6,10 @@ export function applyMaritimeMethods(GlobeController) {
 
     this._toast("Loading ships...")
     try {
-      let url = "/api/ships"
+      const params = new URLSearchParams({ filter: "civilian" })
       const bounds = this.getFilterBounds()
-      if (bounds) {
-        const params = new URLSearchParams(bounds).toString()
-        url += `?${params}`
-      }
+      if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key, value))
+      const url = `/api/ships?${params.toString()}`
 
       const response = await fetch(url)
       if (!response.ok) return
@@ -150,6 +148,7 @@ export function applyMaritimeMethods(GlobeController) {
           flag: ship.flag,
           shipType: ship.ship_type,
           name,
+          _layerKind: "ship",
         })
       }
     })
@@ -176,6 +175,30 @@ export function applyMaritimeMethods(GlobeController) {
   }
 
   GlobeController.prototype.getShipsDataSource = function() { return getDataSource(this.viewer, this._ds, "ships") }
+
+  GlobeController.prototype._resolveShipRecord = function(mmsi) {
+    return this.shipData.get(`${mmsi}`)
+      || this.shipData.get(mmsi)
+      || this._navalShipData.get(`${mmsi}`)
+      || this._navalShipData.get(mmsi)
+      || null
+  }
+
+  GlobeController.prototype._shipSelectionDataSource = function(mmsi) {
+    const ship = this._resolveShipRecord(mmsi)
+    return ship?._layerKind === "naval_vessel"
+      ? this.getNavalVesselsDataSource?.()
+      : this.getShipsDataSource()
+  }
+
+  GlobeController.prototype._showShipLikeDetail = function(ship) {
+    if (!ship) return
+    if (ship._layerKind === "naval_vessel") {
+      this.showNavalVesselDetail(ship)
+      return
+    }
+    this.showShipDetail(ship)
+  }
 
   GlobeController.prototype.getShipTypeName = function(type) {
     const types = {

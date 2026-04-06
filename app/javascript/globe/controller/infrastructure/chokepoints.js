@@ -10,6 +10,7 @@ export function applyChokepointsMethods(GlobeController) {
       this._clearChokepointEntities()
       if (this._syncRightPanels) this._syncRightPanels()
     }
+    if (this.insightsVisible && this._renderInsightMarkers) this._renderInsightMarkers()
     this._syncQuickBar()
     this._savePrefs()
   }

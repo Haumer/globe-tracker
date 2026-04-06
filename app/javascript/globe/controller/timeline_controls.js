@@ -36,7 +36,9 @@ export function applyTimelineControlMethods(GlobeController) {
   GlobeController.prototype._timelinePauseLive = function() {
     this._timelinePausedIntervals = {
       flight: !!this.flightInterval,
+      militaryFlight: !!this._milFlightInterval,
       ship: !!this.shipInterval,
+      navalShip: !!this._navalShipInterval,
       strikes: !!this._strikesInterval,
       gpsJamming: !!this._gpsJammingInterval,
       news: !!this._newsInterval,
@@ -53,7 +55,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._clearConflictPulseEntities?.()
     this._lastConflictPulseBucket = null
 
-    const liveDataSources = new Set(["flights", "ships", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+    const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
     this._timelineHiddenSources = []
     for (const [name, ds] of Object.entries(this._ds)) {
       if (!liveDataSources.has(name)) continue
@@ -71,9 +73,21 @@ export function applyTimelineControlMethods(GlobeController) {
       this.fetchFlights()
       this.flightInterval = setInterval(() => this.fetchFlights(), 10000)
     }
+    if (this._milFlightsActive) {
+      this._fetchMilitaryFlights()
+      this._milFlightInterval = setInterval(() => {
+        if (this._milFlightsActive) this._fetchMilitaryFlights()
+      }, 10000)
+    }
     if (this.shipsVisible) {
       this.fetchShips()
       this.shipInterval = setInterval(() => this.fetchShips(), 60000)
+    }
+    if (this.navalVesselsVisible) {
+      this.fetchNavalVessels()
+      this._navalShipInterval = setInterval(() => {
+        if (this.navalVesselsVisible) this.fetchNavalVessels()
+      }, 60000)
     }
     if (this.gpsJammingVisible) {
       this.fetchGpsJamming()
@@ -311,7 +325,9 @@ function autoEnablePlaybackLayers() {
 
 function clearLiveIntervals() {
   if (this.flightInterval) { clearInterval(this.flightInterval); this.flightInterval = null }
+  if (this._milFlightInterval) { clearInterval(this._milFlightInterval); this._milFlightInterval = null }
   if (this.shipInterval) { clearInterval(this.shipInterval); this.shipInterval = null }
+  if (this._navalShipInterval) { clearInterval(this._navalShipInterval); this._navalShipInterval = null }
   if (this._strikesInterval) { clearInterval(this._strikesInterval); this._strikesInterval = null }
   if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
   if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
@@ -324,7 +340,9 @@ function restoreHiddenSources() {
 
   const activeDs = new Set()
   if (this.flightsVisible) activeDs.add("flights")
+  if (this._milFlightsActive) activeDs.add("mil-flights")
   if (this.shipsVisible) activeDs.add("ships")
+  if (this.navalVesselsVisible) activeDs.add("naval-vessels")
   if (this.airportsVisible) activeDs.add("airports")
   if (this.earthquakesVisible || this.naturalEventsVisible) activeDs.add("events")
   if (this.gpsJammingVisible) activeDs.add("gpsJamming")
@@ -340,7 +358,7 @@ function restoreHiddenSources() {
 }
 
 function clearLiveEntities() {
-  const liveDataSources = new Set(["flights", "ships", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
   for (const [name, source] of Object.entries(this._ds)) {
     if (liveDataSources.has(name) && source) source.entities.removeAll()
   }

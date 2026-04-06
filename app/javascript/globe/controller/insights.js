@@ -4,9 +4,26 @@ import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, r
 export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._shouldRenderInsightMarker = function(insight) {
     const type = `${insight?.type || ""}`
-    // Keep fire-related insights in the feed/context, but don't paint them on the globe
-    // where they read like a second uncontrolled fire-hotspot layer.
-    return !type.startsWith("fire_")
+    // Keep layer-derivative insights in feed/context, but don't paint them on the globe
+    // when a dedicated layer is already showing the same phenomenon.
+    if (type.startsWith("fire_")) return false
+
+    if (this.situationsVisible && (
+      type === "conflict_pulse" ||
+      type === "chokepoint_disruption" ||
+      type === "chokepoint_market_stress"
+    )) {
+      return false
+    }
+
+    if (this.chokepointsVisible && (
+      type === "chokepoint_disruption" ||
+      type === "chokepoint_market_stress"
+    )) {
+      return false
+    }
+
+    return true
   }
 
   GlobeController.prototype.toggleInsights = function() {
@@ -336,7 +353,7 @@ export function applyInsightsMethods(GlobeController) {
     const lng = ship.currentLng ?? ship.longitude
     this._flyToCoordinates?.(lng, lat, 100000, { duration: 1.0 })
 
-    this.showShipDetail(ship)
+    this._showShipLikeDetail?.(ship)
     return true
   }
 
@@ -395,11 +412,20 @@ export function applyInsightsMethods(GlobeController) {
 
     if (this._ensureContextLayerVisible) this._ensureContextLayerVisible("ships")
 
-    let ship = this.shipData.get(`${shipId}`) || this.shipData.get(shipId)
+    let ship = this._resolveShipRecord?.(shipId)
     if (!ship && Number.isFinite(insight?.lat) && Number.isFinite(insight?.lng)) {
       await this._flyToInsightTarget(insight.lat, insight.lng, 180000, 1.1)
       if (typeof this.fetchShips === "function") await this.fetchShips()
-      ship = this.shipData.get(`${shipId}`) || this.shipData.get(shipId)
+      if (!ship && typeof this.fetchNavalVessels === "function") {
+        const priorNavalState = this.navalVesselsVisible
+        if (!priorNavalState) this.navalVesselsVisible = true
+        await this.fetchNavalVessels()
+        if (!priorNavalState) {
+          this.navalVesselsVisible = false
+          this._clearNavalVesselEntities?.()
+        }
+      }
+      ship = this._resolveShipRecord?.(shipId)
     }
 
     if (!ship) {

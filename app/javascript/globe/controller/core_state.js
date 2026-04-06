@@ -38,6 +38,7 @@ const INTERVAL_PROPS = [
   "_alertPollInterval",
   "flightInterval",
   "shipInterval",
+  "_navalShipInterval",
   "_gpsJammingInterval",
   "_newsInterval",
   "_eventsInterval",
@@ -228,6 +229,8 @@ export function initializeCoreState(controller) {
   controller.shipsVisible = false
   controller.shipData = new Map()
   controller.shipInterval = null
+  controller._navalShipData = new Map()
+  controller._navalShipInterval = null
   controller.bordersVisible = false
   controller.bordersLoaded = false
   controller.selectedCountries = new Set()

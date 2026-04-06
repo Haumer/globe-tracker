@@ -115,7 +115,7 @@ function buildLayerPrefs() {
     traffic: this.trafficVisible,
     notams: this.notamsVisible,
     insights: this.insightsVisible,
-    fireHotspots: false,
+    fireHotspots: this.fireHotspotsVisible,
     fireClusters: this.fireClustersVisible,
     strikeArcs: this._strikeArcsVisible,
     hexTheater: this._hexTheaterVisible,
@@ -126,6 +126,7 @@ function buildLayerPrefs() {
     financial: this.financialVisible,
     chokepoints: this.chokepointsVisible,
     militaryBases: this.militaryBasesVisible,
+    militaryFlights: this._milFlightsActive,
     airbases: this.airbasesVisible,
     navalVessels: this.navalVesselsVisible,
     weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
@@ -222,6 +223,7 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.traffic, "trafficToggle", "toggleTraffic")
   toggleIf.call(this, l.notams, "notamsToggle", "toggleNotams")
   toggleIf.call(this, l.insights, "insightsToggle", "toggleInsights")
+  toggleIf.call(this, l.fireHotspots, "fireHotspotsToggle", "toggleFireHotspots")
 
   if (this.hasFireClustersToggleTarget) {
     const fireClustersEnabled = l.fireClusters !== false
@@ -236,6 +238,7 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.financial, "financialToggle", "toggleFinancial")
   toggleIf.call(this, l.chokepoints, "chokepointsToggle", "toggleChokepoints")
   toggleIf.call(this, l.militaryBases, "militaryBasesToggle", "toggleMilitaryBases")
+  toggleIf.call(this, l.militaryFlights, "militaryFlightsToggle", "toggleMilitaryFlightsFilter")
   toggleIf.call(this, l.airbases, "airbasesToggle", "toggleAirbases")
   toggleIf.call(this, l.navalVessels, "navalVesselsToggle", "toggleNavalVessels")
   toggleIf.call(this, l.terrain, "terrainToggle", "toggleTerrain")

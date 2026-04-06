@@ -33,9 +33,14 @@ export function applyFlightRenderingMethods(GlobeController) {
     const Cesium = window.Cesium
     const dataSource = this.getFlightsDataSource()
     const currentIds = new Set()
+    const generalFlights = (flights || []).filter(flight => !this._isMilitaryFlight({
+      id: flight.icao24,
+      callsign: (flight.callsign || flight.icao24 || "").trim(),
+      military: flight.military,
+    }))
 
     dataSource.entities.suspendEvents()
-    flights.forEach(flight => {
+    generalFlights.forEach(flight => {
       if (!flight.latitude || !flight.longitude) return
 
       const id = flight.icao24
@@ -183,7 +188,7 @@ export function applyFlightRenderingMethods(GlobeController) {
           outsideAirTemp: flight.outside_air_temp,
           navAltitudeFms: flight.nav_altitude_fms,
         })
-        entity.show = isMil ? this.showMilitary : this.showCivilian
+        entity.show = this.showCivilian
       }
     })
 
@@ -386,7 +391,15 @@ export function applyFlightRenderingMethods(GlobeController) {
   }
 
   GlobeController.prototype.toggleMilitaryFlightsFilter = function() {
-    this._milFlightsActive = !this._milFlightsActive
+    this._milFlightsActive = this.hasMilitaryFlightsToggleTarget
+      ? this.militaryFlightsToggleTarget.checked
+      : !this._milFlightsActive
+
+    if (this._timelineActive) {
+      this._timelineOnLayerToggle?.()
+      this._savePrefs()
+      return
+    }
 
     if (this._milFlightsActive) {
       this._fetchMilitaryFlights()
@@ -407,6 +420,7 @@ export function applyFlightRenderingMethods(GlobeController) {
   }
 
   GlobeController.prototype._fetchMilitaryFlights = async function() {
+    if (this._timelineActive) return
     const bounds = this.getViewportBounds()
     let url = "/api/flights?filter=military"
     if (bounds) {
@@ -479,7 +493,7 @@ export function applyFlightRenderingMethods(GlobeController) {
   GlobeController.prototype.getFlightsDataSource = function() { return getDataSource(this.viewer, this._ds, "flights") }
 
   GlobeController.prototype.toggleFlights = function() {
-    this.flightsVisible = this.flightsToggleTarget.checked
+    this.flightsVisible = this.hasFlightsToggleTarget && this.flightsToggleTarget.checked
     if (this._timelineActive) {
       this._timelineOnLayerToggle?.()
       this._savePrefs()

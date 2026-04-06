@@ -1,13 +1,4 @@
-import { getDataSource, cachedColor, LABEL_DEFAULTS } from "globe/utils"
-
-const NAVAL_SHIP_TYPES = new Set([35, 55])
-const NAVAL_NAME_PATTERNS = /\b(USS|HMS|HMAS|INS|KRI|HMCS|HMNZS|FGS|FS|ITS|ESPS|TCG|ROKS|JS|BRP)\b/i
-
-function isNavalVessel(ship) {
-  if (NAVAL_SHIP_TYPES.has(ship.shipType)) return true
-  if (ship.name && NAVAL_NAME_PATTERNS.test(ship.name)) return true
-  return false
-}
+import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
 
 function createNavalIcon() {
   const size = 28
@@ -53,16 +44,74 @@ export function applyNavalVesselsMethods(GlobeController) {
     return getDataSource(this.viewer, this._ds, "naval-vessels")
   }
 
+  GlobeController.prototype.fetchNavalVessels = async function() {
+    if (!this.navalVesselsVisible || this._timelineActive) return
+
+    try {
+      const bounds = this.getFilterBounds?.() || this.getViewportBounds?.()
+      const params = new URLSearchParams({ filter: "naval" })
+      if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key, value))
+
+      const response = await fetch(`/api/ships?${params.toString()}`)
+      if (!response.ok) return
+
+      const ships = await response.json()
+      this._navalShipData = new Map(
+        ships
+          .filter(ship => ship.latitude && ship.longitude)
+          .map(ship => {
+            const mmsi = `${ship.mmsi}`
+            const name = (ship.name || ship.mmsi || "").trim()
+            return [mmsi, {
+              mmsi,
+              latitude: ship.latitude,
+              longitude: ship.longitude,
+              currentLat: ship.latitude,
+              currentLng: ship.longitude,
+              heading: ship.heading || ship.course || 0,
+              speed: ship.speed,
+              course: ship.course,
+              destination: ship.destination,
+              flag: ship.flag,
+              shipType: ship.ship_type,
+              name,
+              _layerKind: "naval_vessel",
+            }]
+          })
+      )
+
+      this.renderNavalVessels()
+    } catch (error) {
+      console.error("Naval vessels fetch failed:", error)
+    }
+  }
+
   GlobeController.prototype.toggleNavalVessels = function() {
     this.navalVesselsVisible = this.hasNavalVesselsToggleTarget && this.navalVesselsToggleTarget.checked
+    if (this._timelineActive) {
+      this._timelineOnLayerToggle?.()
+      this._syncQuickBar()
+      this._savePrefs()
+      return
+    }
     if (this.navalVesselsVisible) {
-      this.renderNavalVessels()
+      this.fetchNavalVessels()
+      if (!this._navalShipInterval) {
+        this._navalShipInterval = setInterval(() => {
+          if (this.navalVesselsVisible) this.fetchNavalVessels()
+        }, 60000)
+      }
       if (!this._navalCameraCb) {
-        this._navalCameraCb = () => { if (this.navalVesselsVisible) this.renderNavalVessels() }
+        this._navalCameraCb = () => { if (this.navalVesselsVisible) this.fetchNavalVessels() }
         this.viewer.camera.moveEnd.addEventListener(this._navalCameraCb)
       }
     } else {
       this._clearNavalVesselEntities()
+      this._navalShipData.clear()
+      if (this._navalShipInterval) {
+        clearInterval(this._navalShipInterval)
+        this._navalShipInterval = null
+      }
       if (this._navalCameraCb) {
         this.viewer.camera.moveEnd.removeEventListener(this._navalCameraCb)
         this._navalCameraCb = null
@@ -78,20 +127,11 @@ export function applyNavalVesselsMethods(GlobeController) {
 
     const Cesium = window.Cesium
     const dataSource = this.getNavalVesselsDataSource()
-    const bounds = this.getViewportBounds()
-
     if (!this._navalIcon) this._navalIcon = createNavalIcon()
     const color = Cesium.Color.fromCssColorString("#42a5f5")
 
-    // Filter ships to naval vessels
     const navalShips = []
-    this.shipData.forEach((ship, mmsi) => {
-      if (!isNavalVessel(ship)) return
-      if (bounds) {
-        const lat = ship.currentLat || ship.latitude
-        const lng = ship.currentLng || ship.longitude
-        if (lat < bounds.lamin || lat > bounds.lamax || lng < bounds.lomin || lng > bounds.lomax) return
-      }
+    this._navalShipData.forEach((ship, mmsi) => {
       if (this.hasActiveFilter && this.hasActiveFilter()) {
         const lat = ship.currentLat || ship.latitude
         const lng = ship.currentLng || ship.longitude
@@ -137,6 +177,7 @@ export function applyNavalVesselsMethods(GlobeController) {
     })
 
     dataSource.entities.resumeEvents()
+    this._updateStats?.()
     this._requestRender()
   }
 

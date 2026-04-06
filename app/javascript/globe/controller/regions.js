@@ -82,14 +82,19 @@ export function applyRegionMethods(GlobeController) {
 
     // Enable region layers via applyDeepLink (reuses existing toggle logic)
     const state = {
-      layers: region.layers,
+      layers: [...region.layers],
       satCategories: region.satCategories || [],
     }
 
-    // Also enable military flights by default for conflict regions
-    if (region.layers.includes("flights")) {
+    // Region presets should preserve the old "full picture" behavior even now that
+    // civilian and military feeds are split into separate toggles.
+    if (region.layers.includes("flights") && !state.layers.includes("militaryFlights")) {
+      state.layers.push("militaryFlights")
       state.showMilitary = true
       state.showCivilian = true
+    }
+    if (region.layers.includes("ships") && !state.layers.includes("navalVessels")) {
+      state.layers.push("navalVessels")
     }
 
     applyDeepLink(this, state)

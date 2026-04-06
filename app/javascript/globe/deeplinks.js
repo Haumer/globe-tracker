@@ -11,7 +11,7 @@ const LAYER_KEYS = [
   "earthquakes", "naturalEvents", "cameras", "gpsJamming", "news",
   "cables", "ports", "shippingLanes", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
   "fireHotspots", "weather", "financial", "insights", "situations",
-  "pipelines", "railways", "trains", "chokepoints", "militaryBases", "airbases",
+  "pipelines", "railways", "trains", "chokepoints", "militaryBases", "militaryFlights", "airbases", "navalVessels",
 ]
 
 // Short aliases to keep URLs compact
@@ -21,7 +21,7 @@ const LAYER_SHORT = {
   gpsJamming: "gj", news: "nw", cables: "cb", ports: "po", shippingLanes: "sl", outages: "ou",
   powerPlants: "pp", conflicts: "cf", traffic: "tf", notams: "nt", terrain: "tn",
   fireHotspots: "fh", weather: "wx", financial: "fn", insights: "in", situations: "si",
-  pipelines: "pl", railways: "rl", trains: "tns", chokepoints: "cp", militaryBases: "mb", airbases: "ab",
+  pipelines: "pl", railways: "rl", trains: "tns", chokepoints: "cp", militaryBases: "mb", militaryFlights: "mf", airbases: "ab", navalVessels: "nv",
 }
 
 const SHORT_TO_LAYER = Object.fromEntries(
@@ -58,9 +58,9 @@ export function encodeState(controller) {
 
   // Active layers
   const activeLayers = LAYER_KEYS.filter(k => {
-    if (k === "naturalEvents") return controller.naturalEventsVisible
     if (k === "terrain") return controller.terrainEnabled
-    return controller[k + "Visible"]
+    const visibleProp = LAYER_REGISTRY_BY_KEY[k]?.visibleProp || `${k}Visible`
+    return controller[visibleProp]
   })
   if (activeLayers.length > 0) {
     parts.push("l:" + activeLayers.map(k => LAYER_SHORT[k]).join(","))
@@ -205,7 +205,7 @@ export function applyDeepLink(controller, state) {
       terrain: "toggleTerrain", fireHotspots: "toggleFireHotspots", weather: "toggleWeather",
       financial: "toggleFinancial", insights: "toggleInsights", situations: "toggleSituations",
       pipelines: "togglePipelines", railways: "toggleRailways", trains: "toggleTrains",
-      chokepoints: "toggleChokepoints", militaryBases: "toggleMilitaryBases", airbases: "toggleAirbases",
+      chokepoints: "toggleChokepoints", militaryBases: "toggleMilitaryBases", militaryFlights: "toggleMilitaryFlightsFilter", airbases: "toggleAirbases", navalVessels: "toggleNavalVessels",
     }
     const targetMap = {
       flights: "flightsToggle", trails: "trailsToggle", ships: "shipsToggle",
@@ -217,7 +217,7 @@ export function applyDeepLink(controller, state) {
       fireHotspots: "fireHotspotsToggle", weather: "weatherToggle", financial: "financialToggle",
       terrain: "terrainToggle", insights: "insightsToggle", situations: "situationsToggle",
       pipelines: "pipelinesToggle", railways: "railwaysToggle", trains: "trainsToggle",
-      chokepoints: "chokepointsToggle", militaryBases: "militaryBasesToggle", airbases: "airbasesToggle",
+      chokepoints: "chokepointsToggle", militaryBases: "militaryBasesToggle", militaryFlights: "militaryFlightsToggle", airbases: "airbasesToggle", navalVessels: "navalVesselsToggle",
     }
 
     for (const layer of state.layers) {

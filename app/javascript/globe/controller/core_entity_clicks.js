@@ -77,7 +77,15 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "milflt-", skip: [], handler: (id) => {
         const data = this._milFlightData?.find(flight => flight.icao24 === id)
         if (!data) return false
-        this.showDetail(data)
+        this.showDetail(id, {
+          ...data,
+          id,
+          currentLat: data.latitude,
+          currentLng: data.longitude,
+          currentAlt: data.altitude,
+          verticalRate: data.vertical_rate,
+          originCountry: data.origin_country,
+        })
         return true
       }},
       { prefix: "strike-", skip: [], handler: (id) => {
@@ -201,7 +209,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
       }},
       { prefix: "airbase-", skip: [], handler: (id) => { this.showAirbaseDetail(id); return true }},
       { prefix: "naval-", skip: [], handler: (id) => {
-        const data = this.shipData.get(id)
+        const data = this._navalShipData.get(id) || this._navalShipData.get(`${id}`)
         if (!data) return false
         this.showNavalVesselDetail(data)
         return true

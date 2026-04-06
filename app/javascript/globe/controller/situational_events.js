@@ -28,29 +28,23 @@ export function applySituationalEventMethods(GlobeController) {
     dataSource.show = true
     const hasFilter = this.hasActiveFilter()
 
-    let entries = Object.entries(this._airportDb)
+    let entries = Object.entries(this._airportDb).filter(([, ap]) => !ap.military)
 
     if (hasFilter) {
       entries = entries.filter(([, ap]) => this.pointPassesFilter(ap.lat, ap.lng))
     }
 
     const civilColorHex = "#ffd54f"
-    const milColorHex = "#ef5350"
     const civilIcon = createAirportIcon(civilColorHex, false)
-    const milIcon = createAirportIcon(milColorHex, true)
     const civilColor = Cesium.Color.fromCssColorString(civilColorHex)
-    const milColor = Cesium.Color.fromCssColorString(milColorHex)
 
     dataSource.entities.suspendEvents()
     for (const [icao, ap] of entries) {
-      const isMil = ap.military
-      const color = isMil ? milColor : civilColor
-
       const entity = dataSource.entities.add({
         id: `airport-${icao}`,
         position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat, 10),
         billboard: {
-          image: isMil ? milIcon : civilIcon,
+          image: civilIcon,
           scale: 1,
           scaleByDistance: new Cesium.NearFarScalar(5e4, 1.2, 1e7, 0.4),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -60,7 +54,7 @@ export function applySituationalEventMethods(GlobeController) {
         label: {
           text: icao,
           font: LABEL_DEFAULTS.font,
-          fillColor: color.withAlpha(0.95),
+          fillColor: civilColor.withAlpha(0.95),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,
           style: LABEL_DEFAULTS.style(),

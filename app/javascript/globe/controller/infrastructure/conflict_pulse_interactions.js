@@ -194,7 +194,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
       duration: 1.0,
       complete: () => {
         const layerToggles = {
-          flights: "flightsToggle",
+          militaryFlights: "militaryFlightsToggle",
           gpsJamming: "gpsJammingToggle",
           fires: "firesToggle",
           conflicts: "conflictsToggle",
@@ -511,7 +511,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
       duration: 1.5,
       complete: () => {
         const layerMap = {
-          military_flights: "flightsToggle",
+          military_flights: "militaryFlightsToggle",
           gps_jamming: "gpsJammingToggle",
           fire_hotspots: "firesToggle",
           known_conflict_zone: "conflictsToggle",

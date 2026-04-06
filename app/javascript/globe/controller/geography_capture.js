@@ -21,7 +21,9 @@ export function applyGeographyCaptureMethods(GlobeController) {
     ["weather", "weatherVisible"],
     ["fireHotspots", "fireHotspotsVisible"],
     ["militaryBases", "militaryBasesVisible"],
+    ["militaryFlights", "_milFlightsActive"],
     ["airbases", "airbasesVisible"],
+    ["navalVessels", "navalVesselsVisible"],
   ]
 
   GlobeController.prototype.toggleRecording = function() {

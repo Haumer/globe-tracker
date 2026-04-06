@@ -192,16 +192,60 @@ class SupplyChainNormalizationService
     end
 
     def direct_chokepoints_for_partner(partner)
-      country_code = partner.fetch(:partner_country_code, nil).to_s.upcase
-      return [] if country_code.blank?
+      country_codes = partner_country_codes_for_chokepoint_lookup(partner)
+      return [] if country_codes.blank?
 
       ChokepointMonitorService::CHOKEPOINTS.each_with_object([]) do |(chokepoint_key, config), memo|
-        memo << chokepoint_key.to_s if Array(config[:countries]).include?(country_code)
+        chokepoint_countries = Array(config[:countries])
+        memo << chokepoint_key.to_s if country_codes.any? { |country_code| chokepoint_countries.include?(country_code) }
       end
     end
 
     def chokepoint_name_for(chokepoint_key)
       ChokepointMonitorService::CHOKEPOINTS.fetch(chokepoint_key.to_sym).fetch(:name)
+    end
+
+    def partner_country_codes_for_chokepoint_lookup(partner)
+      codes = []
+
+      iso2 = partner.fetch(:partner_country_code, nil).to_s.upcase
+      codes << iso2 if iso2.present?
+
+      alpha3 = partner.fetch(:partner_country_code_alpha3, nil).to_s.upcase
+      if alpha3.present?
+        mapped_iso2 = country_reference_for_alpha3(alpha3)[:country_code]
+        codes << mapped_iso2 if mapped_iso2.present?
+      end
+
+      codes.compact_blank.uniq
+    end
+
+    def country_reference_for_alpha3(country_code_alpha3)
+      return {} if country_code_alpha3.blank?
+
+      country_reference_by_alpha3[country_code_alpha3.to_s.upcase] || {}
+    end
+
+    def country_reference_by_alpha3
+      @country_reference_by_alpha3 ||= begin
+        refs = {}
+
+        CountryProfile.where.not(country_code_alpha3: nil).find_each do |profile|
+          refs[profile.country_code_alpha3.to_s.upcase] ||= {
+            country_code: profile.country_code.to_s.upcase.presence,
+            country_name: profile.country_name,
+          }
+        end
+
+        CountryIndicatorSnapshot.where.not(country_code_alpha3: nil).find_each do |snapshot|
+          refs[snapshot.country_code_alpha3.to_s.upcase] ||= {
+            country_code: snapshot.country_code.to_s.upcase.presence,
+            country_name: snapshot.country_name,
+          }
+        end
+
+        refs
+      end
     end
   end
 end

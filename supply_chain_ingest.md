@@ -42,6 +42,7 @@ This app now has a raw economic and supply-chain ingest layer built around publi
   - cadence: daily via `RefreshEnergyBalancesJob`
   - storage: `energy_balance_snapshots`
   - source mode:
+    - default `JODI Oil` remote pull when no override is configured
     - normalized CSV from `ENERGY_BALANCES_SOURCE_PATH`
     - normalized CSV from `ENERGY_BALANCES_SOURCE_URL`
   - intended upstream sources:
@@ -110,6 +111,8 @@ Optional:
 - `release_version`
 
 ### Energy Balances
+
+By default the app can ingest the current or previous-year `JODI Oil` primary CSV directly, so both local and production environments can populate `energy_balance_snapshots` without mounting a manual file.
 
 Required:
 

@@ -14,6 +14,23 @@ class SupplyChainNormalizationServiceTest < ActiveSupport::TestCase
     CountryChokepointExposure.delete_all
     SourceFeedStatus.delete_all
 
+    CountryProfile.create!(
+      country_code: "AE",
+      country_code_alpha3: "ARE",
+      country_name: "United Arab Emirates",
+      latest_year: 2024,
+      fetched_at: Time.current,
+      metadata: {}
+    )
+    CountryProfile.create!(
+      country_code: "SA",
+      country_code_alpha3: "SAU",
+      country_name: "Saudi Arabia",
+      latest_year: 2024,
+      fetched_at: Time.current,
+      metadata: {}
+    )
+
     create_country_indicator!("gdp_nominal_usd", 4_200_000_000_000)
     create_country_indicator!("gdp_per_capita_usd", 33_950.1)
     create_country_indicator!("population_total", 124_500_000)
@@ -30,7 +47,7 @@ class SupplyChainNormalizationServiceTest < ActiveSupport::TestCase
       reporter_country_code: "JP",
       reporter_country_code_alpha3: "JPN",
       reporter_country_name: "Japan",
-      partner_country_code: "AE",
+      partner_country_code: nil,
       partner_country_code_alpha3: "ARE",
       partner_country_name: "United Arab Emirates",
       flow_direction: "import",
@@ -51,7 +68,7 @@ class SupplyChainNormalizationServiceTest < ActiveSupport::TestCase
       reporter_country_code: "JP",
       reporter_country_code_alpha3: "JPN",
       reporter_country_name: "Japan",
-      partner_country_code: "SA",
+      partner_country_code: nil,
       partner_country_code_alpha3: "SAU",
       partner_country_name: "Saudi Arabia",
       flow_direction: "import",

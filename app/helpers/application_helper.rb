@@ -24,7 +24,8 @@ module ApplicationHelper
     { key: "airbases", label: "Airbases", icon: "fa-solid fa-tower-observation", color: "#ff7043", target: "qlAirbases" },
     { key: "militaryBases", label: "Military Bases", icon: "fa-solid fa-shield-halved", color: "#ff5252", target: "qlMilitaryBases" },
     { key: "navalVessels", label: "Naval Vessels", icon: "fa-solid fa-ship", color: "#42a5f5", target: "qlNavalVessels" },
-    { key: "strikes", label: "Strike Signals", icon: "fa-solid fa-crosshairs", color: "#e040fb", target: "qlStrikes" },
+    { key: "verifiedStrikes", label: "Verified Strikes", icon: "fa-solid fa-crosshairs", color: "#4caf50", target: "qlVerifiedStrikes" },
+    { key: "heatSignatures", label: "Heat Signatures", icon: "fa-solid fa-fire-flame-curved", color: "#e040fb", target: "qlHeatSignatures" },
     { key: "cables", label: "Submarine Cables", icon: "fa-solid fa-network-wired", color: "#00bcd4", target: "qlCables" },
     { key: "pipelines", label: "Pipelines", icon: "fa-solid fa-oil-well", color: "#ff6d00", target: "qlPipelines" },
     { key: "railways", label: "Railways", icon: "fa-solid fa-train", color: "#90a4ae", target: "qlRailways" },
@@ -145,6 +146,11 @@ module ApplicationHelper
 
     layer_prefs.each do |key, value|
       enabled << key.to_s if value == true
+    end
+
+    if enabled.include?("strikes")
+      enabled << "verifiedStrikes"
+      enabled << "heatSignatures"
     end
 
     sat_categories = layer_prefs["satCategories"]

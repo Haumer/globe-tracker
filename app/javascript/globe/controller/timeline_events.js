@@ -9,6 +9,8 @@ export function applyTimelineEventMethods(GlobeController) {
     if (!this._timelineActive) return
 
     const cursor = this._timelineCursor
+    const showHeatSignatures = this._heatSignaturesLayerVisible ? this._heatSignaturesLayerVisible() : !!(this.heatSignaturesVisible || this.strikesVisible)
+    const showVerifiedStrikes = this._verifiedStrikesLayerVisible ? this._verifiedStrikesLayerVisible() : !!(this.verifiedStrikesVisible || this.strikesVisible)
     const generalTypes = []
     if (this.earthquakesVisible) generalTypes.push("earthquake")
     if (this.naturalEventsVisible) generalTypes.push("natural_event")
@@ -16,7 +18,9 @@ export function applyTimelineEventMethods(GlobeController) {
     if (this.gpsJammingVisible) generalTypes.push("gps_jamming")
     if (this.outagesVisible) generalTypes.push("internet_outage")
 
-    const strikeTypes = this.strikesVisible ? ["fire", "geoconfirmed"] : []
+    const strikeTypes = []
+    if (showHeatSignatures) strikeTypes.push("fire")
+    if (showVerifiedStrikes) strikeTypes.push("geoconfirmed")
 
     if (generalTypes.length === 0 && strikeTypes.length === 0) {
       this._timelineEventCount = 0
@@ -92,6 +96,8 @@ export function applyTimelineEventMethods(GlobeController) {
 
   GlobeController.prototype._renderUnifiedTimelineEvents = function(events, strikeEvents = []) {
     getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
+    const showHeatSignatures = this._heatSignaturesLayerVisible ? this._heatSignaturesLayerVisible() : !!(this.heatSignaturesVisible || this.strikesVisible)
+    const showVerifiedStrikes = this._verifiedStrikesLayerVisible ? this._verifiedStrikesLayerVisible() : !!(this.verifiedStrikesVisible || this.strikesVisible)
     const byType = {}
     events.forEach(event => {
       if (!byType[event.type]) byType[event.type] = []
@@ -179,19 +185,23 @@ export function applyTimelineEventMethods(GlobeController) {
       this._renderOutages({ summary: outageEvents, events: outageEvents })
     }
 
-    if (this.strikesVisible) {
+    if (showHeatSignatures || showVerifiedStrikes) {
       const cursorMs = this._timelineCursor?.getTime() || Date.now()
       const oldestStrikeMs = cursorMs - STRIKE_TIMELINE_WINDOW_MS
 
-      this._strikeDetections = strikeEvents
-        .filter(event => event?.type === "fire")
-        .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
-        .map(event => timelineFireToStrikeDetection(event))
+      this._strikeDetections = showHeatSignatures
+        ? strikeEvents
+          .filter(event => event?.type === "fire")
+          .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
+          .map(event => timelineFireToStrikeDetection(event))
+        : []
 
-      this._gcDetections = strikeEvents
-        .filter(event => event?.type === "geoconfirmed")
-        .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
-        .map(event => timelineGeoconfirmedToDetection(event))
+      this._gcDetections = showVerifiedStrikes
+        ? strikeEvents
+          .filter(event => event?.type === "geoconfirmed")
+          .filter(event => timelineStrikeWindowContains(event, oldestStrikeMs, cursorMs))
+          .map(event => timelineGeoconfirmedToDetection(event))
+        : []
 
       this.renderStrikes()
     } else if (this._timelineActive) {

@@ -253,6 +253,8 @@ export function initializeCoreState(controller) {
   controller._fireHotspotData = []
   controller._fireHotspotClusterData = []
   controller._fireHotspotEntities = []
+  controller.verifiedStrikesVisible = false
+  controller.heatSignaturesVisible = false
   controller.strikesVisible = false
   controller._strikeDetections = []
   controller._strikeEntities = []

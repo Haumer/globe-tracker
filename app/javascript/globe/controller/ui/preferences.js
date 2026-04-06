@@ -119,6 +119,8 @@ function buildLayerPrefs() {
     fireClusters: this.fireClustersVisible,
     strikeArcs: this._strikeArcsVisible,
     hexTheater: this._hexTheaterVisible,
+    verifiedStrikes: this.verifiedStrikesVisible,
+    heatSignatures: this.heatSignaturesVisible,
     strikes: this.strikesVisible,
     weather: this.weatherVisible,
     financial: this.financialVisible,
@@ -227,7 +229,9 @@ function applyLayerPrefs(layers) {
     this.fireClustersVisible = fireClustersEnabled
   }
 
-  toggleIf.call(this, l.strikes, "strikesToggle", "toggleStrikes")
+  const legacyStrikesEnabled = l.strikes === true
+  toggleIf.call(this, l.verifiedStrikes ?? legacyStrikesEnabled, "verifiedStrikesToggle", "toggleVerifiedStrikes")
+  toggleIf.call(this, l.heatSignatures ?? legacyStrikesEnabled, "heatSignaturesToggle", "toggleHeatSignatures")
   restoreWeather.call(this, l)
   toggleIf.call(this, l.financial, "financialToggle", "toggleFinancial")
   toggleIf.call(this, l.chokepoints, "chokepointsToggle", "toggleChokepoints")

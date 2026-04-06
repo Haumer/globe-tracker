@@ -95,10 +95,10 @@ export function applyTimelineControlMethods(GlobeController) {
       this.fetchOutages()
       this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
     }
-    if (this.strikesVisible) {
+    if (strikeSignalsVisible(this)) {
       this.fetchStrikes()
       this._strikesInterval = setInterval(() => {
-        if (this.strikesVisible) this.fetchStrikes()
+        if (strikeSignalsVisible(this)) this.fetchStrikes()
       }, 300000)
     }
     if (this.situationsVisible && this._fetchConflictPulse) {
@@ -330,7 +330,7 @@ function restoreHiddenSources() {
   if (this.gpsJammingVisible) activeDs.add("gpsJamming")
   if (this.newsVisible) activeDs.add("news")
   if (this.outagesVisible) activeDs.add("outages")
-  if (this.strikesVisible) activeDs.add("strikes")
+  if (strikeSignalsVisible(this)) activeDs.add("strikes")
   if (this.trailsVisible) activeDs.add("trails")
 
   for (const name of this._timelineHiddenSources) {
@@ -361,7 +361,7 @@ function stepTimeline(direction) {
 function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, opening) {
   const frameCount = frameStatus?.frameCount || 0
   const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
-    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible || this.strikesVisible
+    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible || strikeSignalsVisible(this)
 
   if (frameStatus?.boundsRequired) {
     this._toast("Zoom in or apply a region filter to load movement playback.")
@@ -393,4 +393,8 @@ function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, 
   }
 
   this._toast("No playback data found for this time range", "error")
+}
+
+function strikeSignalsVisible(controller) {
+  return !!(controller?.verifiedStrikesVisible || controller?.heatSignaturesVisible || controller?.strikesVisible)
 }

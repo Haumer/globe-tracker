@@ -105,30 +105,72 @@ export function applyStrikesMethods(GlobeController) {
     return getDataSource(this.viewer, this._ds, "strikes")
   }
 
+  GlobeController.prototype._verifiedStrikesLayerVisible = function() {
+    return this.hasVerifiedStrikesToggleTarget ? this.verifiedStrikesVisible : this.strikesVisible
+  }
+
+  GlobeController.prototype._heatSignaturesLayerVisible = function() {
+    return this.hasHeatSignaturesToggleTarget ? this.heatSignaturesVisible : this.strikesVisible
+  }
+
+  GlobeController.prototype._strikeSignalsVisible = function() {
+    return this._verifiedStrikesLayerVisible() || this._heatSignaturesLayerVisible()
+  }
+
+  GlobeController.prototype._syncStrikeSignalsVisibility = function() {
+    this.strikesVisible = this._strikeSignalsVisible()
+    if (this.hasStrikesToggleTarget) this.strikesToggleTarget.checked = this.strikesVisible
+  }
+
+  GlobeController.prototype.toggleVerifiedStrikes = function() {
+    this.verifiedStrikesVisible = this.hasVerifiedStrikesToggleTarget && this.verifiedStrikesToggleTarget.checked
+    this._handleStrikeLayerToggle()
+  }
+
+  GlobeController.prototype.toggleHeatSignatures = function() {
+    this.heatSignaturesVisible = this.hasHeatSignaturesToggleTarget && this.heatSignaturesToggleTarget.checked
+    this._handleStrikeLayerToggle()
+  }
+
   GlobeController.prototype.toggleStrikes = function() {
-    this.strikesVisible = this.hasStrikesToggleTarget && this.strikesToggleTarget.checked
-    if (this.strikesVisible) {
-      if (this._timelineActive) {
-        this._timelineOnLayerToggle?.()
-      } else {
+    const enabled = this.hasStrikesToggleTarget && this.strikesToggleTarget.checked
+    if (this.hasVerifiedStrikesToggleTarget) this.verifiedStrikesToggleTarget.checked = enabled
+    if (this.hasHeatSignaturesToggleTarget) this.heatSignaturesToggleTarget.checked = enabled
+    this.verifiedStrikesVisible = enabled
+    this.heatSignaturesVisible = enabled
+    this._handleStrikeLayerToggle()
+  }
+
+  GlobeController.prototype._handleStrikeLayerToggle = function() {
+    const wasVisible = this.strikesVisible
+    this._syncStrikeSignalsVisibility()
+
+    if (this._timelineActive) {
+      if (!this.strikesVisible) this._clearStrikeEntities()
+      this._timelineOnLayerToggle?.()
+    } else if (this.strikesVisible) {
+      if (!wasVisible) {
         this.fetchStrikes()
-        if (!this._strikesInterval) {
-          this._strikesInterval = setInterval(() => {
-            if (this.strikesVisible) this.fetchStrikes()
-          }, 300000)
-        }
+      } else {
+        this.renderStrikes()
+      }
+
+      if (!this._strikesInterval) {
+        this._strikesInterval = setInterval(() => {
+          if (this._strikeSignalsVisible()) this.fetchStrikes()
+        }, 300000)
       }
     } else {
       this._clearStrikeEntities()
       if (this._strikesInterval) { clearInterval(this._strikesInterval); this._strikesInterval = null }
-      if (this._timelineActive) this._timelineOnLayerToggle?.()
     }
+
     this._syncQuickBar()
     this._savePrefs()
   }
 
   GlobeController.prototype.fetchStrikes = async function() {
-    this._toast("Loading strike signals...")
+    this._toast("Loading strike layers...")
     try {
       const resp = await fetch("/api/strikes")
       if (!resp.ok) return
@@ -171,11 +213,13 @@ export function applyStrikesMethods(GlobeController) {
 
   GlobeController.prototype.renderStrikes = function() {
     this._clearStrikeEntities()
-    if (!this.strikesVisible) return
+    if (!this._strikeSignalsVisible()) return
 
     const Cesium = window.Cesium
     const dataSource = this.getStrikesDataSource()
     const bounds = this.getViewportBounds()
+    const showVerifiedStrikes = this._verifiedStrikesLayerVisible()
+    const showHeatSignatures = this._heatSignaturesLayerVisible()
 
     dataSource.entities.suspendEvents()
 
@@ -190,6 +234,7 @@ export function applyStrikesMethods(GlobeController) {
 
         const frp = s.frp || 1
         const isVerified = isVerifiedStrike(s)
+        if ((isVerified && !showVerifiedStrikes) || (!isVerified && !showHeatSignatures)) return
         const confidence = normalizedStrikeConfidence(s)
         const color = isVerified ? verifiedColor : firmsColor
         const confScale = isVerified ? 1.4 : confidence === "high" ? 1.3 : confidence === "medium" ? 1.0 : 0.7
@@ -234,7 +279,7 @@ export function applyStrikesMethods(GlobeController) {
     }
 
     // ── Render standalone GeoConfirmed events ────────────────
-    if (this._gcDetections?.length) {
+    if (showVerifiedStrikes && this._gcDetections?.length) {
       if (!this._gcIcon) this._gcIcon = createGeoconfirmedIcon()
 
       this._gcDetections.forEach(gc => {

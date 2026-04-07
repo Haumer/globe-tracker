@@ -1,6 +1,8 @@
 class HealthController < ActionController::Base
   # No auth — this endpoint is for external monitors / load balancers.
 
+  SOURCE_LOOKBACK_SLACK = 5.minutes
+
   STALENESS_THRESHOLDS = {
     "opensky"    => 180,
     "adsb"       => 180,   # matches any adsb-* source
@@ -59,7 +61,7 @@ class HealthController < ActionController::Base
     # Grab the latest successful poll per source in one query
     latest = PollingStat
       .successful
-      .where("created_at > ?", 1.hour.ago)
+      .where("created_at > ?", source_lookback_window.ago)
       .group(:source)
       .maximum(:created_at)
 
@@ -67,7 +69,7 @@ class HealthController < ActionController::Base
     results = {}
 
     STALENESS_THRESHOLDS.each do |key, threshold|
-      if key == "ais" && runtime_status[:ais_mode] == "disabled"
+      if source_disabled?(key, runtime_status)
         results[key] = { status: "disabled", last_success: nil, age_seconds: nil }
         next
       end
@@ -102,5 +104,20 @@ class HealthController < ActionController::Base
       last_success: last_success.utc.iso8601,
       age_seconds: age,
     }
+  end
+
+  def source_lookback_window
+    STALENESS_THRESHOLDS.values.max.seconds + SOURCE_LOOKBACK_SLACK
+  end
+
+  def source_disabled?(key, runtime_status)
+    case key
+    when "ais"
+      runtime_status[:ais_mode] == "disabled"
+    when "hafas"
+      LayerAvailability.disabled?(:trains)
+    else
+      false
+    end
   end
 end

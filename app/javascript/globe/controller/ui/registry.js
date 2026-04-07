@@ -48,6 +48,8 @@ export const ADVANCED_LIBRARY_KEYS = [
   "outages",
   "gpsJamming",
   "chokepoints",
+  "ports",
+  "shippingLanes",
   "trains",
   "notams",
   "militaryFlights",

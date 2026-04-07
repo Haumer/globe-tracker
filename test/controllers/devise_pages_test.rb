@@ -7,7 +7,7 @@ class DevisePagesTest < ActionDispatch::IntegrationTest
     get new_user_session_path
 
     assert_response :success
-    assert_includes response.body, "Resume your watchfloor"
+    assert_includes response.body, "Welcome back"
     assert_includes response.body, "auth-shell"
     assert_includes response.body, "auth-links"
   end

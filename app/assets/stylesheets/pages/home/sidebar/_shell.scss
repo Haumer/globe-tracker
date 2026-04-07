@@ -44,6 +44,9 @@
 
 // ─── Sidebar shell ─────────────────────────────────────────────
 #sidebar {
+  --sb-title-size: 12.75px;
+  --sb-meta-size: 10.75px;
+  --sb-note-size: 11.25px;
   position: fixed;
   top: 38px;
   left: 0;
@@ -177,7 +180,8 @@
 
   .sb-layer-name {
     flex: 1;
-    font: 500 11px 'DM Sans', sans-serif;
+    font: 500 var(--sb-title-size) 'DM Sans', sans-serif;
+    line-height: 1.2;
     color: var(--gt-text-dim);
   }
 
@@ -198,9 +202,9 @@
   }
 
   .sb-layer-meta {
-    font: 400 9px var(--gt-mono);
+    font: 400 var(--sb-meta-size) var(--gt-mono);
     color: rgba(200, 210, 225, 0.42);
-    line-height: 1.25;
+    line-height: 1.28;
   }
 
   .sb-layer-pill {

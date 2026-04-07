@@ -110,6 +110,7 @@ function buildLayerPrefs() {
     trains: this.trainsVisible,
     outages: this.outagesVisible,
     powerPlants: this.powerPlantsVisible,
+    commoditySites: this.commoditySitesVisible,
     conflicts: this.conflictsVisible,
     situations: this.situationsVisible,
     traffic: this.trafficVisible,
@@ -206,6 +207,7 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.trains, "trainsToggle", "toggleTrains")
   toggleIf.call(this, l.outages, "outagesToggle", "toggleOutages")
   toggleIf.call(this, l.powerPlants, "powerPlantsToggle", "togglePowerPlants")
+  toggleIf.call(this, l.commoditySites, "commoditySitesToggle", "toggleCommoditySites")
   toggleIf.call(this, l.conflicts, "conflictsToggle", "toggleConflicts")
 
   if (this.hasStrikeArcsToggleTarget) {

@@ -24,6 +24,7 @@
   <input type="checkbox" data-globe-target="pipelinesToggle" data-action="change->globe#togglePipelines">
   <input type="checkbox" data-globe-target="outagesToggle" data-action="change->globe#toggleOutages">
   <input type="checkbox" data-globe-target="powerPlantsToggle" data-action="change->globe#togglePowerPlants">
+  <input type="checkbox" data-globe-target="commoditySitesToggle" data-action="change->globe#toggleCommoditySites">
   <input type="checkbox" data-globe-target="conflictsToggle" data-action="change->globe#toggleConflicts">
   <input type="checkbox" data-globe-target="trafficToggle" data-action="change->globe#toggleTraffic">
   <input type="checkbox" data-globe-target="notamsToggle" data-action="change->globe#toggleNotams">
@@ -259,7 +260,7 @@
     </div>
     <div class="sb-section-body" role="region">
       <% if user_signed_in? %>
-        <div class="sb-library-note">Adding a layer reveals it above in <strong>Additional Layers</strong> and turns it on. Military-specific layers stay separate from civilian and general layers. Disabled items remain visible so upcoming feeds do not disappear from the catalog.</div>
+        <div class="sb-library-note">Enabled layers appear above in <strong>Additional Layers</strong>. Military layers stay separate from civilian ones. Disabled items stay visible as upcoming feeds.</div>
         <div class="sb-library-grid">
           <% advanced_layers.each do |layer| %>
             <% enabled = enabled_layer_keys.include?(layer[:key]) %>

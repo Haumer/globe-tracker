@@ -14,6 +14,7 @@ module AreaWorkspacesHelper
     "cables" => "cb",
     "outages" => "ou",
     "powerPlants" => "pp",
+    "commoditySites" => "cs",
     "conflicts" => "cf",
     "traffic" => "tf",
     "notams" => "nt",

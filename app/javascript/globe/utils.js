@@ -21,7 +21,7 @@ function cached(key, fn) {
 }
 
 export const LABEL_DEFAULTS = {
-  font: "13px JetBrains Mono, monospace",
+  font: "16.5px JetBrains Mono, monospace",
   outlineWidth: 3,
   style: cached("style", () => C().LabelStyle.FILL_AND_OUTLINE),
   outlineColor: cached("outlineColor", () => C().Color.BLACK.withAlpha(0.8)),

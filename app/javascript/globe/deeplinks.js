@@ -10,6 +10,7 @@ const LAYER_KEYS = [
   "flights", "trails", "ships", "borders", "cities", "airports",
   "earthquakes", "naturalEvents", "cameras", "gpsJamming", "news",
   "cables", "ports", "shippingLanes", "outages", "powerPlants", "conflicts", "traffic", "notams", "terrain",
+  "commoditySites",
   "fireHotspots", "weather", "financial", "insights", "situations",
   "pipelines", "railways", "trains", "chokepoints", "militaryBases", "militaryFlights", "airbases", "navalVessels",
 ]
@@ -20,6 +21,7 @@ const LAYER_SHORT = {
   airports: "ap", earthquakes: "eq", naturalEvents: "ev", cameras: "cm",
   gpsJamming: "gj", news: "nw", cables: "cb", ports: "po", shippingLanes: "sl", outages: "ou",
   powerPlants: "pp", conflicts: "cf", traffic: "tf", notams: "nt", terrain: "tn",
+  commoditySites: "cs",
   fireHotspots: "fh", weather: "wx", financial: "fn", insights: "in", situations: "si",
   pipelines: "pl", railways: "rl", trains: "tns", chokepoints: "cp", militaryBases: "mb", militaryFlights: "mf", airbases: "ab", navalVessels: "nv",
 }
@@ -201,6 +203,7 @@ export function applyDeepLink(controller, state) {
       earthquakes: "toggleEarthquakes", naturalEvents: "toggleNaturalEvents",
       cameras: "toggleCameras", gpsJamming: "toggleGpsJamming", news: "toggleNews",
       cables: "toggleCables", ports: "togglePorts", shippingLanes: "toggleShippingLanes", outages: "toggleOutages", powerPlants: "togglePowerPlants",
+      commoditySites: "toggleCommoditySites",
       conflicts: "toggleConflicts", traffic: "toggleTraffic", notams: "toggleNotams",
       terrain: "toggleTerrain", fireHotspots: "toggleFireHotspots", weather: "toggleWeather",
       financial: "toggleFinancial", insights: "toggleInsights", situations: "toggleSituations",
@@ -213,6 +216,7 @@ export function applyDeepLink(controller, state) {
       earthquakes: "earthquakesToggle", naturalEvents: "naturalEventsToggle",
       cameras: "camerasToggle", gpsJamming: "gpsJammingToggle", news: "newsToggle",
       cables: "cablesToggle", ports: "portsToggle", shippingLanes: "shippingLanesToggle", outages: "outagesToggle", powerPlants: "powerPlantsToggle",
+      commoditySites: "commoditySitesToggle",
       conflicts: "conflictsToggle", traffic: "trafficToggle", notams: "notamsToggle",
       fireHotspots: "fireHotspotsToggle", weather: "weatherToggle", financial: "financialToggle",
       terrain: "terrainToggle", insights: "insightsToggle", situations: "situationsToggle",

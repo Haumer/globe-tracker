@@ -4,6 +4,7 @@ import { applyPortsMethods } from "globe/controller/infrastructure/ports"
 import { applyShippingLanesMethods } from "globe/controller/infrastructure/shippingLanes"
 import { applyOutagesMethods } from "globe/controller/infrastructure/internetOutages"
 import { applyPowerPlantsMethods } from "globe/controller/infrastructure/powerPlants"
+import { applyCommoditySitesMethods } from "globe/controller/infrastructure/commoditySites"
 import { applyConflictsMethods } from "globe/controller/infrastructure/conflictEvents"
 import { applyNotamsMethods } from "globe/controller/infrastructure/notams"
 import { applyTrafficMethods } from "globe/controller/infrastructure/internetTraffic"
@@ -24,6 +25,7 @@ export function applyInfrastructureMethods(GlobeController) {
   applyShippingLanesMethods(GlobeController)
   applyOutagesMethods(GlobeController)
   applyPowerPlantsMethods(GlobeController)
+  applyCommoditySitesMethods(GlobeController)
   applyConflictsMethods(GlobeController)
   applyNotamsMethods(GlobeController)
   applyTrafficMethods(GlobeController)

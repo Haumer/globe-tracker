@@ -87,6 +87,7 @@ const CAMERA_MOVE_END_CALLBACK_PROPS = [
   "_notamCameraCb",
   "_navalCameraCb",
   "_ppCameraCb",
+  "_commoditySiteCameraCb",
 ]
 
 function satCategoryVisibility() {
@@ -318,6 +319,10 @@ export function initializeCoreState(controller) {
   controller.powerPlantsVisible = false
   controller._powerPlantData = []
   controller._powerPlantEntities = []
+  controller.commoditySitesVisible = false
+  controller._commoditySiteAll = []
+  controller._commoditySiteData = []
+  controller._commoditySiteEntities = []
   controller.conflictsVisible = false
   controller._conflictData = []
   controller._conflictEntities = []

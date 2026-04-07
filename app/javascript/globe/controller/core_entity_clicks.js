@@ -228,6 +228,13 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showPowerPlantDetail(data)
         return true
       }},
+      { prefix: "comsite-", skip: [], handler: (id) => {
+        const data = this._commoditySiteData?.find(site => `${site.id}` === `${id}`) ||
+          this._commoditySiteAll?.find(site => `${site.id}` === `${id}`)
+        if (!data) return false
+        this.showCommoditySiteDetail(data)
+        return true
+      }},
       { prefix: "choke-zone-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false

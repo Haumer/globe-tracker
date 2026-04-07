@@ -14,6 +14,7 @@ export function applyGeographyCaptureMethods(GlobeController) {
     ["chokepoints", "chokepointsVisible"],
     ["ports", "portsVisible"],
     ["powerPlants", "powerPlantsVisible"],
+    ["commoditySites", "commoditySitesVisible"],
     ["shippingLanes", "shippingLanesVisible"],
     ["pipelines", "pipelinesVisible"],
     ["cables", "cablesVisible"],
@@ -356,7 +357,7 @@ export function applyGeographyCaptureMethods(GlobeController) {
     if (layerSet.has("ships") || layerSet.has("chokepoints") || layerSet.has("cables") || layerSet.has("shippingLanes")) return "maritime"
     if (layerSet.has("notams") || layerSet.has("flights")) return "airspace"
     if (layerSet.has("gpsJamming") || layerSet.has("outages")) return "cyber"
-    if (layerSet.has("powerPlants") || layerSet.has("pipelines")) return "infrastructure"
+    if (layerSet.has("powerPlants") || layerSet.has("commoditySites") || layerSet.has("pipelines")) return "infrastructure"
     if (layerSet.has("conflicts") || layerSet.has("situations") || layerSet.has("insights")) return "land_conflict"
 
     return "general"

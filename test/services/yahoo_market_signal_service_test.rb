@@ -17,6 +17,8 @@ class YahooMarketSignalServiceTest < ActiveSupport::TestCase
         yahoo_chart_body(price: 18.42, previous_close: 19.10, market_time: 1_711_700_010)
       when "^TNX"
         yahoo_chart_body(price: 42.71, previous_close: 42.11, market_time: 1_711_700_020)
+      when "BZ=F"
+        yahoo_chart_body(price: 111.25, previous_close: 109.77, market_time: 1_711_700_030)
       else
         { chart: { result: [], error: nil } }.to_json
       end
@@ -29,6 +31,7 @@ class YahooMarketSignalServiceTest < ActiveSupport::TestCase
     spy = quotes.find { |quote| quote.symbol == "SPY" }
     vix = quotes.find { |quote| quote.symbol == "VIX" }
     us10y = quotes.find { |quote| quote.symbol == "US10Y" }
+    brent = quotes.find { |quote| quote.symbol == "OIL_BRENT" }
 
     assert_not_nil spy
     assert_equal "yahoo_finance", spy.source
@@ -41,6 +44,11 @@ class YahooMarketSignalServiceTest < ActiveSupport::TestCase
 
     assert_not_nil us10y
     assert_in_delta 4.271, us10y.price, 0.001
+
+    assert_not_nil brent
+    assert_in_delta 57.48, brent.latitude, 0.001
+    assert_in_delta 1.75, brent.longitude, 0.001
+    assert_equal "North Sea", brent.region
   end
 
   test "merge_quotes overlays live signal fields and preserves spatial metadata" do

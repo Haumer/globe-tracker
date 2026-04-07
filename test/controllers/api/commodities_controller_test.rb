@@ -110,6 +110,38 @@ class Api::CommoditiesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "yahoo_finance", vix["source"]
   end
 
+  test "live spatial commodity signals stay in map prices" do
+    YahooMarketSignalService.singleton_class.send(:define_method, :merge_quotes) do |quotes|
+      base_quotes = Array(quotes).reject { |quote| quote.symbol == "XAU" }
+      base_quotes + [
+        YahooMarketSignalService::Quote.new(
+          symbol: "OIL_BRENT",
+          category: "commodity",
+          name: "Brent Crude",
+          price: 111.25,
+          change_pct: 1.35,
+          unit: "USD/barrel",
+          latitude: 57.48,
+          longitude: 1.75,
+          region: "North Sea",
+          recorded_at: Time.current,
+          source: "yahoo_finance",
+          live_signal: true
+        ),
+      ]
+    end
+
+    get "/api/commodities"
+    data = JSON.parse(response.body)
+
+    brent = data["prices"].find { |p| p["symbol"] == "OIL_BRENT" }
+
+    assert_not_nil brent
+    assert_in_delta 57.48, brent["lat"], 0.001
+    assert_in_delta 1.75, brent["lng"], 0.001
+    assert_equal "North Sea", brent["region"]
+  end
+
   test "category filter works" do
     get "/api/commodities", params: { category: "currency" }
     data = JSON.parse(response.body)

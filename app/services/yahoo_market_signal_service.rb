@@ -208,6 +208,7 @@ class YahooMarketSignalService
     change_pct = meta["regularMarketChangePercent"]
     change_pct = percent_change(price, previous_close) if change_pct.blank?
     market_time = meta["regularMarketTime"].present? ? Time.at(meta["regularMarketTime"]).utc : Time.current
+    spatial_defaults = spatial_defaults_for(internal_symbol)
 
     Quote.new(
       symbol: internal_symbol,
@@ -216,9 +217,9 @@ class YahooMarketSignalService
       price: price,
       change_pct: change_pct&.to_f&.round(2),
       unit: config.fetch(:unit),
-      latitude: config[:lat],
-      longitude: config[:lng],
-      region: config.fetch(:region),
+      latitude: config[:lat] || spatial_defaults[:lat],
+      longitude: config[:lng] || spatial_defaults[:lng],
+      region: config[:region] || spatial_defaults[:region],
       recorded_at: market_time,
       source: "yahoo_finance",
       live_signal: true
@@ -236,6 +237,10 @@ class YahooMarketSignalService
     return nil if previous.zero?
 
     (((current_value.to_f - previous) / previous) * 100.0).round(2)
+  end
+
+  def spatial_defaults_for(symbol)
+    CommodityPriceService::SPATIAL_COMMODITIES[symbol] || {}
   end
 
   def quote_to_struct(quote)

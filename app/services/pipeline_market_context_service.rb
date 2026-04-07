@@ -29,18 +29,28 @@ class PipelineMarketContextService
     benchmarks = serialize_quotes(latest_quotes(benchmark_symbols))
     downstream = serialize_dependencies(top_dependencies(commodity_keys))
     route_pressure = serialize_exposures(top_exposures(commodity_keys))
+    primary_symbol = primary_benchmark_symbol(benchmark_symbols, benchmarks)
 
     payload = {
       summary: build_summary(benchmarks, downstream, route_pressure),
       risk_level: derive_risk_level(benchmarks, downstream, route_pressure),
       highlights: build_highlights(benchmarks, downstream, route_pressure),
       benchmarks: benchmarks,
+      primary_benchmark_symbol: primary_symbol,
       downstream_countries: downstream,
       route_pressure: route_pressure,
     }
 
     if @detail
       payload[:benchmark_series] = benchmark_series(benchmark_symbols)
+      primary_chokepoint_key = route_pressure.max_by { |row| row[:exposure_score].to_f }&.dig(:chokepoint_key)
+      primary_commodity_key = SupplyChainLensService.primary_commodity_for_pipeline_type(@pipeline.pipeline_type)
+      if primary_chokepoint_key.present? && primary_commodity_key.present?
+        payload[:supply_chain_lens] = SupplyChainLensService.call(
+          chokepoint_key: primary_chokepoint_key,
+          commodity_key: primary_commodity_key,
+        )
+      end
       payload[:coverage] = {
         downstream_observed: downstream.count { |row| row[:estimated] == false },
         downstream_estimated: downstream.count { |row| row[:estimated] == true },
@@ -145,6 +155,7 @@ class PipelineMarketContextService
 
     rows.map do |row|
       {
+        chokepoint_key: row.chokepoint_key,
         chokepoint_name: row.chokepoint_name,
         commodity_name: row.commodity_name,
         exposure_score: row.exposure_score&.to_f,
@@ -240,5 +251,9 @@ class PipelineMarketContextService
 
     status = row[:status].present? ? " (#{row[:status]})" : ""
     "Primary route pressure: #{row[:chokepoint_name]} #{format('%.2f', row[:exposure_score].to_f)}#{status}#{row[:estimated] ? ' est.' : ''}"
+  end
+
+  def primary_benchmark_symbol(symbols, benchmarks)
+    symbols.find { |symbol| benchmarks.any? { |quote| quote[:symbol] == symbol } } || benchmarks.first&.dig(:symbol)
   end
 end

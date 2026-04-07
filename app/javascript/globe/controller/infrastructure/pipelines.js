@@ -133,9 +133,26 @@ export function applyPipelinesMethods(GlobeController) {
     this._pipelineEntities = []
   }
 
-  GlobeController.prototype.showPipelineDetail = function(id) {
+  GlobeController.prototype._upsertPipelineDataRecord = function(pipeline) {
+    if (!pipeline?.id) return
+
+    const current = Array.isArray(this._pipelineData) ? [...this._pipelineData] : []
+    const idx = current.findIndex(item => `${item.id}` === `${pipeline.id}`)
+    if (idx === -1) current.push(pipeline)
+    else current[idx] = { ...current[idx], ...pipeline }
+    this._pipelineData = current
+  }
+
+  GlobeController.prototype.showPipelineDetail = function(id, options = {}) {
     const p = (this._pipelineData || []).find(pipe => pipe.id === id)
     if (!p) return
+    const midpoint = this._pipelineMidpointCoordinates?.(p.coordinates)
+    const anchoredData = midpoint ? { ...p, lat: midpoint.lat, lng: midpoint.lng } : p
+
+    if (this._showCompactEntityDetail) {
+      this._showCompactEntityDetail("pipeline", anchoredData, { id, picked: options.picked })
+    }
+
     const baseContext = this._buildPipelineContext
       ? this._buildPipelineContext(p)
       : null
@@ -163,6 +180,7 @@ export function applyPipelinesMethods(GlobeController) {
         if (!this._selectedContext || this._selectedContext.kind !== "pipeline" || `${this._selectedContext.pipelineId}` !== `${id}`) return
 
         const pipeline = data.pipeline || p
+        this._upsertPipelineDataRecord(pipeline)
         this._setSelectedContext(this._buildPipelineContext(pipeline))
       })
       .catch((error) => {

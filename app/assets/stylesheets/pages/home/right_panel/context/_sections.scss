@@ -390,3 +390,296 @@
   font: 500 9px/1.4 var(--gt-mono);
   color: rgba(184, 197, 214, 0.56);
 }
+
+.pipeline-lens-hero {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    radial-gradient(circle at top right, rgba(79, 195, 247, 0.12), transparent 50%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pipeline-lens-hero-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.pipeline-lens-hero-copy {
+  min-width: 0;
+}
+
+.pipeline-lens-hero-symbol {
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: rgba(189, 204, 221, 0.58);
+}
+
+.pipeline-lens-hero-name {
+  margin-top: 4px;
+  font: 600 14px/1.25 var(--gt-sans);
+  color: rgba(244, 248, 252, 0.95);
+}
+
+.pipeline-lens-hero-stats {
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.pipeline-lens-hero-price {
+  font: 700 22px/1 var(--gt-mono);
+  color: rgba(248, 250, 252, 0.97);
+}
+
+.pipeline-lens-hero-change {
+  margin-top: 4px;
+  font: 700 10px var(--gt-mono);
+  letter-spacing: 0.5px;
+}
+
+.pipeline-lens-sparkline--hero {
+  height: 128px;
+}
+
+.pipeline-lens-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font: 500 8px/1.5 var(--gt-mono);
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: rgba(181, 196, 213, 0.56);
+}
+
+.pipeline-lens-hero-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pipeline-lens-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(239, 244, 250, 0.92);
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    border-color: rgba(147, 197, 253, 0.22);
+    background: rgba(147, 197, 253, 0.08);
+  }
+
+  strong {
+    font-weight: 700;
+  }
+}
+
+.supply-lens-block {
+  display: grid;
+  gap: 10px;
+}
+
+.supply-lens-summary {
+  font: 500 11px/1.55 var(--gt-sans);
+  color: rgba(229, 236, 244, 0.88);
+}
+
+.supply-lens-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.supply-lens-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--supply-lens-tone) 28%, transparent);
+  background: color-mix(in srgb, var(--supply-lens-tone) 14%, transparent);
+  color: color-mix(in srgb, var(--supply-lens-tone) 78%, white 22%);
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.supply-lens-row-list,
+.supply-lens-stage-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.supply-lens-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.supply-lens-row-copy {
+  min-width: 0;
+}
+
+.supply-lens-row-title {
+  font: 600 12px/1.3 var(--gt-sans);
+  color: rgba(243, 247, 252, 0.94);
+}
+
+.supply-lens-row-meta {
+  margin-top: 4px;
+  font: 500 8px/1.45 var(--gt-mono);
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+  color: rgba(184, 197, 214, 0.56);
+}
+
+.supply-lens-row-badge {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-width: 72px;
+  padding: 6px 7px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--supply-lens-tone) 30%, transparent);
+  background: color-mix(in srgb, var(--supply-lens-tone) 12%, transparent);
+  text-align: right;
+
+  span {
+    font: 700 7px var(--gt-mono);
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--supply-lens-tone) 70%, white 30%);
+  }
+
+  strong {
+    font: 700 13px/1 var(--gt-mono);
+    color: rgba(247, 249, 252, 0.96);
+  }
+}
+
+.supply-lens-runway-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.supply-lens-runway-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.026);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.supply-lens-runway-card--critical {
+  border-color: rgba(244, 67, 54, 0.24);
+}
+
+.supply-lens-runway-card--high {
+  border-color: rgba(255, 152, 0, 0.22);
+}
+
+.supply-lens-runway-card--medium {
+  border-color: rgba(255, 193, 7, 0.2);
+}
+
+.supply-lens-runway-card--low {
+  border-color: rgba(102, 187, 106, 0.2);
+}
+
+.supply-lens-runway-country {
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(188, 201, 218, 0.58);
+}
+
+.supply-lens-runway-days {
+  margin-top: 3px;
+  font: 700 26px/0.95 var(--gt-mono);
+  color: rgba(247, 249, 252, 0.97);
+}
+
+.supply-lens-runway-label {
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(188, 201, 218, 0.5);
+}
+
+.supply-lens-runway-meta {
+  font: 500 8px/1.45 var(--gt-mono);
+  color: rgba(184, 197, 214, 0.56);
+}
+
+.supply-lens-stage-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)),
+    rgba(9, 13, 22, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.supply-lens-stage-phase {
+  font: 700 8px var(--gt-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(255, 179, 0, 0.76);
+}
+
+.supply-lens-stage-title {
+  font: 600 12px/1.32 var(--gt-sans);
+  color: rgba(243, 247, 252, 0.94);
+}
+
+.supply-lens-stage-body {
+  font: 500 10px/1.5 var(--gt-sans);
+  color: rgba(226, 234, 242, 0.84);
+}
+
+.supply-lens-stage-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(236, 241, 248, 0.82);
+    font: 700 7px var(--gt-mono);
+    letter-spacing: 0.85px;
+    text-transform: uppercase;
+  }
+}
+
+@media (max-width: 720px) {
+  .supply-lens-runway-grid {
+    grid-template-columns: 1fr;
+  }
+}

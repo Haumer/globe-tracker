@@ -170,11 +170,59 @@ export function applyChokepointsMethods(GlobeController) {
     this._chokepointEntities = []
   }
 
+  GlobeController.prototype._upsertChokepointDataRecord = function(chokepoint) {
+    if (!chokepoint) return
+
+    const id = chokepoint.id || chokepoint.name
+    if (!id) return
+
+    const current = Array.isArray(this._chokepointData) ? [...this._chokepointData] : []
+    const idx = current.findIndex((entry) => `${entry.id || entry.name}` === `${id}`)
+    if (idx === -1) current.push(chokepoint)
+    else current[idx] = { ...current[idx], ...chokepoint }
+    this._chokepointData = current
+  }
+
   // ── Click handler detail panel ─────────────────────────────
 
-  GlobeController.prototype.showChokepointDetail = function(cp) {
+  GlobeController.prototype.showChokepointDetail = function(cpOrId, options = {}) {
+    const identifier = typeof cpOrId === "string"
+      ? cpOrId
+      : (cpOrId?.id || cpOrId?.name)
+    const cp = typeof cpOrId === "string"
+      ? (this._findChokepointById?.(cpOrId) || { id: cpOrId, name: cpOrId, status: "monitoring" })
+      : cpOrId
+    if (!cp || !identifier) return
+
     if (this._buildChokepointContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildChokepointContext(cp))
+      this._showRightPanel?.("context")
+    }
+
+    this._chokepointLensRequestKey = `${identifier}:${Date.now()}`
+    const requestKey = this._chokepointLensRequestKey
+
+    fetch(`/api/chokepoints/${encodeURIComponent(identifier)}`)
+      .then(resp => {
+        if (!resp.ok) throw new Error(`Chokepoint lens HTTP ${resp.status}`)
+        return resp.json()
+      })
+      .then((data) => {
+        if (this._chokepointLensRequestKey !== requestKey) return
+        const enriched = data.chokepoint || cp
+        this._upsertChokepointDataRecord(enriched)
+        if (!this._selectedContext || this._selectedContext.kind !== "chokepoint") return
+        const selectedId = this._selectedContext.nodeRequest?.id || this._selectedContext.title
+        if (`${selectedId || ""}` !== `${identifier}` && `${this._selectedContext.title || ""}` !== `${enriched.name || ""}`) return
+        this._setSelectedContext(this._buildChokepointContext(enriched))
+      })
+      .catch((error) => {
+        console.warn("Chokepoint lens failed:", error)
+      })
+
+    if (options.contextOnly) {
+      if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+      return
     }
 
     const statusColors = { critical: "#f44336", elevated: "#ff9800", monitoring: "#ffc107", normal: "#4fc3f7" }

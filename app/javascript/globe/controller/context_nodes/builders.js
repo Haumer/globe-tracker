@@ -56,19 +56,22 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     return "low"
   }
 
-  GlobeController.prototype._pipelineSparklineSvg = function(series = [], color = "#8bd8ff") {
+  GlobeController.prototype._pipelineSparklineSvg = function(series = [], color = "#8bd8ff", options = {}) {
     const clean = series
       .map(point => Number(point?.price))
       .filter(value => Number.isFinite(value))
 
     if (clean.length < 2) return ""
 
-    const width = 220
-    const height = 56
+    const width = Number(options.width) > 0 ? Number(options.width) : 220
+    const height = Number(options.height) > 0 ? Number(options.height) : 56
     const padding = 6
     const min = Math.min(...clean)
     const max = Math.max(...clean)
     const range = Math.max(max - min, 0.0001)
+    const className = options.className ? ` ${options.className}` : ""
+    const areaClass = options.areaClass || "pipeline-lens-sparkline-area"
+    const lineClass = options.lineClass || "pipeline-lens-sparkline-line"
 
     const points = clean.map((value, idx) => {
       const x = padding + (idx / Math.max(clean.length - 1, 1)) * (width - padding * 2)
@@ -82,10 +85,180 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     const area = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`
 
     return `
-      <svg class="pipeline-lens-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
-        <polyline class="pipeline-lens-sparkline-area" points="${area}" style="fill:${color};opacity:${fillOpacity};"></polyline>
-        <polyline class="pipeline-lens-sparkline-line" points="${points}" style="stroke:${color};"></polyline>
+      <svg class="pipeline-lens-sparkline${className}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <polyline class="${areaClass}" points="${area}" style="fill:${color};opacity:${fillOpacity};"></polyline>
+        <polyline class="${lineClass}" points="${points}" style="stroke:${color};"></polyline>
       </svg>
+    `
+  }
+
+  GlobeController.prototype._pipelineQuoteChangeColor = function(changePct) {
+    const change = Number(changePct || 0)
+    if (change > 0) return "#4caf50"
+    if (change < 0) return "#f44336"
+    return "#ffc107"
+  }
+
+  GlobeController.prototype._pipelineQuotePriceLabel = function(quote = {}) {
+    const precision = quote.category === "currency" ? 4 : 2
+    const price = Number(quote.price || 0)
+    return `$${price.toFixed(precision)}`
+  }
+
+  GlobeController.prototype._renderPipelineHeroHtml = function(quote = null, series = [], options = {}) {
+    if (!quote) return '<div class="context-brief-state">No linked benchmark series available for this pipeline.</div>'
+
+    const change = Number(quote.change_pct || 0)
+    const changeColor = this._pipelineQuoteChangeColor(change)
+    const changeLabel = quote.change_pct == null ? "flat" : `${change > 0 ? "+" : ""}${change.toFixed(2)}%`
+    const sparkline = this._pipelineSparklineSvg(series, changeColor, {
+      width: 420,
+      height: 128,
+      className: "pipeline-lens-sparkline--hero",
+    })
+    const recordedAt = quote.recorded_at ? this._timeAgo(new Date(quote.recorded_at)) : null
+    const comparisons = Array.isArray(options.comparisons) ? options.comparisons : []
+
+    return `
+      <div class="pipeline-lens-hero">
+        <div class="pipeline-lens-hero-head">
+          <div class="pipeline-lens-hero-copy">
+            <div class="pipeline-lens-hero-symbol">${this._escapeHtml(quote.symbol)}</div>
+            <div class="pipeline-lens-hero-name">${this._escapeHtml(quote.name || quote.symbol)}</div>
+          </div>
+          <div class="pipeline-lens-hero-stats">
+            <div class="pipeline-lens-hero-price">${this._escapeHtml(this._pipelineQuotePriceLabel(quote))}</div>
+            <div class="pipeline-lens-hero-change" style="color:${changeColor};">${this._escapeHtml(changeLabel)}</div>
+          </div>
+        </div>
+        ${sparkline || '<div class="context-brief-state">Historical benchmark points are still sparse for this route.</div>'}
+        <div class="pipeline-lens-hero-meta">
+          <span>${this._escapeHtml(quote.unit || "market benchmark")}</span>
+          ${recordedAt ? `<span>${this._escapeHtml(recordedAt)}</span>` : ""}
+          <span>14D tracked</span>
+        </div>
+        ${comparisons.length ? `
+          <div class="pipeline-lens-hero-strip">
+            ${comparisons.map((entry) => {
+              const delta = Number(entry.change_pct || 0)
+              const deltaColor = this._pipelineQuoteChangeColor(delta)
+              const deltaLabel = entry.change_pct == null ? "flat" : `${delta > 0 ? "+" : ""}${delta.toFixed(2)}%`
+              return `
+                <button
+                  type="button"
+                  class="pipeline-lens-hero-chip"
+                  data-action="click->globe#selectContextNode"
+                  data-kind="commodity"
+                  data-id="${this._escapeHtml(entry.symbol)}"
+                  data-title="${this._escapeHtml(entry.name || entry.symbol)}"
+                  data-summary="${this._escapeHtml(`${entry.symbol} ${this._pipelineQuotePriceLabel(entry)} ${deltaLabel}`)}"
+                >
+                  <span>${this._escapeHtml(entry.symbol)}</span>
+                  <strong style="color:${deltaColor};">${this._escapeHtml(deltaLabel)}</strong>
+                </button>
+              `
+            }).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `
+  }
+
+  GlobeController.prototype._renderSupplyChainDependencyHtml = function(lens = null) {
+    const dependencyMap = lens?.dependency_map
+    if (!dependencyMap?.rows?.length) {
+      return '<div class="context-brief-state">No downstream dependency rows are available for this route yet.</div>'
+    }
+
+    const bucketChips = (dependencyMap.buckets || [])
+      .filter(bucket => Number(bucket.count || 0) > 0)
+      .map(bucket => `
+        <span class="supply-lens-chip" style="--supply-lens-tone:${this._escapeHtml(bucket.color || "#8bd8ff")};">
+          ${this._escapeHtml(bucket.label)} ${this._escapeHtml(bucket.count)}
+        </span>
+      `)
+      .join("")
+
+    const rows = dependencyMap.rows.map((row) => `
+      <div class="supply-lens-row">
+        <div class="supply-lens-row-copy">
+          <div class="supply-lens-row-title">${this._escapeHtml(row.country_name || row.country_code_alpha3 || "Country")}</div>
+          <div class="supply-lens-row-meta">
+            ${this._escapeHtml([
+              `Exposure ${Number(row.exposure_score || 0).toFixed(2)}`,
+              row.import_share_gdp_pct != null ? `${Number(row.import_share_gdp_pct).toFixed(2)}% GDP` : null,
+              row.estimated ? "estimated" : "observed",
+            ].filter(Boolean).join(" · "))}
+          </div>
+        </div>
+        <div class="supply-lens-row-badge" style="--supply-lens-tone:${this._escapeHtml(row.bucket_color || "#8bd8ff")};">
+          <span>${this._escapeHtml(row.bucket_label || row.bucket || "Tier")}</span>
+          <strong>${this._escapeHtml(Number(row.exposure_score || 0).toFixed(2))}</strong>
+        </div>
+      </div>
+    `).join("")
+
+    return `
+      <div class="supply-lens-block">
+        <div class="supply-lens-summary">${this._escapeHtml(dependencyMap.summary || "")}</div>
+        ${bucketChips ? `<div class="supply-lens-chip-row">${bucketChips}</div>` : ""}
+        <div class="supply-lens-row-list">${rows}</div>
+      </div>
+    `
+  }
+
+  GlobeController.prototype._renderSupplyChainRunwayHtml = function(lens = null) {
+    const runway = lens?.reserve_runway
+    if (!runway?.cards?.length) {
+      return '<div class="context-brief-state">No reserve runway cards are available for this route yet.</div>'
+    }
+
+    const cards = runway.cards.map((card) => `
+      <article class="supply-lens-runway-card supply-lens-runway-card--${this._escapeHtml(card.status || "low")}">
+        <div class="supply-lens-runway-country">${this._escapeHtml(card.country_name || card.country_code_alpha3 || "Country")}</div>
+        <div class="supply-lens-runway-days">${this._escapeHtml(card.runway_days)}</div>
+        <div class="supply-lens-runway-label">days</div>
+        <div class="supply-lens-runway-meta">
+          ${this._escapeHtml([
+            card.supplier_share_pct != null ? `${Number(card.supplier_share_pct).toFixed(1)}% route share` : null,
+            card.coverage_mode || null,
+          ].filter(Boolean).join(" · "))}
+        </div>
+      </article>
+    `).join("")
+
+    return `
+      <div class="supply-lens-block">
+        <div class="supply-lens-summary">${this._escapeHtml(runway.summary || "")}</div>
+        <div class="supply-lens-runway-grid">${cards}</div>
+      </div>
+    `
+  }
+
+  GlobeController.prototype._renderSupplyChainPathwayHtml = function(lens = null) {
+    const pathway = lens?.downstream_pathway
+    if (!pathway?.stages?.length) {
+      return '<div class="context-brief-state">No downstream pathway stages are available for this route yet.</div>'
+    }
+
+    const cards = pathway.stages.map((stage) => `
+      <article class="supply-lens-stage-card">
+        <div class="supply-lens-stage-phase">${this._escapeHtml(stage.phase || "")}</div>
+        <div class="supply-lens-stage-title">${this._escapeHtml(stage.title || "")}</div>
+        <div class="supply-lens-stage-body">${this._escapeHtml(stage.description || "")}</div>
+        ${(stage.stats || []).length ? `
+          <div class="supply-lens-stage-stats">
+            ${(stage.stats || []).map((stat) => `<span>${this._escapeHtml(stat)}</span>`).join("")}
+          </div>
+        ` : ""}
+      </article>
+    `).join("")
+
+    return `
+      <div class="supply-lens-block">
+        <div class="supply-lens-summary">${this._escapeHtml(pathway.summary || "")}</div>
+        <div class="supply-lens-stage-grid">${cards}</div>
+      </div>
     `
   }
 
@@ -95,6 +268,7 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     const downstream = market.downstream_countries || []
     const routePressure = market.route_pressure || []
     const seriesMap = market.benchmark_series || {}
+    const supplyChainLens = market.supply_chain_lens || null
     const midpoint = this._pipelineMidpointCoordinates(pipeline.coordinates)
     const typeLabel = (pipeline.type || "pipeline").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     const statusLabel = (pipeline.status || "monitoring").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
@@ -102,12 +276,15 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     const severity = this._pipelineContextSeverity(pipeline)
     const typeColors = { oil: "#ff8a00", gas: "#66bb6a", products: "#ffb300" }
     const accentColor = pipeline.color || typeColors[pipeline.type] || "#ff8a00"
+    const primarySymbol = market.primary_benchmark_symbol || benchmarks[0]?.symbol || null
+    const primaryQuote = benchmarks.find((quote) => quote.symbol === primarySymbol) || benchmarks[0] || null
+    const comparisonQuotes = benchmarks.filter((quote) => quote.symbol !== primarySymbol)
 
-    const benchmarkCardsHtml = benchmarks.length ? `
+    const benchmarkCardsHtml = comparisonQuotes.length ? `
       <div class="pipeline-lens-benchmark-grid">
-        ${benchmarks.map((quote) => {
+        ${comparisonQuotes.map((quote) => {
           const change = Number(quote.change_pct || 0)
-          const changeColor = change > 0 ? "#4caf50" : change < 0 ? "#f44336" : "#ffc107"
+          const changeColor = this._pipelineQuoteChangeColor(change)
           const changeLabel = quote.change_pct == null ? "flat" : `${change > 0 ? "+" : ""}${change.toFixed(2)}%`
           const series = Array.isArray(seriesMap[quote.symbol]) ? seriesMap[quote.symbol] : []
           const sparkline = this._pipelineSparklineSvg(series, changeColor)
@@ -127,14 +304,14 @@ export function applyContextNodeBuilderMethods(GlobeController) {
                 <span class="pipeline-lens-benchmark-change" style="color:${changeColor};">${this._escapeHtml(changeLabel)}</span>
               </div>
               <div class="pipeline-lens-benchmark-name">${this._escapeHtml(quote.name || quote.symbol)}</div>
-              <div class="pipeline-lens-benchmark-price">$${Number(quote.price || 0).toFixed(quote.category === "currency" ? 4 : 2)}</div>
+              <div class="pipeline-lens-benchmark-price">${this._escapeHtml(this._pipelineQuotePriceLabel(quote))}</div>
               ${sparkline}
               <div class="pipeline-lens-benchmark-meta">${this._escapeHtml([quote.unit, recordedAt].filter(Boolean).join(" · "))}</div>
             </button>
           `
         }).join("")}
       </div>
-    ` : '<div class="context-brief-state">No linked benchmark series available for this pipeline.</div>'
+    ` : ""
 
     const downstreamItems = downstream.map((row) => ({
       label: row.country_name,
@@ -157,7 +334,7 @@ export function applyContextNodeBuilderMethods(GlobeController) {
         label: row.status ? `${row.status}`.slice(0, 4).toUpperCase() : "ROUT",
         variant: row.status === "critical" ? "conf" : row.status === "elevated" ? "outage" : "event",
       },
-      nodeRequest: { kind: "chokepoint", id: row.chokepoint_name },
+      nodeRequest: { kind: "chokepoint", id: row.chokepoint_key || row.chokepoint_name },
     }))
 
     const coverage = market.coverage
@@ -188,15 +365,38 @@ export function applyContextNodeBuilderMethods(GlobeController) {
       ] : [],
       sections: [
         {
-          title: "Market pulse",
+          title: "Market chart",
           variant: "summary",
-          html: benchmarkCardsHtml,
+          html: this._renderPipelineHeroHtml(primaryQuote, Array.isArray(seriesMap[primaryQuote?.symbol]) ? seriesMap[primaryQuote.symbol] : [], {
+            accentColor,
+            comparisons: comparisonQuotes.slice(0, 3),
+          }),
           rows: coverageRows,
         },
+        benchmarkCardsHtml ? {
+          title: "Linked benchmarks",
+          variant: "summary",
+          html: benchmarkCardsHtml,
+        } : null,
         market.highlights?.length ? {
           title: "Derived read",
           variant: "summary",
           html: `<ul class="context-bullet-list">${market.highlights.map(line => `<li>${this._escapeHtml(line)}</li>`).join("")}</ul>`,
+        } : null,
+        supplyChainLens ? {
+          title: "Dependency map",
+          variant: "summary",
+          html: this._renderSupplyChainDependencyHtml(supplyChainLens),
+        } : null,
+        supplyChainLens ? {
+          title: "Reserve runway",
+          variant: "summary",
+          html: this._renderSupplyChainRunwayHtml(supplyChainLens),
+        } : null,
+        supplyChainLens ? {
+          title: "From route to market",
+          variant: "summary",
+          html: this._renderSupplyChainPathwayHtml(supplyChainLens),
         } : null,
         downstreamItems.length ? {
           title: "Downstream dependency",
@@ -434,6 +634,7 @@ export function applyContextNodeBuilderMethods(GlobeController) {
   }
 
   GlobeController.prototype._buildChokepointContext = function(cp) {
+    const supplyChainLens = cp.supply_chain_lens || null
     const flowRows = Object.entries(cp.flows || {})
       .filter(([, flow]) => flow?.pct)
       .map(([flowType, flow]) => ({ label: flowType.replace(/_/g, " "), value: `${flow.pct}% of world` }))
@@ -477,11 +678,26 @@ export function applyContextNodeBuilderMethods(GlobeController) {
       actions: cp.lat != null && cp.lng != null ? [
         { label: "Focus", lat: cp.lat, lng: cp.lng, height: 1000000, icon: "fa-location-crosshairs" },
       ] : [],
-      nodeRequest: cp.name ? { kind: "chokepoint", id: cp.name } : null,
+      nodeRequest: (cp.id || cp.name) ? { kind: "chokepoint", id: cp.id || cp.name } : null,
       sections: [
         flowRows.length ? { title: "Flows", rows: flowRows } : null,
         marketChips.length ? { title: "Market signals", chips: marketChips } : null,
         marketItems.length ? { title: "Market context", items: marketItems } : null,
+        supplyChainLens ? {
+          title: "Dependency map",
+          variant: "summary",
+          html: this._renderSupplyChainDependencyHtml(supplyChainLens),
+        } : null,
+        supplyChainLens ? {
+          title: "Reserve runway",
+          variant: "summary",
+          html: this._renderSupplyChainRunwayHtml(supplyChainLens),
+        } : null,
+        supplyChainLens ? {
+          title: "From route to market",
+          variant: "summary",
+          html: this._renderSupplyChainPathwayHtml(supplyChainLens),
+        } : null,
         pressureItems.length ? { title: "Pressure", items: pressureItems } : null,
       ].filter(Boolean),
     }

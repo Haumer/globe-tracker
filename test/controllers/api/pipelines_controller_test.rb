@@ -91,6 +91,7 @@ class Api::PipelinesControllerTest < ActionDispatch::IntegrationTest
       commodity_key: "oil_crude",
       commodity_name: "Crude Oil",
       dependency_score: 0.58,
+      import_share_gdp_pct: 1.9,
       metadata: { estimated: true }
     )
 
@@ -103,6 +104,22 @@ class Api::PipelinesControllerTest < ActionDispatch::IntegrationTest
       chokepoint_name: "Suez Canal",
       exposure_score: 0.44,
       metadata: { estimated: true }
+    )
+
+    EnergyBalanceSnapshot.create!(
+      country_code: "IT",
+      country_code_alpha3: "ITA",
+      country_name: "Italy",
+      commodity_key: "oil_crude",
+      metric_key: "stocks_days",
+      period_type: "month",
+      period_start: Date.new(2026, 3, 1),
+      period_end: Date.new(2026, 3, 31),
+      value_numeric: 61,
+      unit: "days",
+      source: "jodi",
+      dataset: "oil",
+      fetched_at: Time.current
     )
 
     get "/api/pipelines/pipe-002"
@@ -118,5 +135,11 @@ class Api::PipelinesControllerTest < ActionDispatch::IntegrationTest
     assert_operator lens.dig("benchmark_series", "OIL_BRENT").length, :>=, 2
     assert_equal 0, lens.dig("coverage", "downstream_observed")
     assert_equal 1, lens.dig("coverage", "downstream_estimated")
+    assert_equal "OIL_BRENT", lens["primary_benchmark_symbol"]
+    assert_equal "suez", lens.dig("route_pressure", 0, "chokepoint_key")
+    assert_equal "oil_crude", lens.dig("supply_chain_lens", "commodity_key")
+    assert_equal "Suez Canal", lens.dig("supply_chain_lens", "chokepoint_name")
+    assert_equal "Italy", lens.dig("supply_chain_lens", "dependency_map", "rows", 0, "country_name")
+    assert_equal 61, lens.dig("supply_chain_lens", "reserve_runway", "cards", 0, "runway_days")
   end
 end

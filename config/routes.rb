@@ -52,6 +52,7 @@ Rails.application.routes.draw do
     resources :conflict_events, only: [:index]
     get "conflict_pulse", to: "conflict_pulse#index"
     get "chokepoints", to: "chokepoints#index"
+    get "chokepoints/:id", to: "chokepoints#show"
     resources :internet_traffic, only: [:index]
     resources :notams, only: [:index]
     resources :airports, only: [:index]
@@ -63,6 +64,9 @@ Rails.application.routes.draw do
     get "node_context", to: "node_contexts#show"
     resources :military_bases, only: [:index]
     resources :commodities, only: [:index]
+    get "supply_chain/dependency_map", to: "supply_chain#dependency_map"
+    get "supply_chain/reserve_runway", to: "supply_chain#reserve_runway"
+    get "supply_chain/downstream_pathway", to: "supply_chain#downstream_pathway"
     resource :brief, only: [:show]
     resource :theater_brief, only: [:show]
     resource :exports, only: [] do

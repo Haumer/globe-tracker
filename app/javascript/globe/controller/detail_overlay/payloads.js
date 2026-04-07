@@ -357,6 +357,8 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           ],
           chips: [chip(firstPresent(data?.type, "Pipeline"), "warning")],
           accent: data?.color || "#ff6d00",
+          nodeRequest: data?.id ? { kind: "pipeline", id: data.id } : options.id ? { kind: "pipeline", id: options.id } : null,
+          focusHeight: 1200000,
         })
       }
       case "webcam": {

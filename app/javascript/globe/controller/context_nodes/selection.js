@@ -13,9 +13,17 @@ export function applyContextNodeSelectionMethods(GlobeController) {
     }
 
     if (nodeRequest.kind === "chokepoint") {
-      const chokepoint = this._findChokepointById(nodeRequest.id)
-      if (chokepoint) {
-        this._setSelectedContext(this._buildChokepointContext(chokepoint))
+      if (typeof this.showChokepointDetail === "function") {
+        this.showChokepointDetail(nodeRequest.id, { contextOnly: true })
+        return
+      }
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      return
+    }
+
+    if (nodeRequest.kind === "pipeline") {
+      if (typeof this.showPipelineDetail === "function") {
+        this.showPipelineDetail(nodeRequest.id)
         return
       }
       this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))

@@ -221,7 +221,7 @@ export function applyChokepointsMethods(GlobeController) {
       })
 
     if (options.contextOnly) {
-      if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+      if (this.hasDetailPanelTarget && !options.preserveDetailPanel) this.detailPanelTarget.style.display = "none"
       return
     }
 

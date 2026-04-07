@@ -2,6 +2,11 @@ import { getDataSource } from "globe/utils"
 import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, renderInsightFeedHtml } from "globe/controller/insight_presenters"
 
 export function applyInsightsMethods(GlobeController) {
+  const CHOKEPOINT_LENS_INSIGHT_TYPES = new Set([
+    "chokepoint_market_stress",
+    "country_chokepoint_dependency",
+  ])
+
   GlobeController.prototype._shouldRenderInsightMarker = function(insight) {
     const type = `${insight?.type || ""}`
     const downstreamTypes = new Set([
@@ -256,6 +261,12 @@ export function applyInsightsMethods(GlobeController) {
     }
 
     return affected
+  }
+
+  GlobeController.prototype._linkedChokepointNameForInsight = function(insight) {
+    return insight?.entities?.chokepoint?.name
+      || insight?.entities?.exposures?.[0]?.chokepoint_name
+      || null
   }
 
   GlobeController.prototype._affectedInsightActionLabel = function(affectedEntities) {
@@ -554,7 +565,11 @@ export function applyInsightsMethods(GlobeController) {
   }
 
   GlobeController.prototype.showInsightDetail = function(insight) {
-    if (this._buildInsightContext && this._setSelectedContext) {
+    const chokepointName = this._linkedChokepointNameForInsight?.(insight)
+    if (CHOKEPOINT_LENS_INSIGHT_TYPES.has(`${insight?.type || ""}`) && chokepointName && typeof this.showChokepointDetail === "function") {
+      const chokepoint = this._findChokepointById?.(chokepointName) || chokepointName
+      this.showChokepointDetail(chokepoint, { contextOnly: true, preserveDetailPanel: true })
+    } else if (this._buildInsightContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildInsightContext(insight))
     }
 

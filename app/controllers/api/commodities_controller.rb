@@ -3,11 +3,11 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      quotes = CommodityPrice.select("DISTINCT ON (symbol) *").order(:symbol, recorded_at: :desc)
+      quotes = latest_quotes_scope
 
       category = params[:category]
       quotes = quotes.where(category: category) if category.present?
-      quotes = YahooMarketSignalService.merge_quotes(quotes.to_a)
+      quotes = params[:at].present? ? quotes.to_a : YahooMarketSignalService.merge_quotes(quotes.to_a)
 
       spatial_quotes, watchlist_quotes = quotes.partition { |quote| quote.latitude.present? && quote.longitude.present? }
       watchlist_order = (YahooMarketSignalService.order_symbols + CommodityPriceService::WATCHLIST_SYMBOLS).uniq.each_with_index.to_h
@@ -19,6 +19,21 @@ module Api
     end
 
     private
+
+    def latest_quotes_scope
+      at = parse_time(params[:at])
+      scope = CommodityPrice.all
+      scope = scope.where("recorded_at <= ?", at) if at
+      scope.select("DISTINCT ON (symbol) *").order(:symbol, recorded_at: :desc)
+    end
+
+    def parse_time(value)
+      return nil if value.blank?
+
+      Time.parse(value)
+    rescue ArgumentError
+      nil
+    end
 
     def serialize_quote(quote)
       {

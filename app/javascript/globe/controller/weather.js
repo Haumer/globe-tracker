@@ -48,12 +48,17 @@ export function applyWeatherMethods(GlobeController) {
       this._ensureWeatherPanel()
       this._showWeatherPanel(true)
       // Auto-enable precipitation if nothing is on
-      if (!this._weatherActiveLayers || Object.keys(this._weatherActiveLayers).length === 0) {
+      if (!this._timelineActive && (!this._weatherActiveLayers || Object.keys(this._weatherActiveLayers).length === 0)) {
         this._weatherActiveLayers = {}
         this.toggleWeatherSublayer("precipitation")
       }
-      this._fetchWeatherAlerts()
-      this._enableWeatherSatellites()
+      if (this._timelineActive) {
+        this._pauseWeatherForTimeline()
+        this._timelineOnLayerToggle?.()
+      } else {
+        this._fetchWeatherAlerts()
+        this._enableWeatherSatellites()
+      }
     } else {
       this._removeAllWeatherLayers()
       this._showWeatherPanel(false)
@@ -68,6 +73,11 @@ export function applyWeatherMethods(GlobeController) {
   // ── Sub-layer toggle (imagery overlays) ───────────────────────
 
   GlobeController.prototype.toggleWeatherSublayer = async function(layerKey) {
+    if (this._timelineActive) {
+      this._toast("Weather imagery is live-only. Playback shows historical alerts only.")
+      return
+    }
+
     if (!this._weatherActiveLayers) this._weatherActiveLayers = {}
     if (!this._weatherImageryLayers) this._weatherImageryLayers = {}
 
@@ -447,6 +457,31 @@ export function applyWeatherMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._weatherSatBeamEntities = []
+  }
+
+  GlobeController.prototype._pauseWeatherForTimeline = function() {
+    this._timelineWeatherImageryKeys = Object.entries(this._weatherImageryLayers || {})
+      .filter(([, layer]) => layer?.show !== false)
+      .map(([key]) => key)
+
+    Object.values(this._weatherImageryLayers || {}).forEach((layer) => {
+      if (layer) layer.show = false
+    })
+
+    this._clearWeatherSatBeams()
+  }
+
+  GlobeController.prototype._resumeWeatherFromTimeline = function() {
+    if (!this.weatherVisible) return
+
+    Object.entries(this._weatherImageryLayers || {}).forEach(([key, layer]) => {
+      if (!layer) return
+      layer.show = !this._timelineWeatherImageryKeys || this._timelineWeatherImageryKeys.includes(key)
+    })
+
+    this._timelineWeatherImageryKeys = null
+    this._fetchWeatherAlerts()
+    this._renderWeatherSatBeams()
   }
 
   // ── Detail popup for weather alerts ───────────────────────────

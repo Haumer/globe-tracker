@@ -136,7 +136,7 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
 
   test "GET /api/playback/events returns seven-day strike playback for fire and geoconfirmed" do
     travel_to Time.utc(2026, 4, 5, 12, 0, 0) do
-      fire = FireHotspot.create!(
+      FireHotspot.create!(
         external_id: "timeline-fire-1",
         latitude: 35.7,
         longitude: 51.4,
@@ -149,15 +149,8 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
         acq_datetime: 3.days.ago,
         fetched_at: Time.current
       )
-      TimelineEvent.create!(
-        event_type: "fire",
-        eventable: fire,
-        latitude: fire.latitude,
-        longitude: fire.longitude,
-        recorded_at: fire.acq_datetime
-      )
 
-      gc = GeoconfirmedEvent.create!(
+      GeoconfirmedEvent.create!(
         external_id: "timeline-gc-1",
         map_region: "iran",
         title: "Verified strike report",
@@ -167,13 +160,6 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
         event_time: 4.days.ago,
         posted_at: 2.days.ago,
         fetched_at: Time.current
-      )
-      TimelineEvent.create!(
-        event_type: "geoconfirmed",
-        eventable: gc,
-        latitude: gc.latitude,
-        longitude: gc.longitude,
-        recorded_at: gc.posted_at
       )
 
       get "/api/playback/events", params: {
@@ -194,5 +180,36 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
       assert_equal "verified_strike", gc_event["detectionKind"]
       assert_equal "Verified strike report", gc_event["title"]
     end
+  end
+
+  test "GET /api/playback/events derives outage positions from country centroids" do
+    outage = InternetOutage.create!(
+      external_id: "ir-cloudflare-1",
+      entity_type: "country",
+      entity_code: "IR",
+      entity_name: "Iran",
+      datasource: "cloudflare",
+      score: 12_500,
+      level: "severe",
+      condition: "disruption",
+      started_at: Time.utc(2026, 4, 5, 10, 0, 0),
+      fetched_at: Time.utc(2026, 4, 5, 10, 5, 0)
+    )
+
+    get "/api/playback/events", params: {
+      from: 2.hours.before(outage.started_at).iso8601,
+      to: 2.hours.after(outage.started_at).iso8601,
+      types: "internet_outage",
+      lamin: 20.0, lamax: 40.0, lomin: 40.0, lomax: 60.0
+    }
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    event = data.find { |row| row["type"] == "internet_outage" }
+
+    assert_not_nil event
+    assert_in_delta 32.0, event["lat"], 0.001
+    assert_in_delta 53.0, event["lng"], 0.001
+    assert_equal "IR", event["code"]
   end
 end

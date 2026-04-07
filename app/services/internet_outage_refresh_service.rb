@@ -75,12 +75,13 @@ class InternetOutageRefreshService
 
     inserted = InternetOutage.where(external_id: records.map { |record| record[:external_id] })
     timeline_rows = inserted.map do |outage|
+      lat, lng = country_centroid(outage.entity_code)
       {
         event_type: "internet_outage",
         eventable_type: "InternetOutage",
         eventable_id: outage.id,
-        latitude: nil,
-        longitude: nil,
+        latitude: lat,
+        longitude: lng,
         recorded_at: outage.started_at || now,
         created_at: now,
         updated_at: now,
@@ -122,5 +123,10 @@ class InternetOutageRefreshService
     elsif score >= 1_000 then "moderate"
     else "minor"
     end
+  end
+
+  def country_centroid(code)
+    centroid = CrossLayerAnalyzer::Definitions::COUNTRY_CENTROIDS[code.to_s.upcase]
+    centroid ? [centroid[0], centroid[1]] : [nil, nil]
   end
 end

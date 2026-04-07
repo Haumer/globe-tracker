@@ -60,4 +60,25 @@ class InternetOutageRefreshServiceTest < ActiveSupport::TestCase
       assert_equal 1, svc.send(:upsert_events, events_data, now)
     end
   end
+
+  test "upsert_events stores outage timeline rows at country centroids" do
+    svc = InternetOutageRefreshService.new
+    now = Time.zone.parse("2026-03-25 12:00:00 UTC")
+
+    svc.send(:upsert_events, [
+      {
+        "entity" => { "type" => "country", "code" => "IR", "name" => "Iran" },
+        "datasource" => "cloudflare",
+        "score" => 12_000,
+        "method" => "disruption",
+        "from" => now.to_i - 60,
+        "until" => nil,
+      },
+    ], now)
+
+    timeline = TimelineEvent.find_by(event_type: "internet_outage")
+    assert_not_nil timeline
+    assert_in_delta 32.0, timeline.latitude, 0.001
+    assert_in_delta 53.0, timeline.longitude, 0.001
+  end
 end

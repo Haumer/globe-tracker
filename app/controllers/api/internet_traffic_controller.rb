@@ -3,7 +3,9 @@ module Api
     skip_before_action :authenticate_user!
 
     def index
-      snapshots = InternetTrafficSnapshot.latest_batch
+      at = parse_time(params[:at])
+      playback_mode = at.present?
+      snapshots = playback_mode ? InternetTrafficSnapshot.latest_batch_at(at) : InternetTrafficSnapshot.latest_batch
       configured = CloudflareRadarService.api_token.present?
 
       traffic = snapshots.map do |s|
@@ -16,7 +18,7 @@ module Api
         }
       end
 
-      pairs = CloudflareRadarService.cached_attack_pairs
+      pairs = CloudflareRadarService.latest_attack_pairs_at(playback_mode ? at : nil)
       response.set_header("X-Source-Configured", configured ? "1" : "0")
       response.set_header("X-Source-Status", traffic.any? || pairs.any? ? "ready" : (configured ? "empty" : "unconfigured"))
 
@@ -26,7 +28,18 @@ module Api
           { origin: p[:origin], target: p[:target], origin_name: p[:origin_name], target_name: p[:target_name], pct: p[:pct] }
         },
         recorded_at: snapshots.first&.recorded_at&.iso8601,
+        playback: playback_mode,
       }
+    end
+
+    private
+
+    def parse_time(value)
+      return nil if value.blank?
+
+      Time.parse(value)
+    rescue ArgumentError
+      nil
     end
   end
 end

@@ -31,8 +31,10 @@ class CloudflareRadarService
 
       now = Time.current
       records = merge_data(traffic, attack_origins, attack_targets, now)
+      pair_records = normalize_attack_pairs(attack_pairs, now)
 
       InternetTrafficSnapshot.insert_all(records) if records.any?
+      InternetAttackPairSnapshot.insert_all(pair_records) if pair_records.any?
 
       # Persist attack pairs as JSON in a single-row snapshot attribute
       if attack_pairs.any?
@@ -50,6 +52,24 @@ class CloudflareRadarService
       JSON.parse(File.read(attack_pairs_cache_path), symbolize_names: true)
     rescue
       []
+    end
+
+    def latest_attack_pairs_at(time = nil)
+      scope = time.present? ? InternetAttackPairSnapshot.latest_batch_at(time) : InternetAttackPairSnapshot.latest_batch
+      pairs = scope.to_a
+      return pairs.map { |pair|
+        {
+          origin: pair.origin_country_code,
+          target: pair.target_country_code,
+          origin_name: pair.origin_country_name,
+          target_name: pair.target_country_name,
+          pct: pair.attack_pct,
+        }
+      } if pairs.any?
+
+      return [] if time.present?
+
+      cached_attack_pairs
     end
 
     def attack_pairs_cache_path
@@ -147,6 +167,25 @@ class CloudflareRadarService
       end
 
       countries.values
+    end
+
+    def normalize_attack_pairs(pairs, now)
+      Array(pairs).filter_map do |pair|
+        origin = pair[:origin] || pair["origin"]
+        target = pair[:target] || pair["target"]
+        next if origin.blank? || target.blank?
+
+        {
+          origin_country_code: origin,
+          target_country_code: target,
+          origin_country_name: pair[:origin_name] || pair["origin_name"],
+          target_country_name: pair[:target_name] || pair["target_name"],
+          attack_pct: (pair[:pct] || pair["pct"])&.to_f,
+          recorded_at: now,
+          created_at: now,
+          updated_at: now,
+        }
+      end
     end
   end
 end

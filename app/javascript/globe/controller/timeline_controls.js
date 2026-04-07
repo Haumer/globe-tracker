@@ -26,6 +26,7 @@ export function applyTimelineControlMethods(GlobeController) {
       const frameStatus = await this._timelineLoadFrames()
       const eventCount = await this._timelineUpdateEvents()
       const situationCount = await this._timelineUpdateConflictPulse()
+      await this._timelineRefreshCursorLayers()
 
       showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, true)
     } catch (error) {
@@ -44,9 +45,15 @@ export function applyTimelineControlMethods(GlobeController) {
       news: !!this._newsInterval,
       events: !!this._eventsInterval,
       outages: !!this._outageInterval,
+      financial: !!this._financialInterval,
     }
 
     clearLiveIntervals.call(this)
+    if (this._notamCameraCb) {
+      this.viewer.camera.moveEnd.removeEventListener(this._notamCameraCb)
+    }
+    this._pauseWeatherForTimeline?.()
+    this._stopInsightPolling?.({ clearData: false })
 
     if (this._conflictPulseInterval) {
       clearInterval(this._conflictPulseInterval)
@@ -55,7 +62,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._clearConflictPulseEntities?.()
     this._lastConflictPulseBucket = null
 
-    const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+    const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
     this._timelineHiddenSources = []
     for (const [name, ds] of Object.entries(this._ds)) {
       if (!liveDataSources.has(name)) continue
@@ -109,11 +116,25 @@ export function applyTimelineControlMethods(GlobeController) {
       this.fetchOutages()
       this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
     }
+    if (this.financialVisible) {
+      this.fetchCommodities()
+      this._financialInterval = setInterval(() => this.fetchCommodities(), 60000)
+    }
     if (strikeSignalsVisible(this)) {
       this.fetchStrikes()
       this._strikesInterval = setInterval(() => {
         if (strikeSignalsVisible(this)) this.fetchStrikes()
       }, 300000)
+    }
+    if (this.fireHotspotsVisible) {
+      this.fetchFireHotspots()
+      this._startFiresRefresh?.()
+    }
+    this._resumeWeatherFromTimeline?.()
+    this._resumeNotamsFromTimeline?.()
+    if (this.insightsVisible) this._startInsightPolling?.()
+    if (Object.values(this.satCategoryVisible || {}).some(Boolean)) {
+      this._refreshLiveSatelliteCategories?.()
     }
     if (this.situationsVisible && this._fetchConflictPulse) {
       this._fetchConflictPulse()
@@ -242,8 +263,11 @@ export function applyTimelineControlMethods(GlobeController) {
 
   GlobeController.prototype._timelineEventDebounce = function() {
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
-    this._timelineEventTimer = setTimeout(() => this._timelineUpdateEvents(), 400)
-    this._timelineUpdateConflictPulse()
+    this._timelineEventTimer = setTimeout(async () => {
+      await this._timelineUpdateEvents()
+      await this._timelineUpdateConflictPulse()
+      await this._timelineRefreshCursorLayers()
+    }, 400)
   }
 
   GlobeController.prototype.timelinePickDate = function() {
@@ -281,6 +305,7 @@ export function applyTimelineControlMethods(GlobeController) {
     const frameStatus = await this._timelineLoadFrames()
     const eventCount = await this._timelineUpdateEvents()
     const situationCount = await this._timelineUpdateConflictPulse()
+    await this._timelineRefreshCursorLayers()
 
     showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, false)
   }
@@ -293,7 +318,25 @@ export function applyTimelineControlMethods(GlobeController) {
       this._renderNearestFrame()
       await this._timelineUpdateEvents()
       await this._timelineUpdateConflictPulse()
+      await this._timelineRefreshCursorLayers()
     }, 300)
+  }
+
+  GlobeController.prototype._timelineRefreshCursorLayers = async function() {
+    if (!this._timelineActive) return
+
+    const tasks = []
+
+    if (this.conflictsVisible) tasks.push(Promise.resolve(this.fetchConflicts?.()))
+    if (this.financialVisible) tasks.push(Promise.resolve(this.fetchCommodities?.()))
+    if (this.trafficVisible) tasks.push(Promise.resolve(this.fetchTraffic?.()))
+    if (this.fireHotspotsVisible) tasks.push(Promise.resolve(this.fetchFireHotspots?.()))
+    if (Object.values(this.satCategoryVisible || {}).some(Boolean)) {
+      tasks.push(Promise.resolve(this.fetchPlaybackSatellites?.()))
+    }
+
+    if (tasks.length === 0) return
+    await Promise.all(tasks)
   }
 }
 
@@ -333,6 +376,7 @@ function clearLiveIntervals() {
   if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
   if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
   if (this._outageInterval) { clearInterval(this._outageInterval); this._outageInterval = null }
+  if (this._financialInterval) { clearInterval(this._financialInterval); this._financialInterval = null }
 }
 
 function restoreHiddenSources() {
@@ -348,6 +392,13 @@ function restoreHiddenSources() {
   if (this.gpsJammingVisible) activeDs.add("gpsJamming")
   if (this.newsVisible) activeDs.add("news")
   if (this.outagesVisible) activeDs.add("outages")
+  if (this.weatherVisible) activeDs.add("weather")
+  if (this.notamsVisible) activeDs.add("notams")
+  if (this.financialVisible) activeDs.add("financial")
+  if (this.insightsVisible) activeDs.add("insights")
+  if (this.fireHotspotsVisible) activeDs.add("fires")
+  if (Object.values(this.satCategoryVisible || {}).some(Boolean)) activeDs.add("satellites")
+  if (this.satOrbitsVisible) activeDs.add("sat-orbits")
   if (strikeSignalsVisible(this)) activeDs.add("strikes")
   if (this.trailsVisible) activeDs.add("trails")
 
@@ -358,7 +409,7 @@ function restoreHiddenSources() {
 }
 
 function clearLiveEntities() {
-  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents"])
+  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
   for (const [name, source] of Object.entries(this._ds)) {
     if (liveDataSources.has(name) && source) source.entities.removeAll()
   }
@@ -379,7 +430,9 @@ function stepTimeline(direction) {
 function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, opening) {
   const frameCount = frameStatus?.frameCount || 0
   const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
-    this.gpsJammingVisible || this.outagesVisible || this.situationsVisible || strikeSignalsVisible(this)
+    this.gpsJammingVisible || this.outagesVisible || this.weatherVisible || this.notamsVisible ||
+    this.conflictsVisible || this.financialVisible || this.trafficVisible || this.situationsVisible ||
+    this.fireHotspotsVisible || strikeSignalsVisible(this) || Object.values(this.satCategoryVisible || {}).some(Boolean)
 
   if (frameStatus?.boundsRequired) {
     this._toast("Zoom in or apply a region filter to load movement playback.")

@@ -59,11 +59,25 @@ export function applyFiresMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchFireHotspots = async function() {
-    if (this._timelineActive) return
     const fetchToken = ++this._fireHotspotFetchToken
     this._toast("Loading fire hotspots...")
     try {
-      const resp = await fetch("/api/fire_hotspots")
+      let url
+      if (this._timelineActive && this._timelineCursor) {
+        const from = new Date(this._timelineCursor.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        const params = new URLSearchParams({
+          from,
+          to: this._timelineCursor.toISOString(),
+          types: "fire",
+        })
+        const bounds = this.hasActiveFilter() ? this.getFilterBounds?.() : this.getViewportBounds?.()
+        if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key, value))
+        url = `/api/playback/events?${params.toString()}`
+      } else {
+        url = "/api/fire_hotspots"
+      }
+
+      const resp = await fetch(url)
       if (fetchToken !== this._fireHotspotFetchToken || !this.fireHotspotsVisible) {
         this._toastHide()
         return
@@ -77,16 +91,34 @@ export function applyFiresMethods(GlobeController) {
         this._toastHide()
         return
       }
-      // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time, strike]
-      this._fireHotspotData = raw.map(r => ({
-        id: r[0], lat: r[1], lng: r[2], brightness: r[3],
-        confidence: r[4], satellite: r[5], instrument: r[6],
-        frp: r[7], daynight: r[8], time: r[9], strike: r[10] === 1,
-      }))
+      if (this._timelineActive) {
+        this._fireHotspotData = raw.map(event => ({
+          id: event.external_id || event.id,
+          lat: event.lat,
+          lng: event.lng,
+          brightness: event.brightness,
+          confidence: event.confidence,
+          satellite: event.satellite,
+          instrument: event.instrument,
+          frp: event.frp,
+          daynight: event.daynight,
+          time: event.time,
+          strike: false,
+        }))
+      } else {
+        // API returns arrays: [id, lat, lng, brightness, confidence, satellite, instrument, frp, daynight, time, strike]
+        this._fireHotspotData = raw.map(r => ({
+          id: r[0], lat: r[1], lng: r[2], brightness: r[3],
+          confidence: r[4], satellite: r[5], instrument: r[6],
+          frp: r[7], daynight: r[8], time: r[9], strike: r[10] === 1,
+        }))
+      }
       this._fireHotspotClusterData = []
-      this._handleBackgroundRefresh(resp, "fire-hotspots", this._fireHotspotData.length > 0, () => {
-        if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
-      })
+      if (!this._timelineActive) {
+        this._handleBackgroundRefresh(resp, "fire-hotspots", this._fireHotspotData.length > 0, () => {
+          if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
+        })
+      }
       this.renderFireHotspots()
       this._markFresh("fireHotspots")
       this._updateStats()

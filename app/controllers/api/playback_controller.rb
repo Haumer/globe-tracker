@@ -97,10 +97,14 @@ module Api
           NaturalEvent.minimum(:event_date),  NaturalEvent.maximum(:event_date),
           NewsEvent.minimum(:published_at),   NewsEvent.maximum(:published_at),
           FireHotspot.minimum(:acq_datetime), FireHotspot.maximum(:acq_datetime),
+          ConflictEvent.minimum(:date_start), ConflictEvent.maximum(:date_start),
           GpsJammingSnapshot.minimum(:recorded_at), GpsJammingSnapshot.maximum(:recorded_at),
           InternetOutage.minimum(:started_at),      InternetOutage.maximum(:started_at),
+          InternetTrafficSnapshot.minimum(:recorded_at), InternetTrafficSnapshot.maximum(:recorded_at),
           WeatherAlert.minimum(:onset),       WeatherAlert.maximum(:onset),
           Notam.minimum(:effective_start),    Notam.maximum(:effective_start),
+          CommodityPrice.minimum(:recorded_at), CommodityPrice.maximum(:recorded_at),
+          SatelliteTleSnapshot.minimum(:recorded_at), SatelliteTleSnapshot.maximum(:recorded_at),
         ].compact.each { |t| time_points << t }
 
         geoconfirmed_oldest = [GeoconfirmedEvent.minimum(:posted_at), GeoconfirmedEvent.minimum(:event_time)].compact.min
@@ -128,10 +132,14 @@ module Api
             news: NewsEvent.count,
             heat_signatures: FireHotspot.count,
             geoconfirmed: GeoconfirmedEvent.count,
+            conflicts: ConflictEvent.count,
             gps_jamming: GpsJammingSnapshot.count,
             outages: InternetOutage.count,
+            internet_traffic: InternetTrafficSnapshot.count,
             weather_alerts: WeatherAlert.count,
             notams: Notam.count,
+            markets: CommodityPrice.count,
+            satellites: SatelliteTleSnapshot.count,
           },
         }
       end
@@ -147,16 +155,36 @@ module Api
       max_range = max_event_range_for(types)
       from = [from, to - max_range].max
 
-      scope = TimelineEvent.in_range(from, to)
-      scope = scope.of_type(types) if types.present?
-
       bounds = parse_bounds
-      scope = scope.within_bounds(bounds) if bounds.size == 4
+      requested_types = Array(types).presence || []
+      timeline_types = requested_types - %w[fire geoconfirmed internet_outage]
 
-      limit = types.present? && (types & %w[fire geoconfirmed]).any? ? 5000 : 2000
-      timeline_events = scope.order(:recorded_at).limit(limit).includes(:eventable)
+      events = []
 
-      render json: timeline_events.filter_map { |te| timeline_event_json(te) }
+      if timeline_types.any?
+        scope = TimelineEvent.in_range(from, to).of_type(timeline_types)
+        scope = scope.within_bounds(bounds) if bounds.size == 4
+        timeline_limit = (timeline_types & %w[gps_jamming weather_alert notam]).any? ? 5000 : 2000
+        events.concat(scope.order(recorded_at: :desc).limit(timeline_limit).includes(:eventable).filter_map { |te| timeline_event_json(te) })
+      end
+
+      if requested_types.include?("fire")
+        scope = FireHotspot.in_range(from, to)
+        scope = scope.within_bounds(bounds) if bounds.size == 4
+        events.concat(scope.order(:acq_datetime).limit(5000).map { |fire| playback_fire_event_json(fire) })
+      end
+
+      if requested_types.include?("geoconfirmed")
+        scope = GeoconfirmedEvent.where("COALESCE(posted_at, event_time, fetched_at) BETWEEN ? AND ?", from, to)
+        scope = scope.within_bounds(bounds) if bounds.size == 4
+        events.concat(scope.order(Arel.sql("COALESCE(posted_at, event_time, fetched_at) ASC")).limit(5000).map { |gc| playback_geoconfirmed_event_json(gc) })
+      end
+
+      if requested_types.include?("internet_outage")
+        events.concat(playback_internet_outage_events(from: from, to: to, bounds: bounds))
+      end
+
+      render json: events.sort_by { |event| event[:time].to_s }
     end
 
     # GET /api/playback/conflicts?at=ISO8601
@@ -171,7 +199,11 @@ module Api
       at = parse_time(params[:at]) || Time.current
 
       scope = SatelliteTleSnapshot.tles_at(at)
-      scope = scope.where(category: params[:category]) if params[:category].present?
+      if params[:categories].present?
+        scope = scope.where(category: params[:categories].split(",").map(&:strip))
+      elsif params[:category].present?
+        scope = scope.where(category: params[:category])
+      end
 
       render json: {
         at: at.utc.iso8601,
@@ -239,12 +271,13 @@ module Api
         base.merge(code: io.entity_code, name: io.entity_name, score: io.score, level: io.level)
       when "weather_alert"
         wa = te.eventable
-        base.merge(event: wa.event, severity: wa.severity, headline: wa.headline,
-                   areas: wa.areas, onset: wa.onset&.iso8601, expires: wa.expires&.iso8601)
+        base.merge(event: wa.event, severity: wa.severity, urgency: wa.urgency, certainty: wa.certainty,
+                   headline: wa.headline, description: wa.description, areas: wa.areas,
+                   sender: wa.sender, onset: wa.onset&.iso8601, expires: wa.expires&.iso8601)
       when "notam"
         n = te.eventable
         base.merge(reason: n.reason, text: n.text, radius_nm: n.radius_nm,
-                   alt_low_ft: n.alt_low_ft, alt_high_ft: n.alt_high_ft,
+                   radius_m: n.radius_m, alt_low_ft: n.alt_low_ft, alt_high_ft: n.alt_high_ft,
                    effective_start: n.effective_start&.iso8601, effective_end: n.effective_end&.iso8601)
       else
         base
@@ -295,6 +328,74 @@ module Api
         time: s.recorded_at&.utc&.iso8601,
         x: s.extra.present? ? JSON.parse(s.extra) : nil,
       }
+    end
+
+    def playback_fire_event_json(fire)
+      {
+        id: "fire-#{fire.id}",
+        type: "fire",
+        lat: fire.latitude,
+        lng: fire.longitude,
+        time: fire.acq_datetime&.iso8601,
+        external_id: fire.external_id,
+        brightness: fire.brightness,
+        confidence: fire.confidence,
+        satellite: fire.satellite,
+        instrument: fire.instrument,
+        frp: fire.frp,
+        daynight: fire.daynight,
+        detectionKind: "heat_signature",
+      }
+    end
+
+    def playback_geoconfirmed_event_json(gc)
+      {
+        id: "geoconfirmed-#{gc.id}",
+        type: "geoconfirmed",
+        lat: gc.latitude,
+        lng: gc.longitude,
+        time: gc.timeline_recorded_at&.iso8601,
+        external_id: gc.external_id,
+        title: gc.title,
+        region: gc.map_region,
+        description: clean_geoconfirmed_description(gc.description),
+        sourceUrls: gc.source_urls || [],
+        geoUrls: gc.geolocation_urls || [],
+        detectionKind: "verified_strike",
+      }
+    end
+
+    def playback_internet_outage_events(from:, to:, bounds:)
+      scope = InternetOutage.in_range(from, to).order(:started_at).limit(1000)
+
+      scope.filter_map do |outage|
+        lat, lng = outage_centroid(outage.entity_code)
+        next if bounds.size == 4 && !point_in_bounds?(lat, lng, bounds)
+
+        {
+          id: "internet-outage-#{outage.id}",
+          type: "internet_outage",
+          lat: lat,
+          lng: lng,
+          time: (outage.started_at || outage.fetched_at)&.iso8601,
+          code: outage.entity_code,
+          name: outage.entity_name,
+          score: outage.score,
+          level: outage.level,
+        }
+      end
+    end
+
+    def outage_centroid(code)
+      centroid = CrossLayerAnalyzer::Definitions::COUNTRY_CENTROIDS[code.to_s.upcase]
+      centroid ? [centroid[0], centroid[1]] : [nil, nil]
+    end
+
+    def point_in_bounds?(lat, lng, bounds)
+      return false if lat.nil? || lng.nil?
+
+      lat >= bounds[:lamin] && lat <= bounds[:lamax] &&
+        lng >= bounds[:lomin] && lng <= bounds[:lomax]
     end
   end
 end

@@ -40,6 +40,46 @@ class CloudflareRadarServiceTest < ActiveSupport::TestCase
     assert_kind_of Array, pairs
   end
 
+  test "normalize_attack_pairs builds snapshot rows" do
+    now = Time.current
+    rows = CloudflareRadarService.send(:normalize_attack_pairs, [
+      { origin: "US", target: "DE", origin_name: "United States", target_name: "Germany", pct: 12.4 },
+    ], now)
+
+    assert_equal 1, rows.length
+    row = rows.first
+    assert_equal "US", row[:origin_country_code]
+    assert_equal "DE", row[:target_country_code]
+    assert_equal 12.4, row[:attack_pct]
+    assert_equal now, row[:recorded_at]
+  end
+
+  test "latest_attack_pairs_at returns historical batch when stored" do
+    early = 2.hours.ago
+    late = 30.minutes.ago
+
+    InternetAttackPairSnapshot.create!(
+      origin_country_code: "US",
+      target_country_code: "DE",
+      origin_country_name: "United States",
+      target_country_name: "Germany",
+      attack_pct: 12.4,
+      recorded_at: early
+    )
+    InternetAttackPairSnapshot.create!(
+      origin_country_code: "US",
+      target_country_code: "FR",
+      origin_country_name: "United States",
+      target_country_name: "France",
+      attack_pct: 9.1,
+      recorded_at: late
+    )
+
+    pairs = CloudflareRadarService.latest_attack_pairs_at(1.hour.ago)
+    assert_equal 1, pairs.length
+    assert_equal "DE", pairs.first[:target]
+  end
+
   test "api_token returns nil when not configured" do
     original = ENV["CLOUDFLARE_RADAR_TOKEN"]
     ENV["CLOUDFLARE_RADAR_TOKEN"] = nil

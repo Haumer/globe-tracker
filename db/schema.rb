@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_05_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -450,6 +450,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_05_120000) do
     t.index ["cell_lat", "cell_lng", "recorded_at"], name: "idx_gps_jam_cell_time", order: { recorded_at: :desc }
     t.index ["cell_lat", "cell_lng", "recorded_at"], name: "idx_jamming_cell_time"
     t.index ["recorded_at"], name: "index_gps_jamming_snapshots_on_recorded_at"
+  end
+
+  create_table "internet_attack_pair_snapshots", force: :cascade do |t|
+    t.string "origin_country_code", null: false
+    t.string "target_country_code", null: false
+    t.string "origin_country_name"
+    t.string "target_country_name"
+    t.float "attack_pct"
+    t.datetime "recorded_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["origin_country_code", "target_country_code", "recorded_at"], name: "idx_attack_pair_snapshots_route_time"
+    t.index ["recorded_at"], name: "index_internet_attack_pair_snapshots_on_recorded_at"
   end
 
   create_table "internet_outages", force: :cascade do |t|

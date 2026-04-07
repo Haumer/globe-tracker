@@ -11,10 +11,13 @@ export function applyTimelineFrameMethods(GlobeController) {
     this._timelineAppliedFrameIndex = -1
     this._ds["timeline"]?.entities.removeAll()
 
+    const wantsFlightPlayback = this.flightsVisible || this._milFlightsActive
+    const wantsShipPlayback = this.shipsVisible || this.navalVesselsVisible
+
     let playbackType = "all"
-    if (this.flightsVisible && !this.shipsVisible) playbackType = "flight"
-    else if (this.shipsVisible && !this.flightsVisible) playbackType = "ship"
-    else if (!this.flightsVisible && !this.shipsVisible) playbackType = "none"
+    if (wantsFlightPlayback && !wantsShipPlayback) playbackType = "flight"
+    else if (wantsShipPlayback && !wantsFlightPlayback) playbackType = "ship"
+    else if (!wantsFlightPlayback && !wantsShipPlayback) playbackType = "none"
 
     if (playbackType === "none") {
       this._timelineFrames = {}
@@ -108,6 +111,13 @@ export function applyTimelineFrameMethods(GlobeController) {
       if (hasFilter && !this.pointPassesFilter(entity.lat, entity.lng)) return
 
       const isFlight = entity.type === "flight"
+      if (!timelineEntityVisible(this, entity)) return
+
+      const isMilitaryFlight = isFlight && timelineEntityIsMilitaryFlight(this, entity)
+      const isNavalVessel = entity.type === "ship" && timelineEntityIsNavalVessel(entity)
+      const labelColor = isFlight
+        ? (isMilitaryFlight ? "rgba(239,83,80,0.92)" : "rgba(200,210,225,0.85)")
+        : (isNavalVessel ? "rgba(66,165,245,0.92)" : "rgba(38,198,218,0.85)")
       const id = `tl-${entity.type}-${entity.id}`
       activeIds.add(id)
       const position = Cesium.Cartesian3.fromDegrees(entity.lng, entity.lat, (entity.alt || 0) + 100)
@@ -116,13 +126,15 @@ export function applyTimelineFrameMethods(GlobeController) {
       if (timelineEntity) {
         timelineEntity.position = position
         timelineEntity.billboard.rotation = -Cesium.Math.toRadians(entity.hdg || 0)
+        timelineEntity.billboard.image = timelineBillboardImage(this, entity, { isMilitaryFlight, isNavalVessel })
         if (timelineEntity.label) timelineEntity.label.text = entity.callsign || entity.id
+        if (timelineEntity.label) timelineEntity.label.fillColor = Cesium.Color.fromCssColorString(labelColor)
       } else {
         timelineEntity = dataSource.entities.add({
           id,
           position,
           billboard: {
-            image: isFlight ? (entity.gnd ? this.planeIconGround : this.planeIcon) : this._timelineShipIcon(),
+            image: timelineBillboardImage(this, entity, { isMilitaryFlight, isNavalVessel }),
             scale: isFlight ? 1.0 : 0.8,
             rotation: -Cesium.Math.toRadians(entity.hdg || 0),
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -132,7 +144,7 @@ export function applyTimelineFrameMethods(GlobeController) {
           label: {
             text: entity.callsign || entity.id,
             font: "12px JetBrains Mono, monospace",
-            fillColor: Cesium.Color.fromCssColorString(isFlight ? "rgba(200,210,225,0.85)" : "rgba(38,198,218,0.85)"),
+            fillColor: Cesium.Color.fromCssColorString(labelColor),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -171,6 +183,27 @@ export function applyTimelineFrameMethods(GlobeController) {
     return this._cachedTimelineShipIcon
   }
 
+  GlobeController.prototype._timelineNavalShipIcon = function() {
+    if (this._cachedTimelineNavalShipIcon) return this._cachedTimelineNavalShipIcon
+    const canvas = document.createElement("canvas")
+    canvas.width = 20
+    canvas.height = 20
+    const ctx = canvas.getContext("2d")
+    ctx.fillStyle = "#42a5f5"
+    ctx.beginPath()
+    ctx.moveTo(10, 2)
+    ctx.lineTo(16, 16)
+    ctx.lineTo(10, 13)
+    ctx.lineTo(4, 16)
+    ctx.closePath()
+    ctx.fill()
+    ctx.strokeStyle = "#bbdefb"
+    ctx.lineWidth = 1
+    ctx.stroke()
+    this._cachedTimelineNavalShipIcon = canvas.toDataURL()
+    return this._cachedTimelineNavalShipIcon
+  }
+
   GlobeController.prototype._fmtTimelineDateTime = function(dateOrStr) {
     const date = typeof dateOrStr === "string" ? new Date(dateOrStr) : dateOrStr
     if (!date || isNaN(date)) return "--"
@@ -206,6 +239,43 @@ function applyTimelineFramesThrough(index) {
 
 function timelineEntityStaleMs(entityType) {
   return entityType === "ship" ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000
+}
+
+function timelineEntityVisible(controller, entity) {
+  if (entity.type === "flight") {
+    const isMilitary = timelineEntityIsMilitaryFlight(controller, entity)
+    return isMilitary ? !!controller._milFlightsActive : !!controller.flightsVisible
+  }
+
+  if (entity.type === "ship") {
+    const isNaval = timelineEntityIsNavalVessel(entity)
+    return isNaval ? !!controller.navalVesselsVisible : !!controller.shipsVisible
+  }
+
+  return true
+}
+
+function timelineEntityIsMilitaryFlight(controller, entity) {
+  const milFlag = entity?.x?.mil === 1 || entity?.x?.mil === true
+  return controller._isMilitaryFlight?.({
+    id: entity.id,
+    callsign: entity.callsign,
+    military: milFlag,
+  }) || false
+}
+
+function timelineEntityIsNavalVessel(entity) {
+  const shipType = Number(entity?.x?.ship_type)
+  return shipType === 35 || shipType === 55
+}
+
+function timelineBillboardImage(controller, entity, { isMilitaryFlight, isNavalVessel }) {
+  if (entity.type === "flight") {
+    if (entity.gnd) return controller.planeIconGround
+    return isMilitaryFlight ? controller.planeIconMil : controller.planeIcon
+  }
+
+  return isNavalVessel ? controller._timelineNavalShipIcon() : controller._timelineShipIcon()
 }
 
 function resolveTimelineBounds() {

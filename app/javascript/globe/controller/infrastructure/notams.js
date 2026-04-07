@@ -6,10 +6,14 @@ export function applyNotamsMethods(GlobeController) {
   GlobeController.prototype.toggleNotams = function() {
     this.notamsVisible = this.hasNotamsToggleTarget && this.notamsToggleTarget.checked
     if (this.notamsVisible) {
-      this.fetchNotams()
-      if (!this._notamCameraCb) {
-        this._notamCameraCb = () => { if (this.notamsVisible) this.fetchNotams() }
-        this.viewer.camera.moveEnd.addEventListener(this._notamCameraCb)
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchNotams()
+        if (!this._notamCameraCb) {
+          this._notamCameraCb = () => { if (this.notamsVisible) this.fetchNotams() }
+          this.viewer.camera.moveEnd.addEventListener(this._notamCameraCb)
+        }
       }
     } else {
       this._clearNotamEntities()
@@ -20,6 +24,7 @@ export function applyNotamsMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchNotams = async function() {
+    if (this._timelineActive) return
     this._toast("Loading NOTAMs...")
     try {
       const bounds = this.getViewportBounds()
@@ -35,6 +40,16 @@ export function applyNotamsMethods(GlobeController) {
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch NOTAMs:", e)
+    }
+  }
+
+  GlobeController.prototype._resumeNotamsFromTimeline = function() {
+    if (!this.notamsVisible || this._timelineActive) return
+
+    this.fetchNotams()
+    if (!this._notamCameraCb) {
+      this._notamCameraCb = () => { if (this.notamsVisible && !this._timelineActive) this.fetchNotams() }
+      this.viewer.camera.moveEnd.addEventListener(this._notamCameraCb)
     }
   }
 

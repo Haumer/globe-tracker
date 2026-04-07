@@ -151,4 +151,27 @@ class Api::CommoditiesControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes symbols, "XAU"
     assert_equal [], data["benchmarks"]
   end
+
+  test "historical query returns latest quote at or before timestamp without live merge" do
+    historical_time = @now - 3.hours
+    CommodityPrice.create!(
+      symbol: "XAU", category: "commodity", name: "Gold",
+      price: 2201.25, change_pct: -0.4, unit: "USD/oz",
+      latitude: 26.2, longitude: 28.0, region: "South Africa",
+      recorded_at: historical_time
+    )
+
+    YahooMarketSignalService.singleton_class.send(:define_method, :merge_quotes) do |_quotes|
+      raise "live merge should not run for historical commodity queries"
+    end
+
+    get "/api/commodities", params: { at: (@now - 2.hours).iso8601 }
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    gold = data["prices"].find { |p| p["symbol"] == "XAU" }
+
+    assert_not_nil gold
+    assert_in_delta 2201.25, gold["price"], 0.01
+  end
 end

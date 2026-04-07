@@ -16,15 +16,27 @@ export function applyConflictsMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchConflicts = async function() {
-    if (this._timelineActive) return
     this._toast("Loading conflicts...")
     try {
-      const resp = await fetch("/api/conflict_events")
+      let url = "/api/conflict_events"
+      const params = new URLSearchParams()
+      const bounds = this.hasActiveFilter() ? this.getFilterBounds?.() : this.getViewportBounds?.()
+      if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key, value))
+      if (this._timelineActive && this._timelineCursor) {
+        const start = this._timelineRangeStart || new Date(this._timelineCursor.getTime() - 24 * 60 * 60 * 1000)
+        params.set("from", start.toISOString())
+        params.set("to", this._timelineCursor.toISOString())
+      }
+      if ([...params.keys()].length > 0) url += `?${params.toString()}`
+
+      const resp = await fetch(url)
       if (!resp.ok) return
       this._conflictData = await resp.json()
-      this._handleBackgroundRefresh(resp, "conflict-events", this._conflictData.length > 0, () => {
-        if (this.conflictsVisible && !this._timelineActive) this.fetchConflicts()
-      })
+      if (!this._timelineActive) {
+        this._handleBackgroundRefresh(resp, "conflict-events", this._conflictData.length > 0, () => {
+          if (this.conflictsVisible && !this._timelineActive) this.fetchConflicts()
+        })
+      }
       this.renderConflicts()
       this._updateStats()
       this._toastHide()

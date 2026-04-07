@@ -48,17 +48,22 @@ export function applyTrafficMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchTraffic = async function() {
-    if (this._timelineActive) return
     this._toast("Loading internet traffic...")
     try {
-      const resp = await fetch("/api/internet_traffic")
+      let url = "/api/internet_traffic"
+      if (this._timelineActive && this._timelineCursor) {
+        url += `?at=${encodeURIComponent(this._timelineCursor.toISOString())}`
+      }
+      const resp = await fetch(url)
       if (!resp.ok) return
       this._trafficData = await resp.json()
       const sourceConfigured = resp.headers.get("X-Source-Configured") === "1"
       const hasData = (this._trafficData.traffic?.length || 0) > 0 || (this._trafficData.attack_pairs?.length || 0) > 0
-      this._handleBackgroundRefresh(resp, "internet-traffic", hasData, () => {
-        if (this.trafficVisible && !this._timelineActive) this.fetchTraffic()
-      })
+      if (!this._timelineActive) {
+        this._handleBackgroundRefresh(resp, "internet-traffic", hasData, () => {
+          if (this.trafficVisible && !this._timelineActive) this.fetchTraffic()
+        })
+      }
       this.renderTraffic()
       if (!hasData) {
         this._toast(
@@ -161,7 +166,7 @@ export function applyTrafficMethods(GlobeController) {
     })
 
     // DDoS attack arcs (origin → target) with labels and directional arrows
-    const pairs = this._trafficData.attack_pairs || []
+    const pairs = this._timelineActive ? [] : (this._trafficData.attack_pairs || [])
     this._attackArcData = pairs
 
     // Build set of attacked country codes for cross-layer correlation

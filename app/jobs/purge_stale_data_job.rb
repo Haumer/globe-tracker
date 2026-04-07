@@ -10,6 +10,7 @@ class PurgeStaleDataJob < ApplicationJob
     deleted += PollingStat.where("created_at < ?", cutoff).delete_all
     deleted += GpsJammingSnapshot.where("recorded_at < ?", cutoff).delete_all
     deleted += InternetTrafficSnapshot.where("created_at < ?", cutoff).delete_all
+    deleted += InternetAttackPairSnapshot.where("created_at < ?", cutoff).delete_all
     deleted += SatelliteTleSnapshot.where("recorded_at < ?", 14.days.ago).delete_all
     deleted += Flight.where("updated_at < ?", 6.hours.ago).delete_all
     deleted += Ship.where("updated_at < ?", 24.hours.ago).delete_all

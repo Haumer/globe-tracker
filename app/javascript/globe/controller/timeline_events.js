@@ -1,7 +1,15 @@
 import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
-const GENERAL_TIMELINE_WINDOW_MS = 3600000
+const EVENT_TIMELINE_WINDOWS_MS = {
+  earthquake: 24 * 60 * 60 * 1000,
+  natural_event: 24 * 60 * 60 * 1000,
+  news: 24 * 60 * 60 * 1000,
+  gps_jamming: 60 * 60 * 1000,
+  internet_outage: 24 * 60 * 60 * 1000,
+  weather_alert: 48 * 60 * 60 * 1000,
+  notam: 48 * 60 * 60 * 1000,
+}
 const STRIKE_TIMELINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
@@ -17,6 +25,8 @@ export function applyTimelineEventMethods(GlobeController) {
     if (this.newsVisible) generalTypes.push("news")
     if (this.gpsJammingVisible) generalTypes.push("gps_jamming")
     if (this.outagesVisible) generalTypes.push("internet_outage")
+    if (this.weatherVisible) generalTypes.push("weather_alert")
+    if (this.notamsVisible) generalTypes.push("notam")
 
     const strikeTypes = []
     if (showHeatSignatures) strikeTypes.push("fire")
@@ -34,12 +44,15 @@ export function applyTimelineEventMethods(GlobeController) {
     const bounds = this.hasActiveFilter() ? this.getFilterBounds() : (getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds)
 
     try {
-      const generalPromise = fetchTimelineEventSet({
-        from: new Date(cursor.getTime() - GENERAL_TIMELINE_WINDOW_MS).toISOString(),
-        to: new Date(cursor.getTime() + GENERAL_TIMELINE_WINDOW_MS).toISOString(),
-        types: generalTypes,
-        bounds,
-      })
+      const groupedTypes = groupTimelineTypesByWindow(generalTypes)
+      const generalPromise = Promise.all(groupedTypes.map(({ windowMs, types }) => (
+        fetchTimelineEventSet({
+          from: new Date(cursor.getTime() - windowMs).toISOString(),
+          to: cursor.toISOString(),
+          types,
+          bounds,
+        })
+      ))).then((groups) => groups.flat())
       const strikePromise = fetchTimelineEventSet({
         from: new Date(cursor.getTime() - STRIKE_TIMELINE_WINDOW_MS).toISOString(),
         to: cursor.toISOString(),
@@ -117,6 +130,9 @@ export function applyTimelineEventMethods(GlobeController) {
         time: event.time ? new Date(event.time).getTime() : null,
       }))
       this.renderEarthquakes()
+    } else if (this.earthquakesVisible) {
+      this._earthquakeData = []
+      this.renderEarthquakes()
     }
 
     if (byType.natural_event && this.naturalEventsVisible) {
@@ -130,6 +146,9 @@ export function applyTimelineEventMethods(GlobeController) {
         date: event.time,
         magnitudeValue: event.magnitudeValue,
       }))
+      this.renderNaturalEvents()
+    } else if (this.naturalEventsVisible) {
+      this._naturalEventData = []
       this.renderNaturalEvents()
     }
 
@@ -155,9 +174,12 @@ export function applyTimelineEventMethods(GlobeController) {
           threat: event.threat,
           cluster_id: event.cluster_id,
           time: event.time,
-        }))
+      }))
       this._newsData = newsData
       this._renderTimelineNews(newsData)
+    } else if (this.newsVisible) {
+      this._newsData = []
+      this._renderTimelineNews([])
     }
 
     if (byType.gps_jamming && this.gpsJammingVisible) {
@@ -171,6 +193,9 @@ export function applyTimelineEventMethods(GlobeController) {
       }))
       this._gpsJammingData = jammingData
       this._renderGpsJamming(jammingData)
+    } else if (this.gpsJammingVisible) {
+      this._gpsJammingData = []
+      this._renderGpsJamming([])
     }
 
     if (byType.internet_outage && this.outagesVisible) {
@@ -183,6 +208,50 @@ export function applyTimelineEventMethods(GlobeController) {
       }))
       this._outageData = outageEvents
       this._renderOutages({ summary: outageEvents, events: outageEvents })
+    } else if (this.outagesVisible) {
+      this._outageData = []
+      this._renderOutages({ summary: [], events: [] })
+    }
+
+    if (byType.weather_alert && this.weatherVisible) {
+      this._weatherAlerts = byType.weather_alert.map(event => ({
+        event: event.event,
+        severity: event.severity,
+        urgency: event.urgency,
+        certainty: event.certainty,
+        headline: event.headline,
+        description: event.description,
+        areas: event.areas,
+        onset: event.onset,
+        expires: event.expires,
+        sender: event.sender,
+        lat: event.lat,
+        lng: event.lng,
+      }))
+      this._renderWeatherAlerts()
+    } else if (this.weatherVisible) {
+      this._weatherAlerts = []
+      this._clearWeatherAlertEntities?.()
+    }
+
+    if (byType.notam && this.notamsVisible) {
+      this._notamData = byType.notam.map(event => ({
+        id: event.id,
+        lat: event.lat,
+        lng: event.lng,
+        radius_nm: event.radius_nm,
+        radius_m: event.radius_m,
+        alt_low_ft: event.alt_low_ft,
+        alt_high_ft: event.alt_high_ft,
+        reason: event.reason,
+        text: event.text,
+        effective_start: event.effective_start,
+        effective_end: event.effective_end,
+      }))
+      this.renderNotams()
+    } else if (this.notamsVisible) {
+      this._notamData = []
+      this._clearNotamEntities?.()
     }
 
     if (showHeatSignatures || showVerifiedStrikes) {
@@ -255,6 +324,21 @@ async function fetchTimelineEventSet({ from, to, types, bounds }) {
   if (!response.ok) throw new Error(`Timeline events request failed with ${response.status}`)
   const events = await response.json()
   return Array.isArray(events) ? events : []
+}
+
+function groupTimelineTypesByWindow(types) {
+  const grouped = new Map()
+
+  types.forEach((type) => {
+    const windowMs = EVENT_TIMELINE_WINDOWS_MS[type] || (24 * 60 * 60 * 1000)
+    if (!grouped.has(windowMs)) grouped.set(windowMs, [])
+    grouped.get(windowMs).push(type)
+  })
+
+  return [...grouped.entries()].map(([windowMs, groupedTypes]) => ({
+    windowMs: Number(windowMs),
+    types: groupedTypes,
+  }))
 }
 
 function timelineStrikeWindowContains(event, fromMs, toMs) {

@@ -5,6 +5,10 @@ export function applySatDataMethods(GlobeController) {
   GlobeController.prototype.getSatOrbitsDataSource = function() { return getDataSource(this.viewer, this._ds, "sat-orbits") }
 
   GlobeController.prototype.fetchSatCategory = async function(cat) {
+    if (this._timelineActive) {
+      return this.fetchPlaybackSatellites()
+    }
+
     this._toast("Loading satellites...")
     try {
       const response = await fetch(`/api/satellites?category=${cat}`)
@@ -27,6 +31,43 @@ export function applySatDataMethods(GlobeController) {
     } catch (e) {
       console.error("Failed to fetch satellites:", e)
     }
+  }
+
+  GlobeController.prototype.fetchPlaybackSatellites = async function() {
+    if (!this._timelineActive || !this._timelineCursor) return
+
+    const categories = Object.entries(this.satCategoryVisible || {})
+      .filter(([, visible]) => visible)
+      .map(([category]) => category)
+    if (categories.length === 0) {
+      this.satelliteData = []
+      this.updateSatellitePositions()
+      return
+    }
+
+    this._toast("Loading historical satellites...")
+    try {
+      const params = new URLSearchParams({
+        at: this._timelineCursor.toISOString(),
+        categories: categories.join(","),
+      })
+      const response = await fetch(`/api/playback/satellites?${params.toString()}`)
+      if (!response.ok) return
+
+      const data = await response.json()
+      this.satelliteData = data.satellites || []
+      this.updateSatellitePositions()
+      this._toastHide()
+    } catch (e) {
+      console.error("Failed to fetch historical satellites:", e)
+    }
+  }
+
+  GlobeController.prototype._refreshLiveSatelliteCategories = function() {
+    Object.entries(this.satCategoryVisible || {}).forEach(([category, visible]) => {
+      if (!visible) return
+      this.fetchSatCategory(category)
+    })
   }
 
   Object.defineProperty(GlobeController.prototype, "satCategoryColors", {
@@ -242,7 +283,7 @@ export function applySatDataMethods(GlobeController) {
     if (!sat) return
 
     const orbitSource = this.getSatOrbitsDataSource()
-    const now = new Date()
+    const now = this._timelineActive && this._timelineCursor ? new Date(this._timelineCursor.getTime()) : new Date()
     const activeIds = new Set()
 
     // Only render orbits for stations and a subset of others (too many = slow)
@@ -312,8 +353,12 @@ export function applySatDataMethods(GlobeController) {
     this.satCategoryVisible[cat] = event.target.checked
 
     // Fetch this category if not loaded yet
-    if (event.target.checked && !this._loadedSatCategories.has(cat)) {
-      this.fetchSatCategory(cat)
+    if (event.target.checked) {
+      if (this._timelineActive) {
+        this.fetchPlaybackSatellites()
+      } else if (!this._loadedSatCategories.has(cat)) {
+        this.fetchSatCategory(cat)
+      }
     }
 
     // Remove entities for this category immediately if unchecked

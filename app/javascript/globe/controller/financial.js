@@ -6,13 +6,14 @@ export function applyFinancialMethods(GlobeController) {
     this.financialVisible = this.hasFinancialToggleTarget
       ? this.financialToggleTarget.checked
       : !this.financialVisible
+    if (this._financialInterval) clearInterval(this._financialInterval)
+    this._financialInterval = null
     if (this.financialVisible) {
       this.fetchCommodities()
-      if (this._financialInterval) clearInterval(this._financialInterval)
-      this._financialInterval = setInterval(() => this.fetchCommodities(), 60000)
+      if (!this._timelineActive) {
+        this._financialInterval = setInterval(() => this.fetchCommodities(), 60000)
+      }
     } else {
-      if (this._financialInterval) clearInterval(this._financialInterval)
-      this._financialInterval = null
       this._clearFinancialEntities()
     }
     this._syncQuickBar()
@@ -21,7 +22,11 @@ export function applyFinancialMethods(GlobeController) {
 
   GlobeController.prototype.fetchCommodities = async function() {
     try {
-      const resp = await fetch("/api/commodities")
+      let url = "/api/commodities"
+      if (this._timelineActive && this._timelineCursor) {
+        url += `?at=${encodeURIComponent(this._timelineCursor.toISOString())}`
+      }
+      const resp = await fetch(url)
       if (!resp.ok) return
       const data = await resp.json()
       if (!this.financialVisible) return

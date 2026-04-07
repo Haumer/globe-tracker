@@ -30,7 +30,12 @@ export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype.toggleInsights = function() {
     this.insightsVisible = this.hasInsightsToggleTarget && this.insightsToggleTarget.checked
     if (this.insightsVisible) {
-      this._startInsightPolling()
+      if (this._timelineActive) {
+        this._stopInsightPolling({ clearData: true })
+        this._toast("Insights are live-only right now; playback hides them until historical snapshots exist.")
+      } else {
+        this._startInsightPolling()
+      }
     } else {
       this._stopInsightPolling({ clearData: true })
     }

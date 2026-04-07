@@ -30,6 +30,186 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     }
   }
 
+  GlobeController.prototype._pipelineMidpointCoordinates = function(coordinates = []) {
+    if (!Array.isArray(coordinates) || !coordinates.length) return null
+    const mid = coordinates[Math.floor(coordinates.length / 2)]
+    if (!Array.isArray(mid) || mid.length < 2) return null
+
+    const lat = Number(mid[0])
+    const lng = Number(mid[1])
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+
+    return { lat, lng }
+  }
+
+  GlobeController.prototype._pipelineContextSeverity = function(pipeline = {}) {
+    const market = pipeline.market_context || {}
+    const riskLevel = `${market.risk_level || ""}`.toLowerCase()
+    if (["critical", "high", "medium", "low"].includes(riskLevel)) return riskLevel
+
+    const maxRoutePressure = Math.max(...(market.route_pressure || []).map(row => Number(row.exposure_score || 0)), 0)
+    const maxBenchmarkMove = Math.max(...(market.benchmarks || []).map(row => Math.abs(Number(row.change_pct || 0))), 0)
+
+    if (maxRoutePressure >= 0.8 || maxBenchmarkMove >= 4) return "critical"
+    if (maxRoutePressure >= 0.6 || maxBenchmarkMove >= 2.5) return "high"
+    if (maxRoutePressure >= 0.35 || maxBenchmarkMove >= 1.25) return "medium"
+    return "low"
+  }
+
+  GlobeController.prototype._pipelineSparklineSvg = function(series = [], color = "#8bd8ff") {
+    const clean = series
+      .map(point => Number(point?.price))
+      .filter(value => Number.isFinite(value))
+
+    if (clean.length < 2) return ""
+
+    const width = 220
+    const height = 56
+    const padding = 6
+    const min = Math.min(...clean)
+    const max = Math.max(...clean)
+    const range = Math.max(max - min, 0.0001)
+
+    const points = clean.map((value, idx) => {
+      const x = padding + (idx / Math.max(clean.length - 1, 1)) * (width - padding * 2)
+      const y = height - padding - ((value - min) / range) * (height - padding * 2)
+      return `${x.toFixed(2)},${y.toFixed(2)}`
+    }).join(" ")
+
+    const last = clean[clean.length - 1]
+    const first = clean[0]
+    const fillOpacity = Math.abs(last - first) < 0.0001 ? 0.08 : 0.14
+    const area = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`
+
+    return `
+      <svg class="pipeline-lens-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <polyline class="pipeline-lens-sparkline-area" points="${area}" style="fill:${color};opacity:${fillOpacity};"></polyline>
+        <polyline class="pipeline-lens-sparkline-line" points="${points}" style="stroke:${color};"></polyline>
+      </svg>
+    `
+  }
+
+  GlobeController.prototype._buildPipelineContext = function(pipeline = {}) {
+    const market = pipeline.market_context || {}
+    const benchmarks = market.benchmarks || []
+    const downstream = market.downstream_countries || []
+    const routePressure = market.route_pressure || []
+    const seriesMap = market.benchmark_series || {}
+    const midpoint = this._pipelineMidpointCoordinates(pipeline.coordinates)
+    const typeLabel = (pipeline.type || "pipeline").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+    const statusLabel = (pipeline.status || "monitoring").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+    const summary = market.summary || market.highlights?.join(" · ") || "Linked market context unavailable."
+    const severity = this._pipelineContextSeverity(pipeline)
+    const typeColors = { oil: "#ff8a00", gas: "#66bb6a", products: "#ffb300" }
+    const accentColor = pipeline.color || typeColors[pipeline.type] || "#ff8a00"
+
+    const benchmarkCardsHtml = benchmarks.length ? `
+      <div class="pipeline-lens-benchmark-grid">
+        ${benchmarks.map((quote) => {
+          const change = Number(quote.change_pct || 0)
+          const changeColor = change > 0 ? "#4caf50" : change < 0 ? "#f44336" : "#ffc107"
+          const changeLabel = quote.change_pct == null ? "flat" : `${change > 0 ? "+" : ""}${change.toFixed(2)}%`
+          const series = Array.isArray(seriesMap[quote.symbol]) ? seriesMap[quote.symbol] : []
+          const sparkline = this._pipelineSparklineSvg(series, changeColor)
+          const recordedAt = quote.recorded_at ? this._timeAgo(new Date(quote.recorded_at)) : null
+          return `
+            <button
+              type="button"
+              class="pipeline-lens-benchmark-card"
+              data-action="click->globe#selectContextNode"
+              data-kind="commodity"
+              data-id="${this._escapeHtml(quote.symbol)}"
+              data-title="${this._escapeHtml(quote.name || quote.symbol)}"
+              data-summary="${this._escapeHtml(`${quote.symbol} $${Number(quote.price || 0).toFixed(quote.category === "currency" ? 4 : 2)} ${changeLabel}`)}"
+            >
+              <div class="pipeline-lens-benchmark-top">
+                <span class="pipeline-lens-benchmark-symbol">${this._escapeHtml(quote.symbol)}</span>
+                <span class="pipeline-lens-benchmark-change" style="color:${changeColor};">${this._escapeHtml(changeLabel)}</span>
+              </div>
+              <div class="pipeline-lens-benchmark-name">${this._escapeHtml(quote.name || quote.symbol)}</div>
+              <div class="pipeline-lens-benchmark-price">$${Number(quote.price || 0).toFixed(quote.category === "currency" ? 4 : 2)}</div>
+              ${sparkline}
+              <div class="pipeline-lens-benchmark-meta">${this._escapeHtml([quote.unit, recordedAt].filter(Boolean).join(" · "))}</div>
+            </button>
+          `
+        }).join("")}
+      </div>
+    ` : '<div class="context-brief-state">No linked benchmark series available for this pipeline.</div>'
+
+    const downstreamItems = downstream.map((row) => ({
+      label: row.country_name,
+      meta: [
+        `Dependency ${Number(row.dependency_score || 0).toFixed(2)}`,
+        row.import_share_gdp_pct != null ? `${Number(row.import_share_gdp_pct).toFixed(2)}% GDP` : null,
+        row.estimated ? "estimated" : "observed",
+      ].filter(Boolean).join(" · "),
+      badge: { label: row.country_code_alpha3 || "DEP", variant: row.estimated ? "outage" : "event" },
+    }))
+
+    const routePressureItems = routePressure.map((row) => ({
+      label: row.chokepoint_name,
+      meta: [
+        `Exposure ${Number(row.exposure_score || 0).toFixed(2)}`,
+        row.status ? `${row.status}`.replace(/_/g, " ") : null,
+        row.estimated ? "estimated" : "observed",
+      ].filter(Boolean).join(" · "),
+      badge: {
+        label: row.status ? `${row.status}`.slice(0, 4).toUpperCase() : "ROUT",
+        variant: row.status === "critical" ? "conf" : row.status === "elevated" ? "outage" : "event",
+      },
+      nodeRequest: { kind: "chokepoint", id: row.chokepoint_name },
+    }))
+
+    const coverage = market.coverage
+    const coverageRows = coverage ? [
+      { label: "Downstream coverage", value: `${coverage.downstream_observed || 0} observed · ${coverage.downstream_estimated || 0} estimated` },
+      { label: "Route coverage", value: `${coverage.route_observed || 0} observed · ${coverage.route_estimated || 0} estimated` },
+    ] : []
+
+    return {
+      kind: "pipeline",
+      pipelineId: pipeline.id,
+      severity,
+      statusLabel,
+      icon: "fa-oil-well",
+      accentColor,
+      eyebrow: "PIPELINE MARKET LENS",
+      title: pipeline.name || "Pipeline",
+      subtitle: [typeLabel, pipeline.country].filter(Boolean).join(" · "),
+      summary,
+      meta: [
+        { label: "Type", value: typeLabel },
+        { label: "Status", value: statusLabel },
+        pipeline.length_km ? { label: "Length", value: `${Number(pipeline.length_km).toLocaleString()} km` } : null,
+      ].filter(Boolean),
+      coordinates: midpoint ? { lat: midpoint.lat, lng: midpoint.lng, height: 1200000 } : null,
+      actions: midpoint ? [
+        { label: "Focus map", lat: midpoint.lat, lng: midpoint.lng, height: 1200000, icon: "fa-location-crosshairs" },
+      ] : [],
+      sections: [
+        {
+          title: "Market pulse",
+          variant: "summary",
+          html: benchmarkCardsHtml,
+          rows: coverageRows,
+        },
+        market.highlights?.length ? {
+          title: "Derived read",
+          variant: "summary",
+          html: `<ul class="context-bullet-list">${market.highlights.map(line => `<li>${this._escapeHtml(line)}</li>`).join("")}</ul>`,
+        } : null,
+        downstreamItems.length ? {
+          title: "Downstream dependency",
+          items: downstreamItems,
+        } : null,
+        routePressureItems.length ? {
+          title: "Route pressure",
+          items: routePressureItems,
+        } : null,
+      ].filter(Boolean),
+    }
+  }
+
   GlobeController.prototype._buildNewsContext = function(ev) {
     const categoryColors = {
       conflict: "#f44336",

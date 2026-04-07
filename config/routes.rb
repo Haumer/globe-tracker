@@ -44,7 +44,7 @@ Rails.application.routes.draw do
     resources :submarine_cables, only: [:index]
     resources :ports, only: [:index]
     resources :shipping_lanes, only: [:index]
-    resources :pipelines, only: [:index]
+    resources :pipelines, only: [:index, :show]
     resources :railways, only: [:index]
     resources :trains, only: [:index]
     resources :internet_outages, only: [:index]

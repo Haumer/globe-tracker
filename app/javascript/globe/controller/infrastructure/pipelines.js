@@ -136,72 +136,37 @@ export function applyPipelinesMethods(GlobeController) {
   GlobeController.prototype.showPipelineDetail = function(id) {
     const p = (this._pipelineData || []).find(pipe => pipe.id === id)
     if (!p) return
+    const baseContext = this._buildPipelineContext
+      ? this._buildPipelineContext(p)
+      : null
 
-    const typeColors = { oil: "#ff6d00", gas: "#76ff03", products: "#ffab00" }
-    const color = p.color || typeColors[p.type] || "#ff6d00"
-    const typeLabel = (p.type || "oil").charAt(0).toUpperCase() + (p.type || "oil").slice(1)
-    const statusLabel = (p.status || "operational").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-    const benchmarks = p.market_context?.benchmarks || []
-    const downstreamCountries = p.market_context?.downstream_countries || []
-    const routePressure = p.market_context?.route_pressure || []
+    if (!baseContext || !this._setSelectedContext) return
 
-    const benchmarkHtml = benchmarks.length ? `
-      <div style="margin-top:10px;font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);letter-spacing:1px;text-transform:uppercase;">Linked market signals</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
-        ${benchmarks.map((quote) => {
-          const isUp = Number(quote.change_pct || 0) > 0
-          const quoteColor = isUp ? "#4caf50" : Number(quote.change_pct || 0) < 0 ? "#f44336" : "#ffc107"
-          const delta = quote.change_pct == null ? "" : ` ${quote.change_pct > 0 ? "+" : ""}${Number(quote.change_pct).toFixed(2)}%`
-          return `<button type="button" class="detail-chip" data-action="click->globe#selectContextNode" data-kind="commodity" data-id="${this._escapeHtml(quote.symbol)}" data-title="${this._escapeHtml(quote.name || quote.symbol)}" data-summary="${this._escapeHtml(`${quote.symbol} $${Number(quote.price || 0).toFixed(quote.category === "currency" ? 4 : 2)}${delta}`)}" style="cursor:pointer;border:0;background:rgba(${isUp ? "76,175,80" : Number(quote.change_pct || 0) < 0 ? "244,67,54" : "255,193,7"},0.15);color:${quoteColor};">${this._escapeHtml(quote.symbol)} $${Number(quote.price || 0).toFixed(quote.category === "currency" ? 4 : 2)}${this._escapeHtml(delta)}</button>`
-        }).join("")}
-      </div>
-    ` : ""
+    this._pipelineLensRequestKey = `${id}:${Date.now()}`
+    baseContext.pipelineId = p.id
+    baseContext.summary = baseContext.summary || "Loading linked market lens…"
+    this._rightPanelUserClosed = false
+    this._setSelectedContext(baseContext)
+    this._showRightPanel?.("context")
 
-    const downstreamHtml = downstreamCountries.length ? `
-      <div style="margin-top:10px;font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);letter-spacing:1px;text-transform:uppercase;">Downstream dependency</div>
-      <div style="display:grid;gap:4px;margin-top:6px;">
-        ${downstreamCountries.map((row) => {
-          const dependency = row.dependency_score != null ? row.dependency_score.toFixed(2) : "—"
-          const importShare = row.import_share_gdp_pct != null ? ` · ${row.import_share_gdp_pct.toFixed(2)}% GDP` : ""
-          return `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">${this._escapeHtml(row.country_name)} <span style="color:#c8d2e1;">${dependency}</span>${importShare}${row.estimated ? ' · est.' : ''}</div>`
-        }).join("")}
-      </div>
-    ` : ""
+    if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
 
-    const routePressureHtml = routePressure.length ? `
-      <div style="margin-top:10px;font:500 9px var(--gt-mono);color:rgba(200,210,225,0.45);letter-spacing:1px;text-transform:uppercase;">Tracked route pressure</div>
-      <div style="display:grid;gap:4px;margin-top:6px;">
-        ${routePressure.map((row) => {
-          const exposure = row.exposure_score != null ? row.exposure_score.toFixed(2) : "—"
-          return `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">${this._escapeHtml(row.chokepoint_name)} <span style="color:#c8d2e1;">${exposure}</span>${row.estimated ? ' · est.' : ''}</div>`
-        }).join("")}
-      </div>
-    ` : ""
+    const requestKey = this._pipelineLensRequestKey
 
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid fa-oil-well" style="margin-right:6px;"></i>${this._escapeHtml(p.name)}
-      </div>
-      <div class="detail-country">${this._escapeHtml(p.country || "—")}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Type</span>
-          <span class="detail-value" style="color:${color};">${typeLabel}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Status</span>
-          <span class="detail-value">${statusLabel}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Length</span>
-          <span class="detail-value">${p.length_km ? p.length_km.toLocaleString() + " km" : "—"}</span>
-        </div>
-      </div>
-      ${benchmarkHtml}
-      ${downstreamHtml}
-      ${routePressureHtml}
-      <div style="margin-top:8px; font-size:10px; opacity:0.5;">Data: <a href="https://globalenergymonitor.org" target="_blank" rel="noopener" style="color:inherit;">Global Energy Monitor</a> (CC BY 4.0)</div>
-    `
-    this.detailPanelTarget.style.display = ""
+    fetch(`/api/pipelines/${encodeURIComponent(id)}`)
+      .then(resp => {
+        if (!resp.ok) throw new Error(`Pipeline lens HTTP ${resp.status}`)
+        return resp.json()
+      })
+      .then((data) => {
+        if (this._pipelineLensRequestKey !== requestKey) return
+        if (!this._selectedContext || this._selectedContext.kind !== "pipeline" || `${this._selectedContext.pipelineId}` !== `${id}`) return
+
+        const pipeline = data.pipeline || p
+        this._setSelectedContext(this._buildPipelineContext(pipeline))
+      })
+      .catch((error) => {
+        console.warn("Pipeline lens failed:", error)
+      })
   }
 }

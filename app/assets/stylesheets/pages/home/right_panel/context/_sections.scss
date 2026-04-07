@@ -320,3 +320,73 @@
   gap: 6px;
   margin-top: 8px;
 }
+
+.pipeline-lens-benchmark-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.pipeline-lens-benchmark-card {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+
+  &:hover {
+    border-color: rgba(147, 197, 253, 0.24);
+    background: rgba(147, 197, 253, 0.06);
+    transform: translateY(-1px);
+  }
+}
+
+.pipeline-lens-benchmark-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pipeline-lens-benchmark-symbol {
+  font: 700 9px var(--gt-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(195, 208, 224, 0.68);
+}
+
+.pipeline-lens-benchmark-change {
+  font: 700 10px var(--gt-mono);
+}
+
+.pipeline-lens-benchmark-name {
+  font: 600 12px/1.35 var(--gt-sans);
+  color: rgba(243, 247, 252, 0.93);
+}
+
+.pipeline-lens-benchmark-price {
+  font: 700 18px/1 var(--gt-mono);
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.pipeline-lens-sparkline {
+  display: block;
+  width: 100%;
+  height: 56px;
+}
+
+.pipeline-lens-sparkline-line {
+  fill: none;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pipeline-lens-benchmark-meta {
+  font: 500 9px/1.4 var(--gt-mono);
+  color: rgba(184, 197, 214, 0.56);
+}

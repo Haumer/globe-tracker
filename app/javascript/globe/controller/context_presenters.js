@@ -178,6 +178,24 @@ function primaryContextRailSections(controller, context) {
   return [renderRecordedRailSection(controller, context)].filter(Boolean)
 }
 
+function renderRailSectionEntry(controller, section) {
+  if (!section) return ""
+  if (typeof section === "string") return section
+  return renderContextSection(controller, section)
+}
+
+function mergedContextRailSections(controller, context, pinnedSection) {
+  const sections = [
+    ...primaryContextRailSections(controller, context),
+    ...((context?.sections || []).map(section => renderRailSectionEntry(controller, section))),
+    ...((controller._durableContextSections?.(context) || []).map(section => renderRailSectionEntry(controller, section))),
+    ...((controller._dynamicContextSections?.(context) || []).map(section => renderRailSectionEntry(controller, section))),
+  ].filter(Boolean)
+
+  if (pinnedSection) sections.push(pinnedSection)
+  return sections
+}
+
 function primaryContextActions(controller, context) {
   const actions = []
 
@@ -244,8 +262,7 @@ export function renderSelectedContext(controller, context) {
     `)
     .join("")
 
-  const sections = [...primaryContextRailSections(controller, context)]
-  if (pinnedSection) sections.push(pinnedSection)
+  const sections = mergedContextRailSections(controller, context, pinnedSection)
 
   const actions = primaryContextActions(controller, context)
     .map(action => renderContextAction(controller, action))

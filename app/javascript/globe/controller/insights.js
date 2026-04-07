@@ -4,22 +4,23 @@ import { INSIGHT_SEVERITY_COLORS, INSIGHT_TYPE_ICONS, renderInsightDetailHtml, r
 export function applyInsightsMethods(GlobeController) {
   GlobeController.prototype._shouldRenderInsightMarker = function(insight) {
     const type = `${insight?.type || ""}`
+    const downstreamTypes = new Set([
+      "chokepoint_market_stress",
+      "country_chokepoint_dependency",
+      "supply_chain_vulnerability",
+    ])
+
+    if (downstreamTypes.has(type)) return true
+
     // Keep layer-derivative insights in feed/context, but don't paint them on the globe
     // when a dedicated layer is already showing the same phenomenon.
     if (type.startsWith("fire_")) return false
 
-    if (this.situationsVisible && (
-      type === "conflict_pulse" ||
-      type === "chokepoint_disruption" ||
-      type === "chokepoint_market_stress"
-    )) {
+    if (this.situationsVisible && type === "conflict_pulse") {
       return false
     }
 
-    if (this.chokepointsVisible && (
-      type === "chokepoint_disruption" ||
-      type === "chokepoint_market_stress"
-    )) {
+    if (this.chokepointsVisible && type === "chokepoint_disruption") {
       return false
     }
 

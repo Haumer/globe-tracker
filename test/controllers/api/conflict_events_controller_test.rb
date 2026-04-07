@@ -44,4 +44,38 @@ class Api::ConflictEventsControllerTest < ActionDispatch::IntegrationTest
     data = JSON.parse(response.body)
     assert_empty data
   end
+
+  test "falls back to conflict pulse zones when no conflict events exist" do
+    ConflictEvent.delete_all
+    LayerSnapshot.create!(
+      snapshot_type: "conflict_pulse",
+      scope_key: "global",
+      payload: {
+        zones: [{
+          cell_key: "33.0:44.0",
+          lat: 33.0,
+          lng: 44.0,
+          theater: "Middle East / Iran War",
+          situation_name: "Iraq Theater",
+          pulse_score: 78,
+          top_headlines: ["Regional escalation cluster"],
+          detected_at: Time.current.iso8601,
+        }],
+        strategic_situations: [],
+        strike_arcs: [],
+        hex_cells: [],
+      },
+      status: "ready",
+      fetched_at: Time.current,
+      expires_at: 5.minutes.from_now,
+    )
+
+    get "/api/conflict_events"
+    assert_response :success
+
+    data = JSON.parse(response.body)
+    assert_equal 1, data.length
+    assert_equal "Middle East / Iran War", data.first["conflict"]
+    assert_equal "Current conflict pulse", data.first["type_label"]
+  end
 end

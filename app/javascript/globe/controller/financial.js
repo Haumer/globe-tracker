@@ -3,7 +3,9 @@ import { getDataSource } from "globe/utils"
 export function applyFinancialMethods(GlobeController) {
 
   GlobeController.prototype.toggleFinancial = function() {
-    this.financialVisible = !this.financialVisible
+    this.financialVisible = this.hasFinancialToggleTarget
+      ? this.financialToggleTarget.checked
+      : !this.financialVisible
     if (this.financialVisible) {
       this.fetchCommodities()
       if (this._financialInterval) clearInterval(this._financialInterval)
@@ -22,6 +24,7 @@ export function applyFinancialMethods(GlobeController) {
       const resp = await fetch("/api/commodities")
       if (!resp.ok) return
       const data = await resp.json()
+      if (!this.financialVisible) return
       this._commodityData = data.prices || []
       this._marketBenchmarkData = data.benchmarks || []
       this._renderCommodities()

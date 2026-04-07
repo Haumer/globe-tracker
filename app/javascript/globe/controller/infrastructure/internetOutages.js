@@ -36,7 +36,8 @@ export function applyOutagesMethods(GlobeController) {
       this._handleBackgroundRefresh(resp, "internet-outages", hasData, () => {
         if (this.outagesVisible && !this._timelineActive) this.fetchOutages()
       })
-      this._outageData = data.summary || []
+      const summary = data.summary?.length ? data.summary : this._deriveOutageSummary(data.events || [])
+      this._outageData = summary
       this._renderOutages(data)
       this._markFresh("outages")
       this._toastHide()
@@ -58,7 +59,7 @@ export function applyOutagesMethods(GlobeController) {
       minor: "#ffc107",
     }
 
-    const summaries = data.summary || []
+    const summaries = data.summary?.length ? data.summary : this._deriveOutageSummary(data.events || [])
     dataSource.entities.suspendEvents()
     summaries.forEach(s => {
       const centroid = COUNTRY_CENTROIDS[s.code]
@@ -101,7 +102,7 @@ export function applyOutagesMethods(GlobeController) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: `${s.code} ▼${s.score}`,
+          text: `${s.code} ▼${s.score}${s.eventCount ? ` · ${s.eventCount}` : ""}`,
           font: "bold 12px JetBrains Mono, monospace",
           fillColor: cesiumColor.withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK,
@@ -125,6 +126,37 @@ export function applyOutagesMethods(GlobeController) {
     this._outageEntities.forEach(e => ds.entities.remove(e))
     ds.entities.resumeEvents()
     this._outageEntities = []
+  }
+
+  GlobeController.prototype._deriveOutageSummary = function(events) {
+    if (!Array.isArray(events) || events.length === 0) return []
+
+    const levelRank = { minor: 1, moderate: 2, major: 3, severe: 4, critical: 5 }
+    const groups = new Map()
+
+    events.forEach((event) => {
+      if (!event?.code) return
+      if (!groups.has(event.code)) groups.set(event.code, [])
+      groups.get(event.code).push(event)
+    })
+
+    return [...groups.entries()].map(([code, rows]) => {
+      const strongest = rows.reduce((best, row) => {
+        if (!best) return row
+        const bestRank = levelRank[best.level] || 0
+        const rowRank = levelRank[row.level] || 0
+        if (rowRank !== bestRank) return rowRank > bestRank ? row : best
+        return Number(row.score || 0) > Number(best.score || 0) ? row : best
+      }, null)
+
+      return {
+        code,
+        name: strongest?.name || code,
+        score: Math.max(...rows.map(row => Number(row.score || 0))).toFixed(1).replace(/\.0$/, ""),
+        eventCount: rows.length,
+        level: strongest?.level || "minor",
+      }
+    }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
   }
 
   GlobeController.prototype.showOutageDetail = function(code) {
@@ -152,6 +184,10 @@ export function applyOutagesMethods(GlobeController) {
           <span class="detail-label">Country</span>
           <span class="detail-value">${s.code}</span>
         </div>
+        ${s.eventCount ? `<div class="detail-field">
+          <span class="detail-label">Events</span>
+          <span class="detail-value">${s.eventCount}</span>
+        </div>` : ""}
       </div>
       <a href="https://ioda.inetintel.cc.gatech.edu/country/${s.code}" target="_blank" rel="noopener" class="detail-track-btn">View on IODA →</a>
       <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: IODA (Georgia Tech)</div>

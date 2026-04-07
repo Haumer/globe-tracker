@@ -86,20 +86,28 @@ export function applyTrafficMethods(GlobeController) {
     const CC = COUNTRY_CENTROIDS
 
     const traffic = this._trafficData.traffic || []
-    const maxTraffic = traffic.length > 0 ? Math.max(...traffic.map(t => t.traffic || 0)) : 1
 
-    // Traffic volume markers (blue-green gradient)
+    // Traffic activity markers. Cloudflare's value is an index-like percentage, not uptime.
     traffic.forEach(t => {
       const centroid = CC[t.code]
       if (!centroid || !t.traffic) return
 
-      const intensity = t.traffic / maxTraffic
-      const pixelSize = 6 + intensity * 20
-      // Blue (low) → green (high)
-      const r = Math.round(30 * (1 - intensity))
-      const g = Math.round(200 + 55 * intensity)
-      const b = Math.round(220 * (1 - intensity) + 80)
-      const color = Cesium.Color.fromBytes(r, g, b, 200)
+      const trafficIndex = Number(t.traffic || 0)
+      const deviation = Math.abs(100 - trafficIndex)
+      const attackPressure = Math.max(Number(t.attack_origin || 0), Number(t.attack_target || 0))
+      const impact = Math.max(deviation, attackPressure * 2)
+
+      // Skip flat baseline countries so the layer reflects anomalies and attack pressure.
+      if (impact < 2) return
+
+      const pixelSize = 6 + Math.min(impact, 30) * 0.55
+      const color = attackPressure >= 1
+        ? Cesium.Color.fromCssColorString("#ff5252").withAlpha(0.9)
+        : trafficIndex < 70
+          ? Cesium.Color.fromCssColorString("#ff9800").withAlpha(0.9)
+          : trafficIndex < 90
+            ? Cesium.Color.fromCssColorString("#ffd54f").withAlpha(0.9)
+            : Cesium.Color.fromCssColorString("#26c6da").withAlpha(0.9)
 
       const entity = dataSource.entities.add({
         id: `traf-${t.code}`,
@@ -114,7 +122,7 @@ export function applyTrafficMethods(GlobeController) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: `${t.code} ${t.traffic.toFixed(1)}%`,
+          text: `${t.code} ${trafficIndex.toFixed(0)} idx`,
           font: "12px JetBrains Mono, monospace",
           fillColor: color.withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK,
@@ -154,6 +162,7 @@ export function applyTrafficMethods(GlobeController) {
 
     // DDoS attack arcs (origin → target) with labels and directional arrows
     const pairs = this._trafficData.attack_pairs || []
+    this._attackArcData = pairs
 
     // Build set of attacked country codes for cross-layer correlation
     const prevAttacked = this._attackedCountries || new Set()
@@ -288,6 +297,7 @@ export function applyTrafficMethods(GlobeController) {
       ds.entities.resumeEvents(); this._requestRender()
     }
     this._trafficEntities = []
+    this._attackArcData = []
     this._attackedCountries = null
     this._threatsActive = false
     this._clearCableAttackHighlights()
@@ -336,6 +346,10 @@ export function applyTrafficMethods(GlobeController) {
       attackHtml += outbound.map(p => `<div style="font:400 10px var(--gt-mono);color:var(--gt-text-dim);">→ ${this._escapeHtml(p.target_name)} ${p.pct?.toFixed(1)}%</div>`).join("")
     }
 
+    const trafficIndex = Number(t.traffic || 0)
+    const trafficDelta = Number.isFinite(trafficIndex) ? trafficIndex - 100 : null
+    const deltaLabel = trafficDelta == null ? "—" : `${trafficDelta > 0 ? "+" : ""}${trafficDelta.toFixed(2)}`
+
     this.detailContentTarget.innerHTML = `
       <div class="detail-callsign" style="color:#69f0ae;">
         <i class="fa-solid fa-globe" style="margin-right:6px;"></i>Internet Traffic
@@ -343,8 +357,12 @@ export function applyTrafficMethods(GlobeController) {
       <div class="detail-country">${this._escapeHtml(t.name || t.code)}</div>
       <div class="detail-grid">
         <div class="detail-field">
-          <span class="detail-label">Traffic Share</span>
-          <span class="detail-value" style="color:#69f0ae;">${t.traffic?.toFixed(2)}%</span>
+          <span class="detail-label">Traffic Index</span>
+          <span class="detail-value" style="color:#69f0ae;">${trafficIndex.toFixed(2)}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Delta Vs Baseline</span>
+          <span class="detail-value" style="color:${trafficDelta != null && trafficDelta < 0 ? "#ff9800" : "#26c6da"};">${deltaLabel}</span>
         </div>
         ${t.attack_target > 0 ? `<div class="detail-field">
           <span class="detail-label">Attack Target</span>
@@ -357,7 +375,7 @@ export function applyTrafficMethods(GlobeController) {
       </div>
       ${attackHtml}
       ${this._trafficData.recorded_at ? `<div style="margin-top:8px;font:400 9px var(--gt-mono);color:var(--gt-text-dim);">Updated: ${new Date(this._trafficData.recorded_at).toLocaleString()}</div>` : ""}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Netscout / Arbor Networks</div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Cloudflare Radar daily activity index</div>
     `
     this.detailPanelTarget.style.display = ""
   }

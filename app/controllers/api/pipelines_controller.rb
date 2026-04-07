@@ -6,6 +6,7 @@ module Api
       pipelines = Pipeline.all
       render json: {
         pipelines: pipelines.map { |p|
+          market_context = PipelineMarketContextService.call(p)
           {
             id: p.pipeline_id,
             name: p.name,
@@ -15,6 +16,7 @@ module Api
             color: p.color,
             country: p.country,
             coordinates: p.coordinates,
+            market_context: market_context,
           }
         },
       }

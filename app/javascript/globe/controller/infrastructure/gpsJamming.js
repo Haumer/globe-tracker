@@ -48,6 +48,9 @@ export function applyGpsJammingMethods(GlobeController) {
 
     if (cells.length === 0) return
 
+    const elevatedCells = cells.filter(cell => cell.level !== "low")
+    const renderCells = elevatedCells.length > 0 ? elevatedCells : cells
+
     const colors = {
       low: Cesium.Color.fromCssColorString("rgba(255, 152, 0, 0.25)"),
       medium: Cesium.Color.fromCssColorString("rgba(255, 87, 34, 0.45)"),
@@ -62,8 +65,7 @@ export function applyGpsJammingMethods(GlobeController) {
     const hexRadius = 1.0 // degrees (~111km) — matches backend HEX_SIZE for flush tiling
 
     dataSource.entities.suspendEvents()
-    cells.forEach(cell => {
-      if (cell.level === "low") return // skip noise — only show medium/high
+    renderCells.forEach(cell => {
       const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
       const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
 
@@ -86,13 +88,13 @@ export function applyGpsJammingMethods(GlobeController) {
       })
       this._gpsJammingEntities.push(hexEntity)
 
-      // Label only for medium/high
-      if (cell.level !== "low") {
+      // Label only for medium/high, unless low is all we have in the current scope.
+      if (cell.level !== "low" || elevatedCells.length === 0) {
         const labelEntity = dataSource.entities.add({
           id: `jam-lbl-${cell.lat}-${cell.lng}`,
           position: Cesium.Cartesian3.fromDegrees(cell.lng, cell.lat, 5500),
           label: {
-            text: `⚠ ${cell.pct}%`,
+            text: `${cell.level === "low" ? "GPS" : "⚠"} ${cell.pct}%`,
             font: "13px DM Sans, sans-serif",
             fillColor: cell.level === "high" ? cachedColor("#ff5252") : cachedColor("#ffd54f"),
             outlineColor: Cesium.Color.BLACK,
@@ -135,5 +137,39 @@ export function applyGpsJammingMethods(GlobeController) {
     this._gpsJammingEntities.forEach(e => ds.entities.remove(e))
     ds.entities.resumeEvents()
     this._gpsJammingEntities = []
+  }
+
+  GlobeController.prototype.showGpsJammingDetail = function(cellKey) {
+    const cell = (this._gpsJammingData || []).find(entry => `${entry.lat}-${entry.lng}` === cellKey)
+    if (!cell) return false
+
+    const color = cell.level === "high" ? "#ff5252" : cell.level === "medium" ? "#ff7043" : "#ffca28"
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${color};">
+        <i class="fa-solid fa-satellite-dish" style="margin-right:6px;"></i>GPS Interference
+      </div>
+      <div class="detail-country">${cell.level.toUpperCase()} cell</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Degraded</span>
+          <span class="detail-value" style="color:${color};">${cell.pct}%</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Aircraft</span>
+          <span class="detail-value">${cell.bad} / ${cell.total}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Latitude</span>
+          <span class="detail-value">${Number(cell.lat).toFixed(2)}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Longitude</span>
+          <span class="detail-value">${Number(cell.lng).toFixed(2)}</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Derived from ADS-B position quality (NACp)</div>
+    `
+    this.detailPanelTarget.style.display = ""
+    return true
   }
 }

@@ -146,6 +146,8 @@ export function applyCoreEntityClickMethods(GlobeController) {
       }},
       { prefix: "outage-ring-", skip: [], handler: (id) => { this.showOutageDetail(id); return true }},
       { prefix: "outage-", skip: [], handler: (id) => { this.showOutageDetail(id); return true }},
+      { prefix: "jam-lbl-", skip: [], handler: (id) => this.showGpsJammingDetail(id) },
+      { prefix: "jam-", skip: ["jam-lbl-"], handler: (id) => this.showGpsJammingDetail(id) },
       { prefix: "cable-", skip: [], handler: () => {
         const props = picked.id.properties
         if (!props) return false
@@ -327,16 +329,27 @@ export function applyCoreEntityClickMethods(GlobeController) {
         return true
       }},
       { prefix: "conf-ring-", skip: [], handler: (id) => {
-        const data = this._conflictData.find(event => event.id === parseInt(id, 10))
+        const conflictId = /^\d+$/.test(id) ? parseInt(id, 10) : id
+        const data = this._conflictData.find(event => `${event.id}` === `${conflictId}`)
         if (!data) return false
         this.showConflictDetail(data)
         return true
       }},
       { prefix: "conf-", skip: [], handler: (id) => {
-        const data = this._conflictData.find(event => event.id === parseInt(id, 10))
+        const conflictId = /^\d+$/.test(id) ? parseInt(id, 10) : id
+        const data = this._conflictData.find(event => `${event.id}` === `${conflictId}`)
         if (!data) return false
         this.showConflictDetail(data)
         return true
+      }},
+      { prefix: "traf-lbl-", skip: [], handler: (id) => {
+        const idx = parseInt(id, 10)
+        const arc = this._attackArcData?.[idx]
+        if (arc?.target) {
+          this.showTrafficDetail(arc.target)
+          return true
+        }
+        return false
       }},
       { prefix: "traf-atk-", skip: [], handler: (id) => { this.showTrafficDetail(id); return true }},
       { prefix: "traf-arc-", skip: [], handler: (id) => {

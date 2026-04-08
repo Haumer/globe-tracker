@@ -247,8 +247,9 @@ export function applyTimelineEventMethods(GlobeController) {
         time: event.time,
         timelineAlpha: timelineWindowAlpha(event.time, this._timelineCursor, EVENT_TIMELINE_WINDOWS_MS.internet_outage),
       }))
-      this._outageData = outageEvents
-      this._renderOutages({ summary: outageEvents, events: outageEvents })
+      const outageSummary = this._deriveOutageSummary ? this._deriveOutageSummary(outageEvents) : outageEvents
+      this._outageData = outageSummary
+      this._renderOutages({ summary: outageSummary, events: outageEvents })
     } else if (this.outagesVisible) {
       this._outageData = []
       this._renderOutages({ summary: [], events: [] })

@@ -149,7 +149,7 @@ export function applyPipelinesMethods(GlobeController) {
     const midpoint = this._pipelineMidpointCoordinates?.(p.coordinates)
     const anchoredData = midpoint ? { ...p, lat: midpoint.lat, lng: midpoint.lng } : p
 
-    if (this._showCompactEntityDetail) {
+    if (!options.contextOnly && this._showCompactEntityDetail) {
       this._showCompactEntityDetail("pipeline", anchoredData, { id, picked: options.picked })
     }
 
@@ -162,9 +162,7 @@ export function applyPipelinesMethods(GlobeController) {
     this._pipelineLensRequestKey = `${id}:${Date.now()}`
     baseContext.pipelineId = p.id
     baseContext.summary = baseContext.summary || "Loading linked market lens…"
-    this._rightPanelUserClosed = false
-    this._setSelectedContext(baseContext)
-    this._showRightPanel?.("context")
+    this._setSelectedContext(baseContext, { openRightPanel: options.openRightPanel === true })
 
     if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
 
@@ -181,7 +179,9 @@ export function applyPipelinesMethods(GlobeController) {
 
         const pipeline = data.pipeline || p
         this._upsertPipelineDataRecord(pipeline)
-        this._setSelectedContext(this._buildPipelineContext(pipeline))
+        this._setSelectedContext(this._buildPipelineContext(pipeline), {
+          openRightPanel: this._isRightPanelVisible?.() === true,
+        })
       })
       .catch((error) => {
         console.warn("Pipeline lens failed:", error)

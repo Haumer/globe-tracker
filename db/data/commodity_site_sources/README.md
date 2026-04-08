@@ -21,6 +21,10 @@ Current source groups:
   - LNG, gas-processing, crude and refining sites from operator snapshots
 - `metals_operator_sites.json`
   - copper and iron ore flagship operations from operator snapshots
+- `metals_expansion_sites.json`
+  - additional copper and iron ore sites from operator snapshots
+- `fertilizer_official_sites.json`
+  - ammonia, urea, and phosphate fertilizer complexes from official operator sources
 - `specialty_operator_sites.json`
   - helium and fertilizer strategic sites from official / authority sources
 

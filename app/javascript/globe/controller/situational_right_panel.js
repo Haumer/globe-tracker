@@ -37,6 +37,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
 
   GlobeController.prototype._syncRightPanels = function() {
     const availability = this._rightPanelTabAvailability()
+    const panelVisible = this._isRightPanelVisible()
 
     if (this._rightPanelUserClosed) {
       this._syncPanelToggle(false)
@@ -44,8 +45,13 @@ export function applySituationalRightPanelMethods(GlobeController) {
       return
     }
 
+    if (this._deferContextRail && !panelVisible) {
+      this._syncPanelToggle(false)
+      this._repositionDetailStack(12)
+      return
+    }
+
     const hasPanelContent = !!availability.context
-    const panelVisible = this._isRightPanelVisible()
     if (!panelVisible && !hasPanelContent) {
       this._syncPanelToggle(false)
       this._repositionDetailStack(12)
@@ -84,6 +90,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
       return
     }
 
+    this._deferContextRail = false
     this._rightPanelUserClosed = false
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
     this._activateRightTab("context")
@@ -92,6 +99,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
   }
 
   GlobeController.prototype.closeRightPanel = function() {
+    this._deferContextRail = false
     this._rightPanelUserClosed = true
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
     this._repositionDetailStack(12)

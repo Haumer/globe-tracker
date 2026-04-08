@@ -13,6 +13,18 @@
       "priority": 100
     },
     {
+      "key": "metals_expansion_sites",
+      "type": "normalized_json",
+      "path": "metals_expansion_sites.json",
+      "priority": 100
+    },
+    {
+      "key": "fertilizer_official_sites",
+      "type": "normalized_json",
+      "path": "fertilizer_official_sites.json",
+      "priority": 100
+    },
+    {
       "key": "specialty_operator_sites",
       "type": "normalized_json",
       "path": "specialty_operator_sites.json",

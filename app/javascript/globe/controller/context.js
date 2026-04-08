@@ -6,7 +6,7 @@ export function applyContextMethods(GlobeController) {
   applyContextNodeMethods(GlobeController)
   applyContextSectionMethods(GlobeController)
 
-  GlobeController.prototype._setSelectedContext = function(context) {
+  GlobeController.prototype._setSelectedContext = function(context, options = {}) {
     if (this._theaterBriefPollTimer) {
       clearTimeout(this._theaterBriefPollTimer)
       this._theaterBriefPollTimer = null
@@ -26,6 +26,7 @@ export function applyContextMethods(GlobeController) {
     }
     this._renderSelectedContext()
     if (!context) {
+      this._deferContextRail = false
       this._setRightTabUpdated?.("context", false)
       if (this._syncRightPanels) this._syncRightPanels()
       return
@@ -33,11 +34,16 @@ export function applyContextMethods(GlobeController) {
 
     const panelVisible = this._isRightPanelVisible?.()
     const activeTab = this._currentRightPanelTab?.()
+    const shouldOpenRightPanel = options.openRightPanel === true || context?.autoOpenRightPanel === true
 
-    if (!panelVisible && !this._rightPanelUserClosed) {
+    if (shouldOpenRightPanel) {
+      this._deferContextRail = false
+      this._rightPanelUserClosed = false
       this._showRightPanel("context")
       return
     }
+
+    this._deferContextRail = panelVisible !== true
 
     this._setRightTabUpdated?.("context", activeTab !== "context")
     if (this._syncRightPanels) this._syncRightPanels()
@@ -230,6 +236,9 @@ export function applyContextMethods(GlobeController) {
       {
         title: event.currentTarget.dataset.title,
         summary: event.currentTarget.dataset.summary,
+      },
+      {
+        openRightPanel: this._isRightPanelVisible?.() === true,
       }
     )
   }

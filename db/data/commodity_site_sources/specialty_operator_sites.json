@@ -190,5 +190,30 @@
     "source_name": "Gazprom",
     "source_url": "https://www.gazprom.com/press/news/2024/january/article571580/",
     "source_kind": "official"
+  },
+  {
+    "id": "helium-labarge",
+    "name": "LaBarge Gas Plant",
+    "map_label": "LaBarge He",
+    "commodity_key": "helium",
+    "commodity_name": "Helium",
+    "site_kind": "gas_processing_complex",
+    "stage": "processing",
+    "country_code": "US",
+    "country_name": "United States",
+    "location_label": "LaBarge, Wyoming",
+    "location_precision": "regional plant placement",
+    "lat": 42.26,
+    "lng": -110.2,
+    "operator": "ExxonMobil",
+    "products": [
+      "helium",
+      "carbon dioxide",
+      "natural gas"
+    ],
+    "summary": "LaBarge is one of the United States' strategic helium-processing nodes, separating helium from a complex Wyoming gas stream.",
+    "source_name": "ExxonMobil",
+    "source_url": "https://corporate.exxonmobil.com/locations/united-states/wyoming-facilities/shute-creek-gas-processing-plant",
+    "source_kind": "official"
   }
 ]

@@ -284,6 +284,8 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       this._focusContextNode(state.nodeRequest, {
         title: state.title,
         summary: state.brief,
+      }, {
+        openRightPanel: true,
       })
     }
 
@@ -301,6 +303,8 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       this._focusContextNode(state.nodeRequest, {
         title: state.title,
         summary: state.brief,
+      }, {
+        openRightPanel: true,
       })
     }
 
@@ -369,7 +373,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     }
 
     if (payload.nodeRequest) {
-      actionParts.push(`<button class="anchor-action-btn" type="button" data-action="click->globe#showAnchoredContext" data-anchor-id="${this._escapeHtml(anchorId)}">Rail</button>`)
+      actionParts.push(`<button class="anchor-action-btn" type="button" data-action="click->globe#showAnchoredContext" data-anchor-id="${this._escapeHtml(anchorId)}">Context</button>`)
     }
 
     if (payload.casePath) {

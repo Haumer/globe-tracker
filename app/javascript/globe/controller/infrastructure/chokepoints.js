@@ -195,8 +195,9 @@ export function applyChokepointsMethods(GlobeController) {
     if (!cp || !identifier) return
 
     if (this._buildChokepointContext && this._setSelectedContext) {
-      this._setSelectedContext(this._buildChokepointContext(cp))
-      this._showRightPanel?.("context")
+      this._setSelectedContext(this._buildChokepointContext(cp), {
+        openRightPanel: options.openRightPanel === true || options.contextOnly === true,
+      })
     }
 
     this._chokepointLensRequestKey = `${identifier}:${Date.now()}`
@@ -214,7 +215,9 @@ export function applyChokepointsMethods(GlobeController) {
         if (!this._selectedContext || this._selectedContext.kind !== "chokepoint") return
         const selectedId = this._selectedContext.nodeRequest?.id || this._selectedContext.title
         if (`${selectedId || ""}` !== `${identifier}` && `${this._selectedContext.title || ""}` !== `${enriched.name || ""}`) return
-        this._setSelectedContext(this._buildChokepointContext(enriched))
+        this._setSelectedContext(this._buildChokepointContext(enriched), {
+          openRightPanel: this._isRightPanelVisible?.() === true,
+        })
       })
       .catch((error) => {
         console.warn("Chokepoint lens failed:", error)

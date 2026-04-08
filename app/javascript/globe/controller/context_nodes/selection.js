@@ -1,57 +1,57 @@
 export function applyContextNodeSelectionMethods(GlobeController) {
-  GlobeController.prototype._focusContextNode = function(nodeRequest, fallback = {}) {
+  GlobeController.prototype._focusContextNode = function(nodeRequest, fallback = {}, options = {}) {
     if (!nodeRequest?.kind || !nodeRequest?.id) return
 
     if (nodeRequest.kind === "theater") {
       const zone = this._findConflictZoneForTheater(nodeRequest.id)
       if (zone) {
-        this._setTheaterSelectedContext(nodeRequest.id, zone)
+        this._setTheaterSelectedContext(nodeRequest.id, zone, options)
       } else {
-        this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+        this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
       }
       return
     }
 
     if (nodeRequest.kind === "chokepoint") {
       if (typeof this.showChokepointDetail === "function") {
-        this.showChokepointDetail(nodeRequest.id, { contextOnly: true })
+        this.showChokepointDetail(nodeRequest.id, { contextOnly: true, openRightPanel: options.openRightPanel === true })
         return
       }
-      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
       return
     }
 
     if (nodeRequest.kind === "pipeline") {
       if (typeof this.showPipelineDetail === "function") {
-        this.showPipelineDetail(nodeRequest.id)
+        this.showPipelineDetail(nodeRequest.id, { contextOnly: true, openRightPanel: options.openRightPanel === true })
         return
       }
-      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
       return
     }
 
     if (nodeRequest.kind === "news_story_cluster") {
       const story = (this._newsData || []).find(item => `${item.cluster_id || ""}` === `${nodeRequest.id}`)
       if (story) {
-        this._setSelectedContext(this._buildNewsContext(story))
+        this._setSelectedContext(this._buildNewsContext(story), options)
         return
       }
-      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
       return
     }
 
     if (nodeRequest.kind === "commodity") {
       const commodity = this._findCommodityById(nodeRequest.id)
-      this._setSelectedContext(this._buildCommodityContext(commodity || fallback, nodeRequest))
+      this._setSelectedContext(this._buildCommodityContext(commodity || fallback, nodeRequest), options)
       return
     }
 
     if (nodeRequest.kind === "entity") {
-      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+      this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
       return
     }
 
-    this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback))
+    this._setSelectedContext(this._buildGenericNodeContext(nodeRequest, fallback), options)
   }
 
   GlobeController.prototype._normalizeContextIdentifier = function(value) {
@@ -151,10 +151,10 @@ export function applyContextNodeSelectionMethods(GlobeController) {
     })[0]
   }
 
-  GlobeController.prototype._setTheaterSelectedContext = function(theater, zone = null) {
+  GlobeController.prototype._setTheaterSelectedContext = function(theater, zone = null, options = {}) {
     if (!theater || !this._buildTheaterContext || !this._setSelectedContext) return
 
     const resolvedZone = zone || this._findConflictZoneForTheater(theater) || { theater }
-    this._setSelectedContext(this._buildTheaterContext(resolvedZone))
+    this._setSelectedContext(this._buildTheaterContext(resolvedZone), options)
   }
 }

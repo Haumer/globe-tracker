@@ -14,7 +14,7 @@ const EVENT_APPEAR_WINDOW_MS = 12 * 60 * 1000
 const EVENT_PULSE_WINDOW_MS = 6 * 60 * 1000
 const GENERAL_EVENT_FETCH_BUCKET_MS = 5 * 60 * 1000
 const STRIKE_EVENT_FETCH_BUCKET_MS = 15 * 60 * 1000
-const EVENT_RENDER_BUCKET_MS = 60 * 1000
+const EVENT_RENDER_BUCKET_MS = 5 * 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineRenderCachedState = function(force = false) {

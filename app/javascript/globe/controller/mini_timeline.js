@@ -32,6 +32,7 @@ export function applyMiniTimelineMethods(GlobeController) {
   // ── Timeline events (24h) ─────────────────────────────────
 
   GlobeController.prototype._fetchMiniTimeline = async function() {
+    if (this._timelineActive) return
     try {
       const now = new Date()
       const from = new Date(now - 24 * 60 * 60 * 1000)
@@ -48,6 +49,7 @@ export function applyMiniTimelineMethods(GlobeController) {
   // ── Anomaly detection ─────────────────────────────────────
 
   GlobeController.prototype._fetchAnomalies = async function() {
+    if (this._timelineActive) return
     try {
       const resp = await fetch("/api/anomalies")
       if (!resp.ok) return

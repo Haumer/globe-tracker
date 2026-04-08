@@ -68,26 +68,34 @@ export function applyOutagesMethods(GlobeController) {
       const color = levelColors[s.level] || "#ffc107"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const alpha = Number.isFinite(s.timelineAlpha) ? s.timelineAlpha : 1
+      const pulse = Number.isFinite(s.timelinePulse) ? s.timelinePulse : 0
       const intensity = Math.min(Math.log10(Math.max(s.score, 1)) / 5, 1)
       const pixelSize = 8 + intensity * 16
+      const timelinePulseOnly = this._timelineActive && Number.isFinite(s.timelinePulse)
+      const pulseProgress = 1 - pulse
+      const pulseAlpha = 0.18 + pulse * 0.82
+      const ringRadius = timelinePulseOnly
+        ? 16000 + pulseProgress * 180000
+        : 50000 + intensity * 300000
 
-      // Pulsing ring for outage area
-      const ring = dataSource.entities.add({
-        id: `outage-ring-${s.code}`,
-        position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 0),
-        ellipse: {
-          semiMinorAxis: 50000 + intensity * 300000,
-          semiMajorAxis: 50000 + intensity * 300000,
-          material: cesiumColor.withAlpha((0.06 + intensity * 0.08) * alpha),
-          outline: true,
-          outlineColor: cesiumColor.withAlpha(0.2 * alpha),
-          outlineWidth: 1,
-          height: 0,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          classificationType: Cesium.ClassificationType.BOTH,
-        },
-      })
-      this._outageEntities.push(ring)
+      if (!timelinePulseOnly || pulse > 0.08) {
+        const ring = dataSource.entities.add({
+          id: `outage-ring-${s.code}`,
+          position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 0),
+          ellipse: {
+            semiMinorAxis: ringRadius,
+            semiMajorAxis: ringRadius,
+            material: cesiumColor.withAlpha(timelinePulseOnly ? (0.06 * pulseAlpha) : ((0.06 + intensity * 0.08) * alpha)),
+            outline: true,
+            outlineColor: cesiumColor.withAlpha(timelinePulseOnly ? (0.9 * pulseAlpha) : (0.2 * alpha)),
+            outlineWidth: timelinePulseOnly ? (1.8 + pulse * 1.2) : 1,
+            height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
+          },
+        })
+        this._outageEntities.push(ring)
+      }
 
       // Center marker
       const entity = dataSource.entities.add({
@@ -157,6 +165,7 @@ export function applyOutagesMethods(GlobeController) {
         eventCount: rows.length,
         level: strongest?.level || "minor",
         timelineAlpha: Math.max(...rows.map(row => Number(row.timelineAlpha || 0))),
+        timelinePulse: Math.max(...rows.map(row => Number(row.timelinePulse || 0))),
       }
     }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
   }

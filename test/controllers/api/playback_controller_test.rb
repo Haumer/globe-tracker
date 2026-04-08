@@ -212,4 +212,64 @@ class Api::PlaybackControllerTest < ActionDispatch::IntegrationTest
     assert_in_delta 53.0, event["lng"], 0.001
     assert_equal "IR", event["code"]
   end
+
+  test "GET /api/playback/events keeps seven-day news playback available" do
+    travel_to Time.utc(2026, 4, 8, 10, 0, 0) do
+      source = NewsSource.create!(
+        canonical_key: "publisher:example.com",
+        name: "Example",
+        source_kind: "wire",
+        publisher_domain: "example.com"
+      )
+      article = NewsArticle.create!(
+        news_source: source,
+        url: "https://example.com/time-travel-news",
+        canonical_url: "https://example.com/time-travel-news",
+        title: "Timeline news item",
+        content_scope: "core",
+        publisher_name: "Example",
+        publisher_domain: "example.com",
+        published_at: 3.days.ago,
+        fetched_at: Time.current
+      )
+      event = NewsEvent.create!(
+        url: "https://example.com/time-travel-news",
+        name: "Baghdad",
+        title: "Timeline news item",
+        latitude: 33.3152,
+        longitude: 44.3661,
+        tone: -1.2,
+        level: "negative",
+        category: "conflict",
+        source: "example",
+        content_scope: "core",
+        news_source: source,
+        news_article: article,
+        published_at: 3.days.ago,
+        fetched_at: Time.current
+      )
+      TimelineEvent.create!(
+        event_type: "news",
+        eventable: event,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        recorded_at: 3.days.ago
+      )
+
+      get "/api/playback/events", params: {
+        from: 7.days.ago.iso8601,
+        to: Time.current.iso8601,
+        types: "news",
+        lamin: 30.0, lamax: 36.0, lomin: 42.0, lomax: 46.0
+      }
+      assert_response :success
+
+      data = JSON.parse(response.body)
+      news = data.find { |row| row["type"] == "news" }
+
+      assert_not_nil news
+      assert_equal "Timeline news item", news["title"]
+      assert_equal "Baghdad", news["name"]
+    end
+  end
 end

@@ -1,3 +1,20 @@
+import {
+  autoEnablePlaybackLayers,
+  debounceTimelineRefresh,
+  initializeTimelineState,
+  refreshTimelineCursorLayers,
+  resetTimelineState,
+  revertAutoEnabledPlaybackLayers,
+  showTimelineAvailabilityToast,
+  syncTimelineScrubber,
+  updateTimelineCursorDisplay,
+} from "globe/controller/timeline/playback_state"
+import {
+  clearTimelineLiveEntities,
+  pauseTimelineLive,
+  resumeTimelineLive,
+} from "globe/controller/timeline/live_mode"
+
 export function applyTimelineControlMethods(GlobeController) {
   GlobeController.prototype.timelineOpen = async function() {
     if (this._timelineActive) {
@@ -13,131 +30,31 @@ export function applyTimelineControlMethods(GlobeController) {
         return
       }
 
-      initializeTimelineState.call(this, range)
-      autoEnablePlaybackLayers.call(this)
-      this._timelinePauseLive()
+      initializeTimelineState(this, range)
+      autoEnablePlaybackLayers(this)
+      pauseTimelineLive(this)
 
       this.timelineBarTarget.style.display = ""
       this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(this._timelineRangeStart)
       this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(this._timelineRangeEnd)
-      this._updateTimelineCursorDisplay()
+      updateTimelineCursorDisplay(this)
 
       this._toast("Loading time travel data...")
       const frameStatus = await this._timelineLoadFrames()
       const { eventCount, situationCount } = await this._timelineRefreshPlaybackState()
 
-      showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, true)
+      showTimelineAvailabilityToast(this, frameStatus, eventCount, situationCount, true)
     } catch (error) {
       console.error("Timeline open error:", error)
     }
   }
 
   GlobeController.prototype._timelinePauseLive = function() {
-    this._timelinePausedIntervals = {
-      flight: !!this.flightInterval,
-      militaryFlight: !!this._milFlightInterval,
-      ship: !!this.shipInterval,
-      navalShip: !!this._navalShipInterval,
-      strikes: !!this._strikesInterval,
-      gpsJamming: !!this._gpsJammingInterval,
-      news: !!this._newsInterval,
-      events: !!this._eventsInterval,
-      outages: !!this._outageInterval,
-      financial: !!this._financialInterval,
-    }
-
-    clearLiveIntervals.call(this)
-    if (this._notamCameraCb) {
-      this.viewer.camera.moveEnd.removeEventListener(this._notamCameraCb)
-    }
-    this._pauseWeatherForTimeline?.()
-    this._stopInsightPolling?.({ clearData: false })
-
-    if (this._conflictPulseInterval) {
-      clearInterval(this._conflictPulseInterval)
-      this._conflictPulseInterval = null
-    }
-    this._clearConflictPulseEntities?.()
-    this._lastConflictPulseBucket = null
-
-    const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
-    this._timelineHiddenSources = []
-    for (const [name, ds] of Object.entries(this._ds)) {
-      if (!liveDataSources.has(name)) continue
-      if (ds && ds.show) {
-        ds.show = false
-        this._timelineHiddenSources.push(name)
-      }
-    }
+    pauseTimelineLive(this)
   }
 
   GlobeController.prototype._timelineResumeLive = function() {
-    restoreHiddenSources.call(this)
-
-    if (this.flightsVisible) {
-      this.fetchFlights()
-      this.flightInterval = setInterval(() => this.fetchFlights(), 10000)
-    }
-    if (this._milFlightsActive) {
-      this._fetchMilitaryFlights()
-      this._milFlightInterval = setInterval(() => {
-        if (this._milFlightsActive) this._fetchMilitaryFlights()
-      }, 10000)
-    }
-    if (this.shipsVisible) {
-      this.fetchShips()
-      this.shipInterval = setInterval(() => this.fetchShips(), 60000)
-    }
-    if (this.navalVesselsVisible) {
-      this.fetchNavalVessels()
-      this._navalShipInterval = setInterval(() => {
-        if (this.navalVesselsVisible) this.fetchNavalVessels()
-      }, 60000)
-    }
-    if (this.gpsJammingVisible) {
-      this.fetchGpsJamming()
-      this._gpsJammingInterval = setInterval(() => this.fetchGpsJamming(), 60000)
-    }
-    if (this.newsVisible) {
-      this.fetchNews()
-      this._newsInterval = setInterval(() => this.fetchNews(), 900000)
-    }
-    if (this.earthquakesVisible || this.naturalEventsVisible) {
-      if (this.earthquakesVisible) this.fetchEarthquakes()
-      if (this.naturalEventsVisible) this.fetchNaturalEvents()
-      this._eventsInterval = setInterval(() => {
-        if (this.earthquakesVisible) this.fetchEarthquakes()
-        if (this.naturalEventsVisible) this.fetchNaturalEvents()
-      }, 300000)
-    }
-    if (this.outagesVisible) {
-      this.fetchOutages()
-      this._outageInterval = setInterval(() => this.fetchOutages(), 300000)
-    }
-    if (this.financialVisible) {
-      this.fetchCommodities()
-      this._financialInterval = setInterval(() => this.fetchCommodities(), 60000)
-    }
-    if (strikeSignalsVisible(this)) {
-      this.fetchStrikes()
-      this._strikesInterval = setInterval(() => {
-        if (strikeSignalsVisible(this)) this.fetchStrikes()
-      }, 300000)
-    }
-    if (this.fireHotspotsVisible) {
-      this.fetchFireHotspots()
-      this._startFiresRefresh?.()
-    }
-    this._resumeWeatherFromTimeline?.()
-    this._resumeNotamsFromTimeline?.()
-    if (this.insightsVisible) this._startInsightPolling?.()
-    if (Object.values(this.satCategoryVisible || {}).some(Boolean)) {
-      this._refreshLiveSatelliteCategories?.()
-    }
-    if (this.situationsVisible && this._fetchConflictPulse) {
-      this._fetchConflictPulse()
-      this._conflictPulseInterval = setInterval(() => this._fetchConflictPulse(), 10 * 60 * 1000)
-    }
+    resumeTimelineLive(this)
   }
 
   GlobeController.prototype.timelineToggle = function() {
@@ -169,11 +86,11 @@ export function applyTimelineControlMethods(GlobeController) {
       this._timelineRangeEnd.getTime()
     )
     this._timelineCursor = new Date(newCursorMs)
-    this._syncScrubberToCursor()
-    this._updateTimelineCursorDisplay()
+    syncTimelineScrubber(this)
+    updateTimelineCursorDisplay(this)
     this._renderNearestFrame()
     this._timelineRenderCachedState?.()
-    this._timelineEventDebounce()
+    debounceTimelineRefresh(this)
 
     if (newCursorMs >= this._timelineRangeEnd.getTime()) {
       this._timelinePlaying = false
@@ -199,10 +116,10 @@ export function applyTimelineControlMethods(GlobeController) {
     const range = this._timelineRangeEnd.getTime() - this._timelineRangeStart.getTime()
     const cursorMs = this._timelineRangeStart.getTime() + (value / 10000) * range
     this._timelineCursor = new Date(cursorMs)
-    this._updateTimelineCursorDisplay()
+    updateTimelineCursorDisplay(this)
     this._renderNearestFrame()
     this._timelineRenderCachedState?.()
-    this._timelineEventDebounce()
+    debounceTimelineRefresh(this)
   }
 
   GlobeController.prototype.timelineSetSpeed = function() {
@@ -232,54 +149,36 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineActive = false
     this._timelinePlaying = false
     if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
+    if (this._timelinePulseRaf) cancelAnimationFrame(this._timelinePulseRaf)
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     this._stopTimelinePlaybackRefreshLoop()
     this.timelineBarTarget.style.display = "none"
 
-    this._timelineLastKnown = null
-    this._timelineAppliedFrameIndex = -1
-    this._timelineEventFetchKey = null
-    this._timelineFetchedGeneralEvents = []
-    this._timelineFetchedStrikeEvents = []
-    this._timelineCommodityFetchKey = null
-    this._timelineLastRenderedCursorMs = null
-    this._timelineLastRenderedCursorKey = null
+    resetTimelineState(this)
     this._ds["timeline"]?.entities.removeAll()
     this._ds["timelineEvents"]?.entities.removeAll()
 
     this._lastConflictPulseBucket = null
     this._clearConflictPulseEntities?.()
-    revertAutoEnabledPlaybackLayers.call(this)
-    clearLiveEntities.call(this)
+    revertAutoEnabledPlaybackLayers(this)
+    clearTimelineLiveEntities(this)
     if (this.flightData) this.flightData.clear()
     if (this.shipData) this.shipData.clear()
-    this._timelineResumeLive()
+    resumeTimelineLive(this)
     this._syncQuickBar?.()
     this._updateStats?.()
   }
 
   GlobeController.prototype._syncScrubberToCursor = function() {
-    if (!this.hasTimelineScrubberTarget) return
-    const range = this._timelineRangeEnd.getTime() - this._timelineRangeStart.getTime()
-    if (range <= 0) return
-    const pos = ((this._timelineCursor.getTime() - this._timelineRangeStart.getTime()) / range) * 10000
-    this.timelineScrubberTarget.value = Math.round(pos)
+    syncTimelineScrubber(this)
   }
 
   GlobeController.prototype._updateTimelineCursorDisplay = function() {
-    if (!this._timelineCursor) return
-    const cursor = this._timelineCursor
-    if (this.hasTimelineCursorDateTarget) this.timelineCursorDateTarget.textContent = cursor.toISOString().slice(0, 10)
-    if (this.hasTimelineCursorTimeTarget) this.timelineCursorTimeTarget.textContent = cursor.toUTCString().slice(17, 25)
+    updateTimelineCursorDisplay(this)
   }
 
   GlobeController.prototype._timelineEventDebounce = function() {
-    if (this._timelinePlaying && this._timelineEventTimer) return
-    if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
-    this._timelineEventTimer = setTimeout(async () => {
-      this._timelineEventTimer = null
-      await this._timelineRefreshPlaybackState()
-    }, this._timelinePlaying ? 500 : 250)
+    debounceTimelineRefresh(this)
   }
 
   GlobeController.prototype._timelineRefreshPlaybackState = async function() {
@@ -335,14 +234,14 @@ export function applyTimelineControlMethods(GlobeController) {
 
     this.timelineTimeStartTarget.textContent = this._fmtTimelineDateTime(start)
     this.timelineTimeEndTarget.textContent = this._fmtTimelineDateTime(end)
-    this._updateTimelineCursorDisplay()
-    this._syncScrubberToCursor()
+    updateTimelineCursorDisplay(this)
+    syncTimelineScrubber(this)
 
     this._toast("Loading time travel data...")
     const frameStatus = await this._timelineLoadFrames()
     const { eventCount, situationCount } = await this._timelineRefreshPlaybackState()
 
-    showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, false)
+    showTimelineAvailabilityToast(this, frameStatus, eventCount, situationCount, false)
   }
 
   GlobeController.prototype._timelineOnLayerToggle = function() {
@@ -356,145 +255,7 @@ export function applyTimelineControlMethods(GlobeController) {
   }
 
   GlobeController.prototype._timelineRefreshCursorLayers = async function() {
-    if (!this._timelineActive) return
-
-    const tasks = []
-
-    if (this.conflictsVisible) tasks.push(Promise.resolve(this.fetchConflicts?.()))
-    if (this.financialVisible) tasks.push(Promise.resolve(this.fetchCommodities?.()))
-    if (this.trafficVisible) tasks.push(Promise.resolve(this.fetchTraffic?.({ silent: true })))
-    if (this.fireHotspotsVisible) tasks.push(Promise.resolve(this.fetchFireHotspots?.()))
-    if (Object.values(this.satCategoryVisible || {}).some(Boolean)) {
-      tasks.push(Promise.resolve(this.fetchPlaybackSatellites?.()))
-    }
-
-    if (tasks.length === 0) return
-    await Promise.all(tasks)
-  }
-}
-
-function initializeTimelineState(range) {
-  this._timelineActive = true
-  this._timelinePlaying = false
-  this._timelineSpeed = 5
-  this._timelineFrames = {}
-  this._timelineKeys = []
-  this._timelineFrameIndex = 0
-  this._timelineAppliedFrameIndex = -1
-  this._timelineEventCount = 0
-  this._timelineSituationCount = 0
-  this._timelineEventFetchKey = null
-  this._timelineFetchedGeneralEvents = []
-  this._timelineFetchedStrikeEvents = []
-  this._timelineCommodityFetchKey = null
-  this._timelineLastRenderedCursorMs = null
-  this._timelineLastRenderedCursorKey = null
-
-  const oldest = new Date(range.oldest)
-  const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))
-  const oneDayAgo = new Date(newest.getTime() - 24 * 60 * 60 * 1000)
-  this._timelineRangeStart = oneDayAgo > oldest ? oneDayAgo : oldest
-  this._timelineRangeEnd = newest
-  this._timelineOldest = oldest
-  this._timelineCursor = new Date(this._timelineRangeStart.getTime())
-  this._timelineAutoEnabledLayers = []
-}
-
-function autoEnablePlaybackLayers() {
-  const movementDefs = [
-    { key: "flights", hasTargetProp: "hasFlightsToggleTarget", targetProp: "flightsToggleTarget", visibleProp: "flightsVisible" },
-    { key: "ships", hasTargetProp: "hasShipsToggleTarget", targetProp: "shipsToggleTarget", visibleProp: "shipsVisible" },
-  ]
-  const eventDefs = [
-    { key: "situations", hasTargetProp: "hasSituationsToggleTarget", targetProp: "situationsToggleTarget", visibleProp: "situationsVisible" },
-    { key: "news", hasTargetProp: "hasNewsToggleTarget", targetProp: "newsToggleTarget", visibleProp: "newsVisible" },
-    { key: "verifiedStrikes", hasTargetProp: "hasVerifiedStrikesToggleTarget", targetProp: "verifiedStrikesToggleTarget", visibleProp: "verifiedStrikesVisible" },
-    { key: "heatSignatures", hasTargetProp: "hasHeatSignaturesToggleTarget", targetProp: "heatSignaturesToggleTarget", visibleProp: "heatSignaturesVisible" },
-    { key: "earthquakes", hasTargetProp: "hasEarthquakesToggleTarget", targetProp: "earthquakesToggleTarget", visibleProp: "earthquakesVisible" },
-    { key: "naturalEvents", hasTargetProp: "hasNaturalEventsToggleTarget", targetProp: "naturalEventsToggleTarget", visibleProp: "naturalEventsVisible" },
-    { key: "gpsJamming", hasTargetProp: "hasGpsJammingToggleTarget", targetProp: "gpsJammingToggleTarget", visibleProp: "gpsJammingVisible" },
-    { key: "outages", hasTargetProp: "hasOutagesToggleTarget", targetProp: "outagesToggleTarget", visibleProp: "outagesVisible" },
-    { key: "financial", hasTargetProp: "hasFinancialToggleTarget", targetProp: "financialToggleTarget", visibleProp: "financialVisible" },
-    { key: "traffic", hasTargetProp: "hasTrafficToggleTarget", targetProp: "trafficToggleTarget", visibleProp: "trafficVisible" },
-  ]
-
-  this._timelineAutoEnabledLayers = []
-
-  if (this.hasActiveFilter?.() && !movementPlaybackLayersVisible(this)) {
-    movementDefs.forEach((def) => {
-      if (this[def.visibleProp]) return
-      if (def.hasTargetProp && !this[def.hasTargetProp]) return
-
-      this[def.visibleProp] = true
-      if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = true
-      this._timelineAutoEnabledLayers.push(def)
-    })
-  }
-
-  if (!eventPlaybackLayersVisible(this)) {
-    eventDefs.forEach((def) => {
-      if (this[def.visibleProp]) return
-      if (def.hasTargetProp && !this[def.hasTargetProp]) return
-
-      this[def.visibleProp] = true
-      if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = true
-      this._timelineAutoEnabledLayers.push(def)
-    })
-  }
-
-  if (this._timelineAutoEnabledLayers.length === 0) return
-
-  if (this._syncStrikeSignalsVisibility) this._syncStrikeSignalsVisibility()
-  this._syncQuickBar?.()
-  this._updateStats?.()
-}
-
-function clearLiveIntervals() {
-  if (this.flightInterval) { clearInterval(this.flightInterval); this.flightInterval = null }
-  if (this._milFlightInterval) { clearInterval(this._milFlightInterval); this._milFlightInterval = null }
-  if (this.shipInterval) { clearInterval(this.shipInterval); this.shipInterval = null }
-  if (this._navalShipInterval) { clearInterval(this._navalShipInterval); this._navalShipInterval = null }
-  if (this._strikesInterval) { clearInterval(this._strikesInterval); this._strikesInterval = null }
-  if (this._gpsJammingInterval) { clearInterval(this._gpsJammingInterval); this._gpsJammingInterval = null }
-  if (this._newsInterval) { clearInterval(this._newsInterval); this._newsInterval = null }
-  if (this._eventsInterval) { clearInterval(this._eventsInterval); this._eventsInterval = null }
-  if (this._outageInterval) { clearInterval(this._outageInterval); this._outageInterval = null }
-  if (this._financialInterval) { clearInterval(this._financialInterval); this._financialInterval = null }
-}
-
-function restoreHiddenSources() {
-  if (!this._timelineHiddenSources) return
-
-  const activeDs = new Set()
-  if (this.flightsVisible) activeDs.add("flights")
-  if (this._milFlightsActive) activeDs.add("mil-flights")
-  if (this.shipsVisible) activeDs.add("ships")
-  if (this.navalVesselsVisible) activeDs.add("naval-vessels")
-  if (this.airportsVisible) activeDs.add("airports")
-  if (this.earthquakesVisible || this.naturalEventsVisible) activeDs.add("events")
-  if (this.gpsJammingVisible) activeDs.add("gpsJamming")
-  if (this.newsVisible) activeDs.add("news")
-  if (this.outagesVisible) activeDs.add("outages")
-  if (this.weatherVisible) activeDs.add("weather")
-  if (this.notamsVisible) activeDs.add("notams")
-  if (this.financialVisible) activeDs.add("financial")
-  if (this.insightsVisible) activeDs.add("insights")
-  if (this.fireHotspotsVisible) activeDs.add("fires")
-  if (Object.values(this.satCategoryVisible || {}).some(Boolean)) activeDs.add("satellites")
-  if (this.satOrbitsVisible) activeDs.add("sat-orbits")
-  if (strikeSignalsVisible(this)) activeDs.add("strikes")
-  if (this.trailsVisible) activeDs.add("trails")
-
-  for (const name of this._timelineHiddenSources) {
-    if (this._ds[name]) this._ds[name].show = activeDs.has(name)
-  }
-  this._timelineHiddenSources = null
-}
-
-function clearLiveEntities() {
-  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflictEvents", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
-  for (const [name, source] of Object.entries(this._ds)) {
-    if (liveDataSources.has(name) && source) source.entities.removeAll()
+    await refreshTimelineCursorLayers(this)
   }
 }
 
@@ -504,90 +265,8 @@ function stepTimeline(direction) {
   const key = this._timelineKeys[this._timelineFrameIndex]
   if (!key) return
   this._timelineCursor = new Date(key)
-  this._syncScrubberToCursor()
-  this._updateTimelineCursorDisplay()
+  syncTimelineScrubber(this)
+  updateTimelineCursorDisplay(this)
   this._renderTimelineFrame(this._timelineFrameIndex)
-  this._timelineEventDebounce()
-}
-
-function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, opening) {
-  const frameCount = frameStatus?.frameCount || 0
-  const hasEventPlayback = this.earthquakesVisible || this.naturalEventsVisible || this.newsVisible ||
-    this.gpsJammingVisible || this.outagesVisible || this.weatherVisible || this.notamsVisible ||
-    this.conflictsVisible || this.financialVisible || this.trafficVisible || this.situationsVisible ||
-    this.fireHotspotsVisible || strikeSignalsVisible(this) || Object.values(this.satCategoryVisible || {}).some(Boolean)
-
-  if (frameStatus?.boundsRequired) {
-    if ((eventCount || 0) > 0 || (situationCount || 0) > 0) {
-      this._toast("Zoom in or apply a region filter for movement playback. Time-scoped events and theaters are active.")
-    } else {
-      this._toast("Zoom in or apply a region filter to load movement playback.")
-    }
-    return
-  }
-
-  if (frameCount > 0) {
-    const suffix = opening ? " — press play" : ""
-    this._toast(`Time travel: ${frameCount} movement frames loaded${suffix}`, "success")
-    return
-  }
-
-  if (hasEventPlayback) {
-    if ((eventCount || 0) > 0 || (situationCount || 0) > 0) {
-      const parts = []
-      if ((eventCount || 0) > 0) parts.push(`${eventCount} timeline events`)
-      if ((situationCount || 0) > 0) parts.push(`${situationCount} situation zones`)
-      this._toast(`Event playback ready: ${parts.join(" · ")}`)
-      return
-    }
-
-    if (frameStatus?.movementEnabled === false) {
-      this._toast("Event playback ready. Enable flights or ships if you also want movement snapshots.")
-      return
-    }
-
-    this._toast("No flight or ship snapshots in this range. Event playback is still available.")
-    return
-  }
-
-  this._toast("No playback data found for this time range", "error")
-}
-
-function strikeSignalsVisible(controller) {
-  return !!(controller?.verifiedStrikesVisible || controller?.heatSignaturesVisible || controller?.strikesVisible)
-}
-
-function movementPlaybackLayersVisible(controller) {
-  return !!(
-    controller.flightsVisible ||
-    controller._milFlightsActive ||
-    controller.shipsVisible ||
-    controller.navalVesselsVisible
-  )
-}
-
-function eventPlaybackLayersVisible(controller) {
-  return !!(
-    controller.earthquakesVisible ||
-    controller.naturalEventsVisible ||
-    controller.newsVisible ||
-    controller.gpsJammingVisible ||
-    controller.outagesVisible ||
-    controller.situationsVisible ||
-    controller.financialVisible ||
-    controller.trafficVisible ||
-    strikeSignalsVisible(controller)
-  )
-}
-
-function revertAutoEnabledPlaybackLayers() {
-  if (!Array.isArray(this._timelineAutoEnabledLayers) || this._timelineAutoEnabledLayers.length === 0) return
-
-  this._timelineAutoEnabledLayers.forEach((def) => {
-    this[def.visibleProp] = false
-    if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = false
-  })
-
-  if (this._syncStrikeSignalsVisibility) this._syncStrikeSignalsVisibility()
-  this._timelineAutoEnabledLayers = []
+  debounceTimelineRefresh(this)
 }

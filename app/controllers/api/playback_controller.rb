@@ -295,7 +295,7 @@ module Api
       requested_types = Array(types)
       return STRIKE_TIMELINE_WINDOW if (requested_types & %w[fire geoconfirmed]).any?
 
-      current_user ? 7.days : 24.hours
+      7.days
     end
 
     def clean_geoconfirmed_description(desc)

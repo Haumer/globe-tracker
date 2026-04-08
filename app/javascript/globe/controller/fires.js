@@ -30,7 +30,11 @@ export function applyFiresMethods(GlobeController) {
     this.fireHotspotsVisible = this.hasFireHotspotsToggleTarget && this.fireHotspotsToggleTarget.checked
     this.fireClustersVisible = !this.hasFireClustersToggleTarget || this.fireClustersToggleTarget.checked
     if (this.fireHotspotsVisible) {
-      this.fetchFireHotspots()
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchFireHotspots()
+      }
     } else {
       this._fireHotspotFetchToken += 1
       this._clearFireHotspotEntities()
@@ -137,7 +141,9 @@ export function applyFiresMethods(GlobeController) {
     }
     this._clearFireHotspotEntities()
     this._fireHotspotClusterData = []
-    const bounds = this.getViewportBounds()
+    const bounds = this._timelineActive && !(this.hasActiveFilter && this.hasActiveFilter())
+      ? null
+      : this.getViewportBounds()
     const visibleHotspots = []
 
     this._fireHotspotData.forEach(f => {

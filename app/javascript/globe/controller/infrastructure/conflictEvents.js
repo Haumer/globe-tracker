@@ -6,7 +6,11 @@ export function applyConflictsMethods(GlobeController) {
   GlobeController.prototype.toggleConflicts = function() {
     this.conflictsVisible = this.hasConflictsToggleTarget && this.conflictsToggleTarget.checked
     if (this.conflictsVisible) {
-      this.fetchConflicts()
+      if (this._timelineActive) {
+        this._timelineOnLayerToggle?.()
+      } else {
+        this.fetchConflicts()
+      }
     } else {
       this._clearConflictEntities()
       this._conflictData = []
@@ -16,6 +20,7 @@ export function applyConflictsMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchConflicts = async function() {
+    if (this._timelineActive) return
     this._toast("Loading conflicts...")
     try {
       let url = "/api/conflict_events"
@@ -62,21 +67,27 @@ export function applyConflictsMethods(GlobeController) {
 
       const color = typeColors[c.type] || "#f44336"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const alpha = Number.isFinite(c.timelineAlpha) ? c.timelineAlpha : 1
+      const pulse = Number.isFinite(c.timelinePulse) ? c.timelinePulse : 0
       const deaths = c.deaths || 0
       const pixelSize = Math.min(5 + Math.sqrt(deaths) * 2, 22)
 
-      // Impact ring for higher-casualty events
-      if (deaths >= 5) {
+      const timelinePulseOnly = this._timelineActive && Number.isFinite(c.timelinePulse)
+      if ((timelinePulseOnly && pulse > 0.08) || (!timelinePulseOnly && deaths >= 5)) {
+        const pulseProgress = 1 - pulse
+        const pulseAlpha = 0.18 + pulse * 0.82
+        const baseRadius = Math.min(5000 + deaths * 300, 30000)
+        const pulseRadius = timelinePulseOnly ? 16000 + pulseProgress * 180000 : baseRadius
         const ring = dataSource.entities.add({
           id: `conf-ring-${c.id}`,
           position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 0),
           ellipse: {
-            semiMinorAxis: Math.min(5000 + deaths * 300, 30000),
-            semiMajorAxis: Math.min(5000 + deaths * 300, 30000),
-            material: cesiumColor.withAlpha(0.06),
+            semiMinorAxis: pulseRadius,
+            semiMajorAxis: pulseRadius,
+            material: cesiumColor.withAlpha(timelinePulseOnly ? (0.06 * pulseAlpha) : (0.06 * alpha)),
             outline: true,
-            outlineColor: cesiumColor.withAlpha(0.2),
-            outlineWidth: 1,
+            outlineColor: cesiumColor.withAlpha(timelinePulseOnly ? (0.9 * pulseAlpha) : (0.2 * alpha)),
+            outlineWidth: timelinePulseOnly ? (1.8 + pulse * 1.2) : 1,
             height: 0,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             classificationType: Cesium.ClassificationType.BOTH,
@@ -90,8 +101,8 @@ export function applyConflictsMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 10),
         point: {
           pixelSize,
-          color: cesiumColor.withAlpha(0.85),
-          outlineColor: cesiumColor.withAlpha(0.4),
+          color: cesiumColor.withAlpha(0.85 * alpha),
+          outlineColor: cesiumColor.withAlpha(0.4 * alpha),
           outlineWidth: 2,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -100,7 +111,7 @@ export function applyConflictsMethods(GlobeController) {
         label: {
           text: `${c.conflict || c.country}`,
           font: LABEL_DEFAULTS.font,
-          fillColor: cesiumColor.withAlpha(0.9),
+          fillColor: cesiumColor.withAlpha(0.9 * alpha),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,
           style: LABEL_DEFAULTS.style(),

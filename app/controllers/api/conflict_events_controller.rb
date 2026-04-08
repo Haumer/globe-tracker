@@ -11,6 +11,7 @@ module Api
 
       events = scope.order(date_start: :desc).limit(2000)
       if events.empty?
+        return render json: [] if range
         return render json: fallback_conflict_pulse_events(bounds)
       end
 

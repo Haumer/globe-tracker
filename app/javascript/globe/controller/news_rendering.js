@@ -283,17 +283,18 @@ export function applyNewsRenderingMethods(GlobeController) {
 
       this._newsEntities.push(entity)
 
-      if (pulse > 0.02) {
+      if (pulse > 0.08) {
+        const pulseProgress = 1 - pulse
         const ring = dataSource.entities.add({
           id: `timeline-news-pulse-${ev.id || idx}`,
           position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
           ellipse: {
-            semiMinorAxis: 20000 + (1 - pulse) * 150000,
-            semiMajorAxis: 20000 + (1 - pulse) * 150000,
-            material: cesiumColor.withAlpha(0.02 + pulse * 0.06 * alpha),
+            semiMinorAxis: 10000 + pulseProgress * 120000,
+            semiMajorAxis: 10000 + pulseProgress * 120000,
+            material: cesiumColor.withAlpha(0.01 + pulse * 0.03 * alpha),
             outline: true,
-            outlineColor: cesiumColor.withAlpha(0.14 + pulse * 0.28 * alpha),
-            outlineWidth: 1 + pulse,
+            outlineColor: cesiumColor.withAlpha(pulse * 0.3 * alpha),
+            outlineWidth: 1.2 + pulse * 0.8,
             height: 0,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             classificationType: Cesium.ClassificationType.BOTH,

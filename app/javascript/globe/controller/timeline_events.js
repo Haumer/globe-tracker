@@ -10,8 +10,8 @@ const EVENT_TIMELINE_WINDOWS_MS = {
   notam: 48 * 60 * 60 * 1000,
 }
 const STRIKE_TIMELINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
-const EVENT_APPEAR_WINDOW_MS = 15 * 60 * 1000
-const EVENT_PULSE_WINDOW_MS = 30 * 60 * 1000
+const EVENT_APPEAR_WINDOW_MS = 12 * 60 * 1000
+const EVENT_PULSE_WINDOW_MS = 6 * 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineUpdateEvents = async function() {

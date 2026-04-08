@@ -14,12 +14,28 @@ const EVENT_APPEAR_WINDOW_MS = 12 * 60 * 1000
 const EVENT_PULSE_WINDOW_MS = 6 * 60 * 1000
 const GENERAL_EVENT_FETCH_BUCKET_MS = 5 * 60 * 1000
 const STRIKE_EVENT_FETCH_BUCKET_MS = 15 * 60 * 1000
+const EVENT_RENDER_BUCKET_MS = 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
-  GlobeController.prototype._timelineRenderCachedState = function() {
+  GlobeController.prototype._timelineRenderCachedState = function(force = false) {
     if (!this._timelineActive) return
     const cursorMs = this._timelineCursor?.getTime?.()
-    if (!Number.isFinite(cursorMs) || cursorMs === this._timelineLastRenderedCursorMs) return
+    if (!Number.isFinite(cursorMs)) return
+    const renderBucket = Math.floor(cursorMs / EVENT_RENDER_BUCKET_MS)
+    const renderKey = [
+      renderBucket,
+      this.newsVisible ? 1 : 0,
+      this.earthquakesVisible ? 1 : 0,
+      this.naturalEventsVisible ? 1 : 0,
+      this.gpsJammingVisible ? 1 : 0,
+      this.outagesVisible ? 1 : 0,
+      this.weatherVisible ? 1 : 0,
+      this.notamsVisible ? 1 : 0,
+      this._heatSignaturesLayerVisible ? (this._heatSignaturesLayerVisible() ? 1 : 0) : (this.heatSignaturesVisible ? 1 : 0),
+      this._verifiedStrikesLayerVisible ? (this._verifiedStrikesLayerVisible() ? 1 : 0) : (this.verifiedStrikesVisible ? 1 : 0),
+    ].join("|")
+    if (!force && renderKey === this._timelineLastRenderedCursorKey) return
+    this._timelineLastRenderedCursorKey = renderKey
     this._timelineLastRenderedCursorMs = cursorMs
     this._renderUnifiedTimelineEvents(this._timelineFetchedGeneralEvents || [], this._timelineFetchedStrikeEvents || [])
   }
@@ -94,7 +110,7 @@ export function applyTimelineEventMethods(GlobeController) {
       this._timelineFetchedGeneralEvents = Array.isArray(events) ? events : []
       this._timelineFetchedStrikeEvents = Array.isArray(strikeEvents) ? strikeEvents : []
       this._timelineEventCount = this._timelineFetchedGeneralEvents.length + this._timelineFetchedStrikeEvents.length
-      this._timelineRenderCachedState()
+      this._timelineRenderCachedState(true)
       this._updateStats()
       return this._timelineEventCount
     } catch (error) {

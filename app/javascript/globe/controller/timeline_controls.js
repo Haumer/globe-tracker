@@ -243,6 +243,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineFetchedStrikeEvents = []
     this._timelineCommodityFetchKey = null
     this._timelineLastRenderedCursorMs = null
+    this._timelineLastRenderedCursorKey = null
     this._ds["timeline"]?.entities.removeAll()
     this._ds["timelineEvents"]?.entities.removeAll()
 
@@ -273,11 +274,12 @@ export function applyTimelineControlMethods(GlobeController) {
   }
 
   GlobeController.prototype._timelineEventDebounce = function() {
+    if (this._timelinePlaying && this._timelineEventTimer) return
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     this._timelineEventTimer = setTimeout(async () => {
       this._timelineEventTimer = null
       await this._timelineRefreshPlaybackState()
-    }, 250)
+    }, this._timelinePlaying ? 500 : 250)
   }
 
   GlobeController.prototype._timelineRefreshPlaybackState = async function() {
@@ -386,6 +388,7 @@ function initializeTimelineState(range) {
   this._timelineFetchedStrikeEvents = []
   this._timelineCommodityFetchKey = null
   this._timelineLastRenderedCursorMs = null
+  this._timelineLastRenderedCursorKey = null
 
   const oldest = new Date(range.oldest)
   const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))

@@ -162,7 +162,9 @@ export function applyPipelinesMethods(GlobeController) {
     this._pipelineLensRequestKey = `${id}:${Date.now()}`
     baseContext.pipelineId = p.id
     baseContext.summary = baseContext.summary || "Loading linked market lens…"
-    this._setSelectedContext(baseContext, { openRightPanel: options.openRightPanel === true })
+    this._setSelectedContext(baseContext, {
+      openRightPanel: options.openRightPanel === true || options.contextOnly !== true,
+    })
 
     if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
 

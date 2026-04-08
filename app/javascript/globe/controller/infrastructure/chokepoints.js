@@ -196,7 +196,7 @@ export function applyChokepointsMethods(GlobeController) {
 
     if (this._buildChokepointContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildChokepointContext(cp), {
-        openRightPanel: options.openRightPanel === true || options.contextOnly === true,
+        openRightPanel: options.openRightPanel === true || options.contextOnly !== true,
       })
     }
 

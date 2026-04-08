@@ -20,4 +20,14 @@ class MaritimePassageSignalExtractorTest < ActiveSupport::TestCase
 
     assert_nil signal
   end
+
+  test "extracts safe passage signals as open transit" do
+    signal = MaritimePassageSignalExtractor.extract(
+      title: "Iran agrees to safe passage through Strait of Hormuz",
+      summary: "Officials said the route is open to ships for two weeks after the ceasefire."
+    )
+
+    assert_equal :open, signal[:state]
+    assert_includes signal[:signals], "safe_passage"
+  end
 end

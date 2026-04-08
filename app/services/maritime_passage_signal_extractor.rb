@@ -16,6 +16,8 @@ class MaritimePassageSignalExtractor
     { key: "denied_transit", state: :closed, regex: /no ship is allowed to pass|not allowed to pass/i },
     { key: "mine_risk", state: :closed, regex: /\bmined?\b|mine-clearance/i },
     { key: "reopening", state: :reopening, regex: /\breopen(?:ed|ing)?\b|\bresume(?:d|s|ing)?\b/i },
+    { key: "safe_passage", state: :open, regex: /\bsafe passage\b|\bsafe transit\b/i },
+    { key: "open_transit", state: :open, regex: /\bopen(?:ed|ing)? (?:to|for) (?:ships?|tankers?|vessels?|shipping|transit)\b/i },
     { key: "safe_transit", state: :open, regex: /\bclear(?:ed)? .* safely\b|\bsafely transited\b|\bpassed safely\b/i },
   ].freeze
 

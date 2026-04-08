@@ -108,6 +108,7 @@ export function renderInsightDetailHtml(controller, insight) {
     if (ents.sectors?.length) items.push(`Sector: ${ents.sectors[0].name} ${ents.sectors[0].share_pct}%`)
     if (ents.dependencies?.length) items.push(`Dependency: ${ents.dependencies[0].commodity_name} (${ents.dependencies[0].dependency_score})`)
     if (ents.exposures?.length) items.push(`Exposure: ${ents.exposures[0].commodity_name} via ${ents.exposures[0].chokepoint_name}`)
+    if (ents.passage_signal?.state) items.push(`Passage: ${ents.passage_signal.state.replace(/_/g, " ")}`)
     if (ents.flight) items.push(`Flight ${ents.flight.callsign || ents.flight.icao24} (${ents.flight.squawk || "EMG"})`)
     if (ents.ship) items.push(`Ship: ${ents.ship.name || ents.ship.mmsi}`)
     if (ents.cable) items.push(`Cable: ${ents.cable.name}`)

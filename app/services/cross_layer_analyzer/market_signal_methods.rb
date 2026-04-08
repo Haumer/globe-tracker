@@ -64,12 +64,14 @@ class CrossLayerAnalyzer
         )
         top_move = market_moves.max_by { |signal| signal[:change_pct].to_f.abs }
         top_pulse = Array(cp[:conflict_pulse]).max_by { |pulse| pulse[:score].to_f }
+        passage_signal = chokepoint_passage_signal(cp: cp, top_move: top_move)
+        market_story = chokepoint_market_story(top_move: top_move, passage_signal: passage_signal)
 
         {
           type: "chokepoint_market_stress",
           severity: chokepoint_market_stress_severity(cp[:status], top_move[:change_pct]),
-          title: "#{normalized_chokepoint_name(cp)}: #{top_move[:symbol]} reacting to chokepoint stress",
-          description: chokepoint_market_stress_description(cp: cp, top_move: top_move, top_pulse: top_pulse, supporting_signals: supporting_signals, resource_context: resource_context),
+          title: chokepoint_market_stress_title(cp: cp, top_move: top_move, market_story: market_story, passage_signal: passage_signal),
+          description: chokepoint_market_stress_description(cp: cp, top_move: top_move, top_pulse: top_pulse, passage_signal: passage_signal, market_story: market_story, supporting_signals: supporting_signals, resource_context: resource_context),
           lat: cp[:lat],
           lng: cp[:lng],
           entities: {
@@ -78,9 +80,10 @@ class CrossLayerAnalyzer
             conflict: Array(cp[:conflict_pulse]).first(3),
             ships: cp[:ships_nearby],
             flows: (cp[:flows] || {}).transform_values { |flow| { pct: flow[:pct], note: flow[:note] } },
+            passage_signal: compact_passage_signal_entity(passage_signal),
             supporting_signals: compact_supporting_signal_entities(supporting_signals),
             resource_context: compact_resource_context(resource_context),
-          },
+          }.compact,
           detected_at: cp[:checked_at] || Time.current.iso8601,
         }
       end
@@ -227,16 +230,241 @@ class CrossLayerAnalyzer
       end
     end
 
-    def chokepoint_market_stress_description(cp:, top_move:, top_pulse:, supporting_signals:, resource_context:)
+    def chokepoint_market_stress_title(cp:, top_move:, market_story:, passage_signal:)
+      chokepoint_name = normalized_chokepoint_name(cp)
+
+      if market_story == :relief
+        "#{chokepoint_name}: #{top_move[:symbol]} falling on #{market_relief_label(passage_signal)}"
+      else
+        "#{chokepoint_name}: #{top_move[:symbol]} reacting to chokepoint stress"
+      end
+    end
+
+    def chokepoint_market_stress_description(cp:, top_move:, top_pulse:, passage_signal:, market_story:, supporting_signals:, resource_context:)
       description_parts = [
         "#{top_move[:name] || top_move[:symbol]} #{format_change_pct(top_move[:change_pct])}",
         "#{cp.dig(:ships_nearby, :total).to_i} ships nearby",
       ]
       description_parts << "#{cp.dig(:ships_nearby, :tankers).to_i} tankers" if cp.dig(:ships_nearby, :tankers).to_i.positive?
-      description_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}" if top_pulse
+      if market_story == :relief && passage_signal.present?
+        description_parts << passage_signal_description(passage_signal)
+      elsif top_pulse
+        description_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}"
+      end
+      description_parts << "pulse #{top_pulse[:score]} #{top_pulse[:trend]}" if top_pulse && market_story == :relief
       description_parts << resource_context[:summary] if resource_context&.dig(:summary).present?
       description_parts << supporting_signal_summary(supporting_signals) if supporting_signals.present?
       description_parts.join(" — ")
+    end
+
+    def chokepoint_market_story(top_move:, passage_signal:)
+      return :stress unless passage_signal.present?
+      return :stress unless top_move[:change_pct].to_f <= -1.0
+      return :stress unless relief_passage_signal?(passage_signal)
+
+      :relief
+    end
+
+    def chokepoint_passage_signal(cp:, top_move:)
+      candidates = recent_chokepoint_news(cp).filter_map do |event|
+        signal = passage_signal_for_news_event(event)
+        next unless signal.present?
+
+        {
+          state: signal[:state],
+          signals: signal[:signals],
+          excerpt: signal[:excerpt],
+          headline: clean_market_signal_text(event.title.presence || event.news_article&.title),
+          published_at: event.published_at,
+          source_kind: event.news_source&.source_kind.to_s,
+          url: event.url.presence || event.news_article&.url,
+        }
+      end
+      return nil if candidates.empty?
+
+      candidates.max_by do |candidate|
+        [
+          passage_signal_market_relevance(candidate[:state], top_move[:change_pct]),
+          passage_signal_source_weight(candidate[:source_kind]),
+          candidate[:published_at].to_i,
+        ]
+      end
+    end
+
+    def recent_chokepoint_news(chokepoint)
+      name_terms = chokepoint_search_terms(chokepoint)
+      spatial_scope = NewsEvent
+        .where("published_at > ?", 48.hours.ago)
+        .where.not(content_scope: "out_of_scope")
+        .within_bounds(chokepoint_news_bounds(chokepoint))
+        .includes(:news_source, :news_article)
+        .order(published_at: :desc)
+        .limit(18)
+        .to_a
+
+      named_scope = if name_terms.any?
+        fragments = []
+        bindings = {}
+        name_terms.each_with_index do |term, index|
+          key = :"term_#{index}"
+          bindings[key] = "%#{term.downcase}%"
+          fragments << "(lower(news_events.title) LIKE :#{key} OR lower(coalesce(news_articles.summary, '')) LIKE :#{key})"
+        end
+
+        NewsEvent
+          .left_outer_joins(:news_article)
+          .where("news_events.published_at > ?", 48.hours.ago)
+          .where.not(content_scope: "out_of_scope")
+          .where(fragments.join(" OR "), bindings)
+          .includes(:news_source, :news_article)
+          .order(published_at: :desc)
+          .limit(18)
+          .to_a
+      else
+        []
+      end
+
+      (spatial_scope + named_scope).uniq { |event| event.id }
+    end
+
+    def chokepoint_news_bounds(chokepoint)
+      radius_km = [chokepoint_radius_km(chokepoint) * 3, 180].max
+      bbox(chokepoint[:lat], chokepoint[:lng], radius_km)
+    end
+
+    def chokepoint_radius_km(chokepoint)
+      key = chokepoint[:id].presence&.to_sym
+      return ChokepointMonitorService::CHOKEPOINTS.fetch(key).fetch(:radius_km, 60) if key && ChokepointMonitorService::CHOKEPOINTS.key?(key)
+
+      60
+    end
+
+    def chokepoint_search_terms(chokepoint)
+      name = normalized_chokepoint_name(chokepoint).downcase
+      terms = [name]
+
+      terms.concat(
+        case chokepoint[:id].to_s
+        when "hormuz"
+          ["hormuz", "strait of hormuz"]
+        when "bab_el_mandeb"
+          ["bab el-mandeb", "bab al-mandab", "red sea chokepoint"]
+        when "malacca"
+          ["malacca", "strait of malacca"]
+        when "suez"
+          ["suez", "suez canal"]
+        when "bosphorus"
+          ["bosphorus", "bosporus"]
+        else
+          []
+        end
+      )
+
+      terms.uniq
+    end
+
+    def passage_signal_for_news_event(event)
+      article = event.news_article
+      persisted_signal = normalize_market_passage_signal(article&.metadata.to_h["maritime_passage_signal"])
+      return persisted_signal if persisted_signal.present?
+
+      normalize_market_passage_signal(
+        MaritimePassageSignalExtractor.extract(
+          title: event.title.presence || article&.title,
+          summary: article&.summary
+        )
+      )
+    end
+
+    def normalize_market_passage_signal(signal)
+      return nil unless signal.respond_to?(:[])
+
+      state = market_signal_value_for(signal, :state).presence
+      return nil if state.blank?
+
+      {
+        state: state.to_sym,
+        signals: Array(market_signal_value_for(signal, :signals)).map(&:to_s),
+        excerpt: clean_market_signal_text(market_signal_value_for(signal, :excerpt)),
+      }
+    end
+
+    def market_signal_value_for(object, key)
+      return unless object.respond_to?(:[])
+
+      object[key] || object[key.to_s]
+    end
+
+    def clean_market_signal_text(value)
+      ActionController::Base.helpers.strip_tags(value.to_s).squish.presence
+    end
+
+    def passage_signal_market_relevance(state, change_pct)
+      state_name = state.to_s
+      relief = %w[reopening open].include?(state_name)
+      restrictive = %w[closed restricted restricted_selective].include?(state_name)
+
+      if change_pct.to_f.negative?
+        return 3 if relief
+        return 2 if restrictive
+      else
+        return 3 if restrictive
+        return 2 if relief
+      end
+
+      1
+    end
+
+    def passage_signal_source_weight(source_kind)
+      {
+        "wire" => 3,
+        "publisher" => 2,
+        "aggregator" => 1,
+        "platform" => 0,
+      }.fetch(source_kind.to_s, 1)
+    end
+
+    def relief_passage_signal?(passage_signal)
+      %i[reopening open].include?(passage_signal[:state].to_sym)
+    end
+
+    def market_relief_label(passage_signal)
+      return "safe-passage signal" if Array(passage_signal[:signals]).include?("safe_passage")
+
+      case passage_signal[:state].to_sym
+      when :open then "safe-passage signal"
+      when :reopening then "reopening signal"
+      else "transit signal"
+      end
+    end
+
+    def passage_signal_description(passage_signal)
+      state_text = if Array(passage_signal[:signals]).include?("safe_passage")
+        "safe passage reported"
+      else
+        case passage_signal[:state].to_sym
+      when :open then "safe passage reported"
+      when :reopening then "reopening reported"
+      when :restricted_selective then "selective passage controls reported"
+      when :restricted then "transit restrictions reported"
+      when :closed then "closure risk reported"
+      else "passage update reported"
+      end
+      end
+      headline = passage_signal[:headline].presence || passage_signal[:excerpt]
+      headline.present? ? "#{state_text} (#{headline.truncate(120)})" : state_text
+    end
+
+    def compact_passage_signal_entity(passage_signal)
+      return nil if passage_signal.blank?
+
+      {
+        state: passage_signal[:state].to_s,
+        headline: passage_signal[:headline],
+        excerpt: passage_signal[:excerpt],
+        published_at: passage_signal[:published_at],
+        url: passage_signal[:url],
+      }.compact
     end
 
     def outage_currency_stress_severity(outage:, quote:)

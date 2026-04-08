@@ -796,6 +796,63 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
     end
   end
 
+  test "chokepoint market stress explains relief when safe passage headlines coincide with falling oil" do
+    wire = NewsSource.create!(canonical_key: "wire-hormuz-relief", name: "Wire Source", source_kind: "wire")
+    article = NewsArticle.create!(
+      news_source: wire,
+      url: "https://example.com/hormuz-safe-passage",
+      canonical_url: "https://example.com/hormuz-safe-passage",
+      title: "Iran agrees to safe passage through Strait of Hormuz after ceasefire",
+      summary: "Officials said the route is open to ships for two weeks as traffic resumes.",
+      published_at: 70.minutes.ago,
+      content_scope: "core",
+      hydration_status: "hydrated"
+    )
+    NewsEvent.create!(
+      news_source: wire,
+      news_article: article,
+      url: article.url,
+      title: article.title,
+      name: wire.name,
+      source: "rss",
+      latitude: 26.56,
+      longitude: 56.27,
+      published_at: article.published_at,
+      fetched_at: article.published_at,
+      content_scope: "core"
+    )
+
+    mocked_payload = [{
+      id: "hormuz",
+      name: "Strait of Hormuz",
+      lat: 26.56,
+      lng: 56.27,
+      status: "critical",
+      ships_nearby: { total: 9, tankers: 4, cargo: 3 },
+      flows: { oil: { pct: 21, note: "Largest oil chokepoint globally" } },
+      commodity_signals: [
+        { symbol: "OIL_WTI", name: "Crude Oil (WTI)", price: 61.4, change_pct: -4.8 },
+      ],
+      conflict_pulse: [{ score: 73, trend: "elevated" }],
+      checked_at: Time.current.iso8601,
+    }]
+
+    original_analyze = ChokepointMonitorService.method(:analyze)
+    ChokepointMonitorService.singleton_class.send(:define_method, :analyze) { mocked_payload }
+
+    begin
+      insight = CrossLayerAnalyzer.analyze.find { |row| row[:type] == "chokepoint_market_stress" }
+
+      assert insight
+      assert_includes insight[:title], "falling on safe-passage signal"
+      assert_includes insight[:description], "safe passage reported"
+      assert_includes insight[:description], "ceasefire"
+      assert_equal "reopening", insight.dig(:entities, :passage_signal, :state)
+    ensure
+      ChokepointMonitorService.singleton_class.send(:define_method, :analyze, original_analyze)
+    end
+  end
+
   test "outage currency stress fires when a country outage coincides with an FX move" do
     CommodityPrice.create!(
       symbol: "JPY",

@@ -136,43 +136,41 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       const baseAlpha = score >= 70 ? 0.15 : (score >= 50 ? 0.10 : 0.04)
       const outlineAlpha = score >= 70 ? 0.6 : (score >= 50 ? 0.4 : 0.15)
 
+      const timelineChanged = this._timelineActive && increased.has(zone.cell_key)
       const ring = ds.entities.add({
         id: `cpulse-ring-${zoneKey}`,
         position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
         ellipse: {
           semiMajorAxis: radius,
           semiMinorAxis: radius,
-          material: color.withAlpha(baseAlpha),
+          material: color.withAlpha(this._timelineActive ? baseAlpha * (timelineChanged ? 1.2 : 0.9) : baseAlpha),
           outline: true,
-          outlineColor: color.withAlpha(outlineAlpha),
-          outlineWidth: score >= 50 ? 2 : 1,
+          outlineColor: color.withAlpha(this._timelineActive ? outlineAlpha * (timelineChanged ? 1.15 : 0.75) : outlineAlpha),
+          outlineWidth: this._timelineActive ? (timelineChanged ? 3 : 1.5) : (score >= 50 ? 2 : 1),
           height: 5100,
         },
       })
       this._conflictPulseEntities.push(ring)
 
-      const shouldPulse = this._timelineActive
-        ? increased.has(zone.cell_key)
-        : (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key))
+      const shouldPulse = !this._timelineActive
+        && (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key))
 
       if (shouldPulse) {
         const pulseRing = ds.entities.add({
           id: `cpulse-pulse-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
           ellipse: {
-            semiMajorAxis: this._timelineActive ? radius * 1.28 : radius,
-            semiMinorAxis: this._timelineActive ? radius * 1.28 : radius,
-            material: this._timelineActive ? color.withAlpha(0.03) : Cesium.Color.TRANSPARENT,
+            semiMajorAxis: radius,
+            semiMinorAxis: radius,
+            material: Cesium.Color.TRANSPARENT,
             outline: true,
-            outlineColor: color.withAlpha(this._timelineActive ? 0.42 : 0.8),
-            outlineWidth: this._timelineActive ? 2 : 3,
+            outlineColor: color.withAlpha(0.8),
+            outlineWidth: 3,
             height: 5200,
           },
         })
         this._conflictPulseEntities.push(pulseRing)
-        if (!this._timelineActive) {
-          this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
-        }
+        this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
       }
 
       if (score >= 50) {

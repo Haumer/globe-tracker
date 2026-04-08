@@ -6,6 +6,7 @@
   width: 100vw;
   height: 100vh;
   z-index: 0;
+  background: #05070c;
 }
 
 #mobile-hud,
@@ -16,6 +17,7 @@
 #cesium-viewer {
   width: 100%;
   height: 100%;
+  background: radial-gradient(circle at 50% 35%, rgba(22, 34, 54, 0.9) 0%, rgba(6, 10, 16, 0.98) 58%, #05070c 100%);
 
   .cesium-infoBox { display: none !important; }
   .cesium-viewer-toolbar { display: none !important; }

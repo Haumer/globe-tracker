@@ -29,27 +29,53 @@ export function applyCoreMethods(GlobeController) {
       const link = document.createElement("link")
       link.rel = "stylesheet"
       link.href = "https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css"
+      link.onerror = () => {
+        console.error("Failed to load Cesium widget stylesheet")
+      }
       document.head.appendChild(link)
 
-      needed.push(this.loadScript("https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"))
+      needed.push(this.loadScript(
+        "https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js",
+        { required: true, label: "Cesium" }
+      ))
     }
 
     if (!window.satellite) {
-      needed.push(this.loadScript("https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"))
+      needed.push(this.loadScript(
+        "https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js",
+        { required: false, label: "satellite.js" }
+      ))
     }
 
     if (needed.length === 0) {
       this.initViewer()
-    } else {
-      Promise.all(needed).then(() => this.initViewer())
+      return
     }
+
+    Promise.all(needed)
+      .then(() => this.initViewer())
+      .catch((error) => {
+        console.error("Globe bootstrap failed:", error)
+        this._toast("Globe engine failed to load", "error")
+      })
   }
 
-  GlobeController.prototype.loadScript = function(src) {
-    return new Promise((resolve) => {
+  GlobeController.prototype.loadScript = function(src, options = {}) {
+    const { required = true, label = src } = options
+
+    return new Promise((resolve, reject) => {
       const script = document.createElement("script")
       script.src = src
       script.onload = resolve
+      script.onerror = () => {
+        const error = new Error(`Failed to load ${label}`)
+        if (required) {
+          reject(error)
+        } else {
+          console.warn(error.message)
+          resolve(null)
+        }
+      }
       document.head.appendChild(script)
     })
   }

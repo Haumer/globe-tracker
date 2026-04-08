@@ -166,7 +166,7 @@ export function applyTrafficMethods(GlobeController) {
     })
 
     // DDoS attack arcs (origin → target) with labels and directional arrows
-    const pairs = this._timelineActive ? [] : (this._trafficData.attack_pairs || [])
+    const pairs = this._trafficData.attack_pairs || []
     this._attackArcData = pairs
 
     // Build set of attacked country codes for cross-layer correlation

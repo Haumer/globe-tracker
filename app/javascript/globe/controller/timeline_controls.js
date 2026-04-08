@@ -240,10 +240,13 @@ export function applyTimelineControlMethods(GlobeController) {
 
     this._lastConflictPulseBucket = null
     this._clearConflictPulseEntities?.()
+    revertAutoEnabledPlaybackLayers.call(this)
     clearLiveEntities.call(this)
     if (this.flightData) this.flightData.clear()
     if (this.shipData) this.shipData.clear()
     this._timelineResumeLive()
+    this._syncQuickBar?.()
+    this._updateStats?.()
   }
 
   GlobeController.prototype._syncScrubberToCursor = function() {
@@ -358,12 +361,56 @@ function initializeTimelineState(range) {
   this._timelineRangeEnd = newest
   this._timelineOldest = oldest
   this._timelineCursor = new Date(this._timelineRangeStart.getTime())
+  this._timelineAutoEnabledLayers = []
 }
 
 function autoEnablePlaybackLayers() {
-  if (this.flightsVisible || this.shipsVisible || !this.hasFlightsToggleTarget) return
-  this.flightsToggleTarget.checked = true
-  this.flightsVisible = true
+  const movementDefs = [
+    { key: "flights", hasTargetProp: "hasFlightsToggleTarget", targetProp: "flightsToggleTarget", visibleProp: "flightsVisible" },
+    { key: "ships", hasTargetProp: "hasShipsToggleTarget", targetProp: "shipsToggleTarget", visibleProp: "shipsVisible" },
+  ]
+  const eventDefs = [
+    { key: "situations", hasTargetProp: "hasSituationsToggleTarget", targetProp: "situationsToggleTarget", visibleProp: "situationsVisible" },
+    { key: "news", hasTargetProp: "hasNewsToggleTarget", targetProp: "newsToggleTarget", visibleProp: "newsVisible" },
+    { key: "verifiedStrikes", hasTargetProp: "hasVerifiedStrikesToggleTarget", targetProp: "verifiedStrikesToggleTarget", visibleProp: "verifiedStrikesVisible" },
+    { key: "heatSignatures", hasTargetProp: "hasHeatSignaturesToggleTarget", targetProp: "heatSignaturesToggleTarget", visibleProp: "heatSignaturesVisible" },
+    { key: "earthquakes", hasTargetProp: "hasEarthquakesToggleTarget", targetProp: "earthquakesToggleTarget", visibleProp: "earthquakesVisible" },
+    { key: "naturalEvents", hasTargetProp: "hasNaturalEventsToggleTarget", targetProp: "naturalEventsToggleTarget", visibleProp: "naturalEventsVisible" },
+    { key: "gpsJamming", hasTargetProp: "hasGpsJammingToggleTarget", targetProp: "gpsJammingToggleTarget", visibleProp: "gpsJammingVisible" },
+    { key: "outages", hasTargetProp: "hasOutagesToggleTarget", targetProp: "outagesToggleTarget", visibleProp: "outagesVisible" },
+    { key: "financial", hasTargetProp: "hasFinancialToggleTarget", targetProp: "financialToggleTarget", visibleProp: "financialVisible" },
+    { key: "traffic", hasTargetProp: "hasTrafficToggleTarget", targetProp: "trafficToggleTarget", visibleProp: "trafficVisible" },
+  ]
+
+  this._timelineAutoEnabledLayers = []
+
+  if (!movementPlaybackLayersVisible(this)) {
+    movementDefs.forEach((def) => {
+      if (this[def.visibleProp]) return
+      if (def.hasTargetProp && !this[def.hasTargetProp]) return
+
+      this[def.visibleProp] = true
+      if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = true
+      this._timelineAutoEnabledLayers.push(def)
+    })
+  }
+
+  if (!eventPlaybackLayersVisible(this)) {
+    eventDefs.forEach((def) => {
+      if (this[def.visibleProp]) return
+      if (def.hasTargetProp && !this[def.hasTargetProp]) return
+
+      this[def.visibleProp] = true
+      if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = true
+      this._timelineAutoEnabledLayers.push(def)
+    })
+  }
+
+  if (this._timelineAutoEnabledLayers.length === 0) return
+
+  if (this._syncStrikeSignalsVisibility) this._syncStrikeSignalsVisibility()
+  this._syncQuickBar?.()
+  this._updateStats?.()
 }
 
 function clearLiveIntervals() {
@@ -435,7 +482,11 @@ function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, 
     this.fireHotspotsVisible || strikeSignalsVisible(this) || Object.values(this.satCategoryVisible || {}).some(Boolean)
 
   if (frameStatus?.boundsRequired) {
-    this._toast("Zoom in or apply a region filter to load movement playback.")
+    if ((eventCount || 0) > 0 || (situationCount || 0) > 0) {
+      this._toast("Zoom in or apply a region filter for movement playback. Time-scoped events and theaters are active.")
+    } else {
+      this._toast("Zoom in or apply a region filter to load movement playback.")
+    }
     return
   }
 
@@ -468,4 +519,39 @@ function showTimelineAvailabilityToast(frameStatus, eventCount, situationCount, 
 
 function strikeSignalsVisible(controller) {
   return !!(controller?.verifiedStrikesVisible || controller?.heatSignaturesVisible || controller?.strikesVisible)
+}
+
+function movementPlaybackLayersVisible(controller) {
+  return !!(
+    controller.flightsVisible ||
+    controller._milFlightsActive ||
+    controller.shipsVisible ||
+    controller.navalVesselsVisible
+  )
+}
+
+function eventPlaybackLayersVisible(controller) {
+  return !!(
+    controller.earthquakesVisible ||
+    controller.naturalEventsVisible ||
+    controller.newsVisible ||
+    controller.gpsJammingVisible ||
+    controller.outagesVisible ||
+    controller.situationsVisible ||
+    controller.financialVisible ||
+    controller.trafficVisible ||
+    strikeSignalsVisible(controller)
+  )
+}
+
+function revertAutoEnabledPlaybackLayers() {
+  if (!Array.isArray(this._timelineAutoEnabledLayers) || this._timelineAutoEnabledLayers.length === 0) return
+
+  this._timelineAutoEnabledLayers.forEach((def) => {
+    this[def.visibleProp] = false
+    if (def.targetProp && this[def.targetProp]) this[def.targetProp].checked = false
+  })
+
+  if (this._syncStrikeSignalsVisibility) this._syncStrikeSignalsVisibility()
+  this._timelineAutoEnabledLayers = []
 }

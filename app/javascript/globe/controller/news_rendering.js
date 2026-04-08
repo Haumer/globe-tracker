@@ -241,6 +241,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     events.forEach((ev, idx) => {
       const color = categoryColors[ev.category] || "#90a4ae"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
       const title = ev.title || ev.name || "Untitled"
       const labelText = idx < 12 ? this._truncateNewsLabel(title, 36) : ""
       const sourceName = ev.source ? `${this._escapeHtml(ev.source)} · ` : ""
@@ -250,8 +251,8 @@ export function applyNewsRenderingMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
           pixelSize: idx < 12 ? 13 : 9,
-          color: cesiumColor.withAlpha(0.88),
-          outlineColor: cesiumColor.withAlpha(0.35),
+          color: cesiumColor.withAlpha(0.88 * alpha),
+          outlineColor: cesiumColor.withAlpha(0.35 * alpha),
           outlineWidth: idx < 12 ? 3 : 2,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 1e7, 0.45),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -260,7 +261,7 @@ export function applyNewsRenderingMethods(GlobeController) {
         label: labelText ? {
           text: labelText,
           font: "13px DM Sans, sans-serif",
-          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9 * alpha),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,

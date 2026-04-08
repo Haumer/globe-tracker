@@ -128,6 +128,7 @@ export function applyTimelineEventMethods(GlobeController) {
         depth: event.depth,
         url: event.url,
         time: event.time ? new Date(event.time).getTime() : null,
+        timelineAlpha: timelineWindowAlpha(event.time, cursor, EVENT_TIMELINE_WINDOWS_MS.earthquake),
       }))
       this.renderEarthquakes()
     } else if (this.earthquakesVisible) {
@@ -145,6 +146,7 @@ export function applyTimelineEventMethods(GlobeController) {
         lng: event.lng,
         date: event.time,
         magnitudeValue: event.magnitudeValue,
+        timelineAlpha: timelineWindowAlpha(event.time, cursor, EVENT_TIMELINE_WINDOWS_MS.natural_event),
       }))
       this.renderNaturalEvents()
     } else if (this.naturalEventsVisible) {
@@ -174,6 +176,7 @@ export function applyTimelineEventMethods(GlobeController) {
           threat: event.threat,
           cluster_id: event.cluster_id,
           time: event.time,
+          timelineAlpha: timelineWindowAlpha(event.time, cursorMs, EVENT_TIMELINE_WINDOWS_MS.news),
       }))
       this._newsData = newsData
       this._renderTimelineNews(newsData)
@@ -190,6 +193,7 @@ export function applyTimelineEventMethods(GlobeController) {
         bad: event.bad,
         pct: event.pct,
         level: event.level,
+        timelineAlpha: timelineWindowAlpha(event.time, this._timelineCursor, EVENT_TIMELINE_WINDOWS_MS.gps_jamming),
       }))
       this._gpsJammingData = jammingData
       this._renderGpsJamming(jammingData)
@@ -205,6 +209,8 @@ export function applyTimelineEventMethods(GlobeController) {
         name: event.name,
         score: event.score,
         level: event.level,
+        time: event.time,
+        timelineAlpha: timelineWindowAlpha(event.time, this._timelineCursor, EVENT_TIMELINE_WINDOWS_MS.internet_outage),
       }))
       this._outageData = outageEvents
       this._renderOutages({ summary: outageEvents, events: outageEvents })
@@ -227,6 +233,7 @@ export function applyTimelineEventMethods(GlobeController) {
         sender: event.sender,
         lat: event.lat,
         lng: event.lng,
+        timelineAlpha: timelineWindowAlpha(event.time, this._timelineCursor, EVENT_TIMELINE_WINDOWS_MS.weather_alert),
       }))
       this._renderWeatherAlerts()
     } else if (this.weatherVisible) {
@@ -247,6 +254,7 @@ export function applyTimelineEventMethods(GlobeController) {
         text: event.text,
         effective_start: event.effective_start,
         effective_end: event.effective_end,
+        timelineAlpha: timelineWindowAlpha(event.time, this._timelineCursor, EVENT_TIMELINE_WINDOWS_MS.notam),
       }))
       this.renderNotams()
     } else if (this.notamsVisible) {
@@ -362,6 +370,7 @@ function timelineFireToStrikeDetection(event) {
     clusterSize: 0,
     gcMatch: null,
     detectionKind: "heat_signature",
+    timelineAlpha: event.timelineAlpha,
   }
 }
 
@@ -377,5 +386,16 @@ function timelineGeoconfirmedToDetection(event) {
     description: event.description,
     geoUrls: event.geoUrls || [],
     detectionKind: "verified_strike",
+    timelineAlpha: event.timelineAlpha,
   }
+}
+
+function timelineWindowAlpha(eventTime, cursorOrMs, windowMs) {
+  const eventMs = eventTime ? new Date(eventTime).getTime() : Number.NaN
+  const cursorMs = cursorOrMs instanceof Date ? cursorOrMs.getTime() : Number(cursorOrMs)
+  if (!Number.isFinite(eventMs) || !Number.isFinite(cursorMs) || !(windowMs > 0)) return 1
+
+  const ageMs = Math.max(cursorMs - eventMs, 0)
+  const progress = Math.min(ageMs / windowMs, 1)
+  return 0.18 + (1 - progress) * 0.82
 }

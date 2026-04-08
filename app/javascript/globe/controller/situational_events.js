@@ -171,6 +171,7 @@ export function applySituationalEventMethods(GlobeController) {
 
       const mag = eq.mag || 0
       const t = Math.min(Math.max((mag - 2.5) / 5.5, 0), 1)
+      const alpha = Number.isFinite(eq.timelineAlpha) ? eq.timelineAlpha : 1
       const pixelSize = 6 + t * 14
       const pulseScale = 2 + t * 4
 
@@ -187,9 +188,9 @@ export function applySituationalEventMethods(GlobeController) {
         ellipse: {
           semiMinorAxis: mag * 15000,
           semiMajorAxis: mag * 15000,
-          material: color.withAlpha(0.08),
+          material: color.withAlpha(0.08 * alpha),
           outline: true,
-          outlineColor: color.withAlpha(0.25),
+          outlineColor: color.withAlpha(0.25 * alpha),
           outlineWidth: 1,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -203,8 +204,8 @@ export function applySituationalEventMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 10),
         point: {
           pixelSize,
-          color: color.withAlpha(0.85),
-          outlineColor: color.withAlpha(0.4),
+          color: color.withAlpha(0.85 * alpha),
+          outlineColor: color.withAlpha(0.4 * alpha),
           outlineWidth: pulseScale,
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -212,7 +213,7 @@ export function applySituationalEventMethods(GlobeController) {
         label: {
           text: `M${mag.toFixed(1)}`,
           font: LABEL_DEFAULTS.font,
-          fillColor: Cesium.Color.WHITE.withAlpha(0.95),
+          fillColor: Cesium.Color.WHITE.withAlpha(0.95 * alpha),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,
           style: LABEL_DEFAULTS.style(),
@@ -497,6 +498,7 @@ export function applySituationalEventMethods(GlobeController) {
 
       const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
       const color = Cesium.Color.fromCssColorString(catInfo.color)
+      const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
 
       if (ev.geometryPoints.length > 1) {
         const trailPositions = ev.geometryPoints
@@ -507,7 +509,7 @@ export function applySituationalEventMethods(GlobeController) {
             polyline: {
               positions: trailPositions,
               width: 2,
-              material: color.withAlpha(0.4),
+              material: color.withAlpha(0.4 * alpha),
               clampToGround: true,
             },
           })
@@ -522,9 +524,9 @@ export function applySituationalEventMethods(GlobeController) {
         ellipse: {
           semiMinorAxis: ringRadius,
           semiMajorAxis: ringRadius,
-          material: color.withAlpha(0.06),
+          material: color.withAlpha(0.06 * alpha),
           outline: true,
-          outlineColor: color.withAlpha(0.2),
+          outlineColor: color.withAlpha(0.2 * alpha),
           outlineWidth: 1,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -538,8 +540,8 @@ export function applySituationalEventMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
           pixelSize: 8,
-          color: color.withAlpha(0.9),
-          outlineColor: color.withAlpha(0.35),
+          color: color.withAlpha(0.9 * alpha),
+          outlineColor: color.withAlpha(0.35 * alpha),
           outlineWidth: 3,
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -547,7 +549,7 @@ export function applySituationalEventMethods(GlobeController) {
         label: {
           text: ev.title.length > 30 ? ev.title.substring(0, 28) + "…" : ev.title,
           font: LABEL_DEFAULTS.font,
-          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9 * alpha),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,
           style: LABEL_DEFAULTS.style(),

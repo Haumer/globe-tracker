@@ -67,6 +67,7 @@ export function applyOutagesMethods(GlobeController) {
 
       const color = levelColors[s.level] || "#ffc107"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const alpha = Number.isFinite(s.timelineAlpha) ? s.timelineAlpha : 1
       const intensity = Math.min(Math.log10(Math.max(s.score, 1)) / 5, 1)
       const pixelSize = 8 + intensity * 16
 
@@ -77,9 +78,9 @@ export function applyOutagesMethods(GlobeController) {
         ellipse: {
           semiMinorAxis: 50000 + intensity * 300000,
           semiMajorAxis: 50000 + intensity * 300000,
-          material: cesiumColor.withAlpha(0.06 + intensity * 0.08),
+          material: cesiumColor.withAlpha((0.06 + intensity * 0.08) * alpha),
           outline: true,
-          outlineColor: cesiumColor.withAlpha(0.2),
+          outlineColor: cesiumColor.withAlpha(0.2 * alpha),
           outlineWidth: 1,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -94,8 +95,8 @@ export function applyOutagesMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(centroid[1], centroid[0], 10),
         point: {
           pixelSize,
-          color: cesiumColor.withAlpha(0.85),
-          outlineColor: cesiumColor.withAlpha(0.4),
+          color: cesiumColor.withAlpha(0.85 * alpha),
+          outlineColor: cesiumColor.withAlpha(0.4 * alpha),
           outlineWidth: 3,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -104,7 +105,7 @@ export function applyOutagesMethods(GlobeController) {
         label: {
           text: `${s.code} ▼${s.score}${s.eventCount ? ` · ${s.eventCount}` : ""}`,
           font: "bold 12px JetBrains Mono, monospace",
-          fillColor: cesiumColor.withAlpha(0.95),
+          fillColor: cesiumColor.withAlpha(0.95 * alpha),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -155,6 +156,7 @@ export function applyOutagesMethods(GlobeController) {
         score: Math.max(...rows.map(row => Number(row.score || 0))).toFixed(1).replace(/\.0$/, ""),
         eventCount: rows.length,
         level: strongest?.level || "minor",
+        timelineAlpha: Math.max(...rows.map(row => Number(row.timelineAlpha || 0))),
       }
     }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
   }

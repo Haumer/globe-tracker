@@ -233,6 +233,7 @@ export function applyStrikesMethods(GlobeController) {
         if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(s.lat, s.lng)) return
 
         const frp = s.frp || 1
+        const alpha = Number.isFinite(s.timelineAlpha) ? s.timelineAlpha : 1
         const isVerified = isVerifiedStrike(s)
         if ((isVerified && !showVerifiedStrikes) || (!isVerified && !showHeatSignatures)) return
         const confidence = normalizedStrikeConfidence(s)
@@ -247,9 +248,9 @@ export function applyStrikesMethods(GlobeController) {
             ellipse: {
               semiMinorAxis: Math.min(2000 + frp * 50, 15000),
               semiMajorAxis: Math.min(2000 + frp * 50, 15000),
-              material: color.withAlpha(isVerified ? 0.15 : 0.1),
+              material: color.withAlpha((isVerified ? 0.15 : 0.1) * alpha),
               outline: true,
-              outlineColor: color.withAlpha(isVerified ? 0.4 : 0.3),
+              outlineColor: color.withAlpha((isVerified ? 0.4 : 0.3) * alpha),
               outlineWidth: 1,
               height: 0,
               heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -268,6 +269,7 @@ export function applyStrikesMethods(GlobeController) {
           position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 10),
           billboard: {
             image: this._strikeIcons[iconKey],
+            color: Cesium.Color.WHITE.withAlpha(alpha),
             scale: confScale,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.3),
             heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -285,12 +287,14 @@ export function applyStrikesMethods(GlobeController) {
       this._gcDetections.forEach(gc => {
         if (bounds && (gc.lat < bounds.lamin || gc.lat > bounds.lamax || gc.lng < bounds.lomin || gc.lng > bounds.lomax)) return
         if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(gc.lat, gc.lng)) return
+        const alpha = Number.isFinite(gc.timelineAlpha) ? gc.timelineAlpha : 1
 
         const entity = dataSource.entities.add({
           id: `gc-${gc.id}`,
           position: Cesium.Cartesian3.fromDegrees(gc.lng, gc.lat, 10),
           billboard: {
             image: this._gcIcon,
+            color: Cesium.Color.WHITE.withAlpha(alpha),
             scale: 1.0,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 8e6, 0.3),
             heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,

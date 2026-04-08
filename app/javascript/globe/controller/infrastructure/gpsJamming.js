@@ -66,6 +66,7 @@ export function applyGpsJammingMethods(GlobeController) {
 
     dataSource.entities.suspendEvents()
     renderCells.forEach(cell => {
+      const alpha = Number.isFinite(cell.timelineAlpha) ? cell.timelineAlpha : 1
       const hexPoints = this._hexVertices(cell.lat, cell.lng, hexRadius)
       const positions = hexPoints.map(p => Cesium.Cartesian3.fromDegrees(p[1], p[0]))
 
@@ -73,9 +74,9 @@ export function applyGpsJammingMethods(GlobeController) {
         id: `jam-${cell.lat}-${cell.lng}`,
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(positions),
-          material: colors[cell.level] || colors.medium,
+          material: (colors[cell.level] || colors.medium).withAlpha((colors[cell.level] || colors.medium).alpha * alpha),
           outline: true,
-          outlineColor: outlines[cell.level] || outlines.medium,
+          outlineColor: (outlines[cell.level] || outlines.medium).withAlpha((outlines[cell.level] || outlines.medium).alpha * alpha),
           outlineWidth: 2,
           height: 5000,
         },
@@ -96,7 +97,7 @@ export function applyGpsJammingMethods(GlobeController) {
           label: {
             text: `${cell.level === "low" ? "GPS" : "⚠"} ${cell.pct}%`,
             font: "13px DM Sans, sans-serif",
-            fillColor: cell.level === "high" ? cachedColor("#ff5252") : cachedColor("#ffd54f"),
+            fillColor: (cell.level === "high" ? cachedColor("#ff5252") : cachedColor("#ffd54f")).withAlpha(alpha),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,

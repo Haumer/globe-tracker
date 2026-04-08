@@ -103,7 +103,8 @@ export function applyTimelineFrameMethods(GlobeController) {
 
     this._timelineLastKnown.forEach((entity, entityKey) => {
       const ageSinceSnapshot = cursorMs - entity.seenAt
-      if (ageSinceSnapshot < 0 || ageSinceSnapshot > timelineEntityStaleMs(entity.type)) {
+      const staleMs = timelineEntityStaleMs(entity.type)
+      if (ageSinceSnapshot < 0 || ageSinceSnapshot > staleMs) {
         this._timelineLastKnown.delete(entityKey)
         return
       }
@@ -115,9 +116,10 @@ export function applyTimelineFrameMethods(GlobeController) {
 
       const isMilitaryFlight = isFlight && timelineEntityIsMilitaryFlight(this, entity)
       const isNavalVessel = entity.type === "ship" && timelineEntityIsNavalVessel(entity)
+      const visibilityAlpha = timelineEntityVisibilityAlpha(ageSinceSnapshot, staleMs)
       const labelColor = isFlight
-        ? (isMilitaryFlight ? "rgba(239,83,80,0.92)" : "rgba(200,210,225,0.85)")
-        : (isNavalVessel ? "rgba(66,165,245,0.92)" : "rgba(38,198,218,0.85)")
+        ? (isMilitaryFlight ? `rgba(239,83,80,${Math.max(visibilityAlpha, 0.28)})` : `rgba(200,210,225,${Math.max(visibilityAlpha, 0.24)})`)
+        : (isNavalVessel ? `rgba(66,165,245,${Math.max(visibilityAlpha, 0.28)})` : `rgba(38,198,218,${Math.max(visibilityAlpha, 0.24)})`)
       const id = `tl-${entity.type}-${entity.id}`
       activeIds.add(id)
       const position = Cesium.Cartesian3.fromDegrees(entity.lng, entity.lat, (entity.alt || 0) + 100)
@@ -127,6 +129,7 @@ export function applyTimelineFrameMethods(GlobeController) {
         timelineEntity.position = position
         timelineEntity.billboard.rotation = -Cesium.Math.toRadians(entity.hdg || 0)
         timelineEntity.billboard.image = timelineBillboardImage(this, entity, { isMilitaryFlight, isNavalVessel })
+        timelineEntity.billboard.color = Cesium.Color.WHITE.withAlpha(visibilityAlpha)
         if (timelineEntity.label) timelineEntity.label.text = entity.callsign || entity.id
         if (timelineEntity.label) timelineEntity.label.fillColor = Cesium.Color.fromCssColorString(labelColor)
       } else {
@@ -137,6 +140,7 @@ export function applyTimelineFrameMethods(GlobeController) {
             image: timelineBillboardImage(this, entity, { isMilitaryFlight, isNavalVessel }),
             scale: isFlight ? 1.0 : 0.8,
             rotation: -Cesium.Math.toRadians(entity.hdg || 0),
+            color: Cesium.Color.WHITE.withAlpha(visibilityAlpha),
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             heightReference: Cesium.HeightReference.NONE,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -239,6 +243,12 @@ function applyTimelineFramesThrough(index) {
 
 function timelineEntityStaleMs(entityType) {
   return entityType === "ship" ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000
+}
+
+function timelineEntityVisibilityAlpha(ageMs, staleMs) {
+  if (!(staleMs > 0)) return 1
+  const progress = Math.min(Math.max(ageMs / staleMs, 0), 1)
+  return 0.18 + (1 - progress) * 0.82
 }
 
 function timelineEntityVisible(controller, entity) {

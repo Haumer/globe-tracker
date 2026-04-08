@@ -1,4 +1,5 @@
 require "application_system_test_case"
+require "timeout"
 
 class TimelinePlaybackProbeTest < ApplicationSystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1400]
@@ -246,5 +247,180 @@ class TimelinePlaybackProbeTest < ApplicationSystemTestCase
         )
       })()
     JS
+  end
+
+  test "timeline playback appends news and updates theater state as the cursor advances" do
+    visit root_path
+
+    if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
+      find("#onboarding-dismiss").click
+    end
+
+    page.execute_script(<<~JS)
+      (() => {
+        const element = document.querySelector('[data-controller="globe"]')
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(element, "globe")
+        const originalFetch = window.fetch.bind(window)
+
+        ;[
+          ["flightsVisible", "flightsToggleTarget"],
+          ["shipsVisible", "shipsToggleTarget"],
+          ["verifiedStrikesVisible", "verifiedStrikesToggleTarget"],
+          ["heatSignaturesVisible", "heatSignaturesToggleTarget"],
+          ["earthquakesVisible", "earthquakesToggleTarget"],
+          ["naturalEventsVisible", "naturalEventsToggleTarget"],
+          ["gpsJammingVisible", "gpsJammingToggleTarget"],
+          ["outagesVisible", "outagesToggleTarget"],
+          ["financialVisible", "financialToggleTarget"],
+          ["trafficVisible", "trafficToggleTarget"],
+        ].forEach(([visibleProp, targetProp]) => {
+          controller[visibleProp] = false
+          if (controller[targetProp]) controller[targetProp].checked = false
+        })
+
+        controller.newsVisible = true
+        controller.situationsVisible = true
+        if (controller.newsToggleTarget) controller.newsToggleTarget.checked = true
+        if (controller.situationsToggleTarget) controller.situationsToggleTarget.checked = true
+        controller._timelinePlaybackBounds = { lamin: 20, lamax: 40, lomin: 40, lomax: 60 }
+
+        const newsCandidates = [
+          {
+            id: "timeline-news-early",
+            type: "news",
+            lat: 26.5,
+            lng: 56.4,
+            title: "Early playback news",
+            category: "conflict",
+            source: "probe",
+            url: "https://example.com/news-1",
+            time: "2026-04-06T20:15:00Z",
+          },
+          {
+            id: "timeline-news-late",
+            type: "news",
+            lat: 26.8,
+            lng: 56.6,
+            title: "Late playback news",
+            category: "conflict",
+            source: "probe",
+            url: "https://example.com/news-2",
+            time: "2026-04-06T22:15:00Z",
+          },
+        ]
+
+        window.__timelinePlaybackProbe = { eventFetches: 0, conflictFetches: 0 }
+
+        window.fetch = (input, init) => {
+          const url = typeof input === "string" ? input : input.url
+
+          if (url === "/api/playback/range") {
+            return Promise.resolve(new Response(JSON.stringify({
+              oldest: "2026-04-06T20:00:00Z",
+              newest: "2026-04-06T23:00:00Z",
+              layers: {},
+            }), { status: 200, headers: { "Content-Type": "application/json" } }))
+          }
+
+          if (url.startsWith("/api/playback?")) {
+            const params = new URL(url, window.location.origin).searchParams
+            return Promise.resolve(new Response(JSON.stringify({
+              from: params.get("from"),
+              to: params.get("to"),
+              entity_type: params.get("type") || "all",
+              frame_count: 0,
+              frames: {},
+            }), { status: 200, headers: { "Content-Type": "application/json" } }))
+          }
+
+          if (url.startsWith("/api/playback/events?")) {
+            window.__timelinePlaybackProbe.eventFetches += 1
+            const parsed = new URL(url, window.location.origin)
+            const from = new Date(parsed.searchParams.get("from")).getTime()
+            const to = new Date(parsed.searchParams.get("to")).getTime()
+            const types = (parsed.searchParams.get("types") || "").split(",")
+            const events = []
+
+            if (types.includes("news")) {
+              newsCandidates.forEach((event) => {
+                const eventMs = new Date(event.time).getTime()
+                if (eventMs >= from && eventMs <= to) events.push(event)
+              })
+            }
+
+            return Promise.resolve(new Response(JSON.stringify(events), {
+              status: 200,
+              headers: { "Content-Type": "application/json" }
+            }))
+          }
+
+          if (url.startsWith("/api/playback/conflicts?")) {
+            window.__timelinePlaybackProbe.conflictFetches += 1
+            const parsed = new URL(url, window.location.origin)
+            const at = new Date(parsed.searchParams.get("at"))
+            const hour = at.getUTCHours()
+            const isLate = hour >= 22
+
+            return Promise.resolve(new Response(JSON.stringify({
+              zones: [{
+                cell_key: "26.0,56.0",
+                lat: 27.0,
+                lng: 57.0,
+                pulse_score: isLate ? 92 : 41,
+                escalation_trend: isLate ? "surging" : "active",
+                count_24h: isLate ? 19 : 7,
+                source_count: isLate ? 9 : 4,
+                situation_name: "Strait of Hormuz",
+                theater: "Middle East / Iran War",
+                top_headlines: [isLate ? "Late playback theater" : "Early playback theater"],
+              }],
+              strike_arcs: [],
+              hex_cells: [],
+            }), { status: 200, headers: { "Content-Type": "application/json" } }))
+          }
+
+          return originalFetch(input, init)
+        }
+
+        controller.timelineOpen().then(() => {
+          controller._timelineCursor = new Date("2026-04-06T22:30:00Z")
+          controller._updateTimelineCursorDisplay()
+          controller._renderNearestFrame()
+          return controller._timelineRefreshPlaybackState()
+        }).then(() => {
+          window.__timelinePlaybackProbeResult = {
+            eventFetches: window.__timelinePlaybackProbe.eventFetches,
+            conflictFetches: window.__timelinePlaybackProbe.conflictFetches,
+            newsCount: controller._newsData.length,
+            latestNewsTitle: controller._newsData[controller._newsData.length - 1]?.title || null,
+            pulseScore: controller._conflictPulseData[0]?.pulse_score || null,
+            pulseHeadline: controller._conflictPulseData[0]?.top_headlines?.[0] || null,
+          }
+        }).catch((error) => {
+          window.__timelinePlaybackProbeResult = {
+            error: String(error),
+            stack: error && error.stack ? error.stack : null,
+          }
+        })
+      })()
+    JS
+
+    assert_selector "#timeline-bar", visible: true, wait: 5
+
+    Timeout.timeout(5) do
+      loop do
+        break if page.evaluate_script("!!window.__timelinePlaybackProbeResult")
+        sleep 0.1
+      end
+    end
+
+    playback_state = JSON.parse(page.evaluate_script("JSON.stringify(window.__timelinePlaybackProbeResult)"))
+    assert_nil playback_state["error"], playback_state.inspect
+    assert_operator playback_state["eventFetches"], :>=, 2, playback_state.inspect
+    assert_operator playback_state["conflictFetches"], :>=, 2, playback_state.inspect
+    assert_equal 2, playback_state["newsCount"], playback_state.inspect
+    assert_equal "Late playback news", playback_state["latestNewsTitle"], playback_state.inspect
+    assert_equal 92, playback_state["pulseScore"], playback_state.inspect
+    assert_equal "Late playback theater", playback_state["pulseHeadline"], playback_state.inspect
   end
 end

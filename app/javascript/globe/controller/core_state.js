@@ -48,6 +48,7 @@ const INTERVAL_PROPS = [
   "_milFlightInterval",
   "_financialInterval",
   "_conflictPulseInterval",
+  "_timelinePlaybackRefreshInterval",
   "_firesInterval",
   "_miniTimelineInterval",
   "_anomalyInterval",

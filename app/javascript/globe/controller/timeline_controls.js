@@ -24,9 +24,7 @@ export function applyTimelineControlMethods(GlobeController) {
 
       this._toast("Loading time travel data...")
       const frameStatus = await this._timelineLoadFrames()
-      const eventCount = await this._timelineUpdateEvents()
-      const situationCount = await this._timelineUpdateConflictPulse()
-      await this._timelineRefreshCursorLayers()
+      const { eventCount, situationCount } = await this._timelineRefreshPlaybackState()
 
       showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, true)
     } catch (error) {
@@ -150,9 +148,11 @@ export function applyTimelineControlMethods(GlobeController) {
 
     if (this._timelinePlaying) {
       this._timelineLastTick = performance.now()
+      this._startTimelinePlaybackRefreshLoop()
       this._timelineTick()
     } else if (this._timelineRaf) {
       cancelAnimationFrame(this._timelineRaf)
+      this._stopTimelinePlaybackRefreshLoop()
     }
   }
 
@@ -176,6 +176,7 @@ export function applyTimelineControlMethods(GlobeController) {
 
     if (newCursorMs >= this._timelineRangeEnd.getTime()) {
       this._timelinePlaying = false
+      this._stopTimelinePlaybackRefreshLoop()
       if (this.hasTimelinePlayBtnTarget) this.timelinePlayBtnTarget.classList.remove("playing")
       if (this.hasTimelinePlayIconTarget) this.timelinePlayIconTarget.className = "fa-solid fa-play"
       return
@@ -231,6 +232,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelinePlaying = false
     if (this._timelineRaf) cancelAnimationFrame(this._timelineRaf)
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
+    this._stopTimelinePlaybackRefreshLoop()
     this.timelineBarTarget.style.display = "none"
 
     this._timelineLastKnown = null
@@ -267,10 +269,41 @@ export function applyTimelineControlMethods(GlobeController) {
   GlobeController.prototype._timelineEventDebounce = function() {
     if (this._timelineEventTimer) clearTimeout(this._timelineEventTimer)
     this._timelineEventTimer = setTimeout(async () => {
-      await this._timelineUpdateEvents()
-      await this._timelineUpdateConflictPulse()
+      this._timelineEventTimer = null
+      await this._timelineRefreshPlaybackState()
+    }, 150)
+  }
+
+  GlobeController.prototype._timelineRefreshPlaybackState = async function() {
+    if (this._timelineRefreshPromise) return this._timelineRefreshPromise
+
+    this._timelineRefreshPromise = (async () => {
+      const eventCount = await this._timelineUpdateEvents()
+      const situationCount = await this._timelineUpdateConflictPulse()
       await this._timelineRefreshCursorLayers()
+      return { eventCount, situationCount }
+    })()
+
+    try {
+      return await this._timelineRefreshPromise
+    } finally {
+      this._timelineRefreshPromise = null
+    }
+  }
+
+  GlobeController.prototype._startTimelinePlaybackRefreshLoop = function() {
+    if (this._timelinePlaybackRefreshInterval) return
+
+    this._timelinePlaybackRefreshInterval = setInterval(async () => {
+      if (!this._timelineActive || !this._timelinePlaying) return
+      await this._timelineRefreshPlaybackState()
     }, 400)
+  }
+
+  GlobeController.prototype._stopTimelinePlaybackRefreshLoop = function() {
+    if (!this._timelinePlaybackRefreshInterval) return
+    clearInterval(this._timelinePlaybackRefreshInterval)
+    this._timelinePlaybackRefreshInterval = null
   }
 
   GlobeController.prototype.timelinePickDate = function() {
@@ -306,9 +339,7 @@ export function applyTimelineControlMethods(GlobeController) {
 
     this._toast("Loading time travel data...")
     const frameStatus = await this._timelineLoadFrames()
-    const eventCount = await this._timelineUpdateEvents()
-    const situationCount = await this._timelineUpdateConflictPulse()
-    await this._timelineRefreshCursorLayers()
+    const { eventCount, situationCount } = await this._timelineRefreshPlaybackState()
 
     showTimelineAvailabilityToast.call(this, frameStatus, eventCount, situationCount, false)
   }
@@ -319,9 +350,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineLayerReloadTimer = setTimeout(async () => {
       await this._timelineLoadFrames()
       this._renderNearestFrame()
-      await this._timelineUpdateEvents()
-      await this._timelineUpdateConflictPulse()
-      await this._timelineRefreshCursorLayers()
+      await this._timelineRefreshPlaybackState()
     }, 300)
   }
 

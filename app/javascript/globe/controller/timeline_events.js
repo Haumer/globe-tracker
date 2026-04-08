@@ -109,6 +109,7 @@ export function applyTimelineEventMethods(GlobeController) {
 
   GlobeController.prototype._renderUnifiedTimelineEvents = function(events, strikeEvents = []) {
     getDataSource(this.viewer, this._ds, "timelineEvents").entities.removeAll()
+    const cursor = this._timelineCursor
     const showHeatSignatures = this._heatSignaturesLayerVisible ? this._heatSignaturesLayerVisible() : !!(this.heatSignaturesVisible || this.strikesVisible)
     const showVerifiedStrikes = this._verifiedStrikesLayerVisible ? this._verifiedStrikesLayerVisible() : !!(this.verifiedStrikesVisible || this.strikesVisible)
     const byType = {}

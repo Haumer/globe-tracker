@@ -192,22 +192,30 @@ class TimelinePlaybackProbeTest < ApplicationSystemTestCase
     sleep 1.0
 
     assert_equal true, page.evaluate_script("window.__timelineProbeDone === true")
-    assert_equal true, page.evaluate_script(<<~JS)
+    playback_visibility = page.evaluate_script(<<~JS)
       (() => {
         const element = document.querySelector('[data-controller="globe"]')
         const controller = window.Stimulus.getControllerForElementAndIdentifier(element, "globe")
-        return !!(
-          controller.flightsVisible &&
-          controller.shipsVisible &&
-          controller.situationsVisible &&
-          controller.newsVisible &&
-          controller.verifiedStrikesVisible &&
-          controller.heatSignaturesVisible &&
-          controller.financialVisible &&
-          controller.trafficVisible
-        )
+        return {
+          flightsVisible: !!controller.flightsVisible,
+          shipsVisible: !!controller.shipsVisible,
+          situationsVisible: !!controller.situationsVisible,
+          newsVisible: !!controller.newsVisible,
+          verifiedStrikesVisible: !!controller.verifiedStrikesVisible,
+          heatSignaturesVisible: !!controller.heatSignaturesVisible,
+          financialVisible: !!controller.financialVisible,
+          trafficVisible: !!controller.trafficVisible,
+        }
       })()
     JS
+    assert_equal false, playback_visibility["flightsVisible"], playback_visibility.inspect
+    assert_equal false, playback_visibility["shipsVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["situationsVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["newsVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["verifiedStrikesVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["heatSignaturesVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["financialVisible"], playback_visibility.inspect
+    assert_equal true, playback_visibility["trafficVisible"], playback_visibility.inspect
 
     playback_state = page.evaluate_script(<<~JS)
       (() => {

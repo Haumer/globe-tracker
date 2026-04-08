@@ -151,22 +151,28 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       })
       this._conflictPulseEntities.push(ring)
 
-      if (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key)) {
+      const shouldPulse = this._timelineActive
+        ? increased.has(zone.cell_key)
+        : (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key))
+
+      if (shouldPulse) {
         const pulseRing = ds.entities.add({
           id: `cpulse-pulse-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
           ellipse: {
-            semiMajorAxis: radius,
-            semiMinorAxis: radius,
-            material: Cesium.Color.TRANSPARENT,
+            semiMajorAxis: this._timelineActive ? radius * 1.28 : radius,
+            semiMinorAxis: this._timelineActive ? radius * 1.28 : radius,
+            material: this._timelineActive ? color.withAlpha(0.03) : Cesium.Color.TRANSPARENT,
             outline: true,
-            outlineColor: color.withAlpha(0.8),
-            outlineWidth: 3,
+            outlineColor: color.withAlpha(this._timelineActive ? 0.42 : 0.8),
+            outlineWidth: this._timelineActive ? 2 : 3,
             height: 5200,
           },
         })
         this._conflictPulseEntities.push(pulseRing)
-        this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
+        if (!this._timelineActive) {
+          this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
+        }
       }
 
       if (score >= 50) {
@@ -274,7 +280,7 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
     ds.entities.resumeEvents()
     if (this._updateGlobeOcclusion) this._updateGlobeOcclusion()
 
-    if (this._pulsingRings.length > 0) {
+    if (!this._timelineActive && this._pulsingRings.length > 0) {
       this._startPulseAnimation()
     }
 

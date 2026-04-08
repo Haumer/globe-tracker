@@ -12,8 +12,18 @@ const EVENT_TIMELINE_WINDOWS_MS = {
 const STRIKE_TIMELINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 const EVENT_APPEAR_WINDOW_MS = 12 * 60 * 1000
 const EVENT_PULSE_WINDOW_MS = 6 * 60 * 1000
+const GENERAL_EVENT_FETCH_BUCKET_MS = 5 * 60 * 1000
+const STRIKE_EVENT_FETCH_BUCKET_MS = 15 * 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
+  GlobeController.prototype._timelineRenderCachedState = function() {
+    if (!this._timelineActive) return
+    const cursorMs = this._timelineCursor?.getTime?.()
+    if (!Number.isFinite(cursorMs) || cursorMs === this._timelineLastRenderedCursorMs) return
+    this._timelineLastRenderedCursorMs = cursorMs
+    this._renderUnifiedTimelineEvents(this._timelineFetchedGeneralEvents || [], this._timelineFetchedStrikeEvents || [])
+  }
+
   GlobeController.prototype._timelineUpdateEvents = async function() {
     if (!this._timelineActive) return
 
@@ -45,27 +55,46 @@ export function applyTimelineEventMethods(GlobeController) {
     // Playback events should be global by default. Only spatially scope them when the
     // analyst explicitly applies a country/area filter.
     const bounds = this.hasActiveFilter() ? this.getFilterBounds() : null
+    const groupedTypes = groupTimelineTypesByWindow(generalTypes)
+    const requestKey = buildTimelineEventFetchKey(cursor, groupedTypes, strikeTypes, bounds)
 
     try {
-      const groupedTypes = groupTimelineTypesByWindow(generalTypes)
-      const generalPromise = Promise.all(groupedTypes.map(({ windowMs, types }) => (
-        fetchTimelineEventSet({
-          from: new Date(cursor.getTime() - windowMs).toISOString(),
-          to: cursor.toISOString(),
-          types,
-          bounds,
-        })
-      ))).then((groups) => groups.flat())
-      const strikePromise = fetchTimelineEventSet({
-        from: new Date(cursor.getTime() - STRIKE_TIMELINE_WINDOW_MS).toISOString(),
-        to: cursor.toISOString(),
-        types: strikeTypes,
-        bounds,
-      })
+      if (requestKey === this._timelineEventFetchKey) {
+        this._timelineEventCount = (this._timelineFetchedGeneralEvents?.length || 0) + (this._timelineFetchedStrikeEvents?.length || 0)
+        this._timelineRenderCachedState()
+        this._updateStats()
+        return this._timelineEventCount
+      }
+
+      const generalPromise = groupedTypes.length > 0
+        ? Promise.all(groupedTypes.map(({ windowMs, types }) => {
+            const bucketEnd = timelineFetchBucketEnd(cursor.getTime(), GENERAL_EVENT_FETCH_BUCKET_MS)
+            return fetchTimelineEventSet({
+              from: new Date(bucketEnd - windowMs).toISOString(),
+              to: new Date(bucketEnd).toISOString(),
+              types,
+              bounds,
+            })
+          })).then((groups) => groups.flat())
+        : Promise.resolve([])
+      const strikePromise = strikeTypes.length > 0
+        ? (() => {
+            const bucketEnd = timelineFetchBucketEnd(cursor.getTime(), STRIKE_EVENT_FETCH_BUCKET_MS)
+            return fetchTimelineEventSet({
+              from: new Date(bucketEnd - STRIKE_TIMELINE_WINDOW_MS).toISOString(),
+              to: new Date(bucketEnd).toISOString(),
+              types: strikeTypes,
+              bounds,
+            })
+          })()
+        : Promise.resolve([])
 
       const [events, strikeEvents] = await Promise.all([generalPromise, strikePromise])
-      this._timelineEventCount = (Array.isArray(events) ? events.length : 0) + (Array.isArray(strikeEvents) ? strikeEvents.length : 0)
-      this._renderUnifiedTimelineEvents(events, strikeEvents)
+      this._timelineEventFetchKey = requestKey
+      this._timelineFetchedGeneralEvents = Array.isArray(events) ? events : []
+      this._timelineFetchedStrikeEvents = Array.isArray(strikeEvents) ? strikeEvents : []
+      this._timelineEventCount = this._timelineFetchedGeneralEvents.length + this._timelineFetchedStrikeEvents.length
+      this._timelineRenderCachedState()
       this._updateStats()
       return this._timelineEventCount
     } catch (error) {
@@ -400,6 +429,7 @@ function timelineWindowAlpha(eventTime, cursorOrMs, windowMs) {
   const eventMs = eventTime ? new Date(eventTime).getTime() : Number.NaN
   const cursorMs = cursorOrMs instanceof Date ? cursorOrMs.getTime() : Number(cursorOrMs)
   if (!Number.isFinite(eventMs) || !Number.isFinite(cursorMs) || !(windowMs > 0)) return 1
+  if (eventMs > cursorMs) return 0
 
   const ageMs = Math.max(cursorMs - eventMs, 0)
   const progress = Math.min(ageMs / windowMs, 1)
@@ -426,4 +456,23 @@ function timelinePulseFactor(eventTime, cursorOrMs) {
   const ageMs = cursorMs - eventMs
   if (ageMs < 0 || ageMs > EVENT_PULSE_WINDOW_MS) return 0
   return 1 - (ageMs / EVENT_PULSE_WINDOW_MS)
+}
+
+function timelineFetchBucketEnd(cursorMs, bucketMs) {
+  return Math.ceil(cursorMs / bucketMs) * bucketMs || bucketMs
+}
+
+function buildTimelineEventFetchKey(cursor, groupedTypes, strikeTypes, bounds) {
+  const cursorMs = cursor?.getTime?.()
+  const generalKeys = groupedTypes.map(({ windowMs, types }) => (
+    `${windowMs}:${timelineFetchBucketEnd(cursorMs, GENERAL_EVENT_FETCH_BUCKET_MS)}:${types.slice().sort().join(",")}`
+  ))
+  const strikeKey = strikeTypes.length > 0
+    ? `${timelineFetchBucketEnd(cursorMs, STRIKE_EVENT_FETCH_BUCKET_MS)}:${strikeTypes.slice().sort().join(",")}`
+    : ""
+  return JSON.stringify({
+    bounds: bounds ? `${bounds.lamin},${bounds.lamax},${bounds.lomin},${bounds.lomax}` : "global",
+    generalKeys,
+    strikeKey,
+  })
 }

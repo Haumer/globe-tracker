@@ -1,5 +1,7 @@
 import { getDataSource } from "globe/utils"
 
+const TIMELINE_COMMODITY_BUCKET_MS = 15 * 60 * 1000
+
 export function applyFinancialMethods(GlobeController) {
 
   GlobeController.prototype.toggleFinancial = function() {
@@ -23,13 +25,23 @@ export function applyFinancialMethods(GlobeController) {
   GlobeController.prototype.fetchCommodities = async function() {
     try {
       let url = "/api/commodities"
+      let bucketKey = null
       if (this._timelineActive && this._timelineCursor) {
-        url += `?at=${encodeURIComponent(this._timelineCursor.toISOString())}`
+        const bucketEndMs = Math.ceil(this._timelineCursor.getTime() / TIMELINE_COMMODITY_BUCKET_MS) * TIMELINE_COMMODITY_BUCKET_MS
+        bucketKey = String(bucketEndMs)
+        if (this._timelineCommodityFetchKey === bucketKey && this._commodityData && this._marketBenchmarkData) {
+          this._renderCommodities()
+          return
+        }
+        url += `?at=${encodeURIComponent(new Date(bucketEndMs).toISOString())}`
+      } else {
+        this._timelineCommodityFetchKey = null
       }
       const resp = await fetch(url)
       if (!resp.ok) return
       const data = await resp.json()
       if (!this.financialVisible) return
+      if (bucketKey) this._timelineCommodityFetchKey = bucketKey
       this._commodityData = data.prices || []
       this._marketBenchmarkData = data.benchmarks || []
       this._renderCommodities()

@@ -172,11 +172,11 @@ export function applyTimelineControlMethods(GlobeController) {
     this._syncScrubberToCursor()
     this._updateTimelineCursorDisplay()
     this._renderNearestFrame()
+    this._timelineRenderCachedState?.()
     this._timelineEventDebounce()
 
     if (newCursorMs >= this._timelineRangeEnd.getTime()) {
       this._timelinePlaying = false
-      this._stopTimelinePlaybackRefreshLoop()
       if (this.hasTimelinePlayBtnTarget) this.timelinePlayBtnTarget.classList.remove("playing")
       if (this.hasTimelinePlayIconTarget) this.timelinePlayIconTarget.className = "fa-solid fa-play"
       return
@@ -201,6 +201,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineCursor = new Date(cursorMs)
     this._updateTimelineCursorDisplay()
     this._renderNearestFrame()
+    this._timelineRenderCachedState?.()
     this._timelineEventDebounce()
   }
 
@@ -237,6 +238,11 @@ export function applyTimelineControlMethods(GlobeController) {
 
     this._timelineLastKnown = null
     this._timelineAppliedFrameIndex = -1
+    this._timelineEventFetchKey = null
+    this._timelineFetchedGeneralEvents = []
+    this._timelineFetchedStrikeEvents = []
+    this._timelineCommodityFetchKey = null
+    this._timelineLastRenderedCursorMs = null
     this._ds["timeline"]?.entities.removeAll()
     this._ds["timelineEvents"]?.entities.removeAll()
 
@@ -271,7 +277,7 @@ export function applyTimelineControlMethods(GlobeController) {
     this._timelineEventTimer = setTimeout(async () => {
       this._timelineEventTimer = null
       await this._timelineRefreshPlaybackState()
-    }, 150)
+    }, 250)
   }
 
   GlobeController.prototype._timelineRefreshPlaybackState = async function() {
@@ -291,14 +297,7 @@ export function applyTimelineControlMethods(GlobeController) {
     }
   }
 
-  GlobeController.prototype._startTimelinePlaybackRefreshLoop = function() {
-    if (this._timelinePlaybackRefreshInterval) return
-
-    this._timelinePlaybackRefreshInterval = setInterval(async () => {
-      if (!this._timelineActive || !this._timelinePlaying) return
-      await this._timelineRefreshPlaybackState()
-    }, 400)
-  }
+  GlobeController.prototype._startTimelinePlaybackRefreshLoop = function() {}
 
   GlobeController.prototype._stopTimelinePlaybackRefreshLoop = function() {
     if (!this._timelinePlaybackRefreshInterval) return
@@ -382,6 +381,11 @@ function initializeTimelineState(range) {
   this._timelineAppliedFrameIndex = -1
   this._timelineEventCount = 0
   this._timelineSituationCount = 0
+  this._timelineEventFetchKey = null
+  this._timelineFetchedGeneralEvents = []
+  this._timelineFetchedStrikeEvents = []
+  this._timelineCommodityFetchKey = null
+  this._timelineLastRenderedCursorMs = null
 
   const oldest = new Date(range.oldest)
   const newest = new Date(Math.min(new Date(range.newest).getTime(), Date.now()))

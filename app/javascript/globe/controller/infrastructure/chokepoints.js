@@ -194,11 +194,21 @@ export function applyChokepointsMethods(GlobeController) {
       : cpOrId
     if (!cp || !identifier) return
 
-    if (this._buildChokepointContext && this._setSelectedContext) {
-      this._setSelectedContext(this._buildChokepointContext(cp), {
-        openRightPanel: options.openRightPanel === true || options.contextOnly !== true,
-      })
+    if (!options.contextOnly && this._showCompactEntityDetail) {
+      this._showCompactEntityDetail("chokepoint", cp, { id: identifier, picked: options.picked })
     }
+
+    const baseContext = this._buildChokepointContext
+      ? this._buildChokepointContext(cp)
+      : null
+
+    if (!baseContext || !this._setSelectedContext) return
+
+    this._setSelectedContext(baseContext, {
+      openRightPanel: options.openRightPanel === true || options.contextOnly !== true,
+    })
+
+    if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
 
     this._chokepointLensRequestKey = `${identifier}:${Date.now()}`
     const requestKey = this._chokepointLensRequestKey
@@ -222,121 +232,5 @@ export function applyChokepointsMethods(GlobeController) {
       .catch((error) => {
         console.warn("Chokepoint lens failed:", error)
       })
-
-    if (options.contextOnly) {
-      if (this.hasDetailPanelTarget && !options.preserveDetailPanel) this.detailPanelTarget.style.display = "none"
-      return
-    }
-
-    const statusColors = { critical: "#f44336", elevated: "#ff9800", monitoring: "#ffc107", normal: "#4fc3f7" }
-    const color = statusColors[cp.status] || "#4fc3f7"
-    const snapshotStatus = this._chokepointSnapshotStatus || "pending"
-
-    // Flow chips
-    let flowsHtml = ""
-    if (cp.flows) {
-      Object.entries(cp.flows).forEach(([type, data]) => {
-        if (!data.pct) return
-        flowsHtml += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-          <span style="font:600 11px var(--gt-mono);color:#e0e0e0;text-transform:capitalize;">${type}</span>
-          <span style="font:700 11px var(--gt-mono);color:${color};">${data.pct}% of world</span>
-        </div>`
-        if (data.volume) flowsHtml += `<div style="font:400 9px var(--gt-mono);color:#888;padding:1px 0 4px;">${data.volume}</div>`
-        if (data.note) flowsHtml += `<div style="font:400 9px var(--gt-mono);color:#666;padding:1px 0 4px;">${data.note}</div>`
-      })
-    }
-
-    // Commodity signals
-    let commodityHtml = ""
-    if (cp.commodity_signals?.length) {
-      commodityHtml = cp.commodity_signals.map(c => {
-        const isUp = c.change_pct > 0
-        const cColor = isUp ? "#4caf50" : c.change_pct < 0 ? "#f44336" : "#888"
-        const changeStr = c.change_pct != null ? `${isUp ? "+" : ""}${c.change_pct}%` : ""
-        return `<button type="button" class="detail-chip" data-action="click->globe#selectContextNode" data-kind="commodity" data-id="${this._escapeHtml(c.symbol)}" data-title="${this._escapeHtml(c.name || c.symbol)}" data-summary="${this._escapeHtml(`${c.symbol} $${c.price} ${changeStr}`.trim())}" style="cursor:pointer;border:0;background:rgba(${isUp ? "76,175,80" : "244,67,54"},0.15);color:${cColor};">${c.symbol} $${c.price} ${changeStr}</button>`
-      }).join("")
-    }
-
-    // Risk factors
-    const risksHtml = (cp.risk_factors || []).map(r =>
-      `<div style="font:400 10px var(--gt-mono);color:#ff9800;padding:2px 0;">- ${this._escapeHtml(r)}</div>`
-    ).join("")
-
-    // Ships
-    const ships = cp.ships_nearby || {}
-
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${color};">
-        <i class="fa-solid fa-anchor" style="margin-right:6px;"></i>${this._escapeHtml(cp.name)}
-      </div>
-      <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono);letter-spacing:1px;margin-bottom:8px;">
-        ${cp.status.toUpperCase()}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px;">
-        ${this._statusChip(snapshotStatus, this._statusLabel(snapshotStatus, "snapshot"))}
-      </div>
-      <div style="font:400 10px var(--gt-mono);color:#aaa;margin-bottom:10px;line-height:1.4;">
-        ${this._escapeHtml(cp.description || "")}
-      </div>
-
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Ships</span>
-          <span class="detail-value" style="color:#26c6da;">${ships.total || 0}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Tankers</span>
-          <span class="detail-value">${ships.tankers || 0}</span>
-        </div>
-      </div>
-
-      ${flowsHtml ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono);color:#888;letter-spacing:1px;margin-bottom:6px;">TRADE FLOWS</div>
-          ${flowsHtml}
-        </div>
-      ` : ""}
-
-      ${commodityHtml ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono);color:#888;letter-spacing:1px;margin-bottom:6px;">MARKET SIGNALS</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">${commodityHtml}</div>
-        </div>
-      ` : ""}
-
-      ${cp.conflict_pulse?.length ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono);color:#888;letter-spacing:1px;margin-bottom:6px;">CONFLICT NEARBY</div>
-          ${cp.conflict_pulse.map(p => {
-            const label = p.theater || `${p.trend} (${p.score})`
-            const summary = [p.trend ? `score ${p.score} · ${p.trend}` : `score ${p.score}`, p.headline].filter(Boolean).join(" · ")
-            if (p.theater) {
-              return `<button type="button" class="detail-chip" data-action="click->globe#selectContextNode" data-kind="theater" data-id="${this._escapeHtml(p.theater)}" data-title="${this._escapeHtml(label)}" data-summary="${this._escapeHtml(summary)}" style="cursor:pointer;border:0;background:rgba(244,67,54,0.15);color:#f44336;">${this._escapeHtml(label)}</button>`
-            }
-            return `<span class="detail-chip" style="background:rgba(244,67,54,0.15);color:#f44336;">${this._escapeHtml(label)}</span>`
-          }).join("")}
-        </div>
-      ` : ""}
-
-      ${risksHtml ? `
-        <div style="margin:10px 0;">
-          <div style="font:600 9px var(--gt-mono);color:#888;letter-spacing:1px;margin-bottom:6px;">RISK FACTORS</div>
-          ${risksHtml}
-        </div>
-      ` : ""}
-
-      <button class="detail-track-btn" style="background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.4);color:#f44336;" data-action="click->globe#revealPulseConnections" data-lat="${cp.lat}" data-lng="${cp.lng}" data-signals="${this._escapeHtml(JSON.stringify(cp.conflict_pulse?.length ? { military_flights: 1 } : {}))}">
-        <i class="fa-solid fa-eye" style="margin-right:4px;"></i>Reveal Connected Layers
-      </button>
-
-      <button class="detail-track-btn" style="background:rgba(38,198,218,0.15);border-color:rgba(38,198,218,0.3);color:#26c6da;" data-action="click->globe#showSatVisibility" data-lat="${cp.lat}" data-lng="${cp.lng}">
-        <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>Show Overhead Satellites
-      </button>
-
-      ${this._connectionsPlaceholder()}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: EIA / UNCTAD / S&P Global</div>
-    `
-    this.detailPanelTarget.style.display = ""
-    this._fetchConnections("ship", cp.lat, cp.lng)
   }
 }

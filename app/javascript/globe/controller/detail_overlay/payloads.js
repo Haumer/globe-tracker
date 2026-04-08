@@ -417,6 +417,8 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
             chip("Chokepoint", "neutral"),
           ],
           accent: data?.status === "critical" ? "#f44336" : "#4fc3f7",
+          nodeRequest: firstPresent(data?.id, data?.name) ? { kind: "chokepoint", id: firstPresent(data?.id, data?.name) } : null,
+          focusHeight: 1000000,
         })
       }
       case "railway": {
@@ -626,6 +628,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           ]).join(" · "),
           chips: [chip(firstPresent(data?.category, "Market"), change < 0 ? "critical" : change > 0 ? "accent" : "neutral")],
           accent: change < 0 ? "#ef5350" : change > 0 ? "#4caf50" : "#ffc107",
+          nodeRequest: firstPresent(data?.symbol, data?.name) ? { kind: "commodity", id: firstPresent(data?.symbol, data?.name) } : null,
         })
       }
       case "insight": {

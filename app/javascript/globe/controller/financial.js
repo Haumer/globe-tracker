@@ -143,40 +143,19 @@ export function applyFinancialMethods(GlobeController) {
     this._financialEntities = []
   }
 
-  GlobeController.prototype.showCommodityDetail = function(item) {
-    if (this._buildCommodityContext && this._setSelectedContext) {
-      this._setSelectedContext(this._buildCommodityContext(item))
+  GlobeController.prototype.showCommodityDetail = function(item, options = {}) {
+    if (!item) return
+
+    if (!options.contextOnly && this._showCompactEntityDetail) {
+      this._showCompactEntityDetail("commodity", item, { id: item.symbol || item.name, picked: options.picked })
     }
 
-    const isUp = item.change_pct > 0
-    const changeColor = isUp ? "#4caf50" : item.change_pct < 0 ? "#f44336" : "#ffc107"
-    const changeStr = item.change_pct != null
-      ? `${isUp ? "+" : ""}${item.change_pct.toFixed(2)}%`
-      : "—"
+    if (this._buildCommodityContext && this._setSelectedContext) {
+      this._setSelectedContext(this._buildCommodityContext(item), {
+        openRightPanel: options.openRightPanel === true,
+      })
+    }
 
-    this.detailContentTarget.innerHTML = `
-      <div class="detail-callsign" style="color:${changeColor};">${item.name}</div>
-      <div class="detail-country">${item.region}</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Price</span>
-          <span class="detail-value">$${item.price.toFixed(item.category === "currency" ? 4 : 2)}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Change</span>
-          <span class="detail-value" style="color:${changeColor};">${changeStr}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Unit</span>
-          <span class="detail-value">${item.unit || "—"}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Category</span>
-          <span class="detail-value">${item.category}</span>
-        </div>
-      </div>
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${item.live_signal ? "Yahoo Finance signal" : "Alpha Vantage / ECB snapshot"}</div>
-    `
-    this.detailPanelTarget.style.display = ""
+    if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
   }
 }

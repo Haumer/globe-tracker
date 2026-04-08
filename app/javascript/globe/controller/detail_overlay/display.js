@@ -12,6 +12,11 @@ function shouldPreserveAnchoredHtml(state) {
   return !!state?._strikeMediaPersistent
 }
 
+function nodeRequestKey(nodeRequest) {
+  if (!nodeRequest?.kind || !nodeRequest?.id) return null
+  return `${nodeRequest.kind}:${nodeRequest.id}`
+}
+
 export function applyDetailOverlayDisplayMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailNow = function() {
     const highResNow = window.performance?.now?.()
@@ -280,6 +285,14 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       this._flyToCoordinates?.(lng, lat, state?.focusHeight || 1400000, { duration: 1.0 })
     }
 
+    const anchoredNodeKey = nodeRequestKey(state.nodeRequest)
+    const selectedNodeKey = nodeRequestKey(this._selectedContext?.nodeRequest)
+
+    if (anchoredNodeKey && anchoredNodeKey === selectedNodeKey) {
+      this._showRightPanel?.("context")
+      return
+    }
+
     if (state.nodeRequest && this._focusContextNode) {
       this._focusContextNode(state.nodeRequest, {
         title: state.title,
@@ -298,6 +311,14 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
 
     const state = anchoredStateById(this, event?.currentTarget?.dataset?.anchorId)
     if (!state) return
+
+    const anchoredNodeKey = nodeRequestKey(state.nodeRequest)
+    const selectedNodeKey = nodeRequestKey(this._selectedContext?.nodeRequest)
+
+    if (anchoredNodeKey && anchoredNodeKey === selectedNodeKey) {
+      this._showRightPanel?.("context")
+      return
+    }
 
     if (state.nodeRequest && this._focusContextNode) {
       this._focusContextNode(state.nodeRequest, {

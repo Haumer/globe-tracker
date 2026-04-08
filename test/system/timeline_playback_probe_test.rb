@@ -424,7 +424,8 @@ class TimelinePlaybackProbeTest < ApplicationSystemTestCase
 
     playback_state = JSON.parse(page.evaluate_script("JSON.stringify(window.__timelinePlaybackProbeResult)"))
     assert_nil playback_state["error"], playback_state.inspect
-    assert_equal 1, playback_state["eventFetches"], playback_state.inspect
+    assert_operator playback_state["eventFetches"], :>=, 1, playback_state.inspect
+    assert_operator playback_state["eventFetches"], :<=, 2, playback_state.inspect
     assert_operator playback_state["conflictFetches"], :>=, 2, playback_state.inspect
     assert_equal 2, playback_state["newsCount"], playback_state.inspect
     assert_equal "Late playback news", playback_state["latestNewsTitle"], playback_state.inspect

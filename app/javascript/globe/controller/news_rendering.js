@@ -222,10 +222,11 @@ export function applyNewsRenderingMethods(GlobeController) {
   }
 
   GlobeController.prototype._renderTimelineNews = function(events) {
-    this._clearNewsEntities()
     const dataSource = this.getNewsDataSource()
     dataSource.show = true
     this._newsArcData = []
+    this._timelineNewsEntityMap = this._timelineNewsEntityMap || new Map()
+    this._timelineNewsPulseMap = this._timelineNewsPulseMap || new Map()
 
     const categoryColors = {
       conflict: "#f44336",
@@ -238,7 +239,16 @@ export function applyNewsRenderingMethods(GlobeController) {
       other: "#90a4ae",
     }
 
-    events.forEach((ev, idx) => {
+    const sortedEvents = [...events].sort((a, b) => {
+      const aTime = a?.time ? new Date(a.time).getTime() : 0
+      const bTime = b?.time ? new Date(b.time).getTime() : 0
+      if (bTime !== aTime) return bTime - aTime
+      return stableTimelineNewsId(a).localeCompare(stableTimelineNewsId(b))
+    })
+    const nextEntityIds = new Set()
+    const nextPulseIds = new Set()
+
+    sortedEvents.forEach((ev, idx) => {
       const color = categoryColors[ev.category] || "#90a4ae"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
@@ -248,9 +258,12 @@ export function applyNewsRenderingMethods(GlobeController) {
       const labelText = idx < 12 ? this._truncateNewsLabel(title, 36) : ""
       const sourceName = ev.source ? `${this._escapeHtml(ev.source)} · ` : ""
       const pointSize = (idx < 12 ? 13 : 9) * (0.78 + appear * 0.22)
+      const baseId = stableTimelineNewsId(ev)
+      const entityId = `timeline-news-${baseId}`
+      const pulseId = `timeline-news-pulse-${baseId}`
+      nextEntityIds.add(entityId)
 
-      const entity = dataSource.entities.add({
-        id: `timeline-news-${ev.id || idx}`,
+      const entityConfig = {
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
           pixelSize: pointSize,
@@ -279,14 +292,23 @@ export function applyNewsRenderingMethods(GlobeController) {
           ${ev.time ? `<div style="font-size: 11px; color: #8892a4; margin-bottom: 4px;">${this._escapeHtml(ev.time)}</div>` : ""}
           <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" style="color: ${color}; font-size: 11px;">Read →</a>
         </div>`,
-      })
+      }
 
-      this._newsEntities.push(entity)
+      let entity = this._timelineNewsEntityMap.get(entityId)
+      if (!entity) {
+        entity = dataSource.entities.add({ id: entityId, ...entityConfig })
+        this._timelineNewsEntityMap.set(entityId, entity)
+      } else {
+        entity.position = entityConfig.position
+        entity.point = entityConfig.point
+        entity.label = entityConfig.label
+        entity.description = entityConfig.description
+      }
 
       if (pulse > 0.08) {
+        nextPulseIds.add(pulseId)
         const pulseProgress = 1 - pulse
-        const ring = dataSource.entities.add({
-          id: `timeline-news-pulse-${ev.id || idx}`,
+        const ringConfig = {
           position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
           ellipse: {
             semiMinorAxis: 10000 + pulseProgress * 120000,
@@ -299,11 +321,33 @@ export function applyNewsRenderingMethods(GlobeController) {
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             classificationType: Cesium.ClassificationType.BOTH,
           },
-        })
+        }
 
-        this._newsEntities.push(ring)
+        let ring = this._timelineNewsPulseMap.get(pulseId)
+        if (!ring) {
+          ring = dataSource.entities.add({ id: pulseId, ...ringConfig })
+          this._timelineNewsPulseMap.set(pulseId, ring)
+        } else {
+          ring.position = ringConfig.position
+          ring.ellipse = ringConfig.ellipse
+        }
       }
     })
+
+    this._timelineNewsEntityMap.forEach((entity, id) => {
+      if (nextEntityIds.has(id)) return
+      dataSource.entities.remove(entity)
+      this._timelineNewsEntityMap.delete(id)
+    })
+    this._timelineNewsPulseMap.forEach((entity, id) => {
+      if (nextPulseIds.has(id)) return
+      dataSource.entities.remove(entity)
+      this._timelineNewsPulseMap.delete(id)
+    })
+    this._newsEntities = [
+      ...this._timelineNewsEntityMap.values(),
+      ...this._timelineNewsPulseMap.values(),
+    ]
 
     this._renderRegionFlows()
 
@@ -682,6 +726,8 @@ export function applyNewsRenderingMethods(GlobeController) {
     const ds = this.getNewsDataSource()
     this._newsEntities.forEach(e => ds.entities.remove(e))
     this._newsEntities = []
+    this._timelineNewsEntityMap?.clear?.()
+    this._timelineNewsPulseMap?.clear?.()
     this._clearNewsArcEntities()
   }
 
@@ -711,4 +757,15 @@ export function applyNewsRenderingMethods(GlobeController) {
     }
     this._newsArcEntities = kept
   }
+}
+
+function stableTimelineNewsId(event) {
+  if (event?.id != null && event.id !== "") return String(event.id)
+  const parts = [
+    event?.time || "",
+    Number.isFinite(event?.lat) ? event.lat.toFixed(4) : "",
+    Number.isFinite(event?.lng) ? event.lng.toFixed(4) : "",
+    event?.title || event?.name || "",
+  ]
+  return parts.join("|")
 }

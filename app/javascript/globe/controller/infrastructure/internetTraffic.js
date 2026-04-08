@@ -47,8 +47,21 @@ export function applyTrafficMethods(GlobeController) {
     }
   }
 
-  GlobeController.prototype.fetchTraffic = async function() {
-    this._toast("Loading internet traffic...")
+  GlobeController.prototype.fetchTraffic = async function(options = {}) {
+    const silent = options.silent || this._timelineActive
+
+    if (this._timelineActive && this._timelineCursor) {
+      const bucket = Math.floor(this._timelineCursor.getTime() / (60 * 60 * 1000))
+      if (this._timelineTrafficBucket === bucket && this._trafficData) {
+        this.renderTraffic()
+        return
+      }
+      this._timelineTrafficBucket = bucket
+    } else {
+      this._timelineTrafficBucket = null
+    }
+
+    if (!silent) this._toast("Loading internet traffic...")
     try {
       let url = "/api/internet_traffic"
       if (this._timelineActive && this._timelineCursor) {
@@ -66,17 +79,19 @@ export function applyTrafficMethods(GlobeController) {
       }
       this.renderTraffic()
       if (!hasData) {
-        this._toast(
-          sourceConfigured ? "No internet traffic snapshot is loaded locally" : "Cloudflare Radar is not configured locally",
-          "error"
-        )
+        if (!silent) {
+          this._toast(
+            sourceConfigured ? "No internet traffic snapshot is loaded locally" : "Cloudflare Radar is not configured locally",
+            "error"
+          )
+        }
         return
       }
       this._markFresh("traffic")
-      this._toastHide()
+      if (!silent) this._toastHide()
     } catch (e) {
       console.error("Failed to fetch internet traffic:", e)
-      this._toast("Failed to load internet traffic", "error")
+      if (!silent) this._toast("Failed to load internet traffic", "error")
     }
   }
 

@@ -361,7 +361,7 @@ export function applyTimelineControlMethods(GlobeController) {
 
     if (this.conflictsVisible) tasks.push(Promise.resolve(this.fetchConflicts?.()))
     if (this.financialVisible) tasks.push(Promise.resolve(this.fetchCommodities?.()))
-    if (this.trafficVisible) tasks.push(Promise.resolve(this.fetchTraffic?.()))
+    if (this.trafficVisible) tasks.push(Promise.resolve(this.fetchTraffic?.({ silent: true })))
     if (this.fireHotspotsVisible) tasks.push(Promise.resolve(this.fetchFireHotspots?.()))
     if (Object.values(this.satCategoryVisible || {}).some(Boolean)) {
       tasks.push(Promise.resolve(this.fetchPlaybackSatellites?.()))
@@ -413,7 +413,7 @@ function autoEnablePlaybackLayers() {
 
   this._timelineAutoEnabledLayers = []
 
-  if (!movementPlaybackLayersVisible(this)) {
+  if (this.hasActiveFilter?.() && !movementPlaybackLayersVisible(this)) {
     movementDefs.forEach((def) => {
       if (this[def.visibleProp]) return
       if (def.hasTargetProp && !this[def.hasTargetProp]) return

@@ -1,4 +1,3 @@
-import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
 const EVENT_TIMELINE_WINDOWS_MS = {
@@ -11,6 +10,8 @@ const EVENT_TIMELINE_WINDOWS_MS = {
   notam: 48 * 60 * 60 * 1000,
 }
 const STRIKE_TIMELINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+const EVENT_APPEAR_WINDOW_MS = 15 * 60 * 1000
+const EVENT_PULSE_WINDOW_MS = 30 * 60 * 1000
 
 export function applyTimelineEventMethods(GlobeController) {
   GlobeController.prototype._timelineUpdateEvents = async function() {
@@ -41,7 +42,9 @@ export function applyTimelineEventMethods(GlobeController) {
       return 0
     }
 
-    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : (getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds)
+    // Playback events should be global by default. Only spatially scope them when the
+    // analyst explicitly applies a country/area filter.
+    const bounds = this.hasActiveFilter() ? this.getFilterBounds() : null
 
     try {
       const groupedTypes = groupTimelineTypesByWindow(generalTypes)
@@ -178,6 +181,8 @@ export function applyTimelineEventMethods(GlobeController) {
           cluster_id: event.cluster_id,
           time: event.time,
           timelineAlpha: timelineWindowAlpha(event.time, cursorMs, EVENT_TIMELINE_WINDOWS_MS.news),
+          timelineAppear: timelineAppearProgress(event.time, cursorMs),
+          timelinePulse: timelinePulseFactor(event.time, cursorMs),
       }))
       this._newsData = newsData
       this._renderTimelineNews(newsData)
@@ -398,5 +403,27 @@ function timelineWindowAlpha(eventTime, cursorOrMs, windowMs) {
 
   const ageMs = Math.max(cursorMs - eventMs, 0)
   const progress = Math.min(ageMs / windowMs, 1)
-  return 0.18 + (1 - progress) * 0.82
+  const fadeOut = 0.18 + (1 - progress) * 0.82
+  const fadeIn = 0.28 + timelineAppearProgress(eventTime, cursorMs) * 0.72
+  return Math.min(1, fadeOut * fadeIn)
+}
+
+function timelineAppearProgress(eventTime, cursorOrMs) {
+  const eventMs = eventTime ? new Date(eventTime).getTime() : Number.NaN
+  const cursorMs = cursorOrMs instanceof Date ? cursorOrMs.getTime() : Number(cursorOrMs)
+  if (!Number.isFinite(eventMs) || !Number.isFinite(cursorMs)) return 1
+
+  const ageMs = cursorMs - eventMs
+  if (ageMs <= 0) return 0
+  return Math.min(ageMs / EVENT_APPEAR_WINDOW_MS, 1)
+}
+
+function timelinePulseFactor(eventTime, cursorOrMs) {
+  const eventMs = eventTime ? new Date(eventTime).getTime() : Number.NaN
+  const cursorMs = cursorOrMs instanceof Date ? cursorOrMs.getTime() : Number(cursorOrMs)
+  if (!Number.isFinite(eventMs) || !Number.isFinite(cursorMs)) return 0
+
+  const ageMs = cursorMs - eventMs
+  if (ageMs < 0 || ageMs > EVENT_PULSE_WINDOW_MS) return 0
+  return 1 - (ageMs / EVENT_PULSE_WINDOW_MS)
 }

@@ -1,4 +1,3 @@
-import { getPlaybackBounds } from "globe/camera"
 import { getDataSource } from "globe/utils"
 
 export function applyTimelineFrameMethods(GlobeController) {
@@ -294,10 +293,7 @@ function resolveTimelineBounds() {
     if (bounds) this._timelinePlaybackBounds = bounds
     return bounds
   }
-
-  const bounds = getPlaybackBounds(this.viewer) || this._timelinePlaybackBounds || null
-  if (bounds) this._timelinePlaybackBounds = bounds
-  return bounds
+  return null
 }
 
 function syncTimelineRangeFromResponse(data) {

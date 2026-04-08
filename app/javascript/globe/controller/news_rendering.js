@@ -242,18 +242,21 @@ export function applyNewsRenderingMethods(GlobeController) {
       const color = categoryColors[ev.category] || "#90a4ae"
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
+      const appear = Number.isFinite(ev.timelineAppear) ? ev.timelineAppear : 1
+      const pulse = Number.isFinite(ev.timelinePulse) ? ev.timelinePulse : 0
       const title = ev.title || ev.name || "Untitled"
       const labelText = idx < 12 ? this._truncateNewsLabel(title, 36) : ""
       const sourceName = ev.source ? `${this._escapeHtml(ev.source)} · ` : ""
+      const pointSize = (idx < 12 ? 13 : 9) * (0.78 + appear * 0.22)
 
       const entity = dataSource.entities.add({
         id: `timeline-news-${ev.id || idx}`,
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
-          pixelSize: idx < 12 ? 13 : 9,
+          pixelSize: pointSize,
           color: cesiumColor.withAlpha(0.88 * alpha),
           outlineColor: cesiumColor.withAlpha(0.35 * alpha),
-          outlineWidth: idx < 12 ? 3 : 2,
+          outlineWidth: (idx < 12 ? 3 : 2) + pulse * 2.5,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 1e7, 0.45),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -279,6 +282,26 @@ export function applyNewsRenderingMethods(GlobeController) {
       })
 
       this._newsEntities.push(entity)
+
+      if (pulse > 0.02) {
+        const ring = dataSource.entities.add({
+          id: `timeline-news-pulse-${ev.id || idx}`,
+          position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
+          ellipse: {
+            semiMinorAxis: 20000 + (1 - pulse) * 150000,
+            semiMajorAxis: 20000 + (1 - pulse) * 150000,
+            material: cesiumColor.withAlpha(0.02 + pulse * 0.06 * alpha),
+            outline: true,
+            outlineColor: cesiumColor.withAlpha(0.14 + pulse * 0.28 * alpha),
+            outlineWidth: 1 + pulse,
+            height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
+          },
+        })
+
+        this._newsEntities.push(ring)
+      }
     })
 
     this._renderRegionFlows()

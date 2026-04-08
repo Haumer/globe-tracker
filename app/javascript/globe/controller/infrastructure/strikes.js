@@ -217,23 +217,26 @@ export function applyStrikesMethods(GlobeController) {
 
     const Cesium = window.Cesium
     const dataSource = this.getStrikesDataSource()
-    const bounds = this.getViewportBounds()
+    const bounds = this._timelineActive && !(this.hasActiveFilter && this.hasActiveFilter())
+      ? null
+      : this.getViewportBounds()
     const showVerifiedStrikes = this._verifiedStrikesLayerVisible()
     const showHeatSignatures = this._heatSignaturesLayerVisible()
+    const firmsColor = cachedColor("#e040fb")
+    const verifiedColor = cachedColor("#4caf50")
 
     dataSource.entities.suspendEvents()
 
     // ── Render FIRMS detections ──────────────────────────────
     if (this._strikeDetections?.length) {
-      const firmsColor = cachedColor("#e040fb")
-      const verifiedColor = cachedColor("#4caf50")
-
       this._strikeDetections.forEach(s => {
         if (bounds && (s.lat < bounds.lamin || s.lat > bounds.lamax || s.lng < bounds.lomin || s.lng > bounds.lomax)) return
         if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(s.lat, s.lng)) return
 
         const frp = s.frp || 1
         const alpha = Number.isFinite(s.timelineAlpha) ? s.timelineAlpha : 1
+        const pulse = Number.isFinite(s.timelinePulse) ? s.timelinePulse : 0
+        const timelinePulseOnly = this._timelineActive && Number.isFinite(s.timelinePulse)
         const isVerified = isVerifiedStrike(s)
         if ((isVerified && !showVerifiedStrikes) || (!isVerified && !showHeatSignatures)) return
         const confidence = normalizedStrikeConfidence(s)
@@ -241,17 +244,23 @@ export function applyStrikesMethods(GlobeController) {
         const confScale = isVerified ? 1.4 : confidence === "high" ? 1.3 : confidence === "medium" ? 1.0 : 0.7
 
         // Glow ring
-        if (frp > 10 && confidence !== "low") {
+        if ((timelinePulseOnly && pulse > 0.08) || (frp > 10 && confidence !== "low")) {
+          const pulseProgress = 1 - pulse
+          const pulseAlpha = 0.18 + pulse * 0.82
+          const staticRadius = Math.min(2000 + frp * 50, 15000)
+          const ringRadius = timelinePulseOnly
+            ? 8000 + pulseProgress * 140000
+            : staticRadius
           const ring = dataSource.entities.add({
             id: `strike-ring-${s.id}`,
             position: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, 0),
             ellipse: {
-              semiMinorAxis: Math.min(2000 + frp * 50, 15000),
-              semiMajorAxis: Math.min(2000 + frp * 50, 15000),
-              material: color.withAlpha((isVerified ? 0.15 : 0.1) * alpha),
+              semiMinorAxis: ringRadius,
+              semiMajorAxis: ringRadius,
+              material: color.withAlpha(timelinePulseOnly ? (0.08 * pulseAlpha) : ((isVerified ? 0.15 : 0.1) * alpha)),
               outline: true,
-              outlineColor: color.withAlpha((isVerified ? 0.4 : 0.3) * alpha),
-              outlineWidth: 1,
+              outlineColor: color.withAlpha(timelinePulseOnly ? (0.95 * pulseAlpha) : ((isVerified ? 0.4 : 0.3) * alpha)),
+              outlineWidth: timelinePulseOnly ? (1.8 + pulse * 1.2) : 1,
               height: 0,
               heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
               classificationType: Cesium.ClassificationType.BOTH,
@@ -288,6 +297,28 @@ export function applyStrikesMethods(GlobeController) {
         if (bounds && (gc.lat < bounds.lamin || gc.lat > bounds.lamax || gc.lng < bounds.lomin || gc.lng > bounds.lomax)) return
         if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(gc.lat, gc.lng)) return
         const alpha = Number.isFinite(gc.timelineAlpha) ? gc.timelineAlpha : 1
+        const pulse = Number.isFinite(gc.timelinePulse) ? gc.timelinePulse : 0
+
+        if (this._timelineActive && pulse > 0.08) {
+          const pulseProgress = 1 - pulse
+          const pulseAlpha = 0.18 + pulse * 0.82
+          const ring = dataSource.entities.add({
+            id: `gc-ring-${gc.id}`,
+            position: Cesium.Cartesian3.fromDegrees(gc.lng, gc.lat, 0),
+            ellipse: {
+              semiMinorAxis: 9000 + pulseProgress * 150000,
+              semiMajorAxis: 9000 + pulseProgress * 150000,
+              material: verifiedColor.withAlpha(0.08 * pulseAlpha),
+              outline: true,
+              outlineColor: verifiedColor.withAlpha(0.95 * pulseAlpha),
+              outlineWidth: 1.8 + pulse * 1.2,
+              height: 0,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              classificationType: Cesium.ClassificationType.BOTH,
+            },
+          })
+          this._strikeEntities.push(ring)
+        }
 
         const entity = dataSource.entities.add({
           id: `gc-${gc.id}`,

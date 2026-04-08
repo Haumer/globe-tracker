@@ -1,5 +1,7 @@
 import { createSatelliteIcon, getDataSource } from "globe/utils"
 
+const TIMELINE_SATELLITE_BUCKET_MS = 15 * 60 * 1000
+
 export function applySatDataMethods(GlobeController) {
   GlobeController.prototype.getSatellitesDataSource = function() { return getDataSource(this.viewer, this._ds, "satellites") }
   GlobeController.prototype.getSatOrbitsDataSource = function() { return getDataSource(this.viewer, this._ds, "sat-orbits") }
@@ -40,7 +42,15 @@ export function applySatDataMethods(GlobeController) {
       .filter(([, visible]) => visible)
       .map(([category]) => category)
     if (categories.length === 0) {
+      this._timelineSatelliteFetchKey = null
       this.satelliteData = []
+      this.updateSatellitePositions()
+      return
+    }
+
+    const bucketEndMs = Math.ceil(this._timelineCursor.getTime() / TIMELINE_SATELLITE_BUCKET_MS) * TIMELINE_SATELLITE_BUCKET_MS
+    const fetchKey = `${bucketEndMs}:${categories.slice().sort().join(",")}`
+    if (this._timelineSatelliteFetchKey === fetchKey && Array.isArray(this.satelliteData)) {
       this.updateSatellitePositions()
       return
     }
@@ -48,13 +58,14 @@ export function applySatDataMethods(GlobeController) {
     this._toast("Loading historical satellites...")
     try {
       const params = new URLSearchParams({
-        at: this._timelineCursor.toISOString(),
+        at: new Date(bucketEndMs).toISOString(),
         categories: categories.join(","),
       })
       const response = await fetch(`/api/playback/satellites?${params.toString()}`)
       if (!response.ok) return
 
       const data = await response.json()
+      this._timelineSatelliteFetchKey = fetchKey
       this.satelliteData = data.satellites || []
       this.updateSatellitePositions()
       this._toastHide()

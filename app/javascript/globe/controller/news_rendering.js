@@ -308,15 +308,16 @@ export function applyNewsRenderingMethods(GlobeController) {
       if (pulse > 0.08) {
         nextPulseIds.add(pulseId)
         const pulseProgress = 1 - pulse
+        const pulseAlpha = 0.18 + pulse * 0.82
         const ringConfig = {
           position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
           ellipse: {
-            semiMinorAxis: 10000 + pulseProgress * 120000,
-            semiMajorAxis: 10000 + pulseProgress * 120000,
-            material: cesiumColor.withAlpha(0.01 + pulse * 0.03 * alpha),
+            semiMinorAxis: 16000 + pulseProgress * 190000,
+            semiMajorAxis: 16000 + pulseProgress * 190000,
+            material: cesiumColor.withAlpha(0.06 * pulseAlpha),
             outline: true,
-            outlineColor: cesiumColor.withAlpha(pulse * 0.3 * alpha),
-            outlineWidth: 1.2 + pulse * 0.8,
+            outlineColor: cesiumColor.withAlpha(0.9 * pulseAlpha),
+            outlineWidth: 1.8 + pulse * 1.4,
             height: 0,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             classificationType: Cesium.ClassificationType.BOTH,
@@ -355,6 +356,7 @@ export function applyNewsRenderingMethods(GlobeController) {
       this._renderNewsArticleList()
       this._setNewsDotOpacity(0.25)
     }
+    this._requestRender()
   }
 
   GlobeController.prototype._getSourceLocation = function(url) {

@@ -172,6 +172,8 @@ export function applySituationalEventMethods(GlobeController) {
       const mag = eq.mag || 0
       const t = Math.min(Math.max((mag - 2.5) / 5.5, 0), 1)
       const alpha = Number.isFinite(eq.timelineAlpha) ? eq.timelineAlpha : 1
+      const pulse = Number.isFinite(eq.timelinePulse) ? eq.timelinePulse : 0
+      const timelinePulseOnly = this._timelineActive && Number.isFinite(eq.timelinePulse)
       const pixelSize = 6 + t * 14
       const pulseScale = 2 + t * 4
 
@@ -182,16 +184,23 @@ export function applySituationalEventMethods(GlobeController) {
       else if (mag < 6) color = cachedColor("#ef5350")
       else color = cachedColor("#d50000")
 
+      const baseRadius = mag * 15000
+      const pulseProgress = 1 - pulse
+      const pulseAlpha = 0.18 + pulse * 0.82
+      const ringRadius = timelinePulseOnly
+        ? baseRadius + pulseProgress * Math.max(50000, mag * 70000)
+        : baseRadius
+
       const ring = dataSource.entities.add({
         id: `eq-ring-${eq.id}`,
         position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 0),
         ellipse: {
-          semiMinorAxis: mag * 15000,
-          semiMajorAxis: mag * 15000,
-          material: color.withAlpha(0.08 * alpha),
+          semiMinorAxis: ringRadius,
+          semiMajorAxis: ringRadius,
+          material: color.withAlpha(timelinePulseOnly ? (0.06 * pulseAlpha) : (0.08 * alpha)),
           outline: true,
-          outlineColor: color.withAlpha(0.25 * alpha),
-          outlineWidth: 1,
+          outlineColor: color.withAlpha(timelinePulseOnly ? (0.95 * pulseAlpha) : (0.25 * alpha)),
+          outlineWidth: timelinePulseOnly ? (1.8 + pulse * 1.2) : 1,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           classificationType: Cesium.ClassificationType.BOTH,
@@ -226,6 +235,7 @@ export function applySituationalEventMethods(GlobeController) {
       this._earthquakeEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearEarthquakeEntities = function() {
@@ -499,6 +509,8 @@ export function applySituationalEventMethods(GlobeController) {
       const catInfo = this.eonetCategoryIcons[ev.categoryId] || { icon: "circle-exclamation", color: "#78909c" }
       const color = Cesium.Color.fromCssColorString(catInfo.color)
       const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
+      const pulse = Number.isFinite(ev.timelinePulse) ? ev.timelinePulse : 0
+      const timelinePulseOnly = this._timelineActive && Number.isFinite(ev.timelinePulse)
 
       if (ev.geometryPoints.length > 1) {
         const trailPositions = ev.geometryPoints
@@ -518,16 +530,21 @@ export function applySituationalEventMethods(GlobeController) {
       }
 
       const ringRadius = ev.magnitudeValue ? Math.min(ev.magnitudeValue * 500, 100000) : 30000
+      const pulseProgress = 1 - pulse
+      const pulseAlpha = 0.18 + pulse * 0.82
+      const animatedRadius = timelinePulseOnly
+        ? ringRadius + pulseProgress * Math.max(45000, ringRadius * 2.1)
+        : ringRadius
       const ring = dataSource.entities.add({
         id: `eonet-ring-${ev.id}`,
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 0),
         ellipse: {
-          semiMinorAxis: ringRadius,
-          semiMajorAxis: ringRadius,
-          material: color.withAlpha(0.06 * alpha),
+          semiMinorAxis: animatedRadius,
+          semiMajorAxis: animatedRadius,
+          material: color.withAlpha(timelinePulseOnly ? (0.06 * pulseAlpha) : (0.06 * alpha)),
           outline: true,
-          outlineColor: color.withAlpha(0.2 * alpha),
-          outlineWidth: 1,
+          outlineColor: color.withAlpha(timelinePulseOnly ? (0.95 * pulseAlpha) : (0.2 * alpha)),
+          outlineWidth: timelinePulseOnly ? (1.8 + pulse * 1.2) : 1,
           height: 0,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           classificationType: Cesium.ClassificationType.BOTH,
@@ -562,6 +579,7 @@ export function applySituationalEventMethods(GlobeController) {
       this._naturalEventEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    this._requestRender()
   }
 
   GlobeController.prototype._clearNaturalEventEntities = function() {

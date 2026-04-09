@@ -5,26 +5,23 @@
   top: 50%;
   right: 8px;
   transform: translateY(-50%);
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   pointer-events: none;
 
   &[data-freshness="fresh"] {
-    background: #66bb6a;
-    box-shadow: 0 0 6px #66bb6a;
+    background: #7fae86;
     border-radius: 50%;
   }
   &[data-freshness="warm"] {
-    background: #ffa726;
-    box-shadow: 0 0 6px #ffa726;
+    background: #d4a765;
     border-radius: 50%;
     transform: translateY(-50%) rotate(45deg);
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   &[data-freshness="stale"] {
-    background: #ef5350;
-    box-shadow: 0 0 6px #ef5350;
+    background: #d87872;
     border-radius: 1px;
   }
 }
@@ -37,11 +34,12 @@
   font: 600 8px 'JetBrains Mono', monospace;
   line-height: 1;
   pointer-events: none;
+  color: #5c6472;
 
   &[data-freshness="warm"] {
-    color: #ffa726;
+    color: #d4a765;
   }
   &[data-freshness="stale"] {
-    color: #ef5350;
+    color: #d87872;
   }
 }

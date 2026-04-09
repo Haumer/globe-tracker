@@ -3,56 +3,51 @@
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   padding: 24px;
 
   .onboarding-card {
     width: 200px;
     padding: 24px 16px;
-    background: var(--gt-panel);
-    border: 1px solid var(--gt-border);
-    border-radius: 12px;
+    background: #0f1219;
+    border: 1px solid #1f2633;
+    border-radius: 2px;
     text-align: center;
     cursor: pointer;
-    transition: border-color 0.15s, transform 0.15s;
+    transition: border-color 0.12s;
 
     &:hover {
-      border-color: var(--gt-accent);
-      transform: translateY(-2px);
+      border-color: #2f3642;
     }
   }
 
   .onboarding-icon {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     margin: 0 auto 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
-    background: rgba(79, 195, 247, 0.1);
-    color: var(--ql-color, var(--gt-accent));
-    font-size: 20px;
+    border-radius: 2px;
+    background: rgba(168, 194, 219, 0.08);
+    color: #8a94a6;
+    font-size: 18px;
   }
 
   .onboarding-title {
-    font-family: var(--gt-sans);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--gt-text-bright);
+    font: 600 13px 'Inter', -apple-system, sans-serif;
+    color: #e6ecf3;
     margin-bottom: 6px;
   }
 
   .onboarding-desc {
-    font-family: var(--gt-mono);
-    font-size: 10px;
-    color: var(--gt-text-dim);
+    font: 400 10px 'JetBrains Mono', monospace;
+    color: #5c6472;
     line-height: 1.4;
   }
 
@@ -62,18 +57,19 @@
     left: 50%;
     transform: translateX(-50%);
     background: none;
-    border: 1px solid var(--gt-border);
-    border-radius: 6px;
-    color: var(--gt-text-dim);
-    font-family: var(--gt-mono);
-    font-size: 11px;
+    border: 1px solid #1f2633;
+    border-radius: 2px;
+    color: #5c6472;
+    font: 500 11px 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
     padding: 6px 16px;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.12s, border-color 0.12s;
 
     &:hover {
-      color: var(--gt-text);
-      border-color: var(--gt-border-hover);
+      color: #e6ecf3;
+      border-color: #2f3642;
     }
   }
 }

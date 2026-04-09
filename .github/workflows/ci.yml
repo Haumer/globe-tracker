@@ -25,9 +25,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       RAILS_ENV: test
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/globe_tracker_test
+      REDIS_URL: redis://localhost:6379/1
       CESIUM_ION_TOKEN: test_token
       SECRET_KEY_BASE: test_secret_key_base_for_ci_only
 
@@ -36,16 +47,14 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3.5'
+          ruby-version: .ruby-version
           bundler-cache: true
 
       - name: Setup database
-        run: |
-          bin/rails db:schema:load
+        run: bin/rails db:schema:load
 
       - name: Run tests
-        run: |
-          bin/rails test
+        run: bin/rails test
 
   lint:
     runs-on: ubuntu-latest
@@ -54,7 +63,7 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3.5'
+          ruby-version: .ruby-version
           bundler-cache: true
 
       - name: Security audit

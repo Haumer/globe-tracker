@@ -1,12 +1,13 @@
-// ─── News arc controls popover ──────────────────────────────────
+// ─── Arc controls popover ───────────────────────────────────────
 .arc-controls {
   padding: 4px 10px 4px 28px;
   margin-bottom: 2px;
 
   .arc-controls-title {
-    font: 600 9px var(--gt-mono);
-    color: #ffab40;
+    font: 600 9px 'JetBrains Mono', monospace;
+    color: #8a94a6;
     letter-spacing: 1.2px;
+    text-transform: uppercase;
     margin-bottom: 6px;
   }
 
@@ -15,26 +16,26 @@
     align-items: center;
     gap: 5px;
     cursor: pointer;
-    font: 500 9px var(--gt-mono);
-    color: var(--gt-text-dim);
+    font: 500 9px 'JetBrains Mono', monospace;
+    color: #5c6472;
     letter-spacing: 0.5px;
     text-transform: uppercase;
 
     input[type="checkbox"] { display: none; }
 
     input:checked ~ .arc-mini-track {
-      background: var(--gt-accent);
+      background: #a8c2db;
       &::after { transform: translateX(10px); }
     }
 
-    input:checked ~ span:last-child { color: var(--gt-text); }
+    input:checked ~ span:last-child { color: #e6ecf3; }
   }
 
   .arc-mini-track {
     position: relative;
     width: 20px;
     height: 10px;
-    background: rgba(255, 255, 255, 0.08);
+    background: #1f2633;
     border-radius: 5px;
     flex-shrink: 0;
     transition: background 0.15s;
@@ -46,14 +47,14 @@
       left: 2px;
       width: 6px;
       height: 6px;
-      background: rgba(255, 255, 255, 0.5);
+      background: #5c6472;
       border-radius: 50%;
       transition: transform 0.15s, background 0.15s;
     }
   }
 
   .arc-mini-toggle input:checked ~ .arc-mini-track::after {
-    background: #fff;
+    background: #0f1219;
   }
 
   .arc-controls-row {
@@ -66,8 +67,8 @@
     &:last-child { margin-bottom: 0; }
 
     label:not(.arc-mini-toggle) {
-      font: 500 9px var(--gt-mono);
-      color: var(--gt-text-dim);
+      font: 500 9px 'JetBrains Mono', monospace;
+      color: #5c6472;
       letter-spacing: 0.5px;
       text-transform: uppercase;
       white-space: nowrap;
@@ -75,22 +76,22 @@
 
     select {
       flex: 1;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--gt-border);
-      border-radius: 4px;
-      color: var(--gt-text);
-      font: 500 10px var(--gt-mono);
+      background: #0f1219;
+      border: 1px solid #1f2633;
+      border-radius: 2px;
+      color: #e6ecf3;
+      font: 500 10px 'JetBrains Mono', monospace;
       padding: 3px 6px;
       cursor: pointer;
       outline: none;
       max-width: 120px;
 
-      &:hover { border-color: var(--gt-border-hover); }
-      &:focus { border-color: rgba(255, 171, 64, 0.3); }
+      &:hover { border-color: #2f3642; }
+      &:focus { border-color: #2f3642; }
 
       option {
-        background: #0a0d14;
-        color: var(--gt-text);
+        background: #0f1219;
+        color: #e6ecf3;
       }
     }
   }

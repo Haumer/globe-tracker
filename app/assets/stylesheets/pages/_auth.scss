@@ -1,45 +1,16 @@
 // ═══════════════════════════════════════════════════════════
-// Auth — Precision Instrument
+// Auth — Serious Design Language
 // ═══════════════════════════════════════════════════════════
 
 .devise-page {
   min-height: 100vh;
-  background: #0a0c10;
-  color: #dce4f0;
-
-  // Faint coordinate grid — subtle, not cosplay
-  &::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(79, 195, 247, 0.018) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(79, 195, 247, 0.018) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(0,0,0,0.5), transparent);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  // Warm radial glow behind the card area
-  &::after {
-    content: '';
-    position: fixed;
-    width: 800px;
-    height: 800px;
-    left: 50%;
-    top: 42%;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(79, 195, 247, 0.03) 0%, rgba(255, 152, 0, 0.015) 40%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
+  background: #0b0d10;
+  color: #e6ecf3;
 }
 
 .devise-page .globe-nav {
-  background: rgba(10, 12, 16, 0.85);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
+  background: #161b24;
+  border-bottom: 1px solid #1f2633;
   position: relative;
   z-index: 2;
 }
@@ -57,32 +28,14 @@
 }
 
 // ── Panel ────────────────────────────────────────────────
-// Double-border technique: outer card border + inner highlight
 
 .auth-panel {
   width: 100%;
   max-width: 424px;
   position: relative;
-  border-radius: 14px;
-  background:
-    linear-gradient(170deg, rgba(18, 22, 32, 0.95) 0%, rgba(12, 15, 22, 0.98) 100%);
-  border: 1px solid rgba(79, 195, 247, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 24px 80px -12px rgba(0, 0, 0, 0.5),
-    0 2px 12px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-
-  // Top-edge accent line
-  &::before {
-    content: '';
-    position: absolute;
-    top: -1px;
-    left: 32px;
-    right: 32px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(79, 195, 247, 0.2) 30%, rgba(79, 195, 247, 0.25) 50%, rgba(79, 195, 247, 0.2) 70%, transparent);
-  }
+  border-radius: 2px;
+  background: #0f1219;
+  border: 1px solid #1f2633;
 }
 
 .auth-panel-inner {
@@ -96,7 +49,7 @@
   font: 500 9px 'JetBrains Mono', monospace;
   letter-spacing: 3.5px;
   text-transform: uppercase;
-  color: rgba(79, 195, 247, 0.5);
+  color: #8a94a6;
 
   // Small accent dot before text
   &::before {
@@ -105,7 +58,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: rgba(79, 195, 247, 0.45);
+    background: #a8c2db;
     margin-right: 8px;
     vertical-align: middle;
     position: relative;
@@ -115,15 +68,15 @@
 
 .auth-panel-title {
   margin: 0;
-  font: 700 26px 'DM Sans', sans-serif;
+  font: 700 26px 'Inter', -apple-system, sans-serif;
   letter-spacing: -0.6px;
-  color: rgba(235, 240, 250, 0.95);
+  color: #e6ecf3;
 }
 
 .auth-panel-copy {
   margin: 8px 0 0;
-  font: 400 13px/1.55 'DM Sans', sans-serif;
-  color: rgba(200, 210, 225, 0.4);
+  font: 400 13px/1.55 'Inter', -apple-system, sans-serif;
+  color: #5c6472;
 }
 
 // ── Form ─────────────────────────────────────────────────
@@ -148,7 +101,7 @@
   font: 500 10px 'JetBrains Mono', monospace;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: rgba(200, 210, 225, 0.45);
+  color: #8a94a6;
 }
 
 .auth-form .input abbr {
@@ -156,56 +109,47 @@
 }
 
 // ── Inputs ───────────────────────────────────────────────
-// Crisp, recessed look — like an instrument readout field
 
 .auth-form input:not([type="checkbox"]) {
   width: 100%;
   padding: 13px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  border: 1px solid #1f2633;
   background: rgba(0, 0, 0, 0.25);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
-  color: rgba(235, 240, 250, 0.9);
-  font: 400 14px 'DM Sans', sans-serif;
+  color: #e6ecf3;
+  font: 400 14px 'Inter', -apple-system, sans-serif;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  caret-color: #4fc3f7;
+  caret-color: #a8c2db;
 }
 
 .auth-form input::placeholder {
-  color: rgba(200, 210, 225, 0.18);
+  color: #5c6472;
   font-style: italic;
 }
 
 .auth-form input:not([type="checkbox"]):focus {
-  border-color: rgba(79, 195, 247, 0.3);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.2),
-    0 0 0 3px rgba(79, 195, 247, 0.06);
+  border-color: #a8c2db;
 }
 
 .auth-form .hint {
-  font: 400 11px/1.4 'DM Sans', sans-serif;
-  color: rgba(200, 210, 225, 0.28);
+  font: 400 11px/1.4 'Inter', -apple-system, sans-serif;
+  color: #5c6472;
 }
 
 .auth-form .error,
 .auth-token-error {
-  font: 400 11px 'DM Sans', sans-serif;
-  color: #ef5350;
+  font: 400 11px 'Inter', -apple-system, sans-serif;
+  color: #d87872;
 }
 
 .auth-form .field_with_errors input:not([type="checkbox"]) {
-  border-color: rgba(239, 83, 80, 0.35);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.2),
-    0 0 0 3px rgba(239, 83, 80, 0.05);
+  border-color: #d87872;
 }
 
 // ── Remember me — custom checkbox ────────────────────────
 
 .auth-form .boolean {
-  display: none; // Hide the simple_form wrapper
+  display: none;
 }
 
 .auth-remember {
@@ -227,19 +171,18 @@
     width: 18px !important;
     height: 18px !important;
     min-width: 18px;
-    border-radius: 4px;
-    border: 1.5px solid rgba(200, 210, 225, 0.18);
+    border-radius: 2px;
+    border: 1.5px solid #1f2633;
     background: rgba(0, 0, 0, 0.25);
     cursor: pointer;
     position: relative;
     flex-shrink: 0;
     margin: 0;
     padding: 0;
-    transition: border-color 0.15s, background 0.15s;
 
     &:checked {
-      border-color: rgba(79, 195, 247, 0.5);
-      background: rgba(79, 195, 247, 0.15);
+      border-color: #a8c2db;
+      background: rgba(168, 194, 219, 0.15);
     }
 
     &:checked::after {
@@ -249,20 +192,20 @@
       top: 2px;
       width: 5px;
       height: 9px;
-      border: solid rgba(79, 195, 247, 0.9);
+      border: solid #a8c2db;
       border-width: 0 2px 2px 0;
       transform: rotate(45deg);
     }
 
     &:focus-visible {
-      outline: 2px solid rgba(79, 195, 247, 0.3);
+      outline: 2px solid #a8c2db;
       outline-offset: 2px;
     }
   }
 
   span {
-    font: 400 13px 'DM Sans', sans-serif;
-    color: rgba(200, 210, 225, 0.45);
+    font: 400 13px 'Inter', -apple-system, sans-serif;
+    color: #8a94a6;
     user-select: none;
   }
 }
@@ -279,30 +222,24 @@ button.auth-submit,
 .auth-submit {
   width: 100%;
   padding: 14px 20px;
-  border: 0;
-  border-radius: 8px;
-  background: #e8ecf2;
-  color: #0a0c10;
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  background: #e6ecf3;
+  color: #0b0d10;
   font: 700 12px 'JetBrains Mono', monospace;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 
   &:hover,
   &:focus {
     background: #fff;
-    color: #0a0c10;
-    box-shadow: 0 4px 16px rgba(200, 210, 225, 0.1);
-    transform: translateY(-1px);
+    color: #0b0d10;
   }
 
   &:active {
     background: #d0d6df;
-    color: #0a0c10;
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    color: #0b0d10;
   }
 }
 
@@ -315,26 +252,25 @@ button.auth-submit,
   gap: 0;
   margin-top: 22px;
   padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid #1f2633;
 
   form { margin: 0; }
 }
 
 .auth-link {
-  font: 400 12px 'DM Sans', sans-serif;
-  color: rgba(200, 210, 225, 0.3);
+  font: 400 12px 'Inter', -apple-system, sans-serif;
+  color: #5c6472;
   text-decoration: none;
   padding: 3px 0;
-  transition: color 0.15s;
 
   &:hover {
-    color: rgba(79, 195, 247, 0.65);
+    color: #a8c2db;
   }
 
   &::after {
     content: '\00b7';
     padding: 0 8px;
-    color: rgba(200, 210, 225, 0.12);
+    color: #5c6472;
   }
 
   &:last-child::after {
@@ -348,9 +284,9 @@ button.auth-submit,
 .auth-token-error {
   margin-bottom: 18px;
   padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(239, 83, 80, 0.05);
-  border: 1px solid rgba(239, 83, 80, 0.12);
+  border-radius: 2px;
+  background: rgba(216, 120, 114, 0.05);
+  border: 1px solid rgba(216, 120, 114, 0.15);
 }
 
 .auth-error-title {
@@ -358,24 +294,24 @@ button.auth-submit,
   font: 600 9px 'JetBrains Mono', monospace;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: rgba(239, 83, 80, 0.8);
+  color: #d87872;
 }
 
 .auth-error-list {
   margin: 6px 0 0;
   padding-left: 16px;
-  color: rgba(239, 83, 80, 0.65);
-  font: 400 12px/1.5 'DM Sans', sans-serif;
+  color: #d87872;
+  font: 400 12px/1.5 'Inter', -apple-system, sans-serif;
 }
 
 .auth-inline-note {
   margin-bottom: 18px;
   padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(79, 195, 247, 0.04);
-  border: 1px solid rgba(79, 195, 247, 0.1);
-  color: rgba(200, 210, 225, 0.6);
-  font: 400 13px/1.5 'DM Sans', sans-serif;
+  border-radius: 2px;
+  background: rgba(168, 194, 219, 0.04);
+  border: 1px solid rgba(168, 194, 219, 0.12);
+  color: #8a94a6;
+  font: 400 13px/1.5 'Inter', -apple-system, sans-serif;
 }
 
 // ── Danger zone (edit profile) ───────────────────────────
@@ -383,9 +319,9 @@ button.auth-submit,
 .auth-danger-zone {
   margin-top: 24px;
   padding: 20px;
-  border-radius: 10px;
-  border: 1px solid rgba(239, 83, 80, 0.1);
-  background: rgba(239, 83, 80, 0.02);
+  border-radius: 2px;
+  border: 1px solid rgba(216, 120, 114, 0.15);
+  background: rgba(216, 120, 114, 0.02);
 }
 
 .auth-danger-eyebrow {
@@ -393,19 +329,19 @@ button.auth-submit,
   font: 500 9px 'JetBrains Mono', monospace;
   letter-spacing: 3px;
   text-transform: uppercase;
-  color: rgba(239, 83, 80, 0.5);
+  color: #d87872;
 }
 
 .auth-danger-zone h3 {
   margin: 8px 0 4px;
-  font: 600 16px 'DM Sans', sans-serif;
-  color: rgba(239, 83, 80, 0.8);
+  font: 600 16px 'Inter', -apple-system, sans-serif;
+  color: #d87872;
 }
 
 .auth-danger-zone p {
   margin: 0 0 14px;
-  font: 400 12px/1.5 'DM Sans', sans-serif;
-  color: rgba(200, 210, 225, 0.35);
+  font: 400 12px/1.5 'Inter', -apple-system, sans-serif;
+  color: #5c6472;
 }
 
 .auth-danger-zone form {
@@ -415,37 +351,19 @@ button.auth-submit,
 .auth-danger-button {
   width: 100%;
   padding: 11px 18px;
-  border: 1px solid rgba(239, 83, 80, 0.15);
-  border-radius: 8px;
-  background: rgba(239, 83, 80, 0.06);
-  color: rgba(239, 83, 80, 0.7);
+  border: 1px solid rgba(216, 120, 114, 0.2);
+  border-radius: 2px;
+  background: rgba(216, 120, 114, 0.06);
+  color: #d87872;
   font: 600 11px 'JetBrains Mono', monospace;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
 
   &:hover {
-    background: rgba(239, 83, 80, 0.12);
-    color: #ef5350;
+    background: rgba(216, 120, 114, 0.12);
+    color: #d87872;
   }
-}
-
-// ── Page load animation ──────────────────────────────────
-
-@keyframes auth-panel-in {
-  0% {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.auth-panel {
-  animation: auth-panel-in 0.4s ease-out;
 }
 
 // ── Responsive ───────────────────────────────────────────
@@ -461,10 +379,5 @@ button.auth-submit,
 
   .auth-panel-title {
     font-size: 22px;
-  }
-
-  .devise-page::before,
-  .devise-page::after {
-    display: none;
   }
 }

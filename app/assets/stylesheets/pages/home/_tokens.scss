@@ -1,24 +1,23 @@
-// ─── Globe Tracker — Mission Control Aesthetic ──────────────────
-// Fonts: JetBrains Mono (data), DM Sans (headings)
-// Palette: deep void black, cold blue-steel accents, amber warnings
+// ─── Globe Tracker — Design Tokens ───────────────────────────────
+// Fonts: Inter (UI), JetBrains Mono (data)
+// Palette: flat dark surfaces, steel accent, muted semantics
 
 :root {
-  --gt-void: rgba(6, 8, 13, 0.92);
-  --gt-panel: rgba(10, 13, 20, 0.88);
-  --gt-border: rgba(79, 195, 247, 0.08);
-  --gt-border-hover: rgba(79, 195, 247, 0.18);
-  --gt-text: rgba(200, 210, 225, 0.85);
-  --gt-text-dim: rgba(200, 210, 225, 0.35);
-  --gt-text-bright: rgba(230, 240, 255, 0.95);
-  --gt-accent: #4fc3f7;
-  --gt-accent-dim: rgba(79, 195, 247, 0.12);
-  --gt-amber: #ffa726;
-  --gt-red: #ef5350;
+  --gt-void: #0b0d10;
+  --gt-panel: #0f1219;
+  --gt-border: #1f2633;
+  --gt-border-hover: #2f3642;
+  --gt-text: #e6ecf3;
+  --gt-text-dim: #5c6472;
+  --gt-text-bright: #e6ecf3;
+  --gt-accent: #a8c2db;
+  --gt-accent-dim: rgba(168, 194, 219, 0.12);
+  --gt-amber: #d4a765;
+  --gt-red: #d87872;
   --gt-nav-h: 36px;
   --gt-bottom-strip-h: 40px;
   --gt-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-  --gt-sans: 'DM Sans', -apple-system, sans-serif;
+  --gt-sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   --gt-sidebar-w: 270px;
-  --gt-glass-bg: rgba(10, 13, 20, 0.88);
-  --gt-blur: blur(20px);
+  --gt-glass-bg: #0f1219;
 }

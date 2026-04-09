@@ -1,10 +1,7 @@
 .case-view-page {
   min-height: 100vh;
-  color: #f8fafc;
-  background:
-    radial-gradient(circle at top left, rgba(79, 195, 247, 0.14), transparent 34%),
-    radial-gradient(circle at top right, rgba(251, 146, 60, 0.1), transparent 28%),
-    linear-gradient(180deg, #07111c 0%, #091722 38%, #0b1825 100%);
+  color: #e6ecf3;
+  background: #0b0d10;
 }
 
 .case-shell {
@@ -19,11 +16,9 @@
 .case-list-item,
 .case-intake-panel {
   position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(8, 21, 34, 0.92) 0%, rgba(11, 24, 37, 0.86) 100%);
-  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.35);
-  backdrop-filter: blur(18px);
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  background: #0f1219;
 }
 
 .case-hero {
@@ -68,20 +63,20 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: rgba(125, 211, 252, 0.78);
+  color: #a8c2db;
 }
 
 .case-kicker-sep {
   width: 32px;
   height: 1px;
-  background: rgba(125, 211, 252, 0.35);
+  background: rgba(168, 194, 219, 0.35);
 }
 
 .case-title,
 .case-list-item h2,
 .case-object-item h3 {
   margin: 0;
-  font: 700 clamp(2.1rem, 4vw, 4rem) "DM Sans", sans-serif;
+  font: 700 clamp(2.1rem, 4vw, 4rem) "Inter", -apple-system, sans-serif;
   letter-spacing: -0.04em;
   line-height: 0.96;
 }
@@ -97,9 +92,9 @@
 .case-note-item p,
 .case-intake-summary,
 .case-list-item p {
-  font: 500 0.98rem "DM Sans", sans-serif;
+  font: 500 0.98rem "Inter", -apple-system, sans-serif;
   line-height: 1.6;
-  color: rgba(226, 232, 240, 0.78);
+  color: #8a94a6;
 }
 
 .case-summary {
@@ -117,16 +112,16 @@
 .case-meta-card,
 .case-side-block {
   padding: 14px 15px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-meta-value,
 .case-side-stat {
   display: block;
-  color: #f8fafc;
-  font: 600 1rem "DM Sans", sans-serif;
+  color: #e6ecf3;
+  font: 600 1rem "Inter", -apple-system, sans-serif;
 }
 
 .case-side-stat {
@@ -136,8 +131,8 @@
 
 .case-side-meta {
   margin-top: 6px;
-  font: 500 0.92rem "DM Sans", sans-serif;
-  color: rgba(226, 232, 240, 0.66);
+  font: 500 0.92rem "Inter", -apple-system, sans-serif;
+  color: #8a94a6;
 }
 
 .case-actions,
@@ -161,18 +156,19 @@
   justify-content: center;
   min-height: 44px;
   padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.2);
-  background: rgba(15, 23, 42, 0.55);
-  color: #e2e8f0;
+  border-radius: 2px;
+  border: 1px solid #1f2633;
+  background: #0f1219;
+  color: #e6ecf3;
   text-decoration: none;
-  font: 600 0.95rem "DM Sans", sans-serif;
+  font: 600 0.95rem "Inter", -apple-system, sans-serif;
 }
 
 .case-action--primary,
 .case-inline-action--primary {
-  border-color: rgba(79, 195, 247, 0.28);
-  background: linear-gradient(135deg, rgba(79, 195, 247, 0.24), rgba(3, 105, 161, 0.18));
+  border-color: #1f2633;
+  background: #e6ecf3;
+  color: #0b0d10;
 }
 
 .case-list,
@@ -206,7 +202,7 @@
 }
 
 .case-link {
-  color: #f8fafc;
+  color: #e6ecf3;
   text-decoration: none;
 }
 
@@ -224,74 +220,74 @@
   padding: 0 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(226, 232, 240, 0.86);
+  color: #8a94a6;
 }
 
 .case-object-pill--muted {
-  color: rgba(148, 163, 184, 0.9);
+  color: #5c6472;
 }
 
 .case-badge--open,
 .case-badge--medium {
-  background: rgba(96, 165, 250, 0.16);
-  color: #93c5fd;
+  background: rgba(168, 194, 219, 0.12);
+  color: #a8c2db;
 }
 
 .case-badge--monitoring,
 .case-badge--low {
-  background: rgba(74, 222, 128, 0.14);
-  color: #86efac;
+  background: rgba(127, 174, 134, 0.12);
+  color: #7fae86;
 }
 
 .case-badge--escalated,
 .case-badge--high {
-  background: rgba(251, 191, 36, 0.14);
-  color: #fcd34d;
+  background: rgba(212, 167, 101, 0.12);
+  color: #d4a765;
 }
 
 .case-badge--closed {
-  background: rgba(148, 163, 184, 0.14);
-  color: #cbd5e1;
+  background: rgba(138, 148, 166, 0.12);
+  color: #8a94a6;
 }
 
 .case-badge--critical {
-  background: rgba(248, 113, 113, 0.16);
-  color: #fca5a5;
+  background: rgba(216, 120, 114, 0.12);
+  color: #d87872;
 }
 
 .case-badge--highlight {
-  background: rgba(251, 191, 36, 0.14);
-  color: #fde68a;
+  background: rgba(212, 167, 101, 0.12);
+  color: #d4a765;
 }
 
 .case-badge--note {
-  background: rgba(96, 165, 250, 0.16);
-  color: #93c5fd;
+  background: rgba(168, 194, 219, 0.12);
+  color: #a8c2db;
 }
 
 .case-badge--update {
-  background: rgba(74, 222, 128, 0.14);
-  color: #86efac;
+  background: rgba(127, 174, 134, 0.12);
+  color: #7fae86;
 }
 
 .case-badge--decision {
-  background: rgba(251, 191, 36, 0.14);
-  color: #fcd34d;
+  background: rgba(212, 167, 101, 0.12);
+  color: #d4a765;
 }
 
 .case-badge--brief {
-  background: rgba(192, 132, 252, 0.16);
-  color: #d8b4fe;
+  background: rgba(192, 132, 252, 0.12);
+  color: #c084fc;
 }
 
 .case-badge--signal-thermal {
-  background: rgba(251, 146, 60, 0.14);
-  color: #fdba74;
+  background: rgba(212, 167, 101, 0.12);
+  color: #d4a765;
 }
 
 .case-badge--signal-verified {
-  background: rgba(74, 222, 128, 0.16);
-  color: #86efac;
+  background: rgba(127, 174, 134, 0.12);
+  color: #7fae86;
 }
 
 .case-list-meta,
@@ -300,7 +296,7 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 14px;
-  color: rgba(148, 163, 184, 0.78);
+  color: #5c6472;
 }
 
 .case-grid {
@@ -331,8 +327,8 @@
 }
 
 .case-workspace-copy {
-  font: 500 1.05rem/1.7 "DM Sans", sans-serif;
-  color: rgba(240, 245, 252, 0.9);
+  font: 500 1.05rem/1.7 "Inter", -apple-system, sans-serif;
+  color: #e6ecf3;
 }
 
 .case-workspace-block + .case-workspace-block {
@@ -347,7 +343,7 @@
   font: 600 10px "JetBrains Mono", monospace;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.82);
+  color: #8a94a6;
 }
 
 .case-bullet-list {
@@ -358,8 +354,8 @@
 }
 
 .case-bullet-list li {
-  color: rgba(226, 232, 240, 0.82);
-  font: 500 0.98rem/1.55 "DM Sans", sans-serif;
+  color: #8a94a6;
+  font: 500 0.98rem/1.55 "Inter", -apple-system, sans-serif;
 }
 
 .case-bullet-list--developments {
@@ -382,16 +378,16 @@
 
 .case-workspace-metric {
   padding: 12px 13px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-workspace-metric-value {
   display: block;
   margin-top: 8px;
-  color: #f8fafc;
-  font: 700 1.18rem/1 "DM Sans", sans-serif;
+  color: #e6ecf3;
+  font: 700 1.18rem/1 "Inter", -apple-system, sans-serif;
 }
 
 .case-workspace-state {
@@ -404,13 +400,13 @@
 
 .case-copy--signal-note {
   margin-top: 12px;
-  color: rgba(226, 232, 240, 0.7);
+  color: #8a94a6;
 }
 
 .case-signal-group + .case-signal-group {
   margin-top: 22px;
   padding-top: 22px;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid #1f2633;
 }
 
 .case-signal-list {
@@ -421,9 +417,9 @@
 
 .case-signal-item {
   padding: 14px 15px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.48);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-signal-top {
@@ -435,8 +431,8 @@
 
 .case-signal-title {
   margin-top: 10px;
-  color: #f8fafc;
-  font: 600 1rem/1.45 "DM Sans", sans-serif;
+  color: #e6ecf3;
+  font: 600 1rem/1.45 "Inter", -apple-system, sans-serif;
 }
 
 .case-signal-meta {
@@ -444,7 +440,7 @@
   font: 600 10px "JetBrains Mono", monospace;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.82);
+  color: #8a94a6;
 }
 
 .case-copy--signal {
@@ -460,9 +456,9 @@
 
 .case-timeline-item {
   padding: 14px 15px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-timeline-top {
@@ -474,8 +470,8 @@
 
 .case-timeline-title {
   margin-top: 10px;
-  color: #f8fafc;
-  font: 600 1rem/1.45 "DM Sans", sans-serif;
+  color: #e6ecf3;
+  font: 600 1rem/1.45 "Inter", -apple-system, sans-serif;
 }
 
 .case-timeline-meta {
@@ -491,9 +487,9 @@
 .case-graph-group {
   min-width: 0;
   padding: 14px 15px;
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.42);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-graph-list {
@@ -505,7 +501,7 @@
 .case-graph-item {
   display: block;
   padding: 10px 0 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid #1f2633;
 }
 
 .case-graph-item:first-child {
@@ -518,8 +514,8 @@
 }
 
 .case-graph-item-label {
-  color: #f8fafc;
-  font: 600 0.98rem/1.42 "DM Sans", sans-serif;
+  color: #e6ecf3;
+  font: 600 0.98rem/1.42 "Inter", -apple-system, sans-serif;
 }
 
 .case-graph-item-meta {
@@ -553,20 +549,20 @@
 .case-intake-field textarea,
 .case-intake-field select {
   width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.62);
-  color: #f8fafc;
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  background: #161b24;
+  color: #e6ecf3;
   padding: 14px 16px;
-  font: 500 0.95rem "DM Sans", sans-serif;
+  font: 500 0.95rem "Inter", -apple-system, sans-serif;
 }
 
 .case-note-item,
 .case-object-item {
   padding: 18px;
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-note-item p {
@@ -574,7 +570,7 @@
 }
 
 .case-note-author {
-  color: rgba(125, 211, 252, 0.82);
+  color: #a8c2db;
 }
 
 .case-intake-panel {
@@ -587,7 +583,7 @@
 
 .case-intake-title {
   margin: 18px 0 10px;
-  font: 700 clamp(1.7rem, 3vw, 2.4rem) "DM Sans", sans-serif;
+  font: 700 clamp(1.7rem, 3vw, 2.4rem) "Inter", -apple-system, sans-serif;
   letter-spacing: -0.04em;
 }
 
@@ -600,9 +596,9 @@
   display: grid;
   gap: 14px;
   padding: 18px;
-  border-radius: 22px;
-  background: rgba(15, 23, 42, 0.48);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .case-intake-form-grid {
@@ -614,7 +610,7 @@
 .case-intake-field label {
   display: block;
   margin-bottom: 8px;
-  color: rgba(148, 163, 184, 0.82);
+  color: #8a94a6;
   font: 600 10px "JetBrains Mono", monospace;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -626,9 +622,9 @@
   justify-content: center;
   gap: 16px;
   padding: 18px;
-  border-radius: 22px;
-  background: rgba(15, 23, 42, 0.48);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 @media (max-width: 1024px) {

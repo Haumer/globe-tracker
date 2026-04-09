@@ -1,8 +1,21 @@
 export function applyUiStatMethods(GlobeController) {
   GlobeController.prototype._updateStats = function() {
-    updateStat("stat-flights", this.flightData.size, () => this.flightsVisible && this.flightData.size > 0 && this._markFresh("flights"))
-    updateStat("stat-sats", this.satelliteEntities.size)
-    updateStat("stat-ships", this.shipData.size, () => this.shipsVisible && this.shipData.size > 0 && this._markFresh("ships"))
+    // Theater count from conflict pulse zones
+    const theaterCount = (this._hexCellData || []).length
+    updateStat("stat-theaters", theaterCount)
+
+    // News article count
+    const newsCount = (this._newsData || []).length
+    updateStat("stat-news", newsCount)
+
+    // Insight count
+    const insightCount = (this._insightsData || []).length
+    updateStat("stat-insights", insightCount)
+
+    // Legacy stat IDs still referenced by some code paths — update silently if present
+    updateStat("stat-flights", this.flightData?.size || 0)
+    updateStat("stat-sats", this.satelliteEntities?.size || 0)
+    updateStat("stat-ships", this.shipData?.size || 0)
 
     const eventCount = (this.earthquakesVisible ? this._earthquakeData.length : 0) +
       (this.naturalEventsVisible ? this._naturalEventData.length : 0) +
@@ -10,13 +23,7 @@ export function applyUiStatMethods(GlobeController) {
       (this.powerPlantsVisible ? this._powerPlantData.length : 0) +
       (this.conflictsVisible ? this._conflictData.length : 0) +
       (this.fireHotspotsVisible ? this._fireHotspotData.length : 0)
-
-    updateStat("stat-events", eventCount, () => {
-      if (this.earthquakesVisible && this._earthquakeData.length > 0) this._markFresh("earthquakes")
-      if (this.naturalEventsVisible && this._naturalEventData.length > 0) this._markFresh("naturalEvents")
-      if (this.camerasVisible && this._webcamData.length > 0) this._markFresh("cameras")
-      if (this.conflictsVisible && this._conflictData.length > 0) this._markFresh("conflicts")
-    })
+    updateStat("stat-events", eventCount)
 
     this._syncQuickBar()
     this._updateSatBadge()

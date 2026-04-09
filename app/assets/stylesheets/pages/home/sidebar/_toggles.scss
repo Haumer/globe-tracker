@@ -4,23 +4,23 @@
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
-  font: 400 11px var(--gt-mono);
-  color: var(--gt-text-dim);
+  font: 400 11px 'JetBrains Mono', monospace;
+  color: #8a94a6;
   transition: color 0.12s, background 0.12s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--gt-text);
+    background: #161b24;
+    color: #e6ecf3;
   }
 
   input[type="checkbox"] { display: none; }
 
-  input:checked ~ span { color: var(--gt-text); }
+  input:checked ~ span { color: #e6ecf3; }
 
   input:checked ~ .sb-toggle-track {
-    background: var(--gt-accent);
+    background: #a8c2db;
 
     &::after { transform: translateX(12px); }
   }
@@ -33,7 +33,7 @@
   position: relative;
   width: 24px;
   height: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #1f2633;
   border-radius: 6px;
   flex-shrink: 0;
   transition: background 0.15s;
@@ -45,14 +45,14 @@
     left: 2px;
     width: 8px;
     height: 8px;
-    background: rgba(255, 255, 255, 0.5);
+    background: #5c6472;
     border-radius: 50%;
     transition: transform 0.15s, background 0.15s;
   }
 }
 
 .sb-toggle input:checked ~ .sb-toggle-track::after {
-  background: #fff;
+  background: #0f1219;
 }
 
 .sb-with-dot {
@@ -62,15 +62,15 @@
 }
 
 .sb-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--dot);
+  width: 4px;
+  height: 4px;
+  border-radius: 0;
+  background: #5c6472;
   flex-shrink: 0;
 }
 
 .sb-mini-divider {
   height: 1px;
-  background: var(--gt-border);
+  background: #1f2633;
   margin: 6px 4px;
 }

@@ -4,7 +4,7 @@ require "net/http"
 
 class TheaterBriefService
   SNAPSHOT_TYPE = "theater_brief".freeze
-  OPENAI_MODEL = "gpt-4.1-nano".freeze
+  OPENAI_MODEL = "gpt-4.1-mini".freeze
   CLAUDE_MODEL = "claude-sonnet-4-20250514".freeze
   MAX_TOKENS = 1200
   ENQUEUE_TTL = 5.minutes
@@ -183,25 +183,29 @@ class TheaterBriefService
       signal_lines = (zone[:cross_layer_signals] || {}).map { |key, value| "- #{key.to_s.tr('_', ' ')}: #{value}" }
 
       <<~PROMPT
-        You are writing a saved operational brief for a single conflict theater in GlobeTracker.
+        You are writing an operational theater brief for GlobeTracker, a situational-awareness platform.
 
         Return strict JSON only with this shape:
         {
-          "assessment": "2-3 sentence assessment grounded only in the provided data",
-          "why_we_believe_it": ["short evidence point", "short evidence point", "short evidence point"],
-          "key_developments": ["short bullet", "short bullet", "short bullet"],
-          "watch_next": ["short watch item", "short watch item", "short watch item"],
+          "assessment": "2-3 sentence current read",
+          "why_we_believe_it": ["evidence point", "evidence point", "evidence point"],
+          "key_developments": ["development", "development", "development"],
+          "watch_next": ["indicator to watch", "indicator to watch"],
           "confidence_level": "high|medium|low",
-          "confidence_rationale": "one short sentence explaining confidence"
+          "confidence_rationale": "one sentence"
         }
 
-        Rules:
-        - Do not invent actors, casualties, or intent not supported below.
-        - Keep language terse and analytical, not dramatic.
-        - Mention uncertainty when evidence is limited.
-        - Each array item should be a single sentence fragment or short sentence.
-        - "assessment" must answer what is happening right now, not restate the title.
-        - "why_we_believe_it" must cite the concrete basis for the read: reporting density, source depth, spike behavior, corroborating layers, or specific reporting.
+        CRITICAL RULES — read carefully:
+        - The "assessment" is the ONLY part the analyst reads first. It must synthesize, not summarize.
+        - NEVER restate metrics the analyst can already see (pulse score, report count, source count, spike ratio). These are displayed separately. Instead, explain WHAT IS HAPPENING and WHY IT MATTERS.
+        - Synthesize across signal types: if military flights + GPS jamming + conflict reporting all converge, say what that convergence implies operationally. A good assessment connects dots the dashboard cannot.
+        - If corroborating signals (jamming, military flights, outages, fires) are present, the assessment MUST reference what they indicate together — not list them individually.
+        - "why_we_believe_it" should cite the STRONGEST 2-3 evidence pillars, not exhaustively list every metric. Lead with cross-layer corroboration if available.
+        - "key_developments" should highlight what CHANGED recently — new reporting, new signals, shifts in pattern — not restate the baseline.
+        - "watch_next" should name specific, observable indicators that would confirm or disconfirm the current read.
+        - NEVER claim knowledge about nearby infrastructure, geography, or assets (ports, pipelines, chokepoints, bases, cameras). That context is computed separately. Your job is ONLY to interpret the reporting and signal data provided below.
+        - Keep language terse and analytical. No drama, no speculation beyond what the data supports.
+        - If evidence is thin, say so directly. Do not hedge with vague qualifiers.
         - No markdown, no prose outside JSON.
 
         THEATER

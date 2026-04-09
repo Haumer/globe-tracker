@@ -48,7 +48,7 @@
 <div class="sb-sections">
   <div class="sb-section" data-section="primary-signals">
     <div class="sb-section-head open" data-action="click->globe#toggleSection" role="button" aria-expanded="true" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #ff7043;"></span>
+      <span class="sb-section-dot" style="--dot: #5c6472;"></span>
       <div>
         <span class="sb-section-title">Primary Signals</span>
         <div class="sb-section-hint">A small default stack centered on theaters and corroborating reporting.</div>
@@ -57,7 +57,7 @@
     </div>
     <div class="sb-section-body" role="region">
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="situations" data-globe-target="qlSituations">
-        <i class="fa-solid fa-wave-square sb-layer-icon" style="color: #ff7043;"></i>
+        <i class="fa-solid fa-wave-square sb-layer-icon"></i>
         <div class="sb-layer-copy">
           <span class="sb-layer-name">Conflict Theaters</span>
           <span class="sb-layer-meta">Derived theaters, hotspots, and escalation patterns</span>
@@ -80,7 +80,7 @@
       </div>
 
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="insights" data-globe-target="qlInsights">
-        <i class="fa-solid fa-brain sb-layer-icon" style="color: #26c6da;"></i>
+        <i class="fa-solid fa-brain sb-layer-icon"></i>
         <div class="sb-layer-copy">
           <span class="sb-layer-name">Insights</span>
           <span class="sb-layer-meta">Cross-layer signals and analyst-facing correlations</span>
@@ -89,7 +89,7 @@
       </div>
 
       <div class="sb-layer-row" data-action="click->globe#quickToggle" data-layer="news" data-globe-target="qlNews">
-        <i class="fa-solid fa-newspaper sb-layer-icon" style="color: #ff9800;"></i>
+        <i class="fa-solid fa-newspaper sb-layer-icon"></i>
         <div class="sb-layer-copy">
           <span class="sb-layer-name">News</span>
           <span class="sb-layer-meta">Live corroboration and source activity</span>
@@ -115,7 +115,7 @@
 
   <div class="sb-section" data-section="additional-layers">
     <div class="sb-section-head open" data-action="click->globe#toggleSection" role="button" aria-expanded="true" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #4fc3f7;"></span>
+      <span class="sb-section-dot" style="--dot: #5c6472;"></span>
       <div>
         <span class="sb-section-title">Additional Layers</span>
         <div class="sb-section-hint">Advanced layers appear here when enabled or when a preset, region, or deep link activates them.</div>
@@ -161,31 +161,31 @@
           <% when "satellites" %>
             <div class="sb-sub-options">
               <div class="sb-chip-grid" role="group" aria-label="Satellite categories">
-                <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations" style="--chip-color: #ff5252;">ISS</button>
-                <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink" style="--chip-color: #ab47bc;">Starlink</button>
-                <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation" style="--chip-color: #66bb6a;">GPS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass" style="--chip-color: #5c6bc0;">GLONASS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo" style="--chip-color: #0288d1;">Galileo</button>
-                <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather" style="--chip-color: #ffa726;">Weather</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource" style="--chip-color: #29b6f6;">Earth Res</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science" style="--chip-color: #ec407a;">Science</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military" style="--chip-color: #ef5350;">Military</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst" style="--chip-color: #b71c1c;">Classified</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo" style="--chip-color: #78909c;">GEO</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium" style="--chip-color: #26c6da;">Iridium</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb" style="--chip-color: #7e57c2;">OneWeb</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet" style="--chip-color: #8d6e63;">Planet</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire" style="--chip-color: #9ccc65;">Spire</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss" style="--chip-color: #42a5f5;">GNSS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss" style="--chip-color: #78909c;">TDRS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar" style="--chip-color: #8d6e63;">Radar</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas" style="--chip-color: #26a69a;">SBAS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="cubesat" style="--chip-color: #ffee58;">CubeSat</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="amateur" style="--chip-color: #ef5350;">Ham Radio</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat" style="--chip-color: #ff8a65;">SAR</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="last-30-days" style="--chip-color: #ff1744;">New Launch</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="beidou" style="--chip-color: #ff6e40;">BeiDou</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="molniya" style="--chip-color: #d50000;">Molniya</button>
+                <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations">ISS</button>
+                <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink">Starlink</button>
+                <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation">GPS</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass">GLONASS</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo">Galileo</button>
+                <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather">Weather</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource">Earth Res</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science">Science</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military">Military</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst">Classified</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo">GEO</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium">Iridium</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb">OneWeb</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet">Planet</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire">Spire</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss">GNSS</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss">TDRS</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar">Radar</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas">SBAS</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="cubesat">CubeSat</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="amateur">Ham Radio</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat">SAR</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="last-30-days">New Launch</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="beidou">BeiDou</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="molniya">Molniya</button>
               </div>
               <div class="sb-mini-divider"></div>
               <%= globe_toggle target: "satOrbitsToggle", action: "toggleSatOrbits", label: "Orbit Trails" %>
@@ -249,7 +249,7 @@
 
   <div class="sb-section" data-section="layer-library">
     <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #ab47bc;"></span>
+      <span class="sb-section-dot" style="--dot: #5c6472;"></span>
       <div>
         <span class="sb-section-title"><%= user_signed_in? ? "Enable More Layers" : "More Layers" %></span>
         <div class="sb-section-hint">
@@ -297,7 +297,7 @@
 
   <div class="sb-section" data-section="selection-tools">
     <div class="sb-section-head" data-action="click->globe#toggleSection" role="button" aria-expanded="false" tabindex="0">
-      <span class="sb-section-dot" style="--dot: #ffd54f;"></span>
+      <span class="sb-section-dot" style="--dot: #5c6472;"></span>
       <div>
         <span class="sb-section-title">Selection Tools</span>
         <div class="sb-section-hint">Country and area selection stays separate from the layer catalog.</div>

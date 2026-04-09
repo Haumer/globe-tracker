@@ -169,7 +169,6 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
         <circle style="display:none;"></circle>
       </svg>
       <div class="anchor-panel" role="complementary" aria-label="Pinned item">
-        <button class="anchor-close" type="button" data-action="click->globe#unpinAnchoredDetail" data-anchor-id="${this._escapeHtml(state.anchorId)}" aria-label="Unpin focused item">&times;</button>
         <div class="anchor-content"></div>
       </div>
     `
@@ -477,15 +476,31 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       mediaExtraHtml = `${corroborationHtml}${linksHtml}${mediaExtraHtml}`
     }
 
+    const anchorIdAttr = this._escapeHtml(payload.anchorId || "active")
+    const closeAction = payload.pinned
+      ? `data-action="click->globe#unpinAnchoredDetail" data-anchor-id="${anchorIdAttr}"`
+      : `data-action="click->globe#closeDetail"`
+    const closeLabel = payload.pinned ? "Unpin focused item" : "Close focused item"
+    const timeHtml = payload.timeLabel
+      ? `<div class="anchor-time">${this._escapeHtml(payload.timeLabel)}</div>`
+      : ""
+
     return `
-      <div class="anchor-head">
-        <div class="anchor-chip-row">${chipsHtml}</div>
-        ${payload.timeLabel ? `<div class="anchor-time">${this._escapeHtml(payload.timeLabel)}</div>` : ""}
+      <div class="anchor-header">
+        <div class="anchor-title-row">
+          <div class="anchor-title">${this._escapeHtml(payload.title || kindLabel(payload.kind))}</div>
+          ${chipsHtml ? `<div class="anchor-chip-row">${chipsHtml}</div>` : ""}
+        </div>
+        <div class="anchor-header-meta">
+          ${timeHtml}
+          <button class="anchor-close" type="button" ${closeAction} aria-label="${closeLabel}">&times;</button>
+        </div>
       </div>
-      <div class="anchor-title">${this._escapeHtml(payload.title || kindLabel(payload.kind))}</div>
-      ${subtitleHtml}
-      ${briefHtml}
-      ${mediaExtraHtml}
+      <div class="anchor-body">
+        ${subtitleHtml}
+        ${briefHtml}
+        ${mediaExtraHtml}
+      </div>
       ${actionsHtml}
     `
   }

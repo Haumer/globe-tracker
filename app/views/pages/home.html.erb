@@ -15,6 +15,11 @@
   <div id="sidebar" data-globe-target="sidebar" role="navigation" aria-label="Layer controls">
     <div class="sb-sheet-handle" data-action="click->globe#toggleSidebar"></div>
 
+    <div class="sb-header">
+      <span class="sb-header-title">LAYERS</span>
+      <button class="sb-header-close" data-action="click->globe#toggleSidebar" aria-label="Close sidebar">&times;</button>
+    </div>
+
     <%# Workspace selector (logged-in users only) %>
     <% if user_signed_in? %>
     <div class="ws-bar" data-globe-target="workspaceBar">
@@ -67,7 +72,6 @@
       <circle data-globe-target="anchorLeaderSocket" style="display:none;"></circle>
     </svg>
     <div id="anchor-panel" data-globe-target="anchorPanel" style="display:none;" role="complementary" aria-label="Focused item">
-      <button class="anchor-close" data-action="click->globe#closeDetail" aria-label="Close focused item">&times;</button>
       <div class="anchor-content" data-globe-target="anchorContent"></div>
     </div>
   </div>

@@ -77,7 +77,23 @@ export function applyContextMethods(GlobeController) {
   GlobeController.prototype._renderSelectedContext = function() {
     if (!this.hasContextContentTarget) return
 
+    // Preserve open state of <details> elements across re-renders
+    const openDetails = new Set()
+    this.contextContentTarget.querySelectorAll("details[open]").forEach(el => {
+      const summary = el.querySelector("summary")
+      if (summary) openDetails.add(summary.textContent.trim())
+    })
+
     this.contextContentTarget.innerHTML = renderSelectedContext(this, this._selectedContext)
+
+    if (openDetails.size) {
+      this.contextContentTarget.querySelectorAll("details").forEach(el => {
+        const summary = el.querySelector("summary")
+        if (summary && openDetails.has(summary.textContent.trim())) {
+          el.setAttribute("open", "")
+        }
+      })
+    }
   }
 
   GlobeController.prototype._theaterBriefCacheKey = function(context) {

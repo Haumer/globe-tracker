@@ -3,15 +3,14 @@
   <button class="detail-close" data-action="click->globe#closeRightPanel" aria-label="Close panel">&times;</button>
   <div class="right-panel-rail-head">
     <div class="right-panel-rail-copy">
-      <div class="right-panel-rail-kicker">Map-linked summaries</div>
-      <div class="right-panel-rail-title">Live Context</div>
+      <div class="right-panel-rail-title">LIVE CONTEXT</div>
     </div>
   </div>
 
   <%# ── Context pane ── %>
   <div class="rp-pane rp-pane--active" data-rp-pane="context" data-globe-target="contextPanel" role="region" aria-label="Selected context">
     <div class="context-rail-list insight-feed-list" data-globe-target="contextContent">
-      <div class="context-empty">Click a map item to inspect its live context here. Deep analysis belongs in the case workspace.</div>
+      <div class="context-empty">SELECT A MAP ENTITY</div>
     </div>
   </div>
 
@@ -33,8 +32,8 @@
     <div class="entity-airline-bar" data-globe-target="entityAirlineBar" style="display:none;">
       <div class="entity-airline-chips" data-globe-target="entityAirlineChips"></div>
     </div>
-    <span class="rp-loading" data-globe-target="entitiesLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="entitiesEmpty" style="display:none;">Enable a tracking layer to see entities here.</p>
+    <span class="rp-loading" data-globe-target="entitiesLoading" style="display:none;">LOADING</span>
+    <p class="rp-empty" data-globe-target="entitiesEmpty" style="display:none;">NO TRACKING LAYERS ACTIVE</p>
     <div class="entity-list-content" data-globe-target="entityListContent"></div>
   </div>
 
@@ -66,18 +65,18 @@
         </label>
       </div>
       <div class="nf-cat-chips" data-globe-target="newsCatChips">
-        <button class="nf-cat-chip" data-category="conflict" data-action="click->globe#toggleNewsCatChip" style="border-color:#f44336;color:#f44336;">Conflict</button>
-        <button class="nf-cat-chip" data-category="unrest" data-action="click->globe#toggleNewsCatChip" style="border-color:#ff9800;color:#ff9800;">Unrest</button>
-        <button class="nf-cat-chip" data-category="disaster" data-action="click->globe#toggleNewsCatChip" style="border-color:#ff5722;color:#ff5722;">Disaster</button>
-        <button class="nf-cat-chip" data-category="health" data-action="click->globe#toggleNewsCatChip" style="border-color:#4caf50;color:#4caf50;">Health</button>
-        <button class="nf-cat-chip" data-category="economy" data-action="click->globe#toggleNewsCatChip" style="border-color:#2196f3;color:#2196f3;">Economy</button>
-        <button class="nf-cat-chip" data-category="diplomacy" data-action="click->globe#toggleNewsCatChip" style="border-color:#9c27b0;color:#9c27b0;">Diplomacy</button>
-        <button class="nf-cat-chip" data-category="cyber" data-action="click->globe#toggleNewsCatChip" style="border-color:#00bcd4;color:#00bcd4;">Cyber</button>
-        <button class="nf-cat-chip" data-category="other" data-action="click->globe#toggleNewsCatChip" style="border-color:#90a4ae;color:#90a4ae;">Other</button>
+        <button class="nf-cat-chip" data-category="conflict" data-action="click->globe#toggleNewsCatChip">Conflict</button>
+        <button class="nf-cat-chip" data-category="unrest" data-action="click->globe#toggleNewsCatChip">Unrest</button>
+        <button class="nf-cat-chip" data-category="disaster" data-action="click->globe#toggleNewsCatChip">Disaster</button>
+        <button class="nf-cat-chip" data-category="health" data-action="click->globe#toggleNewsCatChip">Health</button>
+        <button class="nf-cat-chip" data-category="economy" data-action="click->globe#toggleNewsCatChip">Economy</button>
+        <button class="nf-cat-chip" data-category="diplomacy" data-action="click->globe#toggleNewsCatChip">Diplomacy</button>
+        <button class="nf-cat-chip" data-category="cyber" data-action="click->globe#toggleNewsCatChip">Cyber</button>
+        <button class="nf-cat-chip" data-category="other" data-action="click->globe#toggleNewsCatChip">Other</button>
       </div>
       <div class="nf-trending-bar" data-globe-target="newsTrendingBar"></div>
-      <span class="rp-loading" data-globe-target="newsLoading" style="display:none;">Loading...</span>
-      <p class="rp-empty" data-globe-target="newsEmpty" style="display:none;">No news articles yet. Enable the News layer to fetch headlines.</p>
+      <span class="rp-loading" data-globe-target="newsLoading" style="display:none;">LOADING</span>
+      <p class="rp-empty" data-globe-target="newsEmpty" style="display:none;">NO HEADLINES</p>
       <div class="nf-article-list" data-globe-target="newsArticleList"></div>
     </div>
     <div class="nf-tab-pane nf-tab-flows" data-globe-target="newsFlowsPane" style="display:none;">
@@ -91,8 +90,8 @@
       <span class="threats-title"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> CYBER THREATS</span>
       <span class="threats-count" data-globe-target="threatsCount">0 targets</span>
     </div>
-    <span class="rp-loading" data-globe-target="threatsLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="threatsEmpty" style="display:none;">No cyber threats detected in view.</p>
+    <span class="rp-loading" data-globe-target="threatsLoading" style="display:none;">LOADING</span>
+    <p class="rp-empty" data-globe-target="threatsEmpty" style="display:none;">NO THREATS IN VIEW</p>
     <div class="threats-content" data-globe-target="threatsContent"></div>
   </div>
 
@@ -102,8 +101,8 @@
       <span class="sit-title"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> THEATERS</span>
       <span class="sit-count" data-globe-target="sitCount">0 zones</span>
     </div>
-    <span class="rp-loading" data-globe-target="sitLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">No active situations detected.</p>
+    <span class="rp-loading" data-globe-target="sitLoading" style="display:none;">LOADING</span>
+    <p class="rp-empty" data-globe-target="sitEmpty" style="display:none;">NO ACTIVE THEATERS</p>
     <div class="sit-list" data-globe-target="sitList"></div>
   </div>
 
@@ -114,13 +113,13 @@
       <span class="insight-feed-count" data-globe-target="insightFeedCount">0 insights</span>
     </div>
     <% if current_user&.admin? %>
-    <button class="detail-track-btn" style="margin:8px 12px;background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;font:600 10px 'JetBrains Mono',monospace;letter-spacing:0.5px;" data-action="click->globe#loadBrief">
-      <i class="fa-solid fa-file-lines" style="margin-right:4px;"></i>INTELLIGENCE BRIEF
+    <button class="insight-action-btn" style="margin:10px 14px;" data-action="click->globe#loadBrief">
+      <i class="fa-solid fa-file-lines"></i>INTELLIGENCE BRIEF
     </button>
     <% end %>
     <div id="intelligence-brief" style="display:none;padding:8px 12px;"></div>
-    <span class="rp-loading" data-globe-target="insightsLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="insightsEmpty" style="display:none;">No insights yet. Enable multiple layers for cross-layer analysis.</p>
+    <span class="rp-loading" data-globe-target="insightsLoading" style="display:none;">LOADING</span>
+    <p class="rp-empty" data-globe-target="insightsEmpty" style="display:none;">NO CROSS-LAYER SIGNALS</p>
     <div class="insight-feed-list" data-globe-target="insightFeedContent"></div>
   </div>
 
@@ -133,8 +132,8 @@
     <div class="cam-feed-filter">
       <input type="text" class="cam-feed-search" placeholder="Search cameras..." data-globe-target="camFeedSearch" data-action="input->globe#filterCamFeed" aria-label="Search cameras">
     </div>
-    <span class="rp-loading" data-globe-target="camerasLoading" style="display:none;">Loading...</span>
-    <p class="rp-empty" data-globe-target="camerasEmpty" style="display:none;">No cameras in view. Enable the Cameras layer to see live feeds.</p>
+    <span class="rp-loading" data-globe-target="camerasLoading" style="display:none;">LOADING</span>
+    <p class="rp-empty" data-globe-target="camerasEmpty" style="display:none;">NO CAMERAS IN VIEW</p>
     <div class="cam-feed-list" data-globe-target="camFeedList"></div>
   </div>
 

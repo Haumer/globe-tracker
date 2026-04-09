@@ -502,12 +502,12 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const parsed = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(parsed.getTime())) return null
 
-    const year = parsed.getUTCFullYear()
-    const month = (parsed.getUTCMonth() + 1).toString().padStart(2, "0")
-    const day = parsed.getUTCDate().toString().padStart(2, "0")
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const day = parsed.getUTCDate()
+    const month = months[parsed.getUTCMonth()]
     const hours = parsed.getUTCHours().toString().padStart(2, "0")
     const minutes = parsed.getUTCMinutes().toString().padStart(2, "0")
-    return `${year}-${month}-${day} ${hours}:${minutes} UTC`
+    return `${day}. ${month}. ${hours}:${minutes}`
   }
 
   GlobeController.prototype._anchoredDetailAnchor = function(kind, data, options = {}) {

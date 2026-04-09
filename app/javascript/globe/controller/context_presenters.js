@@ -87,17 +87,6 @@ function renderMetricGrid(metrics = []) {
 
 function renderTheaterRailSection(controller, context) {
   const zone = context?.zoneData || {}
-  const brief = context?.theaterBrief || {}
-  const derivedConfidence = controller._theaterDerivedConfidence
-    ? controller._theaterDerivedConfidence(zone)
-    : { level: "medium", rationale: "" }
-  const confidenceLevel = brief.confidence_level || derivedConfidence.level || "medium"
-  const confidenceLevelKey = `${confidenceLevel}`.trim().toLowerCase().replace(/\s+/g, "-")
-  const confidenceRationale = brief.confidence_rationale || derivedConfidence.rationale || ""
-  const assessment = brief.assessment
-    || (controller._theaterFallbackAssessment ? controller._theaterFallbackAssessment(zone) : null)
-    || context.summary
-    || "Live theater assessment unavailable."
   const generatedAgo = context.theaterBriefGeneratedAt ? controller._timeAgo(new Date(context.theaterBriefGeneratedAt)) : null
 
   let stateHtml = ""
@@ -126,14 +115,7 @@ function renderTheaterRailSection(controller, context) {
       variant: "summary",
       html: `
         ${renderMetricGrid(metrics)}
-        <div class="context-brief context-brief--summary">
-          <div class="context-brief-body">${controller._escapeHtml(assessment)}</div>
-          <div class="context-brief-confidence">
-            <span class="context-brief-confidence-level context-brief-confidence-level--${controller._escapeHtml(confidenceLevelKey)}">${controller._escapeHtml(confidenceLevel)} confidence</span>
-            ${confidenceRationale ? `<span class="context-brief-confidence-text">${controller._escapeHtml(confidenceRationale)}</span>` : ""}
-          </div>
-          ${stateHtml}
-        </div>
+        ${stateHtml}
       `,
     }),
     developments.length ? renderContextSection(controller, {
@@ -185,9 +167,11 @@ function renderRailSectionEntry(controller, section) {
 }
 
 function mergedContextRailSections(controller, context, pinnedSection) {
+  const dossierSections = (context?.sections || [])
+
   const sections = [
-    ...primaryContextRailSections(controller, context),
-    ...((context?.sections || []).map(section => renderRailSectionEntry(controller, section))),
+    ...((context?.kind === "theater") ? [] : primaryContextRailSections(controller, context)),
+    ...(dossierSections.map(section => renderRailSectionEntry(controller, section))),
     ...((controller._durableContextSections?.(context) || []).map(section => renderRailSectionEntry(controller, section))),
     ...((controller._dynamicContextSections?.(context) || []).map(section => renderRailSectionEntry(controller, section))),
   ].filter(Boolean)

@@ -1,6 +1,6 @@
 // ── Sidebar sections ───────────────────────────────────────────
 .sb-section {
-  border-bottom: 1px solid var(--gt-border);
+  border-bottom: 1px solid #1f2633;
 
   &.sb-disabled {
     opacity: 0.35;
@@ -18,13 +18,13 @@
   user-select: none;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: #161b24;
   }
 
   .sb-chevron {
     margin-left: auto;
     font-size: 8px;
-    color: var(--gt-text-dim);
+    color: #5c6472;
     transition: transform 0.2s;
   }
 
@@ -34,27 +34,22 @@
 }
 
 .sb-section-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dot);
+  width: 4px;
+  height: 4px;
+  border-radius: 0;
+  background: #5c6472;
   flex-shrink: 0;
 }
 
 .sb-section-title {
-  font: 600 11px var(--gt-sans);
-  letter-spacing: 0.8px;
+  font: 600 10px 'JetBrains Mono', monospace;
+  letter-spacing: 1.1px;
   text-transform: uppercase;
-  color: var(--gt-text-dim);
+  color: #8a94a6;
 }
 
 .sb-section-hint {
-  font: 400 8px var(--gt-mono);
-  color: rgba(200, 210, 225, 0.2);
-  letter-spacing: 0;
-  text-transform: none;
-  margin-top: 0;
-  line-height: 1.2;
+  display: none;
 }
 
 .sb-section-body {

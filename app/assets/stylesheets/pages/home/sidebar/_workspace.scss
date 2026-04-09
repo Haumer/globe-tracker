@@ -3,27 +3,27 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--gt-border);
+  padding: 8px 12px;
+  border-bottom: 1px solid #1f2633;
 
   .ws-select {
     flex: 1;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--gt-border);
-    border-radius: 4px;
-    color: var(--gt-text);
-    font: 10px var(--gt-mono);
+    background: #0f1219;
+    border: 1px solid #1f2633;
+    border-radius: 2px;
+    color: #e6ecf3;
+    font: 10px 'JetBrains Mono', monospace;
     padding: 4px 6px;
     cursor: pointer;
     outline: none;
     appearance: none;
     min-width: 0;
 
-    &:focus { border-color: var(--gt-accent); }
+    &:focus { border-color: #2f3642; }
 
     option {
-      background: #0a0d14;
-      color: var(--gt-text);
+      background: #0f1219;
+      color: #e6ecf3;
     }
   }
 
@@ -33,51 +33,51 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--gt-border);
-    border-radius: 4px;
-    color: var(--gt-text-dim);
+    background: transparent;
+    border: 1px solid #1f2633;
+    border-radius: 2px;
+    color: #5c6472;
     cursor: pointer;
-    transition: all 0.12s;
+    transition: color 0.12s, border-color 0.12s;
     font-size: 11px;
     flex-shrink: 0;
 
     &:hover {
-      color: var(--gt-accent);
-      border-color: var(--gt-border-hover);
+      color: #e6ecf3;
+      border-color: #2f3642;
     }
   }
 }
 
 .region-bar {
-  padding: 8px 10px 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 12px;
+  border-bottom: 1px solid #1f2633;
 }
 
 .region-select {
-  width: calc(100% - 36px);
-  margin-left: 36px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #ccc;
-  font: 500 10px var(--gt-mono);
+  width: 100%;
+  margin-left: 0;
+  background: #0f1219;
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  color: #8a94a6;
+  font: 500 10px 'JetBrains Mono', monospace;
   padding: 5px 8px;
   cursor: pointer;
   outline: none;
   appearance: none;
 
-  &:focus { border-color: #4fc3f7; }
+  &:focus { border-color: #2f3642; }
 
   option,
   optgroup {
-    background: #0a0d14;
-    color: #ccc;
+    background: #0f1219;
+    color: #8a94a6;
   }
 
   optgroup {
     font-weight: 600;
-    color: #888;
+    color: #5c6472;
   }
 }
 
@@ -96,12 +96,12 @@
 
 .region-badge {
   display: inline-block;
-  background: rgba(79, 195, 247, 0.12);
-  border: 1px solid rgba(79, 195, 247, 0.25);
-  color: #4fc3f7;
-  font: 600 9px var(--gt-mono);
+  background: transparent;
+  border: 1px solid #1f2633;
+  color: #8a94a6;
+  font: 600 9px 'JetBrains Mono', monospace;
   padding: 2px 7px;
-  border-radius: 3px;
+  border-radius: 999px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -109,8 +109,8 @@
 }
 
 .region-desc {
-  font: 400 9px var(--gt-mono);
-  color: #888;
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: #5c6472;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -121,14 +121,14 @@
 .region-exit-btn {
   background: none;
   border: none;
-  color: #f44336;
+  color: #d87872;
   font-size: 14px;
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
   flex-shrink: 0;
 
-  &:hover { color: #ff7043; }
+  &:hover { color: #e89590; }
 }
 
 .sb-sheet-handle {

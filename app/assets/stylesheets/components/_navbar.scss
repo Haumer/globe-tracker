@@ -5,7 +5,8 @@
   justify-content: space-between;
   padding: 0 24px;
   height: 48px;
-  background: white;
+  background: #0f1219;
+  border-bottom: 1px solid #1f2633;
 }
 
 .globe-nav-brand a {
@@ -21,18 +22,17 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  background: #4fc3f7;
-  color: #000;
+  border-radius: 2px;
+  background: #a8c2db;
+  color: #0b0d10;
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.5px;
 }
 
 .globe-nav-title {
-  font-weight: 600;
-  font-size: 15px;
-  color: #222;
+  font: 600 15px 'Inter', -apple-system, sans-serif;
+  color: #e6ecf3;
   letter-spacing: -0.3px;
 }
 
@@ -43,12 +43,11 @@
 
 .globe-nav-link {
   font-size: 13px;
-  color: #666;
+  color: #8a94a6;
   text-decoration: none;
-  transition: color 0.2s;
 
   &:hover {
-    color: #000;
+    color: #e6ecf3;
   }
 }
 
@@ -58,7 +57,7 @@
   margin: 0;
   padding: 0;
   background: #05070c;
-  color: #e8edf6;
+  color: #e6ecf3;
 
   .globe-nav {
     position: fixed;
@@ -67,10 +66,8 @@
     right: 0;
     z-index: 100;
     height: 36px;
-    background: rgba(6, 8, 13, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(79, 195, 247, 0.06);
+    background: rgba(6, 8, 13, 0.9);
+    border-bottom: 1px solid #1f2633;
     pointer-events: none;
     padding: 0 14px;
 
@@ -83,24 +80,24 @@
     width: 22px;
     height: 22px;
     font-size: 9px;
-    border-radius: 4px;
-    background: rgba(79, 195, 247, 0.2);
-    color: #4fc3f7;
+    border-radius: 2px;
+    background: rgba(168, 194, 219, 0.2);
+    color: #a8c2db;
   }
 
   .globe-nav-title {
-    font: 600 12px 'DM Sans', sans-serif;
-    color: rgba(200, 210, 225, 0.6);
+    font: 600 12px 'Inter', -apple-system, sans-serif;
+    color: #5c6472;
     letter-spacing: 0.5px;
   }
 
   .globe-nav-link {
     font: 500 10px 'JetBrains Mono', monospace;
-    color: rgba(200, 210, 225, 0.35);
+    color: #5c6472;
     letter-spacing: 0.5px;
 
     &:hover {
-      color: rgba(200, 210, 225, 0.8);
+      color: #8a94a6;
     }
   }
 }

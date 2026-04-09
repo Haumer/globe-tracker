@@ -1,10 +1,7 @@
 .object-view-page {
   min-height: 100vh;
-  color: #f8fafc;
-  background:
-    radial-gradient(circle at top left, rgba(79, 195, 247, 0.18), transparent 34%),
-    radial-gradient(circle at top right, rgba(255, 109, 0, 0.12), transparent 28%),
-    linear-gradient(180deg, #07111c 0%, #091722 38%, #0b1825 100%);
+  color: #e6ecf3;
+  background: #0b0d10;
 }
 
 .object-shell {
@@ -24,11 +21,9 @@
 .object-hero-side,
 .object-card {
   position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(8, 21, 34, 0.92) 0%, rgba(11, 24, 37, 0.86) 100%);
-  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.35);
-  backdrop-filter: blur(18px);
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  background: #0f1219;
 }
 
 .object-hero-main {
@@ -46,18 +41,18 @@
   font: 600 11px "JetBrains Mono", monospace;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(125, 211, 252, 0.78);
+  color: #a8c2db;
 }
 
 .object-kicker-sep {
   width: 32px;
   height: 1px;
-  background: rgba(125, 211, 252, 0.35);
+  background: rgba(168, 194, 219, 0.35);
 }
 
 .object-title {
   margin: 18px 0 12px;
-  font: 700 clamp(2.1rem, 4vw, 4rem) "DM Sans", sans-serif;
+  font: 700 clamp(2.1rem, 4vw, 4rem) "Inter", -apple-system, sans-serif;
   letter-spacing: -0.04em;
   line-height: 0.95;
 }
@@ -65,9 +60,9 @@
 .object-summary {
   max-width: 820px;
   margin: 0;
-  font: 500 1.05rem "DM Sans", sans-serif;
+  font: 500 1.05rem "Inter", -apple-system, sans-serif;
   line-height: 1.6;
-  color: rgba(226, 232, 240, 0.78);
+  color: #8a94a6;
 }
 
 .object-meta-grid {
@@ -79,9 +74,9 @@
 
 .object-meta-card {
   padding: 14px 15px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .object-meta-label,
@@ -91,13 +86,13 @@
   font: 600 10px "JetBrains Mono", monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.68);
+  color: #5c6472;
 }
 
 .object-meta-value {
   display: block;
-  font: 600 0.98rem "DM Sans", sans-serif;
-  color: #f8fafc;
+  font: 600 0.98rem "Inter", -apple-system, sans-serif;
+  color: #e6ecf3;
   overflow-wrap: anywhere;
 }
 
@@ -119,25 +114,24 @@
   justify-content: center;
   min-height: 48px;
   padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.2);
-  background: rgba(15, 23, 42, 0.55);
-  color: #e2e8f0;
+  border-radius: 2px;
+  border: 1px solid #1f2633;
+  background: #0f1219;
+  color: #e6ecf3;
   text-decoration: none;
-  font: 600 0.95rem "DM Sans", sans-serif;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  font: 600 0.95rem "Inter", -apple-system, sans-serif;
 }
 
 .object-action:hover {
-  transform: translateY(-1px);
   color: #fff;
-  border-color: rgba(125, 211, 252, 0.46);
-  background: rgba(15, 23, 42, 0.82);
+  border-color: #a8c2db;
+  background: #161b24;
 }
 
 .object-action--primary {
-  border-color: rgba(79, 195, 247, 0.28);
-  background: linear-gradient(135deg, rgba(79, 195, 247, 0.24), rgba(3, 105, 161, 0.18));
+  border-color: #1f2633;
+  background: #e6ecf3;
+  color: #0b0d10;
 }
 
 .object-hero-side {
@@ -149,20 +143,20 @@
 
 .object-side-block {
   padding: 18px 18px 20px;
-  border-radius: 20px;
-  background: rgba(11, 18, 31, 0.75);
+  border-radius: 2px;
+  background: #161b24;
 }
 
 .object-side-stat {
-  font: 700 clamp(2rem, 4vw, 3rem) "DM Sans", sans-serif;
+  font: 700 clamp(2rem, 4vw, 3rem) "Inter", -apple-system, sans-serif;
   letter-spacing: -0.05em;
-  color: #f8fafc;
+  color: #e6ecf3;
 }
 
 .object-side-meta {
   margin-top: 6px;
-  font: 500 0.92rem "DM Sans", sans-serif;
-  color: rgba(226, 232, 240, 0.66);
+  font: 500 0.92rem "Inter", -apple-system, sans-serif;
+  color: #8a94a6;
 }
 
 .object-grid {
@@ -186,14 +180,14 @@
 
 .object-card-head h2 {
   margin: 0;
-  font: 700 1.15rem "DM Sans", sans-serif;
+  font: 700 1.15rem "Inter", -apple-system, sans-serif;
 }
 
 .object-card-head span {
   font: 600 10px "JetBrains Mono", monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(125, 211, 252, 0.72);
+  color: #a8c2db;
 }
 
 .object-list {
@@ -203,9 +197,9 @@
 
 .object-list-item {
   padding: 16px;
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .object-list-top {
@@ -230,39 +224,38 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(79, 195, 247, 0.12);
-  color: rgba(125, 211, 252, 0.88);
+  background: rgba(168, 194, 219, 0.1);
+  color: #a8c2db;
 }
 
 .object-confidence {
-  color: rgba(248, 250, 252, 0.72);
+  color: #8a94a6;
 }
 
 .object-link {
   display: inline-block;
-  color: #f8fafc;
+  color: #e6ecf3;
   text-decoration: none;
-  font: 600 1.02rem "DM Sans", sans-serif;
-  transition: color 0.18s ease;
+  font: 600 1.02rem "Inter", -apple-system, sans-serif;
 }
 
 .object-link:hover {
-  color: #7dd3fc;
+  color: #a8c2db;
 }
 
 .object-link--static:hover {
-  color: #f8fafc;
+  color: #e6ecf3;
 }
 
 .object-copy {
   margin: 9px 0 0;
-  font: 500 0.93rem "DM Sans", sans-serif;
+  font: 500 0.93rem "Inter", -apple-system, sans-serif;
   line-height: 1.5;
-  color: rgba(226, 232, 240, 0.72);
+  color: #8a94a6;
 }
 
 .object-copy--meta {
-  color: rgba(148, 163, 184, 0.72);
+  color: #5c6472;
 }
 
 .object-tags {
@@ -281,8 +274,8 @@
   padding: 0 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.82);
-  font: 500 0.8rem "DM Sans", sans-serif;
+  color: #8a94a6;
+  font: 500 0.8rem "Inter", -apple-system, sans-serif;
 }
 
 .object-empty {
@@ -290,13 +283,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px dashed #1f2633;
   text-align: center;
   padding: 18px;
-  font: 500 0.95rem "DM Sans", sans-serif;
-  color: rgba(148, 163, 184, 0.82);
+  font: 500 0.95rem "Inter", -apple-system, sans-serif;
+  color: #5c6472;
 }
 
 @media (max-width: 1024px) {

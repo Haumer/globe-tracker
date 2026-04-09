@@ -1,10 +1,7 @@
 .area-view-page {
   min-height: 100vh;
-  color: #f8fafc;
-  background:
-    radial-gradient(circle at top left, rgba(79, 195, 247, 0.14), transparent 34%),
-    radial-gradient(circle at top right, rgba(251, 146, 60, 0.1), transparent 28%),
-    linear-gradient(180deg, #07111c 0%, #091722 38%, #0b1825 100%);
+  color: #e6ecf3;
+  background: #0b0d10;
 }
 
 .area-shell {
@@ -28,9 +25,9 @@
 .area-brief-summary {
   margin: 0;
   max-width: 72ch;
-  font: 500 1.02rem "DM Sans", sans-serif;
+  font: 500 1.02rem "Inter", -apple-system, sans-serif;
   line-height: 1.7;
-  color: rgba(241, 245, 249, 0.9);
+  color: #e6ecf3;
 }
 
 .area-brief-grid {
@@ -53,37 +50,37 @@
 }
 
 .area-impact-item {
-  border-top: 2px solid rgba(79, 195, 247, 0.28);
+  border-top: 2px solid #a8c2db;
 }
 
 .area-impact-item--critical {
-  border-top-color: rgba(239, 83, 80, 0.72);
+  border-top-color: #d87872;
 }
 
 .area-impact-item--high {
-  border-top-color: rgba(255, 167, 38, 0.72);
+  border-top-color: #d4a765;
 }
 
 .area-impact-item--medium {
-  border-top-color: rgba(79, 195, 247, 0.72);
+  border-top-color: #a8c2db;
 }
 
 .area-impact-item--low {
-  border-top-color: rgba(129, 199, 132, 0.72);
+  border-top-color: #7fae86;
 }
 
 .area-stat-card,
 .area-list-item {
   padding: 16px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  background: #161b24;
+  border: 1px solid #1f2633;
 }
 
 .area-stat-card strong {
   display: block;
   margin-top: 8px;
-  font: 700 1.7rem "DM Sans", sans-serif;
+  font: 700 1.7rem "Inter", -apple-system, sans-serif;
   letter-spacing: -0.05em;
 }
 
@@ -108,25 +105,25 @@
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.48);
-  color: rgba(226, 232, 240, 0.84);
+  border: 1px solid #1f2633;
+  background: #161b24;
+  color: #8a94a6;
 }
 
 .area-chip--status.area-chip--ready {
-  border-color: rgba(102, 187, 106, 0.25);
-  color: #9be29e;
+  border-color: rgba(127, 174, 134, 0.25);
+  color: #7fae86;
 }
 
 .area-chip--status.area-chip--pending,
 .area-chip--status.area-chip--stale {
-  border-color: rgba(255, 179, 0, 0.25);
-  color: #ffca63;
+  border-color: rgba(212, 167, 101, 0.25);
+  color: #d4a765;
 }
 
 .area-chip--status.area-chip--error {
-  border-color: rgba(239, 83, 80, 0.25);
-  color: #ff8d8b;
+  border-color: rgba(216, 120, 114, 0.25);
+  color: #d87872;
 }
 
 .area-card-stack,
@@ -138,27 +135,27 @@
 
 .area-section-kicker {
   margin-bottom: 12px;
-  color: rgba(125, 211, 252, 0.82);
+  color: #a8c2db;
 }
 
 .area-list-item h3 {
   margin: 0;
-  font: 700 1.05rem "DM Sans", sans-serif;
+  font: 700 1.05rem "Inter", -apple-system, sans-serif;
 }
 
 .area-list-item p {
   margin: 8px 0 0;
-  font: 500 0.94rem "DM Sans", sans-serif;
+  font: 500 0.94rem "Inter", -apple-system, sans-serif;
   line-height: 1.55;
-  color: rgba(226, 232, 240, 0.72);
+  color: #8a94a6;
 }
 
 .area-list-copy {
-  color: rgba(226, 232, 240, 0.82);
+  color: #8a94a6;
 }
 
 .area-list-link {
-  color: #f8fafc;
+  color: #e6ecf3;
   text-decoration: none;
 }
 
@@ -176,7 +173,7 @@
 }
 
 .area-meta-line {
-  color: rgba(226, 232, 240, 0.74);
+  color: #8a94a6;
 }
 
 .region-track-btn {
@@ -186,9 +183,9 @@
   min-height: 24px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid rgba(79, 195, 247, 0.25);
-  background: rgba(79, 195, 247, 0.12);
-  color: #4fc3f7;
+  border: 1px solid #1f2633;
+  background: rgba(168, 194, 219, 0.08);
+  color: #a8c2db;
   text-decoration: none;
   font: 600 9px "JetBrains Mono", monospace;
   letter-spacing: 0.08em;

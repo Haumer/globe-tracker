@@ -2,8 +2,12 @@ class ApplicationJob < ActiveJob::Base
   class_attribute :polling_source_resolver, instance_writer: false, default: nil
   class_attribute :polling_type_resolver, instance_writer: false, default: nil
 
-  # Fast-live jobs older than this are stale — skip to drain backlogs quickly
-  STALE_THRESHOLD = 90.seconds
+  # Jobs older than these thresholds are stale — skip to drain backlogs quickly
+  STALE_THRESHOLDS = {
+    "fast_live" => 90.seconds,
+    "default"   => 10.minutes,
+    "background" => 30.minutes,
+  }.freeze
 
   before_perform :skip_if_stale!
   around_perform :record_polling_telemetry
@@ -22,12 +26,12 @@ class ApplicationJob < ActiveJob::Base
   private
 
   def skip_if_stale!
-    return unless queue_name == "fast_live"
-    return if enqueued_at.blank?
+    threshold = STALE_THRESHOLDS[queue_name]
+    return if threshold.nil? || enqueued_at.blank?
 
     age = Time.current - Time.parse(enqueued_at.to_s)
-    if age > STALE_THRESHOLD
-      Rails.logger.info("[#{self.class.name}] Skipping stale job (age: #{age.round}s)"  )
+    if age > threshold
+      Rails.logger.info("[#{self.class.name}] Skipping stale job (age: #{age.round}s)")
       throw :abort
     end
   end

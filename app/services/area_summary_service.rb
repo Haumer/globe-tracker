@@ -190,7 +190,7 @@ class AreaSummaryService
   end
 
   def fresh_flights_scope
-    @fresh_flights_scope ||= Flight.where("updated_at > ?", 2.minutes.ago).within_bounds(@bounds)
+    @fresh_flights_scope ||= Flight.where("updated_at > ?", 6.minutes.ago).within_bounds(@bounds)
   end
 
   def fresh_ships_scope

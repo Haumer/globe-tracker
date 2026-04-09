@@ -18,7 +18,7 @@ class AdsbService
       end
     end
 
-    Flight.where(source: "adsb").where("updated_at > ?", 2.minutes.ago)
+    Flight.where(source: "adsb").where("updated_at > ?", 6.minutes.ago)
   end
 
   def self.fetch_flights(bounds: {})
@@ -30,7 +30,7 @@ class AdsbService
       end
     end
 
-    Flight.where(source: "adsb").where("updated_at > ?", 2.minutes.ago).within_bounds(bounds)
+    Flight.where(source: "adsb").where("updated_at > ?", 6.minutes.ago).within_bounds(bounds)
   end
 
   private

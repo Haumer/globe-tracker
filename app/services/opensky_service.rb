@@ -27,7 +27,7 @@ class OpenskyService
       end
     end
 
-    Flight.where("updated_at > ?", 2.minutes.ago).within_bounds(bounds)
+    Flight.where("updated_at > ?", 6.minutes.ago).within_bounds(bounds)
   end
 
   def self.fetch_route(callsign)

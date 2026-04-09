@@ -13,7 +13,8 @@ module Api
       bounds = parse_bounds
 
       # Read from DB — the GlobalPollerService keeps flights fresh in the background
-      flights = Flight.where("updated_at > ?", 2.minutes.ago).select(*LIST_COLUMNS)
+      # 6 minutes covers the full ADS-B regional rotation cycle (10 regions × 30s = 5 min)
+      flights = Flight.where("updated_at > ?", 6.minutes.ago).select(*LIST_COLUMNS)
       flights = flights.within_bounds(bounds) if bounds.present?
       flights = flights.where(military: true) if params[:filter] == "military"
 

@@ -72,7 +72,7 @@ class Api::FlightsControllerTest < ActionDispatch::IntegrationTest
       altitude: 30000, speed: 400,
       origin_country: "Germany",
       military: false,
-      updated_at: 5.minutes.ago,
+      updated_at: 7.minutes.ago,
     )
 
     get "/api/flights"

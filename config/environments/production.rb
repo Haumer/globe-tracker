@@ -114,6 +114,8 @@ Rails.application.configure do
   config.hosts = [
     ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"),
     /.*\.herokuapp\.com/,
+    IPAddr.new("0.0.0.0/0"),       # allow direct IP access (Hetzner)
+    IPAddr.new("::/0"),             # allow IPv6
   ]
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

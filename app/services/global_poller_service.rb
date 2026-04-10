@@ -29,7 +29,7 @@ class GlobalPollerService
   ].freeze
 
   JOB_SCHEDULES = [
-    { job: PollOpenskyJob, every: 15.seconds, offset: 0.seconds },
+    { job: PollOpenskyJob, every: 30.seconds, offset: 0.seconds },
     { job: PollAdsbMilitaryJob, every: 15.seconds, offset: 5.seconds },
     { job: RefreshLiveTrainsJob, every: 30.seconds, offset: 10.seconds, conditional: :trains_layer_enabled? },
     { job: RefreshEarthquakesJob, every: 2.minutes, offset: 0.seconds },

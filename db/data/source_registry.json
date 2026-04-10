@@ -105,6 +105,23 @@
       "notes": "Current DACH economy baseline is country-level and source-backed by the World Bank WDI ingest already used in supply-chain normalization. Official Austria, Germany, and Switzerland subnational sources remain planned."
     },
     {
+      "key": "dach-region-population-baseline",
+      "name": "DACH Region Population Baseline",
+      "status": "active",
+      "priority": 56,
+      "country_codes": ["AUT", "DEU", "CHE"],
+      "country_names": ["Austria", "Germany", "Switzerland"],
+      "region_keys": ["dach"],
+      "data_pack_keys": ["economic_baseline"],
+      "target_model": "regional_area_indicator_snapshots",
+      "source_name": "Eurostat Regional Population plus Swiss BFS Canton Population",
+      "retrieval_path": "api/regional_area_indicators?region_key=dach&comparable_level=region",
+      "source_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_r_pjanaggr3 ; https://www.pxweb.bfs.admin.ch/api/v1/en/px-x-0103010000_102/px-x-0103010000_102.px",
+      "access_mode": "public_api",
+      "cadence": "published updates",
+      "notes": "Official region-equivalent population snapshots for DACH: Austrian Bundeslander via NUTS 2, German Lander via NUTS 1, and Swiss cantons via BFS."
+    },
+    {
       "key": "dach-admin-economic-preview",
       "name": "DACH Admin Economic Preview",
       "status": "active",

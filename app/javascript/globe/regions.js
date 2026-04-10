@@ -109,7 +109,7 @@ export const REGIONS = [
         "trade_net_pct_gdp",
         "energy_imports_net_pct_energy_use",
       ],
-      region: ["structure_signal"],
+      region: ["population_total", "structure_signal"],
       municipality: ["structure_signal"],
     },
     metricSources: {
@@ -129,6 +129,12 @@ export const REGIONS = [
         default: {
           label: "Structure preview",
           detail: "Derived from city, site, and curated power catalogs",
+        },
+        metrics: {
+          population_total: {
+            label: "Eurostat + BFS",
+            detail: "Official region-equivalent population",
+          },
         },
       },
       municipality: {

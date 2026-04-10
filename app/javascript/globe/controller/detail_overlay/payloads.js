@@ -720,6 +720,48 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           contextAvailable: true,
         })
       }
+      case "regional_area_metric": {
+        const selectedMetricValue = toNumber(data?.selected_metric_value)
+        const selectedMetricLabel = firstPresent(data?.selected_metric_short_label, data?.selected_metric_label)
+        const nativeLevel = firstPresent(data?.native_level, "region")
+        const accent = this._regionalAdminEconomyAccent?.(data) || data?.accent_color || "#2f7ea7"
+        const sourceLabel = compactFacts([
+          data?.source_name,
+          data?.latest_year,
+          nativeLevel,
+        ], 3).join(" · ")
+        const selectedMetricDisplay = selectedMetricValue != null
+          ? (
+              data?.selected_metric_key?.includes?.("_usd") ? `$${Math.round(selectedMetricValue).toLocaleString()}` :
+              data?.selected_metric_key?.includes?.("_pct") || data?.selected_metric_key === "energy_imports_net_pct_energy_use" ? `${selectedMetricValue.toFixed(1)}%` :
+              Math.round(selectedMetricValue).toLocaleString()
+            )
+          : null
+
+        return makePayload({
+          title: firstPresent(data?.name, "Region"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.country_name,
+              nativeLevel,
+            ], 2).join(" · "),
+            data?.country_code_alpha3,
+            "Regional metric"
+          ),
+          brief: compactFacts([
+            selectedMetricLabel && selectedMetricDisplay ? `${selectedMetricLabel} ${selectedMetricDisplay}` : null,
+            data?.selected_metric_source || sourceLabel,
+          ], 2).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Region"), "warning"),
+            chip(firstPresent(selectedMetricLabel, "Metric"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 450000,
+          contextAvailable: true,
+        })
+      }
       case "regional_municipality": {
         const signalScore = toNumber(data?.signal_score)
         const selectedSectorNames = Array.isArray(data?.selected_sector_names) ? data.selected_sector_names : []

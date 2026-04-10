@@ -13,7 +13,7 @@ export const REGIONAL_METRIC_CATALOG = [
     label: "Population",
     shortLabel: "Pop",
     family: "demography",
-    granularities: ["country"],
+    granularities: ["country", "region"],
     valueType: "count",
     sourceMode: "official",
   },

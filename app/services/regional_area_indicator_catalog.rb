@@ -1,12 +1,53 @@
 require "json"
 require "net/http"
 require "uri"
+require "csv"
+require "open3"
+require "rexml/document"
+require "stringio"
+require "zip"
 
 class RegionalAreaIndicatorCatalog
   EUROSTAT_POPULATION_DATASET = "demo_r_pjanaggr3".freeze
   EUROSTAT_POPULATION_URL = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/#{EUROSTAT_POPULATION_DATASET}".freeze
   SWISS_BFS_POPULATION_URL = "https://www.pxweb.bfs.admin.ch/api/v1/en/px-x-0103010000_102/px-x-0103010000_102.px".freeze
+  SWISS_BFS_DISTRICT_POPULATION_URL = "https://www.pxweb.bfs.admin.ch/api/v1/en/px-x-0102010000_104/px-x-0102010000_104.px".freeze
+  DESTATIS_DISTRICT_POPULATION_URL = "https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Gemeindeverzeichnis/Administrativ/04-kreise.xlsx?__blob=publicationFile&v=14".freeze
+  AUSTRIA_POPULATION_2024_URL = "https://data.statistik.gv.at/data/OGD_bevstandjbab2002_BevStand_2024.csv".freeze
+  AUSTRIA_DISTRICT_HEADER_URL = "https://data.statistik.gv.at/data/OGD_f0743_VZ_HIS_GEM_2_C-GRGEM17-0.csv".freeze
+  GERMANY_DISTRICT_SNAPSHOT_PATH = Rails.root.join("db", "data", "regional_area_indicator_sources", "dach_germany_district_population.json").freeze
   CACHE_TTL = 12.hours
+
+  AUSTRIA_STATE_NAMES = {
+    "1" => "Burgenland",
+    "2" => "Carinthia",
+    "3" => "Lower Austria",
+    "4" => "Upper Austria",
+    "5" => "Salzburg",
+    "6" => "Styria",
+    "7" => "Tyrol",
+    "8" => "Vorarlberg",
+    "9" => "Vienna"
+  }.freeze
+
+  GERMANY_STATE_NAMES = {
+    "01" => "Schleswig-Holstein",
+    "02" => "Hamburg",
+    "03" => "Lower Saxony",
+    "04" => "Bremen",
+    "05" => "North Rhine-Westphalia",
+    "06" => "Hesse",
+    "07" => "Rhineland-Palatinate",
+    "08" => "Baden-Wurttemberg",
+    "09" => "Bavaria",
+    "10" => "Saarland",
+    "11" => "Berlin",
+    "12" => "Brandenburg",
+    "13" => "Mecklenburg-Vorpommern",
+    "14" => "Saxony",
+    "15" => "Saxony-Anhalt",
+    "16" => "Thuringia"
+  }.freeze
 
   DACH_REGION_DEFINITIONS = [
     { key: "region:aut:burgenland", country_code: "AT", country_code_alpha3: "AUT", country_name: "Austria", name: "Burgenland", native_level: "state", iso_3166_2: "AT-1", source_system: "eurostat", source_geo: "AT11" },
@@ -65,19 +106,238 @@ class RegionalAreaIndicatorCatalog
   class << self
     def filtered(region_key:, comparable_level: "region")
       return [] unless region_key.to_s == "dach"
-      return [] unless comparable_level.to_s == "region"
-
-      build_dach_region_population_records
+      case comparable_level.to_s
+      when "region"
+        build_dach_region_population_records
+      when "district"
+        build_dach_district_population_records
+      else
+        []
+      end
     rescue StandardError => error
       Rails.logger.error("RegionalAreaIndicatorCatalog failed: #{error.message}")
       []
     end
 
     def etag(region_key: nil, comparable_level: "region")
-      "regional-area-indicators:v1:#{region_key}:#{comparable_level}"
+      "regional-area-indicators:v2:#{region_key}:#{comparable_level}"
     end
 
     private
+
+    def build_dach_district_population_records
+      records = []
+      records.concat(safe_source_records("destatis_district_population") { build_destatis_district_population_records })
+      records.concat(safe_source_records("statistik_austria_district_population") { build_austria_district_population_records })
+      records.concat(safe_source_records("bfs_district_population") { build_bfs_district_population_records })
+
+      records.sort_by do |record|
+        [
+          record["country_name"].to_s,
+          record["region_name"].to_s,
+          -(record.dig("metrics", "population_total") || 0.0),
+          record["name"].to_s
+        ]
+      end
+    end
+
+    def build_destatis_district_population_records
+      payload = Rails.cache.fetch("regional-area-indicators:destatis:district-population:v1", expires_in: CACHE_TTL) do
+        fetch_body(URI(DESTATIS_DISTRICT_POPULATION_URL))
+      end
+      body = payload[:body].to_s
+      return load_snapshot_records(GERMANY_DISTRICT_SNAPSHOT_PATH) if body.blank?
+
+      parse_destatis_district_population_xlsx(body)
+    rescue StandardError
+      load_snapshot_records(GERMANY_DISTRICT_SNAPSHOT_PATH)
+    end
+
+    def build_austria_district_population_records
+      population_payload = Rails.cache.fetch("regional-area-indicators:austria:district-population:v1", expires_in: CACHE_TTL) do
+        {
+          population_csv: fetch_body(URI(AUSTRIA_POPULATION_2024_URL))[:body],
+          header_csv: fetch_body(URI(AUSTRIA_DISTRICT_HEADER_URL))[:body]
+        }
+      end
+
+      population_csv = population_payload[:population_csv].to_s
+      header_csv = population_payload[:header_csv].to_s
+      return [] if population_csv.blank? || header_csv.blank?
+
+      district_names = {}
+      CSV.parse(header_csv, headers: true, col_sep: ";").each do |row|
+        raw_code = row["code"].to_s
+        next unless raw_code.start_with?("GRBEZ17-")
+
+        district_code = raw_code.delete_prefix("GRBEZ17-")
+        district_names[district_code] = row["name"].to_s.sub(/\s*<\d+>\s*\z/, "").strip
+      end
+
+      totals = Hash.new(0)
+      CSV.parse(population_csv, headers: true, col_sep: ";").each do |row|
+        geo = row["C-GRGEMAKT-0"].to_s
+        value = row["F-ISIS-1"].to_i
+        next if geo.blank? || value.zero?
+
+        district_code = geo[9, 3]
+        next if district_code.blank?
+
+        totals[district_code] += value
+      end
+
+      totals.map do |district_code, total|
+        name = district_names[district_code] || district_code
+        state_name = AUSTRIA_STATE_NAMES[district_code[0]]
+        {
+          "id" => "district-aut-#{district_code}",
+          "geography_kind" => "district",
+          "geography_key" => "district:aut:#{district_code}",
+          "comparable_level" => "district",
+          "native_level" => "bezirk",
+          "name" => name,
+          "region_name" => state_name,
+          "country_code" => "AT",
+          "country_code_alpha3" => "AUT",
+          "country_name" => "Austria",
+          "source_geo" => district_code,
+          "latest_year" => 2024,
+          "source_name" => "Statistik Austria Population at Start of 2024",
+          "source_provider" => "Statistik Austria",
+          "source_dataset" => "OGD_bevstandjbab2002_BevStand_2024",
+          "source_url" => AUSTRIA_POPULATION_2024_URL,
+          "metrics" => {
+            "population_total" => total.to_f
+          }
+        }
+      end
+    end
+
+    def build_bfs_district_population_records
+      payload = Rails.cache.fetch("regional-area-indicators:bfs:district-population:v1", expires_in: CACHE_TTL) do
+        metadata = fetch_json(URI(SWISS_BFS_DISTRICT_POPULATION_URL))
+        geo_variable = metadata.fetch("variables").find { |variable| variable["code"] == "Kanton (-) / Bezirk (>>) / Gemeinde (......)" }
+        values = Array(geo_variable["values"])
+        labels = Array(geo_variable["valueTexts"])
+
+        canton = nil
+        district_entries = values.zip(labels).filter_map do |code, label|
+          if label.to_s.start_with?("- ")
+            canton = label.to_s.delete_prefix("- ").strip
+            next
+          end
+
+          next unless label.to_s.start_with?(">> ")
+
+          {
+            code: code,
+            name: label.to_s.delete_prefix(">> ").strip,
+            region_name: canton
+          }
+        end
+
+        body = {
+          query: [
+            { code: "Jahr", selection: { filter: "item", values: ["2024"] } },
+            { code: "Kanton (-) / Bezirk (>>) / Gemeinde (......)", selection: { filter: "item", values: district_entries.map { |entry| entry[:code] } } },
+            { code: "Bevölkerungstyp", selection: { filter: "item", values: ["1"] } },
+            { code: "Geburtsort", selection: { filter: "item", values: ["-99999"] } },
+            { code: "Staatsangehörigkeit", selection: { filter: "item", values: ["-99999"] } }
+          ],
+          response: { format: "json-stat2" }
+        }
+
+        data = fetch_json(
+          URI(SWISS_BFS_DISTRICT_POPULATION_URL),
+          method: :post,
+          body: JSON.generate(body),
+          headers: { "Content-Type" => "application/json" }
+        )
+
+        { entries: district_entries, data: data }
+      end
+
+      entries = Array(payload[:entries])
+      data = payload[:data]
+      return [] unless data.is_a?(Hash)
+
+      values = Array(data["value"])
+      entries.each_with_index.filter_map do |entry, index|
+        value = values[index]
+        next if value.nil?
+
+        {
+          "id" => "district-che-#{entry[:code].to_s.downcase}",
+          "geography_kind" => "district",
+          "geography_key" => "district:che:#{entry[:code]}",
+          "comparable_level" => "district",
+          "native_level" => "district",
+          "name" => entry[:name],
+          "region_name" => entry[:region_name],
+          "country_code" => "CH",
+          "country_code_alpha3" => "CHE",
+          "country_name" => "Switzerland",
+          "source_geo" => entry[:code],
+          "latest_year" => 2024,
+          "source_name" => "Swiss BFS District Population",
+          "source_provider" => "Swiss Federal Statistical Office",
+          "source_dataset" => "px-x-0102010000_104",
+          "source_url" => SWISS_BFS_DISTRICT_POPULATION_URL,
+          "metrics" => {
+            "population_total" => value.to_f
+          }
+        }
+      end
+    end
+
+    def parse_destatis_district_population_xlsx(binary)
+      rows = xlsx_rows(binary, sheet_name: "Kreisfreie Städte u. Landkreise")
+      header_row_index = rows.find_index do |row|
+        row.values.any? { |value| value.to_s.include?("Amtlicher Regionalschlüssel") }
+      end
+      return [] unless header_row_index
+
+      header_row = rows[header_row_index]
+      code_column = xlsx_column_for_header(header_row, "Amtlicher Regionalschlüssel")
+      type_column = xlsx_column_for_header(header_row, "Regionale Bezeichnung")
+      name_column = xlsx_column_for_header(header_row, "Kreisfreie Städte und Landkreise")
+      population_column = xlsx_column_for_matching_header(header_row, /Bevölkerung/i)
+      return [] unless code_column && type_column && name_column && population_column
+
+      rows.drop(header_row_index + 1).filter_map do |row|
+        district_code = row[code_column].to_s.strip
+        next unless district_code.match?(/\A\d{5}\z/)
+
+        name = row[name_column].to_s.strip
+        next if name.blank?
+
+        native_type = row[type_column].to_s.strip
+        population_total = parse_localized_number(row[population_column])
+        next if population_total.nil?
+
+        {
+          "id" => "district-deu-#{district_code}",
+          "geography_kind" => "district",
+          "geography_key" => "district:deu:#{district_code}",
+          "comparable_level" => "district",
+          "native_level" => native_type.downcase.include?("kreisfreie") ? "kreisfreie_stadt" : "landkreis",
+          "name" => name,
+          "region_name" => GERMANY_STATE_NAMES[district_code[0, 2]],
+          "country_code" => "DE",
+          "country_code_alpha3" => "DEU",
+          "country_name" => "Germany",
+          "source_geo" => district_code,
+          "latest_year" => 2024,
+          "source_name" => "Destatis Kreisfreie Stadte und Landkreise",
+          "source_provider" => "Destatis",
+          "source_dataset" => "04-kreise",
+          "source_url" => DESTATIS_DISTRICT_POPULATION_URL,
+          "metrics" => {
+            "population_total" => population_total.to_f
+          }
+        }
+      end
+    end
 
     def build_dach_region_population_records
       eurostat_definitions = DACH_REGION_DEFINITIONS.select { |definition| definition[:source_system] == "eurostat" }
@@ -216,7 +476,24 @@ class RegionalAreaIndicatorCatalog
       Array(payload["value"])[index]&.to_f
     end
 
+    def fetch_body(uri, method: :get, body: nil, headers: {})
+      response = fetch_response(uri, method: method, body: body, headers: headers)
+
+      {
+        body: response.body,
+        etag: response["ETag"],
+        last_modified: response["Last-Modified"],
+        content_type: response["Content-Type"]
+      }
+    rescue SocketError, Socket::ResolutionError
+      fetch_body_via_curl(uri, method: method, body: body, headers: headers)
+    end
+
     def fetch_json(uri, method: :get, body: nil, headers: {})
+      JSON.parse(fetch_body(uri, method: method, body: body, headers: headers)[:body])
+    end
+
+    def fetch_response(uri, method: :get, body: nil, headers: {})
       request_class = method.to_s == "post" ? Net::HTTP::Post : Net::HTTP::Get
       request = request_class.new(uri)
       headers.each { |key, value| request[key] = value }
@@ -228,7 +505,124 @@ class RegionalAreaIndicatorCatalog
 
       raise "HTTP #{response.code} from #{uri.host}" unless response.is_a?(Net::HTTPSuccess)
 
-      JSON.parse(response.body)
+      response
+    end
+
+    def xlsx_rows(binary, sheet_name:)
+      Zip::File.open_buffer(binary) do |zip|
+        shared_strings = xlsx_shared_strings(zip)
+        sheet_path = xlsx_sheet_path(zip, sheet_name) || "xl/worksheets/sheet1.xml"
+        entry = zip.find_entry(sheet_path)
+        return [] unless entry
+
+        document = REXML::Document.new(entry.get_input_stream.read)
+        REXML::XPath.match(document, "//xmlns:sheetData/xmlns:row").map do |row|
+          cells = {}
+          REXML::XPath.each(row, "xmlns:c") do |cell|
+            column = cell.attributes["r"].to_s.gsub(/\d+/, "")
+            next if column.blank?
+
+            cells[column] = xlsx_cell_value(cell, shared_strings)
+          end
+          cells
+        end
+      end
+    end
+
+    def xlsx_sheet_path(zip, sheet_name)
+      workbook_entry = zip.find_entry("xl/workbook.xml")
+      rels_entry = zip.find_entry("xl/_rels/workbook.xml.rels")
+      return nil unless workbook_entry && rels_entry
+
+      workbook = REXML::Document.new(workbook_entry.get_input_stream.read)
+      rels = REXML::Document.new(rels_entry.get_input_stream.read)
+      relationship_targets = REXML::XPath.match(rels, "//xmlns:Relationship").each_with_object({}) do |node, acc|
+        acc[node.attributes["Id"]] = node.attributes["Target"]
+      end
+
+      sheet = REXML::XPath.match(workbook, "//xmlns:sheets/xmlns:sheet").find do |node|
+        node.attributes["name"].to_s == sheet_name
+      end
+      return nil unless sheet
+
+      target = relationship_targets[sheet.attributes["r:id"]]
+      return nil if target.blank?
+
+      target.start_with?("xl/") ? target : File.join("xl", target)
+    end
+
+    def xlsx_shared_strings(zip)
+      entry = zip.find_entry("xl/sharedStrings.xml")
+      return [] unless entry
+
+      document = REXML::Document.new(entry.get_input_stream.read)
+      REXML::XPath.match(document, "//xmlns:si").map do |node|
+        REXML::XPath.match(node, ".//xmlns:t").map(&:text).join
+      end
+    end
+
+    def xlsx_cell_value(cell, shared_strings)
+      type = cell.attributes["t"].to_s
+      if type == "inlineStr"
+        return REXML::XPath.match(cell, ".//xmlns:t").map(&:text).join
+      end
+
+      raw_value = cell.elements["v"]&.text.to_s
+      return shared_strings[raw_value.to_i].to_s if type == "s"
+
+      raw_value
+    end
+
+    def xlsx_column_for_header(row, header_name)
+      row.find { |_column, value| value.to_s.strip == header_name }&.first
+    end
+
+    def xlsx_column_for_matching_header(row, matcher)
+      row.find { |_column, value| matcher.match?(value.to_s) }&.first
+    end
+
+    def parse_localized_number(value)
+      text = value.to_s.strip
+      return nil if text.blank?
+
+      normalized = text.delete(".").tr(",", ".")
+      Float(normalized)
+    rescue ArgumentError
+      nil
+    end
+
+    def fetch_body_via_curl(uri, method: :get, body: nil, headers: {})
+      command = ["curl", "-fsSL", "-X", method.to_s.upcase]
+      headers.each do |key, value|
+        command.push("-H", "#{key}: #{value}")
+      end
+      command.push("--data", body.to_s) if body.present?
+      command << uri.to_s
+
+      stdout, stderr, status = Open3.capture3(*command)
+      raise "curl failed for #{uri.host}: #{stderr.presence || stdout.presence || 'unknown error'}" unless status.success?
+
+      {
+        body: stdout,
+        etag: nil,
+        last_modified: nil,
+        content_type: nil
+      }
+    end
+
+    def load_snapshot_records(path)
+      return [] unless File.exist?(path)
+
+      JSON.parse(File.read(path.to_s))
+    rescue JSON::ParserError
+      []
+    end
+
+    def safe_source_records(label)
+      Array(yield)
+    rescue StandardError => error
+      Rails.logger.warn("RegionalAreaIndicatorCatalog source failed: #{label} #{error.class}: #{error.message}")
+      []
     end
   end
 end

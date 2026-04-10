@@ -122,6 +122,23 @@
       "notes": "Official region-equivalent population snapshots for DACH: Austrian Bundeslander via NUTS 2, German Lander via NUTS 1, and Swiss cantons via BFS."
     },
     {
+      "key": "dach-district-population-baseline",
+      "name": "DACH District Population Baseline",
+      "status": "active",
+      "priority": 56,
+      "country_codes": ["AUT", "DEU", "CHE"],
+      "country_names": ["Austria", "Germany", "Switzerland"],
+      "region_keys": ["dach"],
+      "data_pack_keys": ["economic_baseline"],
+      "target_model": "regional_area_indicator_snapshots",
+      "source_name": "Destatis district population, Statistik Austria municipal population aggregation, and Swiss BFS district population",
+      "retrieval_path": "api/regional_area_indicators?region_key=dach&comparable_level=district",
+      "source_url": "https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Gemeindeverzeichnis/Administrativ/04-kreise.xlsx?__blob=publicationFile&v=14 ; https://data.statistik.gv.at/data/OGD_bevstandjbab2002_BevStand_2024.csv ; https://www.pxweb.bfs.admin.ch/api/v1/en/px-x-0102010000_104/px-x-0102010000_104.px",
+      "access_mode": "public_api",
+      "cadence": "published updates",
+      "notes": "Official district-equivalent population snapshots for DACH: German Kreise and kreisfreie Stadte, Austrian Bezirke and Statutarstadte aggregated from municipal population, and Swiss districts from BFS. Germany also has a reviewed official snapshot fallback committed in-repo for rebuild resilience."
+    },
+    {
       "key": "dach-admin-economic-preview",
       "name": "DACH Admin Economic Preview",
       "status": "active",

@@ -110,7 +110,7 @@ export const REGIONS = [
         "energy_imports_net_pct_energy_use",
       ],
       region: ["population_total", "structure_signal"],
-      municipality: ["structure_signal"],
+      district: ["population_total"],
     },
     metricSources: {
       country: {
@@ -137,10 +137,10 @@ export const REGIONS = [
           },
         },
       },
-      municipality: {
+      district: {
         default: {
-          label: "Municipal node preview",
-          detail: "Profiled municipal and city nodes from source-backed city packs",
+          label: "Official district population",
+          detail: "Destatis, Statistik Austria, and Swiss BFS district-equivalent population",
         },
       },
     },

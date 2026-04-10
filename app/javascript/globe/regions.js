@@ -99,6 +99,45 @@ export const REGIONS = [
       { key: "finance_services", label: "Finance" },
       { key: "logistics_trade", label: "Trade" },
     ],
+    metricModes: {
+      country: [
+        "gdp_nominal_usd",
+        "population_total",
+        "gdp_per_capita_usd",
+        "exports_goods_services_pct_gdp",
+        "imports_goods_services_pct_gdp",
+        "trade_net_pct_gdp",
+        "energy_imports_net_pct_energy_use",
+      ],
+      region: ["structure_signal"],
+      municipality: ["structure_signal"],
+    },
+    metricSources: {
+      country: {
+        default: {
+          label: "World Bank WDI",
+          detail: "Official country snapshot",
+        },
+        metrics: {
+          trade_net_pct_gdp: {
+            label: "World Bank WDI",
+            detail: "Derived as exports minus imports",
+          },
+        },
+      },
+      region: {
+        default: {
+          label: "Structure preview",
+          detail: "Derived from city, site, and curated power catalogs",
+        },
+      },
+      municipality: {
+        default: {
+          label: "Municipality preview",
+          detail: "Profiled municipalities from city source packs",
+        },
+      },
+    },
     summaryModules: ["regional_economy", "industrial_sites", "power_and_grid", "political_signal"],
     dataPacks: ["economic_baseline", "industrial_sites", "power_and_grid", "political_signal"],
     description: "Economic and infrastructure watch across Germany, Austria, and Switzerland",

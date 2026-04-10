@@ -316,6 +316,7 @@ export function initializeCoreState(controller) {
   controller._localProfileRegionalIndicatorFetchToken = 0
   controller._regionalEconomyMapViewSelection = "country"
   controller._regionalEconomySectorSelection = "all"
+  controller._regionalEconomyMetricSelection = null
   controller._localProfileRegionalAdminCatalog = null
   controller._localProfileRegionalAdminRegionKey = null
   controller._localProfileRegionalAdminFetchToken = 0

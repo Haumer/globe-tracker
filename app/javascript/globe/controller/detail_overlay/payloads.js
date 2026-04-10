@@ -637,20 +637,29 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         const gdpPerCapita = toNumber(data?.metrics?.gdp_per_capita_usd)
         const manufacturingShare = toNumber(data?.metrics?.manufacturing_share_pct)
         const exportsShare = toNumber(data?.metrics?.exports_goods_services_pct_gdp)
+        const selectedMetricValue = toNumber(data?.selected_metric_value)
+        const selectedMetricLabel = firstPresent(data?.selected_metric_short_label, data?.selected_metric_label)
         const accent = this._regionalEconomyAccent?.(data) || data?.accent_color || "#b28704"
         const sourceLabel = [data?.source_name, data?.latest_year].filter(Boolean).join(" · ")
+        const selectedMetricDisplay = selectedMetricValue != null
+          ? (
+              data?.selected_metric_key?.includes?.("_usd") ? `$${Math.round(selectedMetricValue).toLocaleString()}` :
+              data?.selected_metric_key?.includes?.("_pct") || data?.selected_metric_key === "energy_imports_net_pct_energy_use" ? `${selectedMetricValue.toFixed(1)}%` :
+              Math.round(selectedMetricValue).toLocaleString()
+            )
+          : null
 
         return makePayload({
           title: firstPresent(data?.country_name, data?.country_code_alpha3, "Regional economy"),
           subtitle: firstPresent(sourceLabel, "Economic baseline"),
           brief: compactFacts([
-            manufacturingShare != null ? `Mfg ${manufacturingShare.toFixed(1)}%` : null,
+            selectedMetricLabel && selectedMetricDisplay ? `${selectedMetricLabel} ${selectedMetricDisplay}` : null,
             gdpPerCapita != null ? `GDP/cap $${Math.round(gdpPerCapita).toLocaleString()}` : null,
-            exportsShare != null ? `Exports ${exportsShare.toFixed(1)}% GDP` : null,
+            exportsShare != null ? `Exports ${exportsShare.toFixed(1)}% GDP` : manufacturingShare != null ? `Mfg ${manufacturingShare.toFixed(1)}%` : null,
           ], 3).join(" · "),
           chips: [
             chip(firstPresent(data?.country_code_alpha3, "Economy"), "warning"),
-            chip("Baseline", "neutral"),
+            chip(firstPresent(selectedMetricLabel, "Baseline"), "neutral"),
           ],
           accent,
           stroke: accent,

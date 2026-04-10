@@ -8,6 +8,7 @@ import { REGIONS, REGION_MAP, REGION_GROUPS } from "globe/regions"
 import { applyDeepLink } from "globe/deeplinks"
 import { COUNTRY_CENTROIDS } from "globe/country_centroids"
 import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
+import { defaultRegionalMetricKey, regionalMetricConfig, regionalMetricOptions, regionalMetricSourceSummary } from "globe/controller/regional_profiles/catalog"
 
 export function applyRegionMethods(GlobeController) {
   const USD_COMPACT_FORMAT = new Intl.NumberFormat("en-US", {
@@ -150,6 +151,35 @@ export function applyRegionMethods(GlobeController) {
     return numericMetricValue(record?.metrics?.[key])
   }
 
+  function regionalMetricValue(record, metricKey) {
+    if (metricKey === "trade_net_pct_gdp") {
+      const exportsShare = metricValue(record, "exports_goods_services_pct_gdp")
+      const importsShare = metricValue(record, "imports_goods_services_pct_gdp")
+      if (exportsShare == null || importsShare == null) return null
+      return exportsShare - importsShare
+    }
+
+    if (metricKey === "structure_signal") return metricValue(record, "preview_score")
+
+    return metricValue(record, metricKey)
+  }
+
+  function formatRegionalMetric(metricConfig, value) {
+    const number = numericMetricValue(value)
+    if (number == null || !metricConfig) return "—"
+
+    switch (metricConfig.valueType) {
+      case "currency":
+        return formatCompactCurrency(number)
+      case "count":
+        return formatCompactNumber(number)
+      case "percent":
+        return formatPercent(number)
+      default:
+        return formatCompactNumber(number)
+    }
+  }
+
   function sumMetric(records = [], key) {
     const values = records
       .map(record => metricValue(record, key))
@@ -179,17 +209,16 @@ export function applyRegionMethods(GlobeController) {
     return `#${toHex(left.r + ((right.r - left.r) * safeRatio))}${toHex(left.g + ((right.g - left.g) * safeRatio))}${toHex(left.b + ((right.b - left.b) * safeRatio))}`
   }
 
-  function regionalEconomyMetricLabel(record) {
-    const gdpPerCapita = formatCompactCurrency(metricValue(record, "gdp_per_capita_usd"))
-    const manufacturing = formatPercent(metricValue(record, "manufacturing_share_pct"))
-    return `${record.country_name || record.country_code_alpha3 || "Regional economy"}\nMfg ${manufacturing}\nGDP/cap ${gdpPerCapita}`
+  function regionalEconomyMetricLabel(record, metricConfig, value) {
+    const label = metricConfig?.shortLabel || metricConfig?.label || "Metric"
+    return `${record.country_name || record.country_code_alpha3 || "Regional economy"}\n${label} ${formatRegionalMetric(metricConfig, value)}`
   }
 
-  function regionalEconomyBorderStyles(records = []) {
+  function regionalEconomyBorderStyles(records = [], metricKey = "gdp_nominal_usd") {
     const ranked = records
       .slice()
       .sort((left, right) =>
-        (metricValue(right, "manufacturing_share_pct") || -1) - (metricValue(left, "manufacturing_share_pct") || -1) ||
+        (regionalMetricValue(right, metricKey) || -1) - (regionalMetricValue(left, metricKey) || -1) ||
         (left.country_name || "").localeCompare(right.country_name || "")
       )
     const palette = ["#2a6f97", "#b28704", "#9d4edd"]
@@ -264,7 +293,7 @@ export function applyRegionMethods(GlobeController) {
     return municipalitySectorKeys(profile).map(titleizeProfileKey)
   }
 
-  function regionalEconomyMapLegend(view, sectorLabel = "All sectors") {
+  function regionalEconomyMapLegend(view, sectorLabel = "All sectors", metricLabel = "GDP", metricSource = "Source not wired yet") {
     if (view === "admin") {
       return {
         chips: [
@@ -274,7 +303,8 @@ export function applyRegionMethods(GlobeController) {
         ],
         items: [
           `Fill = ${sectorLabel} signal intensity from profiled cities, strategic sites, and curated power`,
-          "Labels = top 12 admin areas in the current DACH sector view",
+          "Labels = top 12 regional nodes in the current DACH sector view",
+          `Source = ${metricSource}`,
           "Click any polygon or label to open the anchored connector card",
         ],
       }
@@ -290,6 +320,7 @@ export function applyRegionMethods(GlobeController) {
         items: [
           `Nodes = profiled municipalities/cities with ${sectorLabel} tags`,
           "Labels = top municipal nodes in the current focus",
+          `Source = ${metricSource}`,
           "Click any node to open the anchored connector card",
         ],
       }
@@ -303,8 +334,9 @@ export function applyRegionMethods(GlobeController) {
           renderLegendSwatch("#9d4edd", "Rank 3"),
         ],
         items: [
-          "Fill = manufacturing-share rank across Germany, Austria, and Switzerland",
-          "Badges = GDP per capita plus manufacturing share",
+          `Fill = ${metricLabel} rank across Germany, Austria, and Switzerland`,
+          `Badges = country label plus ${metricLabel}`,
+          `Source = ${metricSource}`,
           "Click a country badge or border to open the anchored connector card",
         ],
       }
@@ -314,7 +346,7 @@ export function applyRegionMethods(GlobeController) {
       chips: [],
       items: [
         "Economic overlays are hidden",
-        "Use Countries, Admin Areas, or Municipalities to compare the DACH baseline and subnational structure",
+        "Use Country, Region, or Municipality to compare the DACH baseline and subnational structure",
       ],
     }
   }
@@ -346,6 +378,43 @@ export function applyRegionMethods(GlobeController) {
     return ["admin", "municipality", "country", "off"].includes(this._regionalEconomyMapViewSelection)
       ? this._regionalEconomyMapViewSelection
       : "admin"
+  }
+
+  GlobeController.prototype._regionalEconomyGranularityKey = function(region = this._regionalEconomyRegion?.()) {
+    const view = this._regionalEconomyMapView?.(region)
+    if (view === "country") return "country"
+    if (view === "admin") return "region"
+    if (view === "municipality") return "municipality"
+    return "normal"
+  }
+
+  GlobeController.prototype._regionalEconomyMetricOptions = function(region = this._regionalEconomyRegion?.()) {
+    const granularityKey = this._regionalEconomyGranularityKey?.(region)
+    return regionalMetricOptions(region || {}, granularityKey)
+  }
+
+  GlobeController.prototype._regionalEconomyMetricKey = function(region = this._regionalEconomyRegion?.()) {
+    const options = this._regionalEconomyMetricOptions?.(region)
+    const allowedKeys = options.map(metric => metric.key)
+    if (allowedKeys.includes(this._regionalEconomyMetricSelection)) return this._regionalEconomyMetricSelection
+
+    return defaultRegionalMetricKey(region || {}, this._regionalEconomyGranularityKey?.(region))
+  }
+
+  GlobeController.prototype._regionalEconomyMetricConfig = function(region = this._regionalEconomyRegion?.()) {
+    return regionalMetricConfig(this._regionalEconomyMetricKey?.(region))
+  }
+
+  GlobeController.prototype._regionalEconomyMetricValue = function(record, region = this._regionalEconomyRegion?.()) {
+    return regionalMetricValue(record, this._regionalEconomyMetricKey?.(region))
+  }
+
+  GlobeController.prototype._regionalEconomyMetricSourceSummary = function(region = this._regionalEconomyRegion?.()) {
+    return regionalMetricSourceSummary(
+      region || {},
+      this._regionalEconomyGranularityKey?.(region),
+      this._regionalEconomyMetricKey?.(region)
+    )
   }
 
   GlobeController.prototype._regionalEconomySectorMode = function(region = this._regionalEconomyRegion?.()) {
@@ -430,6 +499,10 @@ export function applyRegionMethods(GlobeController) {
   GlobeController.prototype._buildRegionalEconomyContext = function(record) {
     if (!record) return null
 
+    const region = this._regionalEconomyRegion?.()
+    const metricConfig = this._regionalEconomyMetricConfig?.(region)
+    const selectedMetricValue = this._regionalEconomyMetricValue?.(record, region)
+    const metricSourceSummary = this._regionalEconomyMetricSourceSummary?.(region)
     const coordinates = this._regionalEconomyCoordinates(record)
     const sourceLabel = [record.source_name, record.latest_year].filter(Boolean).join(" · ")
     const topSectorItems = Array.isArray(record.top_sectors)
@@ -452,12 +525,14 @@ export function applyRegionMethods(GlobeController) {
       title: record.country_name || record.country_code_alpha3 || "Regional economy",
       subtitle: sourceLabel || "Economic baseline",
       summary: [
-        `Manufacturing ${formatPercent(metricValue(record, "manufacturing_share_pct"))}`,
+        `${metricConfig?.label || "Metric"} ${formatRegionalMetric(metricConfig, selectedMetricValue)}`,
         `GDP / capita ${formatCompactCurrency(metricValue(record, "gdp_per_capita_usd"))}`,
-        `Exports / GDP ${formatPercent(metricValue(record, "exports_goods_services_pct_gdp"))}`,
+        `Energy dep. ${formatPercent(metricValue(record, "energy_imports_net_pct_energy_use"))}`,
       ].join(" · "),
       meta: [
         record.country_code_alpha3 ? { label: "Code", value: record.country_code_alpha3 } : null,
+        { label: metricConfig?.shortLabel || "Metric", value: formatRegionalMetric(metricConfig, selectedMetricValue) },
+        { label: "Source", value: metricSourceSummary || sourceLabel || "—" },
         { label: "GDP", value: formatCompactCurrency(metricValue(record, "gdp_nominal_usd")) },
         { label: "Population", value: formatCompactNumber(metricValue(record, "population_total")) },
       ].filter(Boolean),
@@ -469,6 +544,8 @@ export function applyRegionMethods(GlobeController) {
         {
           title: "Economic snapshot",
           rows: [
+            { label: metricConfig?.label || "Selected Metric", value: formatRegionalMetric(metricConfig, selectedMetricValue) },
+            { label: "Metric Source", value: metricSourceSummary || sourceLabel || "—" },
             { label: "GDP", value: formatCompactCurrency(metricValue(record, "gdp_nominal_usd")) },
             { label: "GDP / Capita", value: formatCompactCurrency(metricValue(record, "gdp_per_capita_usd")) },
             { label: "Population", value: formatCompactNumber(metricValue(record, "population_total")) },
@@ -693,7 +770,7 @@ export function applyRegionMethods(GlobeController) {
       ].filter(Boolean).join(" · "),
       meta: [
         { label: "Country", value: profile.country_name || profile.country_code || "—" },
-        profile.admin_area ? { label: "Admin Area", value: profile.admin_area } : null,
+        profile.admin_area ? { label: "Region", value: profile.admin_area } : null,
         profile.priority != null ? { label: "Priority", value: `${profile.priority}` } : null,
       ].filter(Boolean),
       coordinates,
@@ -787,6 +864,22 @@ export function applyRegionMethods(GlobeController) {
     const panel = this.hasLocalProfilePanelTarget ? this.localProfilePanelTarget : null
     const scrollTop = panel?.scrollTop || 0
     this._regionalEconomySectorSelection = sectorKey
+    this._syncRegionalEconomyMap?.()
+    this._renderLocalProfile?.()
+    if (panel) panel.scrollTop = scrollTop
+    this._requestRender?.()
+  }
+
+  GlobeController.prototype.setRegionalEconomyMetric = function(event) {
+    event?.preventDefault?.()
+    const region = this._regionalEconomyRegion?.()
+    const metricKey = event?.currentTarget?.dataset?.metricKey
+    const allowed = this._regionalEconomyMetricOptions?.(region).map(metric => metric.key)
+    if (!allowed.includes(metricKey)) return
+
+    const panel = this.hasLocalProfilePanelTarget ? this.localProfilePanelTarget : null
+    const scrollTop = panel?.scrollTop || 0
+    this._regionalEconomyMetricSelection = metricKey
     this._syncRegionalEconomyMap?.()
     this._renderLocalProfile?.()
     if (panel) panel.scrollTop = scrollTop
@@ -1362,7 +1455,9 @@ export function applyRegionMethods(GlobeController) {
     this._regionalEconomyMapEntities.forEach(entity => dataSource.entities.remove(entity))
     this._regionalEconomyMapEntities = []
 
-    this._regionalEconomyBorderStyles = regionalEconomyBorderStyles(records)
+    const metricConfig = this._regionalEconomyMetricConfig?.(region)
+    const metricKey = metricConfig?.key || "gdp_nominal_usd"
+    this._regionalEconomyBorderStyles = regionalEconomyBorderStyles(records, metricKey)
     this.updateBorderColors?.()
 
     records.forEach(record => {
@@ -1372,6 +1467,7 @@ export function applyRegionMethods(GlobeController) {
 
       const style = this._regionalEconomyBorderStyles?.[record.country_name]
       const accent = style?.accentCss || "#80cbc4"
+      const metricDisplayValue = this._regionalEconomyMetricValue?.(record, region)
       const [lat, lng] = centroid
       const entity = dataSource.entities.add({
         id: `econ-${`${record.country_code_alpha3 || code}`.toLowerCase()}`,
@@ -1385,7 +1481,7 @@ export function applyRegionMethods(GlobeController) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: regionalEconomyMetricLabel(record),
+          text: regionalEconomyMetricLabel(record, metricConfig, metricDisplayValue),
           font: "bold 13px JetBrains Mono, monospace",
           fillColor: Cesium.Color.WHITE.withAlpha(0.96),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
@@ -1620,10 +1716,32 @@ export function applyRegionMethods(GlobeController) {
   GlobeController.prototype.showRegionalIndicatorDetail = function(record, options = {}) {
     if (!record) return
 
+    const region = this._regionalEconomyRegion?.()
     const coordinates = this._regionalEconomyCoordinates(record)
+    const metricConfig = this._regionalEconomyMetricConfig?.(region)
+    const selectedMetricValue = this._regionalEconomyMetricValue?.(record, region)
+    const selectedMetricSource = this._regionalEconomyMetricSourceSummary?.(region)
     const anchoredRecord = coordinates
-      ? { ...record, lat: coordinates.lat, lng: coordinates.lng, accent_color: this._regionalEconomyAccent(record) }
-      : { ...record, accent_color: this._regionalEconomyAccent(record) }
+      ? {
+          ...record,
+          lat: coordinates.lat,
+          lng: coordinates.lng,
+          accent_color: this._regionalEconomyAccent(record),
+          selected_metric_key: metricConfig?.key,
+          selected_metric_label: metricConfig?.label,
+          selected_metric_short_label: metricConfig?.shortLabel,
+          selected_metric_value: selectedMetricValue,
+          selected_metric_source: selectedMetricSource,
+        }
+      : {
+          ...record,
+          accent_color: this._regionalEconomyAccent(record),
+          selected_metric_key: metricConfig?.key,
+          selected_metric_label: metricConfig?.label,
+          selected_metric_short_label: metricConfig?.shortLabel,
+          selected_metric_value: selectedMetricValue,
+          selected_metric_source: selectedMetricSource,
+        }
 
     if (!options.contextOnly && this._showCompactEntityDetail) {
       this._showCompactEntityDetail("regional_economy", anchoredRecord, {
@@ -1709,17 +1827,21 @@ export function applyRegionMethods(GlobeController) {
     const hasExtendedLayerCatalog = availableLayerNames.join("|") !== defaultLayerNames.join("|")
     const mapView = this._regionalEconomyMapView?.(region)
     const sectorModes = regionSectorModes(region)
+    const metricOptions = this._regionalEconomyMetricOptions?.(region)
+    const selectedMetricKey = this._regionalEconomyMetricKey?.(region)
+    const selectedMetric = this._regionalEconomyMetricConfig?.(region)
+    const selectedMetricSource = this._regionalEconomyMetricSourceSummary?.(region)
     const selectedSectorKey = this._regionalEconomySectorMode?.(region)
     const selectedSectorLabel = this._regionalEconomySectorLabel?.(region)
-    const mapLegend = regionalEconomyMapLegend(mapView, selectedSectorLabel)
+    const mapLegend = regionalEconomyMapLegend(mapView, selectedSectorLabel, selectedMetric?.label || "Metric", selectedMetricSource)
     const mapViewButtons = region.mode === "economic" ? `
       <div class="local-profile-section">
-        <div class="local-profile-section-title">Map View</div>
+        <div class="local-profile-section-title">Granularity</div>
         <div class="local-profile-actions">
-          <button type="button" class="local-profile-btn ${mapView === "admin" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="admin" aria-pressed="${mapView === "admin"}">Admin Areas</button>
-          <button type="button" class="local-profile-btn ${mapView === "municipality" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="municipality" aria-pressed="${mapView === "municipality"}">Municipalities</button>
-          <button type="button" class="local-profile-btn ${mapView === "country" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="country" aria-pressed="${mapView === "country"}">Countries</button>
-          <button type="button" class="local-profile-btn ${mapView === "off" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="off" aria-pressed="${mapView === "off"}">Off</button>
+          <button type="button" class="local-profile-btn ${mapView === "admin" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="admin" aria-pressed="${mapView === "admin"}">Region</button>
+          <button type="button" class="local-profile-btn ${mapView === "municipality" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="municipality" aria-pressed="${mapView === "municipality"}">Municipality</button>
+          <button type="button" class="local-profile-btn ${mapView === "country" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="country" aria-pressed="${mapView === "country"}">Country</button>
+          <button type="button" class="local-profile-btn ${mapView === "off" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="off" aria-pressed="${mapView === "off"}">Normal</button>
         </div>
         ${["admin", "municipality"].includes(mapView) ? `
           <div class="local-profile-section-title">Sector Focus</div>
@@ -1729,6 +1851,15 @@ export function applyRegionMethods(GlobeController) {
               return `<button type="button" class="local-profile-btn ${selectedSectorKey === key ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomySectorFocus" data-sector-key="${this._escapeHtml(key)}" aria-pressed="${selectedSectorKey === key}">${this._escapeHtml(sectorModeLabel(mode))}</button>`
             }).join("")}
           </div>
+        ` : ""}
+        ${mapView !== "off" ? `
+          <div class="local-profile-section-title">Metric</div>
+          <div class="local-profile-actions">
+            ${metricOptions.map(metric => `
+              <button type="button" class="local-profile-btn ${selectedMetricKey === metric.key ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMetric" data-metric-key="${this._escapeHtml(metric.key)}" aria-pressed="${selectedMetricKey === metric.key}">${this._escapeHtml(metric.shortLabel || metric.label)}</button>
+            `).join("")}
+          </div>
+          <div class="local-profile-empty-row">Source · ${this._escapeHtml(selectedMetricSource)}</div>
         ` : ""}
         <div class="local-profile-legend-row">${mapLegend.chips.join("")}</div>
         <ul class="local-profile-list local-profile-list--compact">${renderLocalProfileList(mapLegend.items.map(item => this._escapeHtml(item)), "No map legend yet")}</ul>
@@ -1762,8 +1893,8 @@ export function applyRegionMethods(GlobeController) {
         </div>
 
         <div class="local-profile-section" data-local-profile-admin-preview>
-          <div class="local-profile-section-title">Admin Area Structure</div>
-          <div class="local-profile-empty-row">Loading admin-area structure…</div>
+          <div class="local-profile-section-title">Regional Structure</div>
+          <div class="local-profile-empty-row">Loading regional structure…</div>
         </div>
 
         <div class="local-profile-section" data-local-profile-municipality-preview>
@@ -1855,6 +1986,9 @@ export function applyRegionMethods(GlobeController) {
 
       const totalGdp = sumMetric(regionalRecords, "gdp_nominal_usd")
       const totalPopulation = sumMetric(regionalRecords, "population_total")
+      const granularityKey = this._regionalEconomyGranularityKey?.(region)
+      const selectedMetric = this._regionalEconomyMetricConfig?.(region)
+      const selectedMetricSource = this._regionalEconomyMetricSourceSummary?.(region)
       const manufacturingLeader = regionalRecords
         .slice()
         .sort((left, right) =>
@@ -1875,6 +2009,7 @@ export function applyRegionMethods(GlobeController) {
         <div class="local-profile-section-title">Regional Economy Baseline</div>
         <div class="local-profile-chip-row">
           <span class="local-profile-chip">${regionalRecords.length} Country Snapshots</span>
+          <span class="local-profile-chip">Metric ${this._escapeHtml(selectedMetric?.label || "GDP")}</span>
           <span class="local-profile-chip">GDP ${this._escapeHtml(formatCompactCurrency(totalGdp))}</span>
           <span class="local-profile-chip">Population ${this._escapeHtml(formatCompactNumber(totalPopulation))}</span>
           <span class="local-profile-chip">Top Manufacturing ${this._escapeHtml(manufacturingLeader?.country_name || "—")}</span>
@@ -1888,10 +2023,16 @@ export function applyRegionMethods(GlobeController) {
                 `Combined Population · ${this._escapeHtml(formatCompactNumber(totalPopulation))}`,
                 `Manufacturing Leader · ${this._escapeHtml(manufacturingLeader?.country_name || "Unknown")} · ${this._escapeHtml(formatPercent(metricValue(manufacturingLeader, "manufacturing_share_pct")))}`,
                 `Country Baseline · World Bank WDI snapshots across Germany, Austria, and Switzerland`,
-                `Map Controls · Use Admin Areas, Municipalities, Countries, or Off to switch the DACH economic overlay`,
-                `Sector Focus · Admin mode can now pivot the map toward automotive, chips, chemicals, energy, finance, or trade`,
-                `Interaction · Country mode uses country fills and badges; admin mode uses polygons and top-area labels`,
-                `Current Source · World Bank WDI`,
+                `Granularity · Use Region, Municipality, Country, or Normal to switch the DACH economic overlay`,
+                `Selected Metric · ${this._escapeHtml(selectedMetric?.label || "GDP")}`,
+                `Metric Source · ${this._escapeHtml(selectedMetricSource)}`,
+                granularityKey === "country"
+                  ? `Country mode is source-backed by World Bank WDI`
+                  : `Region and municipality remain structure-only until official subnational sources are wired`,
+                `Sector Focus · Region and municipality views can pivot toward automotive, chips, chemicals, energy, finance, or trade`,
+                granularityKey === "country"
+                  ? `Current Source · ${this._escapeHtml([regionalRecords[0]?.source_name || "World Bank WDI", regionalRecords[0]?.latest_year || "latest", "Country"].filter(Boolean).join(" · "))}`
+                  : `Current Source · ${this._escapeHtml(selectedMetricSource)}`,
               ], "No baseline summary yet")}
             </ul>
           </div>
@@ -1917,12 +2058,16 @@ export function applyRegionMethods(GlobeController) {
               record.source_name || "Unknown source",
               record.latest_year || null,
             ].filter(Boolean).join(" · ")
+            const metricSourceLabel = granularityKey === "country"
+              ? sourceLabel
+              : selectedMetricSource
 
             return `
               <div class="local-profile-section">
                 <div class="local-profile-section-title">${this._escapeHtml(record.country_name || "Unknown")}</div>
                 <ul class="local-profile-list local-profile-list--compact">
                   ${renderLocalProfileList([
+                    `${this._escapeHtml(selectedMetric?.label || "GDP")} · ${this._escapeHtml(formatRegionalMetric(selectedMetric, this._regionalEconomyMetricValue?.(record, region)))}`,
                     `GDP · ${this._escapeHtml(formatCompactCurrency(metricValue(record, "gdp_nominal_usd")))}`,
                     `GDP / Capita · ${this._escapeHtml(formatCompactCurrency(metricValue(record, "gdp_per_capita_usd")))}`,
                     `Population · ${this._escapeHtml(formatCompactNumber(metricValue(record, "population_total")))}`,
@@ -1931,7 +2076,7 @@ export function applyRegionMethods(GlobeController) {
                   ], "No metrics yet")}
                 </ul>
                 ${topSectors ? `<div class="local-profile-empty-row">Top sectors: ${this._escapeHtml(topSectors)}</div>` : ""}
-                <div class="local-profile-empty-row">Source: ${this._escapeHtml(sourceLabel)}</div>
+                <div class="local-profile-empty-row">Metric source: ${this._escapeHtml(metricSourceLabel)}</div>
               </div>
             `
           }).join("")}
@@ -1961,8 +2106,8 @@ export function applyRegionMethods(GlobeController) {
       const previewRecords = Array.isArray(records) ? records : []
       if (previewRecords.length === 0) {
         shell.innerHTML = `
-          <div class="local-profile-section-title">Admin Area Structure</div>
-          <div class="local-profile-empty-row">No subnational admin structure is available for this region yet.</div>
+          <div class="local-profile-section-title">Regional Structure</div>
+          <div class="local-profile-empty-row">No subnational regional structure is available for this region yet.</div>
         `
         return
       }
@@ -1996,9 +2141,9 @@ export function applyRegionMethods(GlobeController) {
       }, {})
 
       shell.innerHTML = `
-        <div class="local-profile-section-title">Admin Area Structure</div>
+        <div class="local-profile-section-title">Regional Structure</div>
         <div class="local-profile-chip-row">
-          <span class="local-profile-chip">${previewRecords.length} Admin Areas</span>
+          <span class="local-profile-chip">${previewRecords.length} Regions</span>
           <span class="local-profile-chip">Cities ${this._escapeHtml(formatCompactNumber(totalCities))}</span>
           <span class="local-profile-chip">Sites ${this._escapeHtml(formatCompactNumber(totalSites))}</span>
           <span class="local-profile-chip">Power ${this._escapeHtml(`${DECIMAL_FORMAT.format((totalPowerMw || 0) / 1000)} GW`)}</span>
@@ -2012,8 +2157,8 @@ export function applyRegionMethods(GlobeController) {
                 `Local-only overlay · Admin-1 polygons for profiled DACH areas`,
                 `Focus · ${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}`,
                 `Fill · ${this._escapeHtml(sectorKey === "all" ? "overall industrial signal" : `${sectorLabel} signal`)} from cities, strategic sites, and curated power`,
-                `Labels · Top 12 admin areas for the current focus`,
-                `Controls · Switch to Municipalities, Countries, or Off above for comparison`,
+                `Labels · Top 12 regions for the current focus`,
+                `Controls · Switch to Municipality, Country, or Normal above for comparison`,
                 `Interaction · Click a polygon or label for the connector anchor`,
                 `Caveat · Derived industrial footprint, not official district GDP or employment yet`,
               ], "No preview guidance yet")}
@@ -2048,7 +2193,7 @@ export function applyRegionMethods(GlobeController) {
             <div class="local-profile-section-title">Next Level</div>
             <ul class="local-profile-list local-profile-list--compact">
               ${renderLocalProfileList([
-                "Current drilldown is state/admin-area level plus city and site nodes",
+                "Current drilldown is region level plus city and site nodes",
                 "District-level regional accounts and sector data still need official admin-2 sources",
                 "Best next real step: Bavaria Kreise, Austrian Bezirke, Swiss cantons/municipalities",
               ], "No next step yet")}
@@ -2056,7 +2201,7 @@ export function applyRegionMethods(GlobeController) {
           </div>
         </div>
         <div class="local-profile-section">
-          <div class="local-profile-section-title">Top Areas</div>
+          <div class="local-profile-section-title">Top Regions</div>
           <ul class="local-profile-list local-profile-list--compact">
             ${renderLocalProfileList(
               topAreas.slice(0, 8).map(record => {
@@ -2074,11 +2219,11 @@ export function applyRegionMethods(GlobeController) {
         </div>
       `
     } catch (error) {
-      console.error("Failed to render local admin-area preview:", error)
+      console.error("Failed to render local regional structure:", error)
       if (this._localProfileRegion?.()?.key !== region.key) return
       shell.innerHTML = `
-        <div class="local-profile-section-title">Admin Area Structure</div>
-        <div class="local-profile-empty-row">Admin-area structure failed to load.</div>
+        <div class="local-profile-section-title">Regional Structure</div>
+        <div class="local-profile-empty-row">Regional structure failed to load.</div>
       `
     }
   }
@@ -2155,14 +2300,14 @@ export function applyRegionMethods(GlobeController) {
         </div>
         <div class="local-profile-grid">
           <div class="local-profile-section">
-            <div class="local-profile-section-title">Top Admin Areas</div>
+            <div class="local-profile-section-title">Top Regions</div>
             <ul class="local-profile-list local-profile-list--compact">
               ${renderLocalProfileList(
                 Object.entries(byAdminArea)
                   .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
                   .slice(0, 8)
                   .map(([name, count]) => `${this._escapeHtml(name)} · ${count}`),
-                "No admin-area split yet"
+                "No regional split yet"
               )}
             </ul>
           </div>

@@ -331,6 +331,17 @@ export function applyCoreMethods(GlobeController) {
       }
       if (launchState.profile === "local" && regionKey && this.openLocalProfile) {
         this.openLocalProfile(regionKey)
+        const allowedGranularities = new Set(["admin", "district", "country", "off"])
+        if (launchState.granularity && allowedGranularities.has(launchState.granularity)) {
+          this._regionalEconomyMapViewSelection = launchState.granularity
+          this._syncRegionalEconomyMap?.()
+          this._renderLocalProfile?.()
+        }
+        if (launchState.metric) {
+          this._regionalEconomyMetricSelection = launchState.metric
+          this._syncRegionalEconomyMap?.()
+          this._renderLocalProfile?.()
+        }
       }
     }
     this._startAlertPolling()

@@ -167,6 +167,8 @@ export function applyGeographyBorderMethods(GlobeController) {
     const Cesium = window.Cesium
     const hasSelection = this.selectedCountries.size > 0
     const adminOverlayActive = Array.isArray(this._regionalAdminEconomyEntities) && this._regionalAdminEconomyEntities.length > 0
+    const districtOverlayActive = Array.isArray(this._regionalDistrictEconomyEntities) && this._regionalDistrictEconomyEntities.length > 0
+    const subnationalOverlayActive = adminOverlayActive || districtOverlayActive
     const region = this._regionalEconomyRegion?.()
     const normalRegionalView = !!(region && this._regionalEconomyMapView?.(region) === "off")
     const defaultColor = hasSelection
@@ -174,10 +176,10 @@ export function applyGeographyBorderMethods(GlobeController) {
       : Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
     const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8)
     const defaultFillColor = hasSelection && !normalRegionalView
-      ? Cesium.Color.fromCssColorString("#0b0f14").withAlpha(adminOverlayActive ? 0.18 : 0.7)
+      ? Cesium.Color.fromCssColorString("#0b0f14").withAlpha(subnationalOverlayActive ? 0.18 : 0.7)
       : Cesium.Color.TRANSPARENT
     const selectedFillColor = hasSelection && !normalRegionalView
-      ? Cesium.Color.fromCssColorString("#ffa726").withAlpha(adminOverlayActive ? 0.08 : 0.18)
+      ? Cesium.Color.fromCssColorString("#ffa726").withAlpha(subnationalOverlayActive ? 0.08 : 0.18)
       : Cesium.Color.TRANSPARENT
 
     for (const [countryName, entities] of this._countryEntities) {
@@ -189,7 +191,7 @@ export function applyGeographyBorderMethods(GlobeController) {
 
     for (const [countryName, entities] of this._countryFillEntities) {
       const isSelected = this.selectedCountries.has(countryName)
-      const economyStyle = isSelected && !adminOverlayActive && !normalRegionalView ? this._regionalEconomyBorderStyles?.[countryName] : null
+      const economyStyle = isSelected && !subnationalOverlayActive && !normalRegionalView ? this._regionalEconomyBorderStyles?.[countryName] : null
       entities.forEach(entity => {
         entity.show = hasSelection
         entity.polygon.material = isSelected

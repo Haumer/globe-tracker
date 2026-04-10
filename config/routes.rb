@@ -54,6 +54,7 @@ Rails.application.routes.draw do
     resources :city_profiles, only: [:index]
     resources :regional_indicators, only: [:index]
     resources :regional_area_indicators, only: [:index]
+    resources :regional_district_boundaries, only: [:index]
     resources :regional_admin_profiles, only: [:index]
     resources :data_sources, only: [:index]
     resources :conflict_events, only: [:index]

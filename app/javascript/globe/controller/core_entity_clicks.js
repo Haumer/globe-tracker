@@ -233,6 +233,24 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showCityDetail?.(data)
         return true
       }},
+      { prefix: "rdist-fill-", skip: [], handler: (id) => {
+        const data = this._regionalDistrictRecordForEntityId?.(`rdist-fill-${id}`)
+        if (!data) return false
+        this.showRegionalDistrictDetail?.(data, { picked })
+        return true
+      }},
+      { prefix: "rdist-line-", skip: [], handler: (id) => {
+        const data = this._regionalDistrictRecordForEntityId?.(`rdist-line-${id}`)
+        if (!data) return false
+        this.showRegionalDistrictDetail?.(data, { picked })
+        return true
+      }},
+      { prefix: "rdist-", skip: ["rdist-fill-", "rdist-line-"], handler: (id) => {
+        const data = this._regionalDistrictRecordForEntityId?.(`rdist-${id}`)
+        if (!data) return false
+        this.showRegionalDistrictDetail?.(data, { picked })
+        return true
+      }},
       { prefix: "radmin-fill-", skip: [], handler: (id) => {
         const data = this._regionalAdminRecordForEntityId?.(`radmin-fill-${id}`)
         if (!data) return false

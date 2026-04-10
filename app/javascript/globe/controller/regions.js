@@ -333,12 +333,16 @@ export function applyRegionMethods(GlobeController) {
 
     if (view === "district") {
       return {
-        chips: [],
+        chips: [
+          renderLegendSwatch("#255f85", "Lower value"),
+          renderLegendSwatch(mixHexColors("#255f85", "#f59e0b", 0.52), "Mid value"),
+          renderLegendSwatch("#f59e0b", "Higher value"),
+        ],
         items: [
-          `District data = ${metricLabel} across official district-equivalent units`,
+          `Fill = ${metricLabel} rank across official district-equivalent units`,
+          `Labels = top 16 districts by ${metricLabel}`,
           `Source = ${metricSource}`,
-          "Map overlay is intentionally off until official district geometry is wired",
-          "Use the district list in the right panel to compare states and top districts",
+          "Click any polygon or label to open the anchored connector card",
         ],
       }
     }
@@ -623,6 +627,16 @@ export function applyRegionMethods(GlobeController) {
     )
   }
 
+  GlobeController.prototype._regionalDistrictEconomyEnabled = function(region = this._regionalEconomyRegion?.()) {
+    return !!(
+      region &&
+      region.mode === "economic" &&
+      this._hasActiveLocalProfile?.() &&
+      this._localProfileRegion?.()?.key === region.key &&
+      this._regionalEconomyMapView?.(region) === "district"
+    )
+  }
+
   GlobeController.prototype._regionalCountryEconomyEnabled = function(region = this._regionalEconomyRegion?.()) {
     return !!(region && region.mode === "economic" && this._regionalEconomyMapView?.(region) === "country")
   }
@@ -635,6 +649,37 @@ export function applyRegionMethods(GlobeController) {
     return styles[record?.id]?.accentCss || "#2f7ea7"
   }
 
+  GlobeController.prototype._regionalDistrictDisplayScore = function(record, region = this._regionalEconomyRegion?.()) {
+    return this._regionalEconomyMetricValueForGranularity?.(record, region, "district")
+  }
+
+  GlobeController.prototype._regionalDistrictRankedRecords = function(region = this._regionalEconomyRegion?.()) {
+    const records = Array.isArray(this._localProfileRegionalDistrictCatalog) ? this._localProfileRegionalDistrictCatalog : []
+    return records
+      .slice()
+      .sort((left, right) =>
+        (this._regionalDistrictDisplayScore?.(right, region) || 0) - (this._regionalDistrictDisplayScore?.(left, region) || 0) ||
+        (left.country_name || "").localeCompare(right.country_name || "") ||
+        (left.name || "").localeCompare(right.name || "")
+      )
+  }
+
+  GlobeController.prototype._regionalDistrictRankForRecord = function(record, region = this._regionalEconomyRegion?.()) {
+    if (!record?.id) return null
+    const ranked = this._regionalDistrictRankedRecords?.(region)
+    const index = ranked.findIndex(item => item?.id === record.id)
+    if (index < 0) return null
+    return { rank: index + 1, total: ranked.length }
+  }
+
+  GlobeController.prototype._regionalDistrictAccent = function(record, region = this._regionalEconomyRegion?.()) {
+    const records = Array.isArray(this._localProfileRegionalDistrictCatalog) && this._localProfileRegionalDistrictCatalog.length > 0
+      ? this._localProfileRegionalDistrictCatalog
+      : [record]
+    const styles = regionalAdminPreviewStyles(records, entry => this._regionalDistrictDisplayScore?.(entry, region))
+    return styles[record?.id]?.accentCss || "#2f7ea7"
+  }
+
   GlobeController.prototype._regionalAdminCoordinates = function(record) {
     const lat = numericMetricValue(record?.lat)
     const lng = numericMetricValue(record?.lng)
@@ -643,9 +688,22 @@ export function applyRegionMethods(GlobeController) {
     return { lat, lng, height: 450000 }
   }
 
+  GlobeController.prototype._regionalDistrictCoordinates = function(record) {
+    const lat = numericMetricValue(record?.lat)
+    const lng = numericMetricValue(record?.lng)
+    if (lat == null || lng == null) return null
+
+    return { lat, lng, height: 220000 }
+  }
+
   GlobeController.prototype._regionalAdminRecordForEntityId = function(entityId) {
     if (!entityId || !(this._regionalAdminEconomyIndex instanceof Map)) return null
     return this._regionalAdminEconomyIndex.get(entityId) || null
+  }
+
+  GlobeController.prototype._regionalDistrictRecordForEntityId = function(entityId) {
+    if (!entityId || !(this._regionalDistrictEconomyIndex instanceof Map)) return null
+    return this._regionalDistrictEconomyIndex.get(entityId) || null
   }
 
   GlobeController.prototype._regionalMunicipalityRecords = function(region = this._localProfileRegion?.()) {
@@ -793,15 +851,22 @@ export function applyRegionMethods(GlobeController) {
     }
   }
 
-  GlobeController.prototype._buildRegionalAreaMetricContext = function(record) {
+  GlobeController.prototype._buildRegionalAreaMetricContextForGranularity = function(record, granularityKey = "region") {
     if (!record) return null
 
     const region = this._regionalEconomyRegion?.()
-    const metricConfig = this._regionalEconomyMetricConfigForGranularity?.(region, "region")
-    const metricValueForRecord = this._regionalEconomyMetricValueForGranularity?.(record, region, "region")
-    const metricSourceSummary = this._regionalEconomyMetricSourceSummaryForGranularity?.(region, "region")
-    const coordinates = this._regionalAdminCoordinates(record)
-    const rank = this._regionalAdminRankForRecord?.(record, "all")
+    const metricConfig = this._regionalEconomyMetricConfigForGranularity?.(region, granularityKey)
+    const metricValueForRecord = this._regionalEconomyMetricValueForGranularity?.(record, region, granularityKey)
+    const metricSourceSummary = this._regionalEconomyMetricSourceSummaryForGranularity?.(region, granularityKey)
+    const coordinates = granularityKey === "district"
+      ? this._regionalDistrictCoordinates?.(record)
+      : this._regionalAdminCoordinates?.(record)
+    const rank = granularityKey === "district"
+      ? this._regionalDistrictRankForRecord?.(record, region)
+      : this._regionalAdminRankForRecord?.(record, "all")
+    const accentColor = granularityKey === "district"
+      ? this._regionalDistrictAccent?.(record, region)
+      : this._regionalAdminEconomyAccent?.(record)
     const nativeLevelLabel = titleizeProfileKey(record?.native_level || "region")
     const sourceLabel = [
       record.source_name,
@@ -813,11 +878,11 @@ export function applyRegionMethods(GlobeController) {
     return {
       kind: "regional_area_metric",
       severity: "low",
-      statusLabel: "region",
+      statusLabel: granularityKey,
       icon: "fa-chart-area",
-      accentColor: this._regionalAdminEconomyAccent(record),
-      eyebrow: "REGIONAL METRIC",
-      title: record.name || "Region",
+      accentColor,
+      eyebrow: granularityKey === "district" ? "DISTRICT METRIC" : "REGIONAL METRIC",
+      title: record.name || (granularityKey === "district" ? "District" : "Region"),
       subtitle: [record.country_name, nativeLevelLabel].filter(Boolean).join(" · "),
       summary: [
         rank ? `Rank ${rank.rank} of ${rank.total} in DACH` : null,
@@ -847,6 +912,57 @@ export function applyRegionMethods(GlobeController) {
         },
       ],
     }
+  }
+
+  GlobeController.prototype._buildRegionalAreaMetricContext = function(record) {
+    return this._buildRegionalAreaMetricContextForGranularity?.(record, "region")
+  }
+
+  GlobeController.prototype.showRegionalAreaMetricDetail = function(record, options = {}) {
+    if (!record) return
+
+    const granularityKey = options.granularityKey || "region"
+    const region = this._regionalEconomyRegion?.()
+    const metricConfig = this._regionalEconomyMetricConfigForGranularity?.(region, granularityKey)
+    const selectedMetricValue = this._regionalEconomyMetricValueForGranularity?.(record, region, granularityKey)
+    const selectedMetricSource = this._regionalEconomyMetricSourceSummaryForGranularity?.(region, granularityKey)
+    const coordinates = granularityKey === "district"
+      ? this._regionalDistrictCoordinates?.(record)
+      : this._regionalAdminCoordinates?.(record)
+    const accentColor = granularityKey === "district"
+      ? this._regionalDistrictAccent?.(record, region)
+      : this._regionalAdminEconomyAccent?.(record)
+    const rank = granularityKey === "district"
+      ? this._regionalDistrictRankForRecord?.(record, region)
+      : this._regionalAdminRankForRecord?.(record, "all")
+
+    const anchoredRecord = {
+      ...record,
+      ...(coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : {}),
+      accent_color: accentColor,
+      selected_rank: rank,
+      selected_metric_key: metricConfig?.key,
+      selected_metric_label: metricConfig?.label,
+      selected_metric_short_label: metricConfig?.shortLabel,
+      selected_metric_value: selectedMetricValue,
+      selected_metric_source: selectedMetricSource,
+    }
+
+    if (!options.contextOnly && this._showCompactEntityDetail) {
+      this._showCompactEntityDetail("regional_area_metric", anchoredRecord, {
+        id: record.id || record.name,
+        picked: options.picked,
+      })
+    }
+
+    const context = this._buildRegionalAreaMetricContextForGranularity?.(record, granularityKey)
+    if (context && this._setSelectedContext) {
+      this._setSelectedContext(context, {
+        openRightPanel: options.openRightPanel === true || this._currentRightPanelTab?.() === "context",
+      })
+    }
+
+    if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
   }
 
   GlobeController.prototype._buildRegionalMunicipalityContext = function(profile) {
@@ -907,6 +1023,11 @@ export function applyRegionMethods(GlobeController) {
     const region = this._regionalEconomyRegion?.()
     const metricConfig = this._regionalEconomyMetricConfigForGranularity?.(region, "region")
     const structureMetric = metricConfig?.key === "structure_signal"
+    if (!structureMetric) {
+      this.showRegionalAreaMetricDetail?.(record, { ...options, granularityKey: "region" })
+      return
+    }
+
     const coordinates = this._regionalAdminCoordinates(record)
     const sectorKey = this._regionalEconomySectorMode?.()
     const sectorLabel = this._regionalEconomySectorLabel?.()
@@ -961,6 +1082,10 @@ export function applyRegionMethods(GlobeController) {
     }
 
     if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+  }
+
+  GlobeController.prototype.showRegionalDistrictDetail = function(record, options = {}) {
+    this.showRegionalAreaMetricDetail?.(record, { ...options, granularityKey: "district" })
   }
 
   GlobeController.prototype.setRegionalEconomyMapView = function(event) {
@@ -1099,6 +1224,7 @@ export function applyRegionMethods(GlobeController) {
     this._regionalIndicatorMapData = []
     this._clearRegionalEconomyMap?.()
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalDistrictMap?.()
     this._clearRegionalMunicipalityMap?.()
 
     // Restore previous state or go to global default
@@ -1293,6 +1419,7 @@ export function applyRegionMethods(GlobeController) {
     this._regionalEconomySectorSelection = "all"
     this._renderLocalProfile()
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalDistrictMap?.()
     this._clearRegionalMunicipalityMap?.()
     this._loadRegionalEconomyMap?.()
     this._syncRightPanels?.()
@@ -1305,6 +1432,10 @@ export function applyRegionMethods(GlobeController) {
 
   GlobeController.prototype.getRegionalAdminEconomyDataSource = function() {
     return getDataSource(this.viewer, this._ds, "regionalAdminEconomy")
+  }
+
+  GlobeController.prototype.getRegionalDistrictEconomyDataSource = function() {
+    return getDataSource(this.viewer, this._ds, "regionalDistrictEconomy")
   }
 
   GlobeController.prototype.getRegionalMunicipalityDataSource = function() {
@@ -1339,6 +1470,20 @@ export function applyRegionMethods(GlobeController) {
     this._requestRender?.()
   }
 
+  GlobeController.prototype._clearRegionalDistrictMap = function() {
+    const ds = this._ds["regionalDistrictEconomy"]
+    if (ds && Array.isArray(this._regionalDistrictEconomyEntities)) {
+      ds.entities.suspendEvents()
+      this._regionalDistrictEconomyEntities.forEach(entity => ds.entities.remove(entity))
+      ds.entities.resumeEvents()
+      ds.show = false
+    }
+    this._regionalDistrictEconomyEntities = []
+    this._regionalDistrictEconomyIndex = new Map()
+    if (this.selectedCountries?.size > 0) this.updateBorderColors?.()
+    this._requestRender?.()
+  }
+
   GlobeController.prototype._clearRegionalMunicipalityMap = function() {
     const ds = this._ds["regionalMunicipalities"]
     if (ds && Array.isArray(this._regionalMunicipalityEntities)) {
@@ -1360,6 +1505,7 @@ export function applyRegionMethods(GlobeController) {
     if (!region) {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
       return
     }
@@ -1367,20 +1513,31 @@ export function applyRegionMethods(GlobeController) {
     if (view === "off") {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
       return
     }
 
     if (this._regionalAdminEconomyEnabled?.(region)) {
       this._clearRegionalEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
       this._loadRegionalAdminEconomyMap?.(region)
+      return
+    }
+
+    if (this._regionalDistrictEconomyEnabled?.(region)) {
+      this._clearRegionalEconomyMap?.()
+      this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
+      this._loadRegionalDistrictMap?.(region)
       return
     }
 
     if (view === "district") {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
       return
     }
@@ -1388,11 +1545,13 @@ export function applyRegionMethods(GlobeController) {
     if (this._regionalMunicipalityEconomyEnabled?.(region)) {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._loadRegionalMunicipalityMap?.(region)
       return
     }
 
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalDistrictMap?.()
     this._clearRegionalMunicipalityMap?.()
     if (!this.bordersVisible) {
       this._clearRegionalEconomyMap?.()
@@ -1465,6 +1624,23 @@ export function applyRegionMethods(GlobeController) {
     return Array.isArray(records) ? records : []
   }
 
+  GlobeController.prototype._ensureRegionalDistrictBoundaries = async function(region) {
+    const countryCodes = Array.isArray(region?.countryCodes) ? region.countryCodes : []
+    const cacheKey = countryCodes.join("|")
+
+    let payload = this._localProfileRegionalDistrictBoundaryCache
+    if (!Array.isArray(payload?.features) || this._localProfileRegionalDistrictBoundaryCountryKey !== cacheKey) {
+      const response = await fetch(`/api/regional_district_boundaries?country_codes=${encodeURIComponent(countryCodes.join(","))}`)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      payload = await response.json()
+      this._localProfileRegionalDistrictBoundaryCache = payload
+      this._localProfileRegionalDistrictBoundaryCountryKey = cacheKey
+    }
+
+    return payload
+  }
+
   GlobeController.prototype._ensureRegionalMunicipalityRecords = async function(region) {
     const countryCodes = Array.isArray(region?.countryCodes) ? region.countryCodes : []
 
@@ -1534,11 +1710,63 @@ export function applyRegionMethods(GlobeController) {
     }) || null
   }
 
+  GlobeController.prototype._findRegionalDistrictBoundaryFeature = function(record, featureCollection) {
+    const features = Array.isArray(featureCollection?.features) ? featureCollection.features : Array.isArray(featureCollection) ? featureCollection : []
+    if (!record || features.length === 0) return null
+
+    const countryCodes = new Set([
+      `${record.country_code || ""}`.toUpperCase(),
+      `${record.country_code_alpha3 || ""}`.toUpperCase(),
+    ].filter(Boolean))
+
+    const countryFeatures = features.filter(feature => {
+      const featureCodes = [
+        `${feature?.properties?.country_code || ""}`.toUpperCase(),
+        `${feature?.properties?.country_code_alpha3 || ""}`.toUpperCase(),
+      ].filter(Boolean)
+      return featureCodes.some(code => countryCodes.has(code))
+    })
+
+    const sourceGeo = `${record.source_geo || ""}`.trim().toUpperCase()
+    if (sourceGeo) {
+      const directMatch = countryFeatures.find(feature =>
+        `${feature?.properties?.source_geo || ""}`.trim().toUpperCase() === sourceGeo
+      )
+      if (directMatch) return directMatch
+    }
+
+    const desiredNames = new Set(
+      [record.name, ...(Array.isArray(record.boundary_names) ? record.boundary_names : [])]
+        .map(normalizeRegionalBoundaryLabel)
+        .filter(Boolean)
+    )
+    if (desiredNames.size === 0) return null
+
+    const regionName = normalizeRegionalBoundaryLabel(record.region_name)
+    const matching = countryFeatures.filter(feature => {
+      const featureNames = [
+        feature?.properties?.name,
+        ...(Array.isArray(feature?.properties?.boundary_names) ? feature.properties.boundary_names : []),
+      ]
+        .map(normalizeRegionalBoundaryLabel)
+        .filter(Boolean)
+
+      return featureNames.some(name => desiredNames.has(name))
+    })
+    if (matching.length === 0) return null
+    if (!regionName) return matching[0]
+
+    return matching.find(feature =>
+      normalizeRegionalBoundaryLabel(feature?.properties?.region_name) === regionName
+    ) || matching[0]
+  }
+
   GlobeController.prototype._loadRegionalEconomyMap = async function(region = this._regionalEconomyRegion?.()) {
     if (!region || region.mode !== "economic") {
       this._regionalIndicatorMapData = []
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
       return
     }
@@ -1557,6 +1785,7 @@ export function applyRegionMethods(GlobeController) {
       this._regionalIndicatorMapData = []
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalDistrictMap?.()
       this._clearRegionalMunicipalityMap?.()
     }
   }
@@ -1581,6 +1810,29 @@ export function applyRegionMethods(GlobeController) {
       console.error("Failed to load regional admin economy map:", error)
       if (token !== this._localProfileRegionalAdminFetchToken) return
       this._clearRegionalAdminEconomyMap?.()
+    }
+  }
+
+  GlobeController.prototype._loadRegionalDistrictMap = async function(region = this._localProfileRegion?.()) {
+    if (!this._regionalDistrictEconomyEnabled?.(region)) {
+      this._clearRegionalDistrictMap?.()
+      return
+    }
+
+    const token = ++this._localProfileRegionalDistrictBoundaryFetchToken
+
+    try {
+      const [records, boundaryCollection] = await Promise.all([
+        this._ensureRegionalDistrictRecords(region),
+        this._ensureRegionalDistrictBoundaries(region),
+      ])
+      if (token !== this._localProfileRegionalDistrictBoundaryFetchToken || !this._regionalDistrictEconomyEnabled?.(region)) return
+
+      this._renderRegionalDistrictMap?.(region, records, boundaryCollection)
+    } catch (error) {
+      console.error("Failed to load regional district map:", error)
+      if (token !== this._localProfileRegionalDistrictBoundaryFetchToken) return
+      this._clearRegionalDistrictMap?.()
     }
   }
 
@@ -1801,6 +2053,142 @@ export function applyRegionMethods(GlobeController) {
       })
       this._regionalAdminEconomyEntities.push(labelEntity)
       this._regionalAdminEconomyIndex.set(labelId, renderRecord)
+    })
+
+    dataSource.entities.resumeEvents()
+    if (this.selectedCountries?.size > 0) this.updateBorderColors?.()
+    this._requestRender?.()
+  }
+
+  GlobeController.prototype._renderRegionalDistrictMap = function(region, records = [], boundaryCollection = null) {
+    if (!this._regionalDistrictEconomyEnabled?.(region) || !Array.isArray(records) || records.length === 0) {
+      this._clearRegionalDistrictMap?.()
+      return
+    }
+
+    const Cesium = window.Cesium
+    if (!Cesium) return
+
+    const features = Array.isArray(boundaryCollection?.features) ? boundaryCollection.features : []
+    if (features.length === 0) {
+      this._clearRegionalDistrictMap?.()
+      return
+    }
+
+    const dataSource = this.getRegionalDistrictEconomyDataSource()
+    dataSource.show = true
+    dataSource.entities.suspendEvents()
+    this._regionalDistrictEconomyEntities.forEach(entity => dataSource.entities.remove(entity))
+    this._regionalDistrictEconomyEntities = []
+    this._regionalDistrictEconomyIndex = new Map()
+
+    const metricConfig = this._regionalEconomyMetricConfigForGranularity?.(region, "district")
+    const scoreForRecord = (entry) => this._regionalDistrictDisplayScore?.(entry, region)
+    const styles = regionalAdminPreviewStyles(records, scoreForRecord)
+    const labeledIds = new Set(
+      records
+        .slice()
+        .sort((left, right) =>
+          (scoreForRecord(right) || 0) - (scoreForRecord(left) || 0) ||
+          (left.country_name || "").localeCompare(right.country_name || "") ||
+          (left.name || "").localeCompare(right.name || "")
+        )
+        .slice(0, 16)
+        .map(record => record.id)
+    )
+
+    records.forEach(record => {
+      const feature = this._findRegionalDistrictBoundaryFeature?.(record, features)
+      if (!feature?.geometry) return
+
+      const renderRecord = (record?.lat == null || record?.lng == null)
+        ? {
+            ...record,
+            lat: feature.properties?.latitude,
+            lng: feature.properties?.longitude,
+            region_name: record.region_name || feature.properties?.region_name,
+          }
+        : record
+
+      const style = styles[record.id] || {
+        accentCss: "#2f7ea7",
+        fillColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.22),
+        lineColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.92),
+        lineWidth: 1.8,
+      }
+
+      const geom = feature.geometry
+      const rings = []
+      if (geom.type === "Polygon") rings.push(geom.coordinates[0])
+      else if (geom.type === "MultiPolygon") geom.coordinates.forEach(polygon => rings.push(polygon[0]))
+
+      rings.forEach((ring, ringIndex) => {
+        if (!Array.isArray(ring) || ring.length < 3) return
+
+        const positions = ring.map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1]))
+        const fillId = `rdist-fill-${record.id}-${ringIndex}`
+        const fillEntity = dataSource.entities.add({
+          id: fillId,
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(positions),
+            material: style.fillColor,
+            clampToGround: true,
+            classificationType: Cesium.ClassificationType.BOTH,
+            outline: false,
+          },
+        })
+        this._regionalDistrictEconomyEntities.push(fillEntity)
+        this._regionalDistrictEconomyIndex.set(fillId, renderRecord)
+
+        const lineId = `rdist-line-${record.id}-${ringIndex}`
+        const lineEntity = dataSource.entities.add({
+          id: lineId,
+          polyline: {
+            positions,
+            width: style.lineWidth,
+            material: style.lineColor,
+            clampToGround: true,
+            classificationType: Cesium.ClassificationType.BOTH,
+          },
+        })
+        this._regionalDistrictEconomyEntities.push(lineEntity)
+        this._regionalDistrictEconomyIndex.set(lineId, renderRecord)
+      })
+
+      const coordinates = this._regionalDistrictCoordinates?.(renderRecord)
+      if (!coordinates || !labeledIds.has(renderRecord.id)) return
+
+      const labelId = `rdist-${renderRecord.id}`
+      const labelEntity = dataSource.entities.add({
+        id: labelId,
+        position: Cesium.Cartesian3.fromDegrees(coordinates.lng, coordinates.lat, 3200),
+        point: {
+          pixelSize: 9,
+          color: Cesium.Color.fromCssColorString(style.accentCss).withAlpha(0.96),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: regionalAreaMetricLabel(renderRecord, metricConfig, scoreForRecord(renderRecord)),
+          font: "bold 10px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.96),
+          outlineColor: LABEL_DEFAULTS.outlineColor(),
+          outlineWidth: LABEL_DEFAULTS.outlineWidth,
+          style: LABEL_DEFAULTS.style(),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
+          scaleByDistance: new Cesium.NearFarScalar(4e4, 1, 1.2e6, 0.12),
+          translucencyByDistance: new Cesium.NearFarScalar(4e4, 1, 1.2e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("#081019").withAlpha(0.78),
+        },
+      })
+      this._regionalDistrictEconomyEntities.push(labelEntity)
+      this._regionalDistrictEconomyIndex.set(labelId, renderRecord)
     })
 
     dataSource.entities.resumeEvents()
@@ -2435,7 +2823,7 @@ export function applyRegionMethods(GlobeController) {
               ${renderLocalProfileList([
                 "Current drilldown is region level plus city and site nodes",
                 "District-level regional accounts and sector data still need official admin-2 sources",
-                "Best next real step: official district geometry for Germany, Austria, and Switzerland",
+                "Best next real step: add district-level economy and sector metrics on top of the new boundary overlay",
               ], "No next step yet")}
             </ul>
           </div>
@@ -2522,8 +2910,8 @@ export function applyRegionMethods(GlobeController) {
               ${renderLocalProfileList([
                 `District-equivalent ${this._escapeHtml(metricConfig?.label || "population")} across DACH`,
                 `Source · ${this._escapeHtml(metricSource)}`,
-                "Map overlay stays off until official district geometry is wired",
-                "Use this panel to compare districts inside and across states",
+                "Map overlay uses official district-equivalent boundary snapshots",
+                "Click a district polygon or label to open the anchored connector card",
               ], "No district guidance yet")}
             </ul>
           </div>

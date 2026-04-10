@@ -235,6 +235,7 @@ export function initializeCoreState(controller) {
   controller._navalShipInterval = null
   controller.bordersVisible = false
   controller.bordersLoaded = false
+  controller._bordersLoadPromise = null
   controller.selectedCountries = new Set()
   controller._selectedCountriesUseHull = true
   controller._selectedCountriesBbox = null

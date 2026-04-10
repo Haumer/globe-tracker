@@ -18,6 +18,7 @@ Rails.application.routes.draw do
   post "admin/stop_poller", to: "admin#stop_poller", as: :admin_stop_poller
 
   namespace :api do
+    get "geography/boundaries", to: "geography_boundaries#show"
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index] do
       collection do

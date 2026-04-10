@@ -49,7 +49,12 @@ Rails.application.routes.draw do
     resources :trains, only: [:index]
     resources :internet_outages, only: [:index]
     resources :power_plants, only: [:index]
+    resources :power_plant_profiles, only: [:index]
     resources :commodity_sites, only: [:index]
+    resources :city_profiles, only: [:index]
+    resources :regional_indicators, only: [:index]
+    resources :regional_admin_profiles, only: [:index]
+    resources :data_sources, only: [:index]
     resources :conflict_events, only: [:index]
     get "conflict_pulse", to: "conflict_pulse#index"
     get "chokepoints", to: "chokepoints#index"

@@ -1,0 +1,46 @@
+{
+  "sources": [
+    {
+      "key": "austria_economic_cities",
+      "type": "normalized_json",
+      "path": "austria_economic_cities.json",
+      "priority": 100,
+      "country_codes": ["AUT"],
+      "target_model": "city_profiles",
+      "source_name": "Statistik Austria / data.gv.at + manual strategic weighting",
+      "source_url": "https://www.statistik.at/en/services/tools/data-access/open-data",
+      "access_mode": "reviewed_snapshot",
+      "cadence": "manual review",
+      "manual_override_policy": "Allowed when a city has strategic economic relevance beyond pure population ranking.",
+      "notes": "Austria-first economic, logistics, administrative, and industrial city pack for DACH local mode."
+    },
+    {
+      "key": "germany_strategic_cities",
+      "type": "normalized_json",
+      "path": "germany_strategic_cities.json",
+      "priority": 200,
+      "country_codes": ["DEU"],
+      "target_model": "city_profiles",
+      "source_name": "Destatis regional statistics + manual strategic weighting",
+      "source_url": "https://www.destatis.de/EN/Themes/Countries-Regions/Regional-Statistics/_node.html",
+      "access_mode": "reviewed_snapshot",
+      "cadence": "manual review",
+      "manual_override_policy": "Allowed when industrial, logistics, or political significance justifies inclusion above a simple population cutoff.",
+      "notes": "Germany strategic city pack prioritized for finance, industry, ports, logistics, and state-level administration."
+    },
+    {
+      "key": "switzerland_strategic_cities",
+      "type": "normalized_json",
+      "path": "switzerland_strategic_cities.json",
+      "priority": 300,
+      "country_codes": ["CHE"],
+      "target_model": "city_profiles",
+      "source_name": "Swiss BFS / swisstopo locality data + manual strategic weighting",
+      "source_url": "https://opendata.swiss/en/organization/bundesamt-fur-statistik-bfs",
+      "access_mode": "reviewed_snapshot",
+      "cadence": "manual review",
+      "manual_override_policy": "Allowed when a municipality is strategically important for finance, border trade, industrial production, or Alpine corridors.",
+      "notes": "Switzerland strategic city pack prioritized for finance, federal institutions, precision industry, border trade, and corridor relevance."
+    }
+  ]
+}

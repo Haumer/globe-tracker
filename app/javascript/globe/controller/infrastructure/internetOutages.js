@@ -64,6 +64,7 @@ export function applyOutagesMethods(GlobeController) {
     summaries.forEach(s => {
       const centroid = COUNTRY_CENTROIDS[s.code]
       if (!centroid) return
+      if (this.hasActiveFilter() && !this.pointPassesFilter(centroid[0], centroid[1])) return
 
       const color = levelColors[s.level] || "#ffc107"
       const cesiumColor = Cesium.Color.fromCssColorString(color)

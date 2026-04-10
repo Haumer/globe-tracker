@@ -32,7 +32,7 @@ module ApplicationHelper
     { key: "pipelines", label: "Pipelines", icon: "fa-solid fa-oil-well", color: "#ff6d00", target: "qlPipelines" },
     { key: "railways", label: "Railways", icon: "fa-solid fa-train", color: "#90a4ae", target: "qlRailways", meta: "Returns after cleanup.", disabled: true },
     { key: "powerPlants", label: "Power Plants", icon: "fa-solid fa-plug", color: "#ffc107", target: "qlPowerPlants" },
-    { key: "commoditySites", label: "Commodity Sites", icon: "fa-solid fa-industry", color: "#9ccc65", target: "qlCommoditySites", meta: "Strategic production and processing sites. Beta." },
+    { key: "commoditySites", label: "Strategic Sites", icon: "fa-solid fa-industry", color: "#9ccc65", target: "qlCommoditySites", meta: "Curated industrial, pharma, and advanced manufacturing sites." },
     { key: "cameras", label: "Webcams", icon: "fa-solid fa-video", color: "#29b6f6", target: "qlCameras" },
     { key: "financial", label: "Markets", icon: "fa-solid fa-chart-line", color: "#66bb6a", target: "qlFinancial" },
     { key: "cities", label: "Cities", icon: "fa-solid fa-city", color: "#ffd54f", target: "qlCities" },

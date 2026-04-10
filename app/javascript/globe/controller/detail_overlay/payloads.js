@@ -171,6 +171,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       nodeRequest = null,
       casePath = null,
       focusHeight = null,
+      contextAvailable = false,
     }) => ({
       kind,
       title: title || genericTitle,
@@ -187,6 +188,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       nodeRequest,
       casePath,
       focusHeight,
+      contextAvailable,
     })
 
     switch (kind) {
@@ -629,6 +631,84 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           chips: [chip(firstPresent(data?.category, "Market"), change < 0 ? "critical" : change > 0 ? "accent" : "neutral")],
           accent: change < 0 ? "#ef5350" : change > 0 ? "#4caf50" : "#ffc107",
           nodeRequest: firstPresent(data?.symbol, data?.name) ? { kind: "commodity", id: firstPresent(data?.symbol, data?.name) } : null,
+        })
+      }
+      case "regional_economy": {
+        const gdpPerCapita = toNumber(data?.metrics?.gdp_per_capita_usd)
+        const manufacturingShare = toNumber(data?.metrics?.manufacturing_share_pct)
+        const exportsShare = toNumber(data?.metrics?.exports_goods_services_pct_gdp)
+        const accent = this._regionalEconomyAccent?.(data) || data?.accent_color || "#b28704"
+        const sourceLabel = [data?.source_name, data?.latest_year].filter(Boolean).join(" · ")
+
+        return makePayload({
+          title: firstPresent(data?.country_name, data?.country_code_alpha3, "Regional economy"),
+          subtitle: firstPresent(sourceLabel, "Economic baseline"),
+          brief: compactFacts([
+            manufacturingShare != null ? `Mfg ${manufacturingShare.toFixed(1)}%` : null,
+            gdpPerCapita != null ? `GDP/cap $${Math.round(gdpPerCapita).toLocaleString()}` : null,
+            exportsShare != null ? `Exports ${exportsShare.toFixed(1)}% GDP` : null,
+          ], 3).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Economy"), "warning"),
+            chip("Baseline", "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 1200000,
+          contextAvailable: true,
+        })
+      }
+      case "regional_admin_economy": {
+        const previewScore = toNumber(data?.metrics?.preview_score)
+        const cityCount = toNumber(data?.metrics?.city_count)
+        const siteCount = toNumber(data?.metrics?.strategic_site_count)
+        const powerCapacityMw = toNumber(data?.metrics?.curated_power_capacity_mw)
+        const accent = this._regionalAdminEconomyAccent?.(data) || data?.accent_color || "#2f7ea7"
+        const selectedSector = data?.selected_sector_profile
+        const selectedSectorKey = data?.selected_sector_key
+        const selectedSectorLabel = firstPresent(data?.selected_sector_label, selectedSector?.sector_name)
+        const selectedRank = data?.selected_rank
+        const topSector = Array.isArray(data?.top_sectors) ? data.top_sectors[0] : null
+        const focusBrief = selectedSector
+          ? compactFacts([
+              selectedSectorLabel ? `${selectedSectorLabel}` : null,
+              selectedSector?.signal_count != null ? `${selectedSector.signal_count} signals` : null,
+              selectedSector?.node_count != null ? `${selectedSector.node_count} nodes` : null,
+            ], 3).join(" · ")
+          : selectedSectorKey && selectedSectorKey !== "all"
+            ? compactFacts([
+                selectedSectorLabel ? `${selectedSectorLabel}` : null,
+                "No current signal",
+              ], 2).join(" · ")
+          : compactFacts([
+              topSector?.sector_name ? `${topSector.sector_name}` : null,
+              previewScore != null ? `Signal ${Math.round(previewScore)}` : null,
+              cityCount != null ? `${cityCount} cities` : null,
+            ], 3).join(" · ")
+
+        return makePayload({
+          title: firstPresent(data?.name, "Admin area"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.country_name,
+              selectedRank?.rank != null && selectedRank?.total != null ? `Rank ${selectedRank.rank}/${selectedRank.total}` : null,
+            ], 2).join(" · "),
+            data?.country_code_alpha3,
+            "Admin area structure"
+          ),
+          brief: compactFacts([
+            focusBrief,
+            siteCount != null ? `${siteCount} sites` : null,
+            powerCapacityMw != null && powerCapacityMw > 0 ? `${(powerCapacityMw / 1000).toFixed(1)} GW` : null,
+          ], 4).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Admin"), "warning"),
+            chip(firstPresent(selectedSectorLabel, topSector?.sector_name, "Structure"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 450000,
+          contextAvailable: true,
         })
       }
       case "insight": {

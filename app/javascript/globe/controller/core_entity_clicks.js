@@ -29,10 +29,20 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showShipDetail(data)
         return true
       }},
-      { prefix: "border-", skip: [], handler: (id) => {
+      { prefix: "border-fill-", skip: [], handler: (id) => {
+        const data = this._borderCountryMap?.get("border-fill-" + id)
+        if (!data) return false
+        if (!this.countrySelectMode && this.showRegionalIndicatorCountry?.(data.name, { picked })) return true
         if (!this.countrySelectMode) return false
+        this.toggleCountrySelection(data.name)
+        this.showBorderDetail()
+        return true
+      }},
+      { prefix: "border-", skip: [], handler: (id) => {
         const data = this._borderCountryMap?.get("border-" + id)
         if (!data) return false
+        if (!this.countrySelectMode && this.showRegionalIndicatorCountry?.(data.name, { picked })) return true
+        if (!this.countrySelectMode) return false
         this.toggleCountrySelection(data.name)
         this.showBorderDetail()
         return true
@@ -214,6 +224,39 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const data = this._navalShipData.get(id) || this._navalShipData.get(`${id}`)
         if (!data) return false
         this.showNavalVesselDetail(data)
+        return true
+      }},
+      { prefix: "city-", skip: [], handler: (id) => {
+        const cityId = picked.id.properties?.cityId?.getValue?.() || id
+        const data = this._citiesData?.find(city => `${city.id}` === `${cityId}`)
+        if (!data) return false
+        this.showCityDetail?.(data)
+        return true
+      }},
+      { prefix: "radmin-fill-", skip: [], handler: (id) => {
+        const data = this._regionalAdminRecordForEntityId?.(`radmin-fill-${id}`)
+        if (!data) return false
+        this.showRegionalAdminDetail?.(data, { picked })
+        return true
+      }},
+      { prefix: "radmin-line-", skip: [], handler: (id) => {
+        const data = this._regionalAdminRecordForEntityId?.(`radmin-line-${id}`)
+        if (!data) return false
+        this.showRegionalAdminDetail?.(data, { picked })
+        return true
+      }},
+      { prefix: "radmin-", skip: ["radmin-fill-", "radmin-line-"], handler: (id) => {
+        const data = this._regionalAdminRecordForEntityId?.(`radmin-${id}`)
+        if (!data) return false
+        this.showRegionalAdminDetail?.(data, { picked })
+        return true
+      }},
+      { prefix: "econ-", skip: [], handler: (id) => {
+        const data = this._regionalIndicatorMapData?.find(record =>
+          `${record.country_code_alpha3 || ""}`.toLowerCase() === `${id}`.toLowerCase()
+        )
+        if (!data) return false
+        this.showRegionalIndicatorDetail?.(data, { picked })
         return true
       }},
       { prefix: "pp-atk-", skip: [], handler: (id) => {

@@ -3,7 +3,7 @@ class RefreshPowerPlantsJob < ApplicationJob
   tracks_polling source: "power-plants", poll_type: "power_plants"
 
   def perform
-    return if PowerPlant.count > 0 # Static dataset — only import once
-    PowerPlantImportService.import!
+    PowerPlantImportService.import! if PowerPlant.count == 0
+    CuratedPowerPlantSyncService.sync!
   end
 end

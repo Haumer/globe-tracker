@@ -2,10 +2,15 @@
 
 This directory is the offline import staging area for `db/data/commodity_sites.json`.
 
+Repo-wide rule:
+
+- follow [DATA_SOURCING.md](/tmp/globe-dach-regional-profile/DATA_SOURCING.md)
+
 Rules:
 
 - Do not fetch third-party source data at request time.
 - Prefer reviewed snapshots from official operator, government, or authority sources.
+- Record the upstream source and rebuild path for every source group.
 - Normalize each source into either:
   - `normalized_json`
   - `normalized_csv`
@@ -27,6 +32,8 @@ Current source groups:
   - ammonia, urea, and phosphate fertilizer complexes from official operator sources
 - `specialty_operator_sites.json`
   - helium and fertilizer strategic sites from official / authority sources
+- `dach_strategic_sites.json`
+  - curated DACH industrial, semiconductor, automotive, battery, and pharma sites from official company sources
 
 Required normalized fields:
 

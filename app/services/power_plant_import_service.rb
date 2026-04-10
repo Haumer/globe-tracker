@@ -49,6 +49,8 @@ class PowerPlantImportService
       Rails.logger.info("PowerPlantImportService: #{imported}/#{records.size}")
     end
 
+    CuratedPowerPlantSyncService.sync!
+
     Rails.logger.info("PowerPlantImportService: done — #{imported} plants")
     imported
   end

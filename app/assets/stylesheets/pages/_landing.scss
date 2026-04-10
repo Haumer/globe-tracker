@@ -71,6 +71,15 @@
   }
 }
 
+.landing-cta--accent {
+  background: #86623b;
+
+  &:hover {
+    background: #6f502f;
+    color: #fff;
+  }
+}
+
 // ── Sections ──────────────────────────────────────────────
 
 .landing-section {

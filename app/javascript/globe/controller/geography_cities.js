@@ -1,5 +1,88 @@
 import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
 
+function normalizeCityIdentity(name = "", country = "") {
+  const normalize = value => `${value || ""}`
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+
+  const normalizedName = normalize(name)
+  const normalizedCountry = normalize(country)
+  if (!normalizedName || !normalizedCountry) return null
+  return `${normalizedCountry}:${normalizedName}`
+}
+
+function buildCityProfileIndex(profiles = []) {
+  const index = new Map()
+
+  profiles.forEach(profile => {
+    const names = [profile.name, ...(profile.aliases || [])]
+    names.forEach(name => {
+      const key = normalizeCityIdentity(name, profile.country_name)
+      if (key) index.set(key, profile)
+    })
+  })
+
+  return index
+}
+
+function applyCityProfile(city, profile) {
+  const roleTags = Array.isArray(profile?.role_tags) ? profile.role_tags : (city.roleTags || [])
+  const strategicSectors = Array.isArray(profile?.strategic_sectors) ? profile.strategic_sectors : (city.strategicSectors || [])
+  const profilePriority = Number.isFinite(profile?.priority) ? profile.priority : (Number.isFinite(city.profilePriority) ? city.profilePriority : 9999)
+
+  return {
+    ...city,
+    id: profile?.id || city.id || normalizeCityIdentity(city.name, profile?.country_name || city.country),
+    country: profile?.country_name || city.country,
+    lat: profile?.lat ?? city.lat,
+    lng: profile?.lng ?? city.lng,
+    capital: city.capital || roleTags.includes("capital"),
+    adminArea: profile?.admin_area || city.adminArea || "",
+    aliases: Array.isArray(profile?.aliases) ? profile.aliases : (city.aliases || []),
+    roleTags,
+    strategicSectors,
+    summary: profile?.summary || city.summary || "",
+    profilePriority,
+    isProfiled: !!profile,
+  }
+}
+
+function cityFromProfile(profile) {
+  return applyCityProfile({
+    id: profile.id,
+    name: profile.name,
+    country: profile.country_name || "",
+    population: profile.population || 0,
+    lat: profile.lat,
+    lng: profile.lng,
+    capital: false,
+    rank: 0,
+    aliases: profile.aliases || [],
+    roleTags: [],
+    strategicSectors: [],
+    summary: "",
+    adminArea: "",
+    profilePriority: profile.priority,
+  }, profile)
+}
+
+function sortCities(left, right) {
+  return Number(Boolean(right.isProfiled)) - Number(Boolean(left.isProfiled)) ||
+    (left.profilePriority || 9999) - (right.profilePriority || 9999) ||
+    Number(Boolean(right.capital)) - Number(Boolean(left.capital)) ||
+    (right.population || 0) - (left.population || 0) ||
+    (left.name || "").localeCompare(right.name || "")
+}
+
+function cityPopulationLabel(population) {
+  if (!population || population <= 0) return "—"
+  if (population >= 1_000_000) return `${(population / 1_000_000).toFixed(1)}M`
+  return `${Math.round(population / 1000)}k`
+}
+
 export function applyGeographyCityMethods(GlobeController) {
   GlobeController.prototype.toggleCities = function() {
     this.citiesVisible = this.hasCitiesToggleTarget && this.citiesToggleTarget.checked
@@ -22,13 +105,22 @@ export function applyGeographyCityMethods(GlobeController) {
         fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places_simple.geojson"),
         fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_urban_areas.geojson"),
       ])
+      const cityProfilesRes = await fetch("/api/city_profiles").catch(() => null)
 
       const placesData = await placesRes.json()
       const urbanData = await urbanRes.json()
+      const cityProfiles = cityProfilesRes?.ok ? await cityProfilesRes.json() : []
+      const profileRecords = Array.isArray(cityProfiles) ? cityProfiles : []
+      const cityProfileIndex = buildCityProfileIndex(profileRecords)
+      const matchedProfileIds = new Set()
 
-      this._citiesData = placesData.features
+      const naturalEarthCities = placesData.features
         .filter(feature => feature.geometry && feature.properties)
         .map(feature => ({
+          id: normalizeCityIdentity(
+            feature.properties.name || feature.properties.nameascii || "",
+            feature.properties.adm0name || feature.properties.sov0name || ""
+          ),
           name: feature.properties.name || feature.properties.nameascii || "",
           country: feature.properties.adm0name || feature.properties.sov0name || "",
           population: feature.properties.pop_max || feature.properties.pop_min || 0,
@@ -37,8 +129,19 @@ export function applyGeographyCityMethods(GlobeController) {
           capital: feature.properties.adm0cap === 1,
           rank: feature.properties.rank_max || 0,
         }))
-        .filter(city => city.name && city.population > 100000)
-        .sort((a, b) => b.population - a.population)
+        .map(city => {
+          const profile = cityProfileIndex.get(normalizeCityIdentity(city.name, city.country))
+          if (profile?.id) matchedProfileIds.add(profile.id)
+          return applyCityProfile(city, profile)
+        })
+        .filter(city => city.name && (city.population > 100000 || city.isProfiled))
+
+      const supplementalProfileCities = profileRecords
+        .filter(profile => !matchedProfileIds.has(profile.id))
+        .map(cityFromProfile)
+
+      this._localProfileCityProfiles = profileRecords
+      this._citiesData = [...naturalEarthCities, ...supplementalProfileCities].sort(sortCities)
 
       this._urbanAreas = urbanData.features
         .filter(feature => feature.geometry)
@@ -82,9 +185,51 @@ export function applyGeographyCityMethods(GlobeController) {
 
     if (!this.citiesVisible) return
 
-    const maxPop = cities.length > 0 ? cities[0].population : 1
+    const maxPop = Math.max(1, ...cities.map(city => city.population || 0))
     cities.forEach(city => addCityEntity.call(this, Cesium, dataSource, city, maxPop))
     renderUrbanAreas.call(this, Cesium, dataSource)
+  }
+
+  GlobeController.prototype.showCityDetail = function(city) {
+    const accent = city.capital ? "#ffd54f" : (city.isProfiled ? "#80cbc4" : "#e0e0e0")
+    const roleTags = (city.roleTags || []).slice(0, 4).map(tag => titleizeCityField(tag)).join(" · ")
+    const sectors = (city.strategicSectors || []).slice(0, 4).map(sector => titleizeCityField(sector)).join(" · ")
+    const sourceLabel = city.isProfiled ? "Regional city profile catalog + Natural Earth" : "Natural Earth"
+
+    this.detailContentTarget.innerHTML = `
+      <div class="detail-callsign" style="color:${accent};">
+        <i class="fa-solid fa-city" style="margin-right:6px;"></i>${this._escapeHtml(city.name)}
+      </div>
+      <div class="detail-country">${this._escapeHtml([city.adminArea, city.country].filter(Boolean).join(" · ") || "Unknown")}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Population</span>
+          <span class="detail-value">${this._escapeHtml(cityPopulationLabel(city.population))}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Profile</span>
+          <span class="detail-value">${city.capital ? "Capital" : (city.isProfiled ? "Strategic city" : "Global city")}</span>
+        </div>
+        ${roleTags ? `
+        <div class="detail-field">
+          <span class="detail-label">Roles</span>
+          <span class="detail-value">${this._escapeHtml(roleTags)}</span>
+        </div>` : ""}
+        ${sectors ? `
+        <div class="detail-field">
+          <span class="detail-label">Sectors</span>
+          <span class="detail-value">${this._escapeHtml(sectors)}</span>
+        </div>` : ""}
+      </div>
+      ${city.summary ? `
+        <div style="margin-top:10px;padding:8px 10px;background:rgba(128,203,196,0.08);border:1px solid rgba(128,203,196,0.22);border-radius:6px;font:400 11px/1.5 var(--gt-sans);color:var(--gt-text);">
+          ${this._escapeHtml(city.summary)}
+        </div>
+      ` : ""}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: ${this._escapeHtml(sourceLabel)}</div>
+    `
+
+    this.detailPanelTarget.style.display = ""
   }
 }
 
@@ -101,12 +246,16 @@ function filterCities() {
 function addCityEntity(Cesium, dataSource, city, maxPop) {
   try {
     const popRatio = city.population / maxPop
-    const pixelSize = city.capital ? 7 : Math.max(3, Math.round(popRatio * 6 + 2))
+    const pixelSize = city.capital ? 7 : (city.isProfiled ? Math.max(5, Math.round(popRatio * 6 + 4)) : Math.max(3, Math.round(popRatio * 6 + 2)))
     const color = city.capital
       ? Cesium.Color.fromCssColorString("#ffd54f")
-      : Cesium.Color.fromCssColorString("#e0e0e0")
+      : (city.isProfiled ? Cesium.Color.fromCssColorString("#80cbc4") : Cesium.Color.fromCssColorString("#e0e0e0"))
 
     const entity = dataSource.entities.add({
+      id: `city-${city.id}`,
+      properties: {
+        cityId: city.id,
+      },
       position: Cesium.Cartesian3.fromDegrees(city.lng, city.lat, 10),
       point: {
         pixelSize,
@@ -118,7 +267,7 @@ function addCityEntity(Cesium, dataSource, city, maxPop) {
       },
       label: {
         text: city.name,
-        font: city.capital ? "bold 15px JetBrains Mono, monospace" : LABEL_DEFAULTS.font,
+        font: city.capital || city.isProfiled ? "bold 14px JetBrains Mono, monospace" : LABEL_DEFAULTS.font,
         fillColor: Cesium.Color.WHITE.withAlpha(0.95),
         outlineColor: LABEL_DEFAULTS.outlineColor(),
         outlineWidth: LABEL_DEFAULTS.outlineWidth,
@@ -135,6 +284,14 @@ function addCityEntity(Cesium, dataSource, city, maxPop) {
   } catch (error) {
     console.warn(`City entity failed: ${city.name}`, error.message)
   }
+}
+
+function titleizeCityField(value = "") {
+  return `${value || ""}`
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
 }
 
 function renderUrbanAreas(Cesium, dataSource) {

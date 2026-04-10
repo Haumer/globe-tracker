@@ -109,6 +109,7 @@ class CommoditySiteImportService
       "stage" => normalize_key(record["stage"]),
       "country_code" => normalize_string(record["country_code"])&.upcase,
       "country_name" => normalize_string(record["country_name"]),
+      "admin_area" => normalize_string(record["admin_area"]),
       "location_label" => normalize_string(record["location_label"]),
       "location_precision" => normalize_string(record["location_precision"]),
       "lat" => normalize_float(record["lat"]),

@@ -1,6 +1,6 @@
 import { getViewportBounds, restoreCamera, saveCamera } from "globe/camera"
 import { createPlaneIcon, findCountryAtPoint, haversineDistance, pointInPolygon, screenToLatLng } from "globe/utils"
-import { decodeHash, decodeFocusParams, applyDeepLink, encodeState, copyShareLink } from "globe/deeplinks"
+import { decodeHash, decodeFocusParams, decodeLaunchParams, applyDeepLink, encodeState, copyShareLink } from "globe/deeplinks"
 import { applyCoreEntityClickMethods } from "globe/controller/core_entity_clicks"
 import { initializeCoreState, teardownCore, wireCoreChrome } from "globe/controller/core_state"
 import { applyCoreUiHelpers } from "globe/controller/core_ui_helpers"
@@ -156,6 +156,8 @@ export function applyCoreMethods(GlobeController) {
     this.viewer.scene.skyBox.show = true
     this.viewer.scene.backgroundColor = Cesium.Color.BLACK
 
+    const launchState = decodeLaunchParams(window.location.search)
+
     // Apply deep link from URL hash (takes priority over saved prefs)
     const deepLinkState = decodeHash(window.location.hash)
     if (deepLinkState) {
@@ -235,7 +237,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-"]
+          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-", "econ-", "radmin-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked, click.position)) return
@@ -322,6 +324,15 @@ export function applyCoreMethods(GlobeController) {
     // Load workspace list for signed-in users
     this._loadWorkspaceList()
     this._initRegions()
+    if (launchState) {
+      const regionKey = launchState.region || this._activeRegion?.key || null
+      if (launchState.region && !deepLinkState?.region && this.enterRegion) {
+        this.enterRegion(launchState.region)
+      }
+      if (launchState.profile === "local" && regionKey && this.openLocalProfile) {
+        this.openLocalProfile(regionKey)
+      }
+    }
     this._startAlertPolling()
     this._startMiniTimeline()
 
@@ -592,13 +603,10 @@ export function applyCoreMethods(GlobeController) {
     })
   }
 
-  // Returns filter bounds from circle/countries, or viewport if no filter active
+  // Returns filter bounds from the most specific active scope, or viewport if no filter is active.
 
   GlobeController.prototype.getFilterBounds = function() {
-    // Region mode takes highest priority — scopes ALL data fetches
-    if (this._activeRegion) return this._activeRegion.bounds
-
-    // Circle filter takes priority
+    // Circle filter takes highest priority.
     if (this._activeCircle) {
       const { center, radius } = this._activeCircle
       const degOffset = (radius / 111320) * 1.1 // rough deg conversion + 10% margin
@@ -610,7 +618,7 @@ export function applyCoreMethods(GlobeController) {
       }
     }
 
-    // Country filter: compute bounding box of all selected countries
+    // Country filter takes precedence over coarse region bounds.
     if (this.selectedCountries.size > 0 && this._countryFeatures.length > 0) {
       let lats = [], lngs = []
       for (const feature of this._countryFeatures) {
@@ -635,17 +643,14 @@ export function applyCoreMethods(GlobeController) {
       }
     }
 
+    if (this._activeRegion) return this._activeRegion.bounds
+
     return this.getViewportBounds()
   }
 
-  // Check if a point passes the active filter (circle or country)
+  // Check if a point passes the most specific active filter.
 
   GlobeController.prototype.pointPassesFilter = function(lat, lng) {
-    if (this._activeRegion) {
-      const b = this._activeRegion.bounds
-      return lat >= b.lamin && lat <= b.lamax && lng >= b.lomin && lng <= b.lomax
-    }
-
     if (this._activeCircle) {
       const dist = this.haversineDistance(this._activeCircle.center, { lat, lng })
       return dist <= this._activeCircle.radius
@@ -659,6 +664,11 @@ export function applyCoreMethods(GlobeController) {
       }
       // Only test polygons of selected countries (not all countries)
       return this._pointInSelectedCountries(lat, lng)
+    }
+
+    if (this._activeRegion) {
+      const b = this._activeRegion.bounds
+      return lat >= b.lamin && lat <= b.lamax && lng >= b.lomin && lng <= b.lomax
     }
 
     return true // no filter active
@@ -679,7 +689,7 @@ export function applyCoreMethods(GlobeController) {
       }
     }
     // Fall back to convex hull (captures international waters between selected countries)
-    if (this._selectedCountriesHull && this._selectedCountriesHull.length >= 3) {
+    if (this._selectedCountriesUseHull !== false && this._selectedCountriesHull && this._selectedCountriesHull.length >= 3) {
       return this.pointInPolygon(lat, lng, this._selectedCountriesHull)
     }
     return false

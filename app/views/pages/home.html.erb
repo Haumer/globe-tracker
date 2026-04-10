@@ -37,6 +37,14 @@
 
     <%# Region Mode %>
     <div class="region-bar">
+      <div class="region-launch-card">
+        <div class="region-launch-copy">
+          <div class="region-launch-kicker">Regional Profile</div>
+          <div class="region-launch-title">DACH Local Mode</div>
+          <div class="region-launch-desc">Switch from the global globe into a scoped DACH shell for checking regional data enrichment.</div>
+        </div>
+        <button class="region-local-btn" data-action="click->globe#openDachLocalProfile" type="button">Open</button>
+      </div>
       <div id="region-indicator" style="display:none;"></div>
       <select class="region-select" id="region-select" data-action="change->globe#selectRegion" aria-label="Focus on a region">
         <option value="">Select Region</option>

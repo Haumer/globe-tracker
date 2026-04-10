@@ -29,6 +29,12 @@
       "type": "normalized_json",
       "path": "specialty_operator_sites.json",
       "priority": 100
+    },
+    {
+      "key": "dach_strategic_sites",
+      "type": "normalized_json",
+      "path": "dach_strategic_sites.json",
+      "priority": 100
     }
   ]
 }

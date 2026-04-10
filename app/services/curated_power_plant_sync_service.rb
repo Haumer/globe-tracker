@@ -18,7 +18,7 @@ class CuratedPowerPlantSyncService
       if (plant = matched_plant(record))
         plant.update!(attrs.except(:gppd_idnr, :created_at))
         updated += 1
-      else
+      elsif attrs[:latitude].present? && attrs[:longitude].present?
         PowerPlant.create!(attrs)
         inserted += 1
       end

@@ -1501,7 +1501,7 @@ export function applyRegionMethods(GlobeController) {
     const region = this._regionalEconomyRegion?.()
     const view = this._regionalEconomyMapView?.(region)
     const cityDataSource = this._ds["cities"]
-    if (cityDataSource) cityDataSource.show = this.citiesVisible
+    if (cityDataSource) cityDataSource.show = this.citiesVisible && !["admin", "district"].includes(view)
     if (!region) {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
@@ -2110,11 +2110,17 @@ export function applyRegionMethods(GlobeController) {
           }
         : record
 
-      const style = styles[record.id] || {
+      const baseStyle = styles[record.id] || {
         accentCss: "#2f7ea7",
-        fillColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.22),
-        lineColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.92),
-        lineWidth: 1.8,
+        fillColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.12),
+        lineColor: Cesium.Color.fromCssColorString("#2f7ea7").withAlpha(0.98),
+        lineWidth: 2.6,
+      }
+      const style = {
+        ...baseStyle,
+        fillColor: Cesium.Color.fromCssColorString(baseStyle.accentCss || "#2f7ea7").withAlpha(0.1),
+        lineColor: Cesium.Color.fromCssColorString(baseStyle.accentCss || "#2f7ea7").withAlpha(0.98),
+        lineWidth: Math.max(baseStyle.lineWidth || 0, 2.4),
       }
 
       const geom = feature.geometry
@@ -2163,7 +2169,7 @@ export function applyRegionMethods(GlobeController) {
         id: labelId,
         position: Cesium.Cartesian3.fromDegrees(coordinates.lng, coordinates.lat, 3200),
         point: {
-          pixelSize: 9,
+          pixelSize: 11,
           color: Cesium.Color.fromCssColorString(style.accentCss).withAlpha(0.96),
           outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
           outlineWidth: 2,
@@ -2172,7 +2178,7 @@ export function applyRegionMethods(GlobeController) {
         },
         label: {
           text: regionalAreaMetricLabel(renderRecord, metricConfig, scoreForRecord(renderRecord)),
-          font: "bold 10px JetBrains Mono, monospace",
+          font: "bold 11px JetBrains Mono, monospace",
           fillColor: Cesium.Color.WHITE.withAlpha(0.96),
           outlineColor: LABEL_DEFAULTS.outlineColor(),
           outlineWidth: LABEL_DEFAULTS.outlineWidth,

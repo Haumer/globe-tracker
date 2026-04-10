@@ -176,10 +176,14 @@ export function applyGeographyBorderMethods(GlobeController) {
       : Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
     const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8)
     const defaultFillColor = hasSelection && !normalRegionalView
-      ? Cesium.Color.fromCssColorString("#0b0f14").withAlpha(subnationalOverlayActive ? 0.18 : 0.7)
+      ? (subnationalOverlayActive
+          ? Cesium.Color.TRANSPARENT
+          : Cesium.Color.fromCssColorString("#0b0f14").withAlpha(0.7))
       : Cesium.Color.TRANSPARENT
     const selectedFillColor = hasSelection && !normalRegionalView
-      ? Cesium.Color.fromCssColorString("#ffa726").withAlpha(subnationalOverlayActive ? 0.08 : 0.18)
+      ? (subnationalOverlayActive
+          ? Cesium.Color.TRANSPARENT
+          : Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.18))
       : Cesium.Color.TRANSPARENT
 
     for (const [countryName, entities] of this._countryEntities) {

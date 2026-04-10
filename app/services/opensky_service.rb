@@ -20,11 +20,9 @@ class OpenskyService
     return [] if ENV["OPENSKY_DISABLED"].present?
 
     if @last_fetch_at.nil? || (Time.now.to_f - @last_fetch_at) > CACHE_TTL
+      @last_fetch_at = Time.now.to_f # set BEFORE fetch to prevent concurrent hammering
       response = fetch_from_api(bounds)
-      if response
-        upsert_flights(response)
-        @last_fetch_at = Time.now.to_f
-      end
+      upsert_flights(response) if response
     end
 
     Flight.where("updated_at > ?", 6.minutes.ago).within_bounds(bounds)

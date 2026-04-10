@@ -333,9 +333,10 @@ export function applyRegionMethods(GlobeController) {
           renderLegendSwatch("#f59e0b", "Higher signal"),
         ],
         items: [
-          `Nodes = profiled municipalities/cities with ${sectorLabel} tags`,
+          `Nodes = profiled municipal or city records with ${sectorLabel} tags`,
           "Labels = top municipal nodes in the current focus",
           `Source = ${metricSource}`,
+          "No municipality polygons yet in this mode",
           "Click any node to open the anchored connector card",
         ],
       }
@@ -361,7 +362,7 @@ export function applyRegionMethods(GlobeController) {
       chips: [],
       items: [
         "Economic overlays are hidden",
-        "Use Country, Region, or Municipality to compare the DACH baseline and subnational structure",
+        "Use Country, Region, or Municipal Nodes to compare the DACH baseline and subnational structure",
       ],
     }
   }
@@ -1977,7 +1978,7 @@ export function applyRegionMethods(GlobeController) {
         <div class="local-profile-section-title">Granularity</div>
         <div class="local-profile-actions">
           <button type="button" class="local-profile-btn ${mapView === "admin" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="admin" aria-pressed="${mapView === "admin"}">Region</button>
-          <button type="button" class="local-profile-btn ${mapView === "municipality" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="municipality" aria-pressed="${mapView === "municipality"}">Municipality</button>
+          <button type="button" class="local-profile-btn ${mapView === "municipality" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="municipality" aria-pressed="${mapView === "municipality"}">Municipal Nodes</button>
           <button type="button" class="local-profile-btn ${mapView === "country" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="country" aria-pressed="${mapView === "country"}">Country</button>
           <button type="button" class="local-profile-btn ${mapView === "off" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="off" aria-pressed="${mapView === "off"}">Normal</button>
         </div>
@@ -2036,8 +2037,8 @@ export function applyRegionMethods(GlobeController) {
         </div>
 
         <div class="local-profile-section" data-local-profile-municipality-preview>
-          <div class="local-profile-section-title">Municipality Structure</div>
-          <div class="local-profile-empty-row">Loading municipality structure…</div>
+          <div class="local-profile-section-title">Municipal Nodes</div>
+          <div class="local-profile-empty-row">Loading municipal nodes…</div>
         </div>
 
         <div class="local-profile-grid">
@@ -2162,14 +2163,14 @@ export function applyRegionMethods(GlobeController) {
                 `Combined Population · ${this._escapeHtml(formatCompactNumber(totalPopulation))}`,
                 `Manufacturing Leader · ${this._escapeHtml(manufacturingLeader?.country_name || "Unknown")} · ${this._escapeHtml(formatPercent(metricValue(manufacturingLeader, "manufacturing_share_pct")))}`,
                 `Country Baseline · World Bank WDI snapshots across Germany, Austria, and Switzerland`,
-                `Granularity · Use Region, Municipality, Country, or Normal to switch the DACH economic overlay`,
+                `Granularity · Use Region, Municipal Nodes, Country, or Normal to switch the DACH economic overlay`,
                 `Country Metric · ${this._escapeHtml(countryMetric?.label || "GDP")}`,
                 `Country Metric Source · ${this._escapeHtml(countryMetricSource)}`,
                 granularityKey === "country"
                   ? `Country mode is source-backed by World Bank WDI`
                   : (granularityKey === "region" && currentMetric?.key !== "structure_signal"
                     ? `Region mode is source-backed by official DACH population feeds`
-                    : `Municipality remains structure-only until official local sources are wired`),
+                    : `Municipal Nodes remain structure-only until official municipality geometries and local sources are wired`),
                 currentMetric?.key === "structure_signal"
                   ? `Sector Focus · Region and municipality views can pivot toward automotive, chips, chemicals, energy, finance, or trade`
                   : `Sector Focus · Structure remains available as a separate derived metric`,
@@ -2362,7 +2363,7 @@ export function applyRegionMethods(GlobeController) {
                 `Focus · ${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}`,
                 `Fill · ${this._escapeHtml(sectorKey === "all" ? "overall industrial signal" : `${sectorLabel} signal`)} from cities, strategic sites, and curated power`,
                 `Labels · Top 12 regions for the current focus`,
-                `Controls · Switch to Municipality, Country, or Normal above for comparison`,
+                `Controls · Switch to Municipal Nodes, Country, or Normal above for comparison`,
                 `Interaction · Click a polygon or label for the connector anchor`,
                 `Caveat · Derived industrial footprint, not official district GDP or employment yet`,
               ], "No preview guidance yet")}
@@ -2445,8 +2446,8 @@ export function applyRegionMethods(GlobeController) {
       const municipalityRecords = Array.isArray(records) ? records : []
       if (municipalityRecords.length === 0) {
         shell.innerHTML = `
-          <div class="local-profile-section-title">Municipality Structure</div>
-          <div class="local-profile-empty-row">No profiled municipalities are available for this region yet.</div>
+          <div class="local-profile-section-title">Municipal Nodes</div>
+          <div class="local-profile-empty-row">No profiled municipal nodes are available for this region yet.</div>
         `
         return
       }
@@ -2473,7 +2474,7 @@ export function applyRegionMethods(GlobeController) {
       }, {})
 
       shell.innerHTML = `
-        <div class="local-profile-section-title">Municipality Structure</div>
+        <div class="local-profile-section-title">Municipal Nodes</div>
         <div class="local-profile-chip-row">
           <span class="local-profile-chip">${filtered.length} Municipal Nodes</span>
           <span class="local-profile-chip">${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}</span>
@@ -2483,9 +2484,9 @@ export function applyRegionMethods(GlobeController) {
             <div class="local-profile-section-title">Map Read</div>
             <ul class="local-profile-list local-profile-list--compact">
               ${renderLocalProfileList([
-                "Node-based municipality view built from profiled city and municipal records",
+                "Node-based municipal view built from profiled city and municipal records",
                 `Sector Focus · ${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}`,
-                "This is not full municipal polygon coverage yet",
+                "This is not municipality border coverage yet",
                 "Best for seeing which municipalities anchor a state or sector cluster",
               ], "No municipality guidance yet")}
             </ul>
@@ -2533,8 +2534,8 @@ export function applyRegionMethods(GlobeController) {
       console.error("Failed to render local municipality structure:", error)
       if (token !== this._localProfileRegionalMunicipalityPreviewFetchToken || this._localProfileRegion?.()?.key !== region.key) return
       shell.innerHTML = `
-        <div class="local-profile-section-title">Municipality Structure</div>
-        <div class="local-profile-empty-row">Municipality structure failed to load.</div>
+        <div class="local-profile-section-title">Municipal Nodes</div>
+        <div class="local-profile-empty-row">Municipal nodes failed to load.</div>
       `
     }
   }

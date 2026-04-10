@@ -768,7 +768,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         const accent = data?.accent_color || "#2f7ea7"
 
         return makePayload({
-          title: firstPresent(data?.name, "Municipality"),
+          title: firstPresent(data?.name, "Municipal node"),
           subtitle: firstPresent(
             compactFacts([
               data?.admin_area,

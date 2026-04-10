@@ -139,8 +139,8 @@ export const REGIONS = [
       },
       municipality: {
         default: {
-          label: "Municipality preview",
-          detail: "Profiled municipalities from city source packs",
+          label: "Municipal node preview",
+          detail: "Profiled municipal and city nodes from source-backed city packs",
         },
       },
     },

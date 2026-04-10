@@ -251,6 +251,12 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showRegionalAdminDetail?.(data, { picked })
         return true
       }},
+      { prefix: "rmuni-", skip: [], handler: (id) => {
+        const data = this._regionalMunicipalityRecordForEntityId?.(`rmuni-${id}`)
+        if (!data) return false
+        this.showRegionalMunicipalityDetail?.(data, { picked })
+        return true
+      }},
       { prefix: "econ-", skip: [], handler: (id) => {
         const data = this._regionalIndicatorMapData?.find(record =>
           `${record.country_code_alpha3 || ""}`.toLowerCase() === `${id}`.toLowerCase()

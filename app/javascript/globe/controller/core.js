@@ -237,7 +237,7 @@ export function applyCoreMethods(GlobeController) {
           // These entity types should always handle clicks (they have detail panels).
           // Decoration entities (rings, cores, labels) are also included — the dispatch
           // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-", "econ-", "radmin-"]
+          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-", "econ-", "radmin-", "rmuni-"]
           const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked, click.position)) return

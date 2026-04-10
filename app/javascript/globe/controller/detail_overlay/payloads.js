@@ -711,6 +711,36 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           contextAvailable: true,
         })
       }
+      case "regional_municipality": {
+        const signalScore = toNumber(data?.signal_score)
+        const selectedSectorNames = Array.isArray(data?.selected_sector_names) ? data.selected_sector_names : []
+        const accent = data?.accent_color || "#2f7ea7"
+
+        return makePayload({
+          title: firstPresent(data?.name, "Municipality"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.admin_area,
+              data?.country_name,
+            ], 2).join(" · "),
+            data?.country_name,
+            "Municipal node"
+          ),
+          brief: compactFacts([
+            data?.selected_sector_label && data?.selected_sector_key !== "all" ? data.selected_sector_label : null,
+            signalScore != null ? `Signal ${Math.round(signalScore)}` : null,
+            selectedSectorNames.length > 0 ? selectedSectorNames.slice(0, 2).join(" · ") : null,
+          ], 3).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code, data?.country_name, "Municipality"), "warning"),
+            chip(firstPresent(data?.selected_sector_label, "Municipal"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 180000,
+          contextAvailable: true,
+        })
+      }
       case "insight": {
         const theater = firstPresent(data?.entities?.theater?.name, data?.entities?.pulse?.theater, data?.location)
         return makePayload({

@@ -319,12 +319,16 @@ export function initializeCoreState(controller) {
   controller._localProfileRegionalAdminCatalog = null
   controller._localProfileRegionalAdminRegionKey = null
   controller._localProfileRegionalAdminFetchToken = 0
+  controller._regionalMunicipalityMapFetchToken = 0
+  controller._localProfileRegionalMunicipalityPreviewFetchToken = 0
   controller._regionalIndicatorMapData = []
   controller._regionalEconomyMapEntities = []
   controller._regionalEconomyBorderStyles = null
   controller._regionalAdminEconomyEntities = []
   controller._regionalAdminEconomyIndex = new Map()
   controller._regionalAdminBoundaryCache = null
+  controller._regionalMunicipalityEntities = []
+  controller._regionalMunicipalityIndex = new Map()
   controller._localProfilePowerPlantCatalog = null
   controller._localProfilePowerPlantFetchToken = 0
   controller._localProfileCityProfiles = null

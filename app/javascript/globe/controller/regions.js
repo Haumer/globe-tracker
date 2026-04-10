@@ -23,6 +23,19 @@ export function applyRegionMethods(GlobeController) {
   const DECIMAL_FORMAT = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 1,
   })
+  const REGIONAL_SECTOR_MATCHERS = {
+    automotive: ["automotive", "vehicle", "vehicles", "truck", "mobility", "driveline"],
+    semiconductors: ["semiconductor", "chip", "chips", "electronics", "microtechnology", "microelectronics"],
+    chemicals: ["chemical", "chemicals", "refining", "refinery", "fuel", "silicones", "materials", "battery materials"],
+    energy: ["energy", "power", "hydropower", "electricity", "utilities", "green hydrogen"],
+    finance_services: ["finance", "banking", "insurance", "private banking", "professional services", "commodity trading"],
+    logistics_trade: ["logistics", "port", "trade", "distribution", "warehousing", "air cargo", "danube logistics", "rail logistics", "cross-border trade", "wholesale"],
+    government_policy: ["government", "public administration", "federal administration", "policy", "administration", "public services", "institutions"],
+    life_sciences: ["pharma", "pharmaceuticals", "biopharma", "life sciences", "medical technology", "health services"],
+    machinery_engineering: ["machinery", "engineering", "industrial automation", "industrial technology", "metals", "steel", "forgings", "precision manufacturing"],
+    knowledge_tech: ["software", "digital", "research", "ai", "education", "technology", "telecom"],
+    tourism: ["tourism", "hospitality", "winter sports"],
+  }
 
   function regionBoundsCenter(bounds = {}) {
     return {
@@ -226,6 +239,31 @@ export function applyRegionMethods(GlobeController) {
     return `${record.name || "Admin area"}\n${sectorLabel || "Signal"} ${rounded}`
   }
 
+  function normalizeRegionalSectorValue(value) {
+    return `${value || ""}`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+  }
+
+  function municipalitySectorKeys(profile = {}) {
+    const haystack = [
+      ...(Array.isArray(profile.strategic_sectors) ? profile.strategic_sectors : []),
+      ...(Array.isArray(profile.role_tags) ? profile.role_tags : []),
+      profile.summary,
+    ].map(normalizeRegionalSectorValue).filter(Boolean)
+
+    const matched = Object.entries(REGIONAL_SECTOR_MATCHERS).filter(([, terms]) =>
+      terms.some(term => haystack.some(value => value.includes(normalizeRegionalSectorValue(term))))
+    )
+
+    return matched.map(([key]) => key)
+  }
+
+  function municipalitySectorNames(profile = {}) {
+    return municipalitySectorKeys(profile).map(titleizeProfileKey)
+  }
+
   function regionalEconomyMapLegend(view, sectorLabel = "All sectors") {
     if (view === "admin") {
       return {
@@ -238,6 +276,21 @@ export function applyRegionMethods(GlobeController) {
           `Fill = ${sectorLabel} signal intensity from profiled cities, strategic sites, and curated power`,
           "Labels = top 12 admin areas in the current DACH sector view",
           "Click any polygon or label to open the anchored connector card",
+        ],
+      }
+    }
+
+    if (view === "municipality") {
+      return {
+        chips: [
+          renderLegendSwatch("#2a6f97", "Lower signal"),
+          renderLegendSwatch(mixHexColors("#2a6f97", "#f59e0b", 0.52), "Mid signal"),
+          renderLegendSwatch("#f59e0b", "Higher signal"),
+        ],
+        items: [
+          `Nodes = profiled municipalities/cities with ${sectorLabel} tags`,
+          "Labels = top municipal nodes in the current focus",
+          "Click any node to open the anchored connector card",
         ],
       }
     }
@@ -261,7 +314,7 @@ export function applyRegionMethods(GlobeController) {
       chips: [],
       items: [
         "Economic overlays are hidden",
-        "Use Country or Admin Areas to compare the DACH baseline and subnational preview",
+        "Use Countries, Admin Areas, or Municipalities to compare the DACH baseline and subnational structure",
       ],
     }
   }
@@ -290,7 +343,7 @@ export function applyRegionMethods(GlobeController) {
       return "country"
     }
 
-    return ["admin", "country", "off"].includes(this._regionalEconomyMapViewSelection)
+    return ["admin", "municipality", "country", "off"].includes(this._regionalEconomyMapViewSelection)
       ? this._regionalEconomyMapViewSelection
       : "admin"
   }
@@ -442,6 +495,16 @@ export function applyRegionMethods(GlobeController) {
     )
   }
 
+  GlobeController.prototype._regionalMunicipalityEconomyEnabled = function(region = this._regionalEconomyRegion?.()) {
+    return !!(
+      region &&
+      region.mode === "economic" &&
+      this._hasActiveLocalProfile?.() &&
+      this._localProfileRegion?.()?.key === region.key &&
+      this._regionalEconomyMapView?.(region) === "municipality"
+    )
+  }
+
   GlobeController.prototype._regionalCountryEconomyEnabled = function(region = this._regionalEconomyRegion?.()) {
     return !!(region && region.mode === "economic" && this._regionalEconomyMapView?.(region) === "country")
   }
@@ -462,6 +525,51 @@ export function applyRegionMethods(GlobeController) {
   GlobeController.prototype._regionalAdminRecordForEntityId = function(entityId) {
     if (!entityId || !(this._regionalAdminEconomyIndex instanceof Map)) return null
     return this._regionalAdminEconomyIndex.get(entityId) || null
+  }
+
+  GlobeController.prototype._regionalMunicipalityRecords = function(region = this._localProfileRegion?.()) {
+    const countryNames = new Set(region?.countries || [])
+    return Array.isArray(this._localProfileCityProfiles)
+      ? this._localProfileCityProfiles.filter(profile => countryNames.has(profile.country_name))
+      : []
+  }
+
+  GlobeController.prototype._regionalMunicipalityCoordinates = function(profile) {
+    const lat = numericMetricValue(profile?.lat)
+    const lng = numericMetricValue(profile?.lng)
+    if (lat == null || lng == null) return null
+    return { lat, lng, height: 180000 }
+  }
+
+  GlobeController.prototype._regionalMunicipalitySelectedSectorKeys = function(profile, sectorKey = this._regionalEconomySectorMode?.()) {
+    const keys = municipalitySectorKeys(profile)
+    if (sectorKey && sectorKey !== "all") return keys.filter(key => key === sectorKey)
+    return keys
+  }
+
+  GlobeController.prototype._regionalMunicipalityDisplayScore = function(profile, sectorKey = this._regionalEconomySectorMode?.()) {
+    const priority = numericMetricValue(profile?.priority) || 100
+    const baseScore = clampNumber(110 - priority, 12, 100)
+    const sectorMatches = this._regionalMunicipalitySelectedSectorKeys?.(profile, sectorKey)
+    if (sectorKey && sectorKey !== "all") {
+      return sectorMatches.length > 0 ? clampNumber(baseScore + (sectorMatches.length * 8), 16, 100) : 0
+    }
+
+    const roleBonus = Array.isArray(profile?.role_tags) && profile.role_tags.some(tag => ["capital", "state_capital"].includes(tag))
+      ? 12
+      : 0
+    const sectorBonus = municipalitySectorKeys(profile).length * 4
+    return clampNumber(baseScore + roleBonus + sectorBonus, 16, 100)
+  }
+
+  GlobeController.prototype._regionalMunicipalityAccent = function(profile, sectorKey = this._regionalEconomySectorMode?.()) {
+    const ratio = clampNumber((this._regionalMunicipalityDisplayScore?.(profile, sectorKey) || 0) / 100.0, 0, 1)
+    return mixHexColors("#2a6f97", "#f59e0b", ratio)
+  }
+
+  GlobeController.prototype._regionalMunicipalityRecordForEntityId = function(entityId) {
+    if (!entityId || !(this._regionalMunicipalityIndex instanceof Map)) return null
+    return this._regionalMunicipalityIndex.get(entityId) || null
   }
 
   GlobeController.prototype._buildRegionalAdminEconomyContext = function(record) {
@@ -558,6 +666,58 @@ export function applyRegionMethods(GlobeController) {
     }
   }
 
+  GlobeController.prototype._buildRegionalMunicipalityContext = function(profile) {
+    if (!profile) return null
+
+    const sectorKey = this._regionalEconomySectorMode?.()
+    const sectorLabel = this._regionalEconomySectorLabel?.()
+    const coordinates = this._regionalMunicipalityCoordinates(profile)
+    const allSectorNames = municipalitySectorNames(profile)
+    const selectedSectorNames = this._regionalMunicipalitySelectedSectorKeys?.(profile, sectorKey).map(titleizeProfileKey)
+    const activeSectorNames = sectorKey === "all" ? allSectorNames : selectedSectorNames
+    const signalScore = this._regionalMunicipalityDisplayScore?.(profile, sectorKey)
+
+    return {
+      kind: "regional_municipality",
+      severity: "low",
+      statusLabel: "municipality",
+      icon: "fa-city",
+      accentColor: this._regionalMunicipalityAccent(profile, sectorKey),
+      eyebrow: "MUNICIPAL STRUCTURE",
+      title: profile.name || "Municipality",
+      subtitle: [profile.admin_area, profile.country_name].filter(Boolean).join(" · "),
+      summary: [
+        sectorKey === "all" ? "Municipal node" : `${sectorLabel} focus`,
+        signalScore ? `Signal ${Math.round(signalScore)}` : null,
+        activeSectorNames.length ? activeSectorNames.slice(0, 2).join(" · ") : "No tagged sector yet",
+      ].filter(Boolean).join(" · "),
+      meta: [
+        { label: "Country", value: profile.country_name || profile.country_code || "—" },
+        profile.admin_area ? { label: "Admin Area", value: profile.admin_area } : null,
+        profile.priority != null ? { label: "Priority", value: `${profile.priority}` } : null,
+      ].filter(Boolean),
+      coordinates,
+      actions: coordinates ? [
+        { label: "Focus map", lat: coordinates.lat, lng: coordinates.lng, height: coordinates.height, icon: "fa-location-crosshairs" },
+      ] : [],
+      sections: [
+        {
+          title: "Municipal profile",
+          rows: [
+            { label: "Signal", value: formatCompactNumber(signalScore) },
+            { label: "Sector Focus", value: sectorKey === "all" ? "All sectors" : sectorLabel },
+            { label: "Tagged Sectors", value: allSectorNames.length ? allSectorNames.slice(0, 4).join(" · ") : "—" },
+            { label: "Roles", value: Array.isArray(profile.role_tags) && profile.role_tags.length > 0 ? profile.role_tags.map(titleizeProfileKey).join(" · ") : "—" },
+          ],
+        },
+        profile.summary ? {
+          title: "Summary",
+          rows: [{ label: "Profile", value: profile.summary }],
+        } : null,
+      ].filter(Boolean),
+    }
+  }
+
   GlobeController.prototype.showRegionalAdminDetail = function(record, options = {}) {
     if (!record) return
 
@@ -606,7 +766,7 @@ export function applyRegionMethods(GlobeController) {
   GlobeController.prototype.setRegionalEconomyMapView = function(event) {
     event?.preventDefault?.()
     const view = event?.currentTarget?.dataset?.mapView
-    if (!["admin", "country", "off"].includes(view)) return
+    if (!["admin", "municipality", "country", "off"].includes(view)) return
 
     const panel = this.hasLocalProfilePanelTarget ? this.localProfilePanelTarget : null
     const scrollTop = panel?.scrollTop || 0
@@ -723,6 +883,7 @@ export function applyRegionMethods(GlobeController) {
     this._regionalIndicatorMapData = []
     this._clearRegionalEconomyMap?.()
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalMunicipalityMap?.()
 
     // Restore previous state or go to global default
     if (this._preRegionState) {
@@ -916,6 +1077,7 @@ export function applyRegionMethods(GlobeController) {
     this._regionalEconomySectorSelection = "all"
     this._renderLocalProfile()
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalMunicipalityMap?.()
     this._loadRegionalEconomyMap?.()
     this._syncRightPanels?.()
     this._savePrefs()
@@ -927,6 +1089,10 @@ export function applyRegionMethods(GlobeController) {
 
   GlobeController.prototype.getRegionalAdminEconomyDataSource = function() {
     return getDataSource(this.viewer, this._ds, "regionalAdminEconomy")
+  }
+
+  GlobeController.prototype.getRegionalMunicipalityDataSource = function() {
+    return getDataSource(this.viewer, this._ds, "regionalMunicipalities")
   }
 
   GlobeController.prototype._clearRegionalEconomyMap = function() {
@@ -957,28 +1123,54 @@ export function applyRegionMethods(GlobeController) {
     this._requestRender?.()
   }
 
+  GlobeController.prototype._clearRegionalMunicipalityMap = function() {
+    const ds = this._ds["regionalMunicipalities"]
+    if (ds && Array.isArray(this._regionalMunicipalityEntities)) {
+      ds.entities.suspendEvents()
+      this._regionalMunicipalityEntities.forEach(entity => ds.entities.remove(entity))
+      ds.entities.resumeEvents()
+      ds.show = false
+    }
+    this._regionalMunicipalityEntities = []
+    this._regionalMunicipalityIndex = new Map()
+    this._requestRender?.()
+  }
+
   GlobeController.prototype._syncRegionalEconomyMap = function() {
     const region = this._regionalEconomyRegion?.()
     const view = this._regionalEconomyMapView?.(region)
+    const cityDataSource = this._ds["cities"]
+    if (cityDataSource) cityDataSource.show = this.citiesVisible && view !== "municipality"
     if (!region || !Array.isArray(this._regionalIndicatorMapData) || this._regionalIndicatorMapData.length === 0) {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
       return
     }
 
     if (view === "off") {
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
       return
     }
 
     if (this._regionalAdminEconomyEnabled?.(region)) {
       this._clearRegionalEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
       this._loadRegionalAdminEconomyMap?.(region)
       return
     }
 
+    if (this._regionalMunicipalityEconomyEnabled?.(region)) {
+      this._clearRegionalEconomyMap?.()
+      this._clearRegionalAdminEconomyMap?.()
+      this._loadRegionalMunicipalityMap?.(region)
+      return
+    }
+
     this._clearRegionalAdminEconomyMap?.()
+    this._clearRegionalMunicipalityMap?.()
     if (!this.bordersVisible) {
       this._clearRegionalEconomyMap?.()
       return
@@ -1023,6 +1215,23 @@ export function applyRegionMethods(GlobeController) {
     }
 
     return Array.isArray(records) ? records : []
+  }
+
+  GlobeController.prototype._ensureRegionalMunicipalityRecords = async function(region) {
+    const countryCodes = Array.isArray(region?.countryCodes) ? region.countryCodes : []
+
+    let profiles = this._localProfileCityProfiles
+    if (!Array.isArray(profiles)) {
+      const response = await fetch(`/api/city_profiles?country_codes=${encodeURIComponent(countryCodes.join(","))}`)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      const payload = await response.json()
+      this._localProfileCityProfiles = Array.isArray(payload) ? payload : []
+      profiles = this._localProfileCityProfiles
+    }
+
+    const countryNames = new Set(region?.countries || [])
+    return Array.isArray(profiles) ? profiles.filter(profile => countryNames.has(profile.country_name)) : []
   }
 
   GlobeController.prototype._ensureRegionalAdminBoundaries = async function() {
@@ -1073,6 +1282,7 @@ export function applyRegionMethods(GlobeController) {
       this._regionalIndicatorMapData = []
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
       return
     }
 
@@ -1090,6 +1300,7 @@ export function applyRegionMethods(GlobeController) {
       this._regionalIndicatorMapData = []
       this._clearRegionalEconomyMap?.()
       this._clearRegionalAdminEconomyMap?.()
+      this._clearRegionalMunicipalityMap?.()
     }
   }
 
@@ -1113,6 +1324,26 @@ export function applyRegionMethods(GlobeController) {
       console.error("Failed to load regional admin economy map:", error)
       if (token !== this._localProfileRegionalAdminFetchToken) return
       this._clearRegionalAdminEconomyMap?.()
+    }
+  }
+
+  GlobeController.prototype._loadRegionalMunicipalityMap = async function(region = this._localProfileRegion?.()) {
+    if (!this._regionalMunicipalityEconomyEnabled?.(region)) {
+      this._clearRegionalMunicipalityMap?.()
+      return
+    }
+
+    const token = ++this._regionalMunicipalityMapFetchToken
+
+    try {
+      const records = await this._ensureRegionalMunicipalityRecords(region)
+      if (token !== this._regionalMunicipalityMapFetchToken || !this._regionalMunicipalityEconomyEnabled?.(region)) return
+
+      this._renderRegionalMunicipalityMap?.(region, records)
+    } catch (error) {
+      console.error("Failed to load regional municipality map:", error)
+      if (token !== this._regionalMunicipalityMapFetchToken) return
+      this._clearRegionalMunicipalityMap?.()
     }
   }
 
@@ -1310,6 +1541,82 @@ export function applyRegionMethods(GlobeController) {
     this._requestRender?.()
   }
 
+  GlobeController.prototype._renderRegionalMunicipalityMap = function(region, records = []) {
+    if (!this._regionalMunicipalityEconomyEnabled?.(region) || !Array.isArray(records) || records.length === 0) {
+      this._clearRegionalMunicipalityMap?.()
+      return
+    }
+
+    const Cesium = window.Cesium
+    if (!Cesium) return
+
+    const sectorKey = this._regionalEconomySectorMode?.(region)
+    const sectorLabel = this._regionalEconomySectorLabel?.(region)
+    const filtered = records
+      .filter(profile => this._regionalMunicipalityDisplayScore?.(profile, sectorKey) > 0)
+      .sort((left, right) =>
+        (this._regionalMunicipalityDisplayScore?.(right, sectorKey) || 0) - (this._regionalMunicipalityDisplayScore?.(left, sectorKey) || 0) ||
+        (left.country_name || "").localeCompare(right.country_name || "") ||
+        (left.name || "").localeCompare(right.name || "")
+      )
+      .slice(0, 80)
+
+    const dataSource = this.getRegionalMunicipalityDataSource()
+    dataSource.show = true
+    dataSource.entities.suspendEvents()
+    this._regionalMunicipalityEntities.forEach(entity => dataSource.entities.remove(entity))
+    this._regionalMunicipalityEntities = []
+    this._regionalMunicipalityIndex = new Map()
+
+    const labeledIds = new Set(filtered.slice(0, 18).map(profile => profile.id))
+
+    filtered.forEach(profile => {
+      const coordinates = this._regionalMunicipalityCoordinates(profile)
+      if (!coordinates) return
+
+      const accent = this._regionalMunicipalityAccent(profile, sectorKey)
+      const score = Math.round(this._regionalMunicipalityDisplayScore?.(profile, sectorKey) || 0)
+      const pointId = `rmuni-${profile.id}`
+      const entity = dataSource.entities.add({
+        id: pointId,
+        position: Cesium.Cartesian3.fromDegrees(coordinates.lng, coordinates.lat, 3000),
+        point: {
+          pixelSize: labeledIds.has(profile.id) ? 14 : 9,
+          color: Cesium.Color.fromCssColorString(accent).withAlpha(0.96),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.75),
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labeledIds.has(profile.id) ? {
+          text: `${profile.name}\n${sectorKey === "all" ? "Signal" : sectorLabel} ${score}`,
+          font: "bold 11px JetBrains Mono, monospace",
+          fillColor: Cesium.Color.WHITE.withAlpha(0.96),
+          outlineColor: LABEL_DEFAULTS.outlineColor(),
+          outlineWidth: LABEL_DEFAULTS.outlineWidth,
+          style: LABEL_DEFAULTS.style(),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          pixelOffset: LABEL_DEFAULTS.pixelOffsetAbove(),
+          scaleByDistance: new Cesium.NearFarScalar(4e4, 1, 1.6e6, 0.15),
+          translucencyByDistance: new Cesium.NearFarScalar(4e4, 1, 1.6e6, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("#081019").withAlpha(0.78),
+        } : undefined,
+        properties: {
+          municipalityId: profile.id,
+        },
+      })
+
+      this._regionalMunicipalityEntities.push(entity)
+      this._regionalMunicipalityIndex.set(pointId, profile)
+    })
+
+    dataSource.entities.resumeEvents()
+    this._requestRender?.()
+  }
+
   GlobeController.prototype.showRegionalIndicatorDetail = function(record, options = {}) {
     if (!record) return
 
@@ -1326,6 +1633,50 @@ export function applyRegionMethods(GlobeController) {
     }
 
     const context = this._buildRegionalEconomyContext?.(record)
+    if (context && this._setSelectedContext) {
+      this._setSelectedContext(context, {
+        openRightPanel: options.openRightPanel === true || this._currentRightPanelTab?.() === "context",
+      })
+    }
+
+    if (this.hasDetailPanelTarget) this.detailPanelTarget.style.display = "none"
+  }
+
+  GlobeController.prototype.showRegionalMunicipalityDetail = function(profile, options = {}) {
+    if (!profile) return
+
+    const coordinates = this._regionalMunicipalityCoordinates(profile)
+    const sectorKey = this._regionalEconomySectorMode?.()
+    const sectorLabel = this._regionalEconomySectorLabel?.()
+    const selectedSectorKeys = this._regionalMunicipalitySelectedSectorKeys?.(profile, sectorKey)
+    const anchoredRecord = coordinates
+      ? {
+          ...profile,
+          lat: coordinates.lat,
+          lng: coordinates.lng,
+          accent_color: this._regionalMunicipalityAccent(profile, sectorKey),
+          selected_sector_key: sectorKey,
+          selected_sector_label: sectorLabel,
+          selected_sector_names: selectedSectorKeys.map(titleizeProfileKey),
+          signal_score: this._regionalMunicipalityDisplayScore?.(profile, sectorKey),
+        }
+      : {
+          ...profile,
+          accent_color: this._regionalMunicipalityAccent(profile, sectorKey),
+          selected_sector_key: sectorKey,
+          selected_sector_label: sectorLabel,
+          selected_sector_names: selectedSectorKeys.map(titleizeProfileKey),
+          signal_score: this._regionalMunicipalityDisplayScore?.(profile, sectorKey),
+        }
+
+    if (!options.contextOnly && this._showCompactEntityDetail) {
+      this._showCompactEntityDetail("regional_municipality", anchoredRecord, {
+        id: profile.id || profile.name,
+        picked: options.picked,
+      })
+    }
+
+    const context = this._buildRegionalMunicipalityContext?.(profile)
     if (context && this._setSelectedContext) {
       this._setSelectedContext(context, {
         openRightPanel: options.openRightPanel === true || this._currentRightPanelTab?.() === "context",
@@ -1366,10 +1717,11 @@ export function applyRegionMethods(GlobeController) {
         <div class="local-profile-section-title">Map View</div>
         <div class="local-profile-actions">
           <button type="button" class="local-profile-btn ${mapView === "admin" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="admin" aria-pressed="${mapView === "admin"}">Admin Areas</button>
+          <button type="button" class="local-profile-btn ${mapView === "municipality" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="municipality" aria-pressed="${mapView === "municipality"}">Municipalities</button>
           <button type="button" class="local-profile-btn ${mapView === "country" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="country" aria-pressed="${mapView === "country"}">Countries</button>
           <button type="button" class="local-profile-btn ${mapView === "off" ? "" : "local-profile-btn--ghost"}" data-action="click->globe#setRegionalEconomyMapView" data-map-view="off" aria-pressed="${mapView === "off"}">Off</button>
         </div>
-        ${mapView === "admin" ? `
+        ${["admin", "municipality"].includes(mapView) ? `
           <div class="local-profile-section-title">Sector Focus</div>
           <div class="local-profile-actions">
             ${sectorModes.map(mode => {
@@ -1412,6 +1764,11 @@ export function applyRegionMethods(GlobeController) {
         <div class="local-profile-section" data-local-profile-admin-preview>
           <div class="local-profile-section-title">Admin Area Structure</div>
           <div class="local-profile-empty-row">Loading admin-area structure…</div>
+        </div>
+
+        <div class="local-profile-section" data-local-profile-municipality-preview>
+          <div class="local-profile-section-title">Municipality Structure</div>
+          <div class="local-profile-empty-row">Loading municipality structure…</div>
         </div>
 
         <div class="local-profile-grid">
@@ -1461,6 +1818,7 @@ export function applyRegionMethods(GlobeController) {
 
     this._renderLocalRegionalEconomyBaseline?.(region)
     this._renderLocalRegionalAdminPreview?.(region)
+    this._renderLocalRegionalMunicipalityPreview?.(region)
     this._renderLocalSourceCoverage?.(region)
     this._renderLocalPowerPlantCoverage?.(region)
     this._renderLocalCityCoverage?.(region)
@@ -1530,7 +1888,7 @@ export function applyRegionMethods(GlobeController) {
                 `Combined Population · ${this._escapeHtml(formatCompactNumber(totalPopulation))}`,
                 `Manufacturing Leader · ${this._escapeHtml(manufacturingLeader?.country_name || "Unknown")} · ${this._escapeHtml(formatPercent(metricValue(manufacturingLeader, "manufacturing_share_pct")))}`,
                 `Country Baseline · World Bank WDI snapshots across Germany, Austria, and Switzerland`,
-                `Map Controls · Use Admin Areas, Countries, or Off to switch the DACH economic overlay`,
+                `Map Controls · Use Admin Areas, Municipalities, Countries, or Off to switch the DACH economic overlay`,
                 `Sector Focus · Admin mode can now pivot the map toward automotive, chips, chemicals, energy, finance, or trade`,
                 `Interaction · Country mode uses country fills and badges; admin mode uses polygons and top-area labels`,
                 `Current Source · World Bank WDI`,
@@ -1655,7 +2013,7 @@ export function applyRegionMethods(GlobeController) {
                 `Focus · ${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}`,
                 `Fill · ${this._escapeHtml(sectorKey === "all" ? "overall industrial signal" : `${sectorLabel} signal`)} from cities, strategic sites, and curated power`,
                 `Labels · Top 12 admin areas for the current focus`,
-                `Controls · Switch to Countries or Off above for comparison`,
+                `Controls · Switch to Municipalities, Countries, or Off above for comparison`,
                 `Interaction · Click a polygon or label for the connector anchor`,
                 `Caveat · Derived industrial footprint, not official district GDP or employment yet`,
               ], "No preview guidance yet")}
@@ -1721,6 +2079,113 @@ export function applyRegionMethods(GlobeController) {
       shell.innerHTML = `
         <div class="local-profile-section-title">Admin Area Structure</div>
         <div class="local-profile-empty-row">Admin-area structure failed to load.</div>
+      `
+    }
+  }
+
+  GlobeController.prototype._renderLocalRegionalMunicipalityPreview = async function(region) {
+    const shell = this.localProfileContentTarget.querySelector("[data-local-profile-municipality-preview]")
+    if (!shell) return
+
+    const token = ++this._localProfileRegionalMunicipalityPreviewFetchToken
+
+    try {
+      const records = await this._ensureRegionalMunicipalityRecords(region)
+      if (token !== this._localProfileRegionalMunicipalityPreviewFetchToken || this._localProfileRegion?.()?.key !== region.key) return
+
+      const municipalityRecords = Array.isArray(records) ? records : []
+      if (municipalityRecords.length === 0) {
+        shell.innerHTML = `
+          <div class="local-profile-section-title">Municipality Structure</div>
+          <div class="local-profile-empty-row">No profiled municipalities are available for this region yet.</div>
+        `
+        return
+      }
+
+      const sectorKey = this._regionalEconomySectorMode?.(region)
+      const sectorLabel = this._regionalEconomySectorLabel?.(region)
+      const filtered = municipalityRecords
+        .filter(profile => this._regionalMunicipalityDisplayScore?.(profile, sectorKey) > 0)
+        .sort((left, right) =>
+          (this._regionalMunicipalityDisplayScore?.(right, sectorKey) || 0) - (this._regionalMunicipalityDisplayScore?.(left, sectorKey) || 0) ||
+          (left.country_name || "").localeCompare(right.country_name || "") ||
+          (left.name || "").localeCompare(right.name || "")
+        )
+
+      const byCountry = filtered.reduce((acc, profile) => {
+        const key = profile.country_name || profile.country_code || "Unknown"
+        acc[key] = (acc[key] || 0) + 1
+        return acc
+      }, {})
+      const byAdminArea = filtered.reduce((acc, profile) => {
+        const key = profile.admin_area || "Unknown"
+        acc[key] = (acc[key] || 0) + 1
+        return acc
+      }, {})
+
+      shell.innerHTML = `
+        <div class="local-profile-section-title">Municipality Structure</div>
+        <div class="local-profile-chip-row">
+          <span class="local-profile-chip">${filtered.length} Municipal Nodes</span>
+          <span class="local-profile-chip">${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}</span>
+        </div>
+        <div class="local-profile-grid">
+          <div class="local-profile-section">
+            <div class="local-profile-section-title">Map Read</div>
+            <ul class="local-profile-list local-profile-list--compact">
+              ${renderLocalProfileList([
+                "Node-based municipality view built from profiled city and municipal records",
+                `Sector Focus · ${this._escapeHtml(sectorKey === "all" ? "All sectors" : sectorLabel)}`,
+                "This is not full municipal polygon coverage yet",
+                "Best for seeing which municipalities anchor a state or sector cluster",
+              ], "No municipality guidance yet")}
+            </ul>
+          </div>
+          <div class="local-profile-section">
+            <div class="local-profile-section-title">By Country</div>
+            <ul class="local-profile-list local-profile-list--compact">
+              ${renderLocalProfileList(
+                Object.entries(byCountry)
+                  .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+                  .map(([name, count]) => `${this._escapeHtml(name)} · ${count}`),
+                "No municipality coverage yet"
+              )}
+            </ul>
+          </div>
+        </div>
+        <div class="local-profile-grid">
+          <div class="local-profile-section">
+            <div class="local-profile-section-title">Top Admin Areas</div>
+            <ul class="local-profile-list local-profile-list--compact">
+              ${renderLocalProfileList(
+                Object.entries(byAdminArea)
+                  .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+                  .slice(0, 8)
+                  .map(([name, count]) => `${this._escapeHtml(name)} · ${count}`),
+                "No admin-area split yet"
+              )}
+            </ul>
+          </div>
+          <div class="local-profile-section">
+            <div class="local-profile-section-title">Top Municipal Nodes</div>
+            <ul class="local-profile-list local-profile-list--compact">
+              ${renderLocalProfileList(
+                filtered.slice(0, 10).map(profile => {
+                  const sectors = municipalitySectorNames(profile).slice(0, 2).join(" · ")
+                  return `${this._escapeHtml(profile.name || "Unknown")} · ${this._escapeHtml(profile.admin_area || profile.country_name || "Unknown")}${sectors ? ` · ${this._escapeHtml(sectors)}` : ""}`
+                }),
+                "No municipal nodes yet"
+              )}
+            </ul>
+          </div>
+        </div>
+      `
+    } catch (error) {
+      console.error("Failed to render local municipality structure:", error)
+      if (token !== this._localProfileRegionalMunicipalityPreviewFetchToken || this._localProfileRegion?.()?.key !== region.key) return
+      shell.innerHTML = `
+        <div class="local-profile-section-title">Municipality Structure</div>
+        <div class="local-profile-empty-row">Municipality structure failed to load.</div>
       `
     }
   }

@@ -1,4 +1,4 @@
-export const REGIONAL_METRIC_CATALOG = [
+export const REGIONAL_METRIC_CATALOG = Object.freeze([
   {
     key: "gdp_nominal_usd",
     label: "GDP",
@@ -71,7 +71,7 @@ export const REGIONAL_METRIC_CATALOG = [
     valueType: "index",
     sourceMode: "derived",
   },
-].freeze
+])
 
 export function regionalMetricConfig(metricKey) {
   return REGIONAL_METRIC_CATALOG.find(metric => metric.key === metricKey) || REGIONAL_METRIC_CATALOG[0]

@@ -6,7 +6,7 @@ class OpenskyService
   PROXY_URL = ENV["OPENSKY_PROXY_URL"]&.chomp("/")
   BASE_URL = PROXY_URL ? "#{PROXY_URL}/api" : "https://opensky-network.org/api"
   TOKEN_URL = PROXY_URL ? "#{PROXY_URL}/auth/token" : "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
-  CACHE_TTL = 15
+  CACHE_TTL = 30
 
   ROUTE_CACHE_MAX = 500
 
@@ -20,11 +20,9 @@ class OpenskyService
     return [] if ENV["OPENSKY_DISABLED"].present?
 
     if @last_fetch_at.nil? || (Time.now.to_f - @last_fetch_at) > CACHE_TTL
+      @last_fetch_at = Time.now.to_f # set BEFORE fetch to prevent concurrent hammering
       response = fetch_from_api(bounds)
-      if response
-        upsert_flights(response)
-        @last_fetch_at = Time.now.to_f
-      end
+      upsert_flights(response) if response
     end
 
     Flight.where("updated_at > ?", 6.minutes.ago).within_bounds(bounds)

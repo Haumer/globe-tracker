@@ -38,6 +38,11 @@ module HttpClient
         unless response.is_a?(Net::HTTPSuccess)
           last_error = "HTTP #{response.code}"
           Rails.logger.warn("#{name} HTTP GET #{uri.host}: #{response.code} #{response.body&.slice(0, 100)}")
+          # 429 = rate limited — don't retry or trip circuit breaker, just back off
+          if response.code == "429"
+            Rails.logger.info("#{name} HTTP GET rate limited (429) — skipping retries")
+            return _cache_fallback(cache_key)
+          end
           raise StandardError, last_error
         end
 

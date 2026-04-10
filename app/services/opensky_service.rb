@@ -6,7 +6,7 @@ class OpenskyService
   PROXY_URL = ENV["OPENSKY_PROXY_URL"]&.chomp("/")
   BASE_URL = PROXY_URL ? "#{PROXY_URL}/api" : "https://opensky-network.org/api"
   TOKEN_URL = PROXY_URL ? "#{PROXY_URL}/auth/token" : "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
-  CACHE_TTL = 15
+  CACHE_TTL = 30
 
   ROUTE_CACHE_MAX = 500
 

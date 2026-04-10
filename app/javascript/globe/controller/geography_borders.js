@@ -1,5 +1,10 @@
 import { getDataSource } from "globe/utils"
 
+const COUNTRY_BORDER_URLS = [
+  "/api/geography/boundaries?dataset=countries",
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson",
+]
+
 export function applyGeographyBorderMethods(GlobeController) {
   GlobeController.prototype.toggleCountrySelect = function() {
     this.countrySelectMode = !this.countrySelectMode
@@ -18,62 +23,45 @@ export function applyGeographyBorderMethods(GlobeController) {
     this.bordersVisible = this.hasBordersToggleTarget && this.bordersToggleTarget.checked
     if (this.bordersVisible && !this.bordersLoaded) this.loadBorders()
     if (this._ds["borders"]) this._ds["borders"].show = this.bordersVisible
+    this._syncRegionalEconomyMap?.()
     this._savePrefs()
   }
 
   GlobeController.prototype.loadBorders = async function() {
+    if (this._bordersLoadPromise) return this._bordersLoadPromise
+
     const Cesium = window.Cesium
 
-    this._toast("Loading borders...")
-    try {
-      const response = await fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson")
-      if (!response.ok) return
-      const geojson = await response.json()
+    this._bordersLoadPromise = (async () => {
+      this._toast("Loading borders...")
+      try {
+        const geojson = await fetchBoundaryDataset(COUNTRY_BORDER_URLS)
+        if (!geojson?.features?.length) throw new Error("Country boundary dataset unavailable")
 
-      this._countryFeatures = geojson.features
-      const dataSource = this.getBordersDataSource()
-      const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
+        this._countryFeatures = geojson.features
+        this._borderCountryMap.clear()
+        this._countryEntities.clear()
+        this._countryFillEntities.clear()
 
-      geojson.features.forEach((feature, featureIndex) => {
-        const geom = feature.geometry
-        if (!geom) return
+        const dataSource = this.getBordersDataSource()
+        dataSource.entities.removeAll()
 
-        const countryName = feature.properties?.NAME || feature.properties?.name || `Unknown-${featureIndex}`
-        const rings = []
-        if (geom.type === "Polygon") rings.push(geom.coordinates[0])
-        else if (geom.type === "MultiPolygon") geom.coordinates.forEach(poly => rings.push(poly[0]))
+        renderCountryBorders.call(this, dataSource, geojson.features, Cesium)
 
-        const countryEntityList = this._countryEntities.get(countryName) || []
-        rings.forEach((ring, ringIndex) => {
-          if (ring.length < 3) return
+        this.bordersLoaded = true
+        this._ds["borders"].show = this.bordersVisible
+        this._toastHide()
+        restorePendingSelections.call(this)
+        this._requestRender?.()
+      } catch (error) {
+        console.error("Failed to load borders:", error)
+        this._toast("Failed to load borders", "error")
+      } finally {
+        this._bordersLoadPromise = null
+      }
+    })()
 
-          const positions = ring.map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1]))
-          const entityId = `border-${featureIndex}-${ringIndex}`
-          const entity = dataSource.entities.add({
-            id: entityId,
-            polyline: {
-              positions,
-              width: 1.5,
-              material: defaultColor,
-              clampToGround: true,
-              classificationType: Cesium.ClassificationType.BOTH,
-            },
-          })
-
-          this._borderCountryMap.set(entityId, { name: countryName })
-          countryEntityList.push(entity)
-        })
-
-        this._countryEntities.set(countryName, countryEntityList)
-      })
-
-      this.bordersLoaded = true
-      this._ds["borders"].show = this.bordersVisible
-      this._toastHide()
-      restorePendingSelections.call(this)
-    } catch (error) {
-      console.error("Failed to load borders:", error)
-    }
+    return this._bordersLoadPromise
   }
 
   GlobeController.prototype.toggleCountrySelection = function(countryName) {
@@ -88,22 +76,55 @@ export function applyGeographyBorderMethods(GlobeController) {
     this._savePrefs()
   }
 
-  GlobeController.prototype.clearCountrySelection = function() {
+  GlobeController.prototype.setCountrySelection = function(countryNames = [], options = {}) {
+    const names = [...new Set((countryNames || []).filter(Boolean))]
+    const showBorders = options.showBorders !== false && names.length > 0
+    const refresh = options.refresh !== false
+
+    this._pendingCountryRestore = names.length > 0 ? names : null
+    this._selectedCountriesUseHull = options.useHull !== false
+    if (showBorders) ensureBordersVisible.call(this)
+
     this.selectedCountries.clear()
-    this._selectedCountriesBbox = null
+    names.forEach(name => this.selectedCountries.add(name))
     this._activeCircle = null
     this.countrySelectMode = false
     this.viewer.canvas.style.cursor = ""
+    const btn = document.getElementById("country-select-btn")
+    if (btn) btn.classList.remove("active")
+    this.removeDrawCircle()
+
+    if (this.selectedCountries.size > 0 && this._countryFeatures.length > 0) {
+      this._updateSelectedCountriesBbox()
+    } else {
+      this._selectedCountriesBbox = null
+      this._selectedCountriesHull = null
+    }
+
+    this.updateBorderColors()
+    this._updateDeselectBtn()
+    if (refresh) refreshSelectionScopedLayers.call(this, this.selectedCountries.size > 0)
+    if (options.showDetail) this.showBorderDetail()
+    this._savePrefs()
+  }
+
+  GlobeController.prototype.clearCountrySelection = function() {
+    this.selectedCountries.clear()
+    this._selectedCountriesBbox = null
+    this._selectedCountriesHull = null
+    this._activeCircle = null
+    this._pendingCountryRestore = null
+    this._selectedCountriesUseHull = true
+    this.countrySelectMode = false
+    this.viewer.canvas.style.cursor = ""
+    const btn = document.getElementById("country-select-btn")
+    if (btn) btn.classList.remove("active")
     this.removeDrawCircle()
     this.updateBorderColors()
     this._updateDeselectBtn()
     this.closeDetail()
-
-    if (this.flightsVisible) this.fetchFlights()
-    if (this.shipsVisible) this.fetchShips()
-    if (this.camerasVisible) this.fetchWebcams()
-    this._entityListRequested = false
-    this.updateEntityList()
+    refreshSelectionScopedLayers.call(this)
+    this._savePrefs()
   }
 
   GlobeController.prototype._updateDeselectBtn = function() {
@@ -114,8 +135,26 @@ export function applyGeographyBorderMethods(GlobeController) {
 
   GlobeController.prototype.updateBorderColors = function() {
     const Cesium = window.Cesium
-    const defaultColor = Cesium.Color.fromCssColorString("#4fc3f7").withAlpha(0.4)
-    const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.8)
+    const hasSelection = this.selectedCountries.size > 0
+    const adminOverlayActive = Array.isArray(this._regionalAdminEconomyEntities) && this._regionalAdminEconomyEntities.length > 0
+    const districtOverlayActive = Array.isArray(this._regionalDistrictEconomyEntities) && this._regionalDistrictEconomyEntities.length > 0
+    const subnationalOverlayActive = adminOverlayActive || districtOverlayActive
+    const region = this._regionalEconomyRegion?.()
+    const normalRegionalView = !!(region && this._regionalEconomyMapView?.(region) === "off")
+    const defaultColor = hasSelection
+      ? Cesium.Color.fromCssColorString("#5f7387").withAlpha(0.38)
+      : Cesium.Color.fromCssColorString("#7fd8ff").withAlpha(0.78)
+    const selectedColor = Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.95)
+    const defaultFillColor = hasSelection && !normalRegionalView
+      ? (subnationalOverlayActive
+          ? Cesium.Color.TRANSPARENT
+          : Cesium.Color.fromCssColorString("#0b0f14").withAlpha(0.7))
+      : Cesium.Color.TRANSPARENT
+    const selectedFillColor = hasSelection && !normalRegionalView
+      ? (subnationalOverlayActive
+          ? Cesium.Color.TRANSPARENT
+          : Cesium.Color.fromCssColorString("#ffa726").withAlpha(0.18))
+      : Cesium.Color.TRANSPARENT
 
     for (const [countryName, entities] of this._countryEntities) {
       const isSelected = this.selectedCountries.has(countryName)
@@ -123,6 +162,19 @@ export function applyGeographyBorderMethods(GlobeController) {
         entity.polyline.material = isSelected ? selectedColor : defaultColor
       })
     }
+
+    for (const [countryName, entities] of this._countryFillEntities) {
+      const isSelected = this.selectedCountries.has(countryName)
+      const economyStyle = isSelected && !subnationalOverlayActive && !normalRegionalView ? this._regionalEconomyBorderStyles?.[countryName] : null
+      entities.forEach(entity => {
+        entity.show = hasSelection
+        entity.polygon.material = isSelected
+          ? (economyStyle?.fillColor || selectedFillColor)
+          : defaultFillColor
+      })
+    }
+
+    this._requestRender?.()
   }
 
   GlobeController.prototype.showBorderDetail = function() {
@@ -280,6 +332,80 @@ export function applyGeographyBorderMethods(GlobeController) {
   }
 }
 
+async function fetchBoundaryDataset(urls) {
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, url.startsWith("/") ? { credentials: "same-origin" } : undefined)
+      if (!response.ok) continue
+
+      const geojson = await response.json()
+      if (geojson?.type === "FeatureCollection" && Array.isArray(geojson.features)) return geojson
+    } catch (error) {
+      console.warn(`Boundary fetch failed for ${url}:`, error)
+    }
+  }
+
+  return null
+}
+
+function renderCountryBorders(dataSource, features, Cesium) {
+  const defaultColor = Cesium.Color.fromCssColorString("#7fd8ff").withAlpha(0.78)
+  const defaultFillColor = Cesium.Color.TRANSPARENT
+
+  features.forEach((feature, featureIndex) => {
+    const geom = feature.geometry
+    if (!geom) return
+
+    const countryName = feature.properties?.NAME || feature.properties?.name || `Unknown-${featureIndex}`
+    const rings = []
+    if (geom.type === "Polygon") rings.push(geom.coordinates[0])
+    else if (geom.type === "MultiPolygon") geom.coordinates.forEach(poly => rings.push(poly[0]))
+
+    const countryEntityList = this._countryEntities.get(countryName) || []
+    const countryFillEntityList = this._countryFillEntities.get(countryName) || []
+    rings.forEach((ring, ringIndex) => {
+      if (!Array.isArray(ring) || ring.length < 3) return
+
+      const positions = ring
+        .filter(coord => Array.isArray(coord) && coord.length >= 2)
+        .map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1]))
+      if (positions.length < 2) return
+
+      const fillEntityId = `border-fill-${featureIndex}-${ringIndex}`
+      const fillEntity = dataSource.entities.add({
+        id: fillEntityId,
+        show: false,
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(positions),
+          material: defaultFillColor,
+          clampToGround: true,
+          classificationType: Cesium.ClassificationType.BOTH,
+          outline: false,
+        },
+      })
+      const entityId = `border-${featureIndex}-${ringIndex}`
+      const entity = dataSource.entities.add({
+        id: entityId,
+        polyline: {
+          positions,
+          width: 2.2,
+          material: defaultColor,
+          clampToGround: true,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      })
+
+      this._borderCountryMap.set(fillEntityId, { name: countryName })
+      this._borderCountryMap.set(entityId, { name: countryName })
+      countryFillEntityList.push(fillEntity)
+      countryEntityList.push(entity)
+    })
+
+    this._countryFillEntities.set(countryName, countryFillEntityList)
+    this._countryEntities.set(countryName, countryEntityList)
+  })
+}
+
 function ensureBordersVisible() {
   if (!this.bordersLoaded) {
     this.bordersVisible = true
@@ -302,13 +428,7 @@ function restorePendingSelections() {
   this._updateSelectedCountriesBbox()
   this.updateBorderColors()
   this._updateDeselectBtn()
-  if (this.flightsVisible) this.fetchFlights()
-  if (this.shipsVisible) this.fetchShips()
-  if (this.camerasVisible) this.fetchWebcams()
-  if (this.citiesVisible) this.renderCities()
-  if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
-  this._entityListRequested = true
-  this.updateEntityList()
+  refreshSelectionScopedLayers.call(this, true)
   if (this._pendingBuildHeatmap) {
     this._pendingBuildHeatmap = false
     this._buildHeatmapActive = true
@@ -320,9 +440,18 @@ function refreshSelectionScopedLayers(forceEntityList = false) {
   if (this.flightsVisible) this.fetchFlights()
   if (this.shipsVisible) this.fetchShips()
   if (this.camerasVisible) this.fetchWebcams()
+  if (this.newsVisible) this.fetchNews?.()
+  if (this.weatherVisible) this._renderWeatherAlerts?.()
+  if (this.outagesVisible) this._renderOutages?.({ summary: this._outageData || [], events: [] })
+  if (this.financialVisible) this._renderCommodities?.()
   this._entityListRequested = forceEntityList || this.selectedCountries.size > 0
   this.updateEntityList()
   if (this.citiesVisible) this.renderCities()
   if (this.airportsVisible) this._fetchAirportData().then(() => this.renderAirports())
+  if (this.portsVisible) this.renderPorts?.()
+  if (this.powerPlantsVisible) this.renderPowerPlants?.()
+  if (this.commoditySitesVisible) this.renderCommoditySites?.()
+  if (this.pipelinesVisible) this._renderPipelines?.(this._pipelineData || [])
+  if (this.notamsVisible) this.renderNotams?.()
   if (this._buildHeatmapActive) this._initBuildHeatmap()
 }

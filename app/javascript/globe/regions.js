@@ -1,7 +1,7 @@
 // ── Region Definitions ──────────────────────────────────────
-// Predefined region profiles for focused multi-layer analysis.
+// Predefined region profiles for focused operating pictures.
 // Each region defines a bounding box (for API scoping), camera position,
-// and curated layer set relevant to that region's threat profile.
+// and curated layer set relevant to that region's monitoring profile.
 
 export const REGIONS = [
   // ── Indo-Pacific ──
@@ -79,6 +79,75 @@ export const REGIONS = [
   },
 
   // ── Europe ──
+  {
+    key: "dach",
+    name: "DACH",
+    group: "Europe",
+    mode: "economic",
+    countries: ["Germany", "Austria", "Switzerland"],
+    countryCodes: ["DE", "AT", "CH"],
+    bounds: { lamin: 45.6, lamax: 55.2, lomin: 5.7, lomax: 17.6 },
+    camera: { lat: 48.7, lng: 10.4, height: 1400000, heading: 0, pitch: -0.88 },
+    defaultLayers: ["borders", "cities", "powerPlants", "commoditySites", "outages", "financial", "news"],
+    availableLayers: ["borders", "cities", "powerPlants", "commoditySites", "outages", "financial", "news", "pipelines", "airports", "notams", "weather", "cameras"],
+    sectorModes: [
+      { key: "all", label: "All" },
+      { key: "automotive", label: "Auto" },
+      { key: "semiconductors", label: "Chips" },
+      { key: "chemicals", label: "Chem" },
+      { key: "energy", label: "Energy" },
+      { key: "finance_services", label: "Finance" },
+      { key: "logistics_trade", label: "Trade" },
+    ],
+    metricModes: {
+      country: [
+        "gdp_nominal_usd",
+        "population_total",
+        "gdp_per_capita_usd",
+        "exports_goods_services_pct_gdp",
+        "imports_goods_services_pct_gdp",
+        "trade_net_pct_gdp",
+        "energy_imports_net_pct_energy_use",
+      ],
+      region: ["population_total", "structure_signal"],
+      district: ["population_total"],
+    },
+    metricSources: {
+      country: {
+        default: {
+          label: "World Bank WDI",
+          detail: "Official country snapshot",
+        },
+        metrics: {
+          trade_net_pct_gdp: {
+            label: "World Bank WDI",
+            detail: "Derived as exports minus imports",
+          },
+        },
+      },
+      region: {
+        default: {
+          label: "Structure preview",
+          detail: "Derived from city, site, and curated power catalogs",
+        },
+        metrics: {
+          population_total: {
+            label: "Eurostat + BFS",
+            detail: "Official region-equivalent population",
+          },
+        },
+      },
+      district: {
+        default: {
+          label: "Official district population",
+          detail: "Destatis, Statistik Austria, and Swiss BFS district-equivalent population",
+        },
+      },
+    },
+    summaryModules: ["regional_economy", "industrial_sites", "power_and_grid", "political_signal"],
+    dataPacks: ["economic_baseline", "industrial_sites", "power_and_grid", "political_signal"],
+    description: "Economic and infrastructure watch across Germany, Austria, and Switzerland",
+  },
   {
     key: "baltic-sea",
     name: "Baltic Sea",

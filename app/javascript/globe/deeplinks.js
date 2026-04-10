@@ -171,6 +171,26 @@ export function decodeFocusParams(search) {
   }
 }
 
+export function decodeLaunchParams(search) {
+  const raw = search || ""
+  if (!raw) return null
+
+  const params = new URLSearchParams(raw.startsWith("?") ? raw.slice(1) : raw)
+  const region = params.get("region")
+  const profile = params.get("profile")
+  const granularity = params.get("granularity")
+  const metric = params.get("metric")
+
+  if (!region && !profile && !granularity && !metric) return null
+
+  return {
+    region: region || null,
+    profile: profile || null,
+    granularity: granularity || null,
+    metric: metric || null,
+  }
+}
+
 export function applyDeepLink(controller, state) {
   const Cesium = window.Cesium
   if (!Cesium || !controller.viewer) return

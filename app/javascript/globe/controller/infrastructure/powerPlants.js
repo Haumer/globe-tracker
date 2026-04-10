@@ -1,5 +1,47 @@
 import { getDataSource, createPowerPlantIcon, LABEL_DEFAULTS } from "globe/utils"
 
+function normalizePowerPlantName(value = "") {
+  return `${value || ""}`
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
+function powerPlantProfileKey(name, countryCode) {
+  const normalizedName = normalizePowerPlantName(name)
+  const normalizedCountry = `${countryCode || ""}`.toUpperCase().trim()
+  if (!normalizedName || !normalizedCountry) return null
+  return `${normalizedCountry}:${normalizedName}`
+}
+
+function buildPowerPlantProfileIndex(profiles = []) {
+  const index = new Map()
+
+  profiles.forEach(profile => {
+    const key = powerPlantProfileKey(profile.match_name || profile.name, profile.country_code)
+    if (key) index.set(key, profile)
+  })
+
+  return index
+}
+
+function mergePowerPlantProfile(plant, profile) {
+  if (!profile) return plant
+
+  return {
+    ...plant,
+    countryName: profile.country_name || plant.countryName || null,
+    owner: profile.owner || plant.owner || null,
+    source: profile.source_name || plant.source || null,
+    url: profile.source_url || plant.url || null,
+    summary: profile.summary || plant.summary || null,
+    sourceKind: profile.source_kind || null,
+    curated: true,
+  }
+}
+
 export function applyPowerPlantsMethods(GlobeController) {
   GlobeController.prototype.getPowerPlantsDataSource = function() { return getDataSource(this.viewer, this._ds, "power-plants") }
 
@@ -24,15 +66,25 @@ export function applyPowerPlantsMethods(GlobeController) {
     if (this._powerPlantAll?.length > 0) return
     this._toast("Loading power plants...")
     try {
-      const resp = await fetch("/api/power_plants")
+      const [resp, profileResp] = await Promise.all([
+        fetch("/api/power_plants"),
+        fetch("/api/power_plant_profiles").catch(() => null),
+      ])
       if (!resp.ok) return
       const raw = await resp.json()
+      const profiles = profileResp?.ok ? await profileResp.json() : []
       if (!raw.length) return // don't cache empty results
+      const profileIndex = buildPowerPlantProfileIndex(Array.isArray(profiles) ? profiles : [])
+      this._localProfilePowerPlantCatalog = Array.isArray(profiles) ? profiles : []
       // API returns arrays: [id, lat, lng, fuel, capacity, name, country_code]
-      this._powerPlantAll = raw.map(r => ({
-        id: r[0], lat: r[1], lng: r[2], fuel: r[3],
-        capacity: r[4], name: r[5], country: r[6],
-      }))
+      this._powerPlantAll = raw.map(r => {
+        const plant = {
+          id: r[0], lat: r[1], lng: r[2], fuel: r[3],
+          capacity: r[4], name: r[5], country: r[6],
+        }
+        const profile = profileIndex.get(powerPlantProfileKey(plant.name, plant.country))
+        return mergePowerPlantProfile(plant, profile)
+      })
       this._markFresh("powerPlants")
       this._toastHide()
     } catch (e) {
@@ -275,7 +327,7 @@ export function applyPowerPlantsMethods(GlobeController) {
       <div class="detail-callsign" style="color:${color};">
         <i class="fa-solid fa-plug" style="margin-right:6px;"></i>${this._escapeHtml(pp.name)}
       </div>
-      <div class="detail-country">${this._escapeHtml(pp.country || "Unknown")}</div>
+      <div class="detail-country">${this._escapeHtml(pp.countryName || pp.country || "Unknown")}</div>
       <div class="detail-grid">
         <div class="detail-field">
           <span class="detail-label">Fuel</span>
@@ -285,8 +337,18 @@ export function applyPowerPlantsMethods(GlobeController) {
           <span class="detail-label">Capacity</span>
           <span class="detail-value">${pp.capacity ? pp.capacity.toLocaleString() + " MW" : "—"}</span>
         </div>
+        ${pp.owner ? `
+        <div class="detail-field">
+          <span class="detail-label">Owner</span>
+          <span class="detail-value">${this._escapeHtml(pp.owner)}</span>
+        </div>` : ""}
         ${shareHtml}
       </div>
+      ${pp.summary ? `
+        <div style="margin-top:10px;padding:8px 10px;background:rgba(77,182,172,0.08);border:1px solid rgba(77,182,172,0.2);border-radius:6px;font:400 11px/1.5 var(--gt-sans);color:var(--gt-text);">
+          ${this._escapeHtml(pp.summary)}
+        </div>
+      ` : ""}
       ${this.trafficVisible && this._attackedCountries?.has(pp.country) ? `
         <div style="margin-top:10px;padding:6px 8px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);border-radius:4px;">
           <div style="font:600 9px var(--gt-mono);color:#f44336;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">⚠ CYBER ATTACK TARGET</div>
@@ -296,7 +358,12 @@ export function applyPowerPlantsMethods(GlobeController) {
         </div>
       ` : ""}
       ${this._connectionsPlaceholder()}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">Source: Global Power Plant Database (WRI)</div>
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">
+        Source:
+        ${pp.url
+          ? `<a href="${this._escapeHtml(pp.url)}" target="_blank" rel="noreferrer" style="color:inherit;">${this._escapeHtml(pp.source || "Official source")}</a>`
+          : this._escapeHtml(pp.source || "Global Power Plant Database (WRI)")}
+      </div>
     `
     this.detailPanelTarget.style.display = ""
     this._fetchConnections("power_plant", pp.lat, pp.lng, { country_code: pp.country })

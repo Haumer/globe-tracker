@@ -61,6 +61,7 @@ export function applyFinancialMethods(GlobeController) {
 
     this._commodityData.forEach((item, idx) => {
       if (item.lat == null || item.lng == null) return
+      if (this.hasActiveFilter() && !this.pointPassesFilter(item.lat, item.lng)) return
 
       const isUp = item.change_pct > 0
       const isDown = item.change_pct < 0

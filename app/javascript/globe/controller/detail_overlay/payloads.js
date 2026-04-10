@@ -171,6 +171,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       nodeRequest = null,
       casePath = null,
       focusHeight = null,
+      contextAvailable = false,
     }) => ({
       kind,
       title: title || genericTitle,
@@ -187,6 +188,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       nodeRequest,
       casePath,
       focusHeight,
+      contextAvailable,
     })
 
     switch (kind) {
@@ -629,6 +631,165 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           chips: [chip(firstPresent(data?.category, "Market"), change < 0 ? "critical" : change > 0 ? "accent" : "neutral")],
           accent: change < 0 ? "#ef5350" : change > 0 ? "#4caf50" : "#ffc107",
           nodeRequest: firstPresent(data?.symbol, data?.name) ? { kind: "commodity", id: firstPresent(data?.symbol, data?.name) } : null,
+        })
+      }
+      case "regional_economy": {
+        const gdpPerCapita = toNumber(data?.metrics?.gdp_per_capita_usd)
+        const manufacturingShare = toNumber(data?.metrics?.manufacturing_share_pct)
+        const exportsShare = toNumber(data?.metrics?.exports_goods_services_pct_gdp)
+        const selectedMetricValue = toNumber(data?.selected_metric_value)
+        const selectedMetricLabel = firstPresent(data?.selected_metric_short_label, data?.selected_metric_label)
+        const accent = this._regionalEconomyAccent?.(data) || data?.accent_color || "#b28704"
+        const sourceLabel = [data?.source_name, data?.latest_year].filter(Boolean).join(" · ")
+        const selectedMetricDisplay = selectedMetricValue != null
+          ? (
+              data?.selected_metric_key?.includes?.("_usd") ? `$${Math.round(selectedMetricValue).toLocaleString()}` :
+              data?.selected_metric_key?.includes?.("_pct") || data?.selected_metric_key === "energy_imports_net_pct_energy_use" ? `${selectedMetricValue.toFixed(1)}%` :
+              Math.round(selectedMetricValue).toLocaleString()
+            )
+          : null
+
+        return makePayload({
+          title: firstPresent(data?.country_name, data?.country_code_alpha3, "Regional economy"),
+          subtitle: firstPresent(sourceLabel, "Economic baseline"),
+          brief: compactFacts([
+            selectedMetricLabel && selectedMetricDisplay ? `${selectedMetricLabel} ${selectedMetricDisplay}` : null,
+            gdpPerCapita != null ? `GDP/cap $${Math.round(gdpPerCapita).toLocaleString()}` : null,
+            exportsShare != null ? `Exports ${exportsShare.toFixed(1)}% GDP` : manufacturingShare != null ? `Mfg ${manufacturingShare.toFixed(1)}%` : null,
+          ], 3).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Economy"), "warning"),
+            chip(firstPresent(selectedMetricLabel, "Baseline"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 1200000,
+          contextAvailable: true,
+        })
+      }
+      case "regional_admin_economy": {
+        const previewScore = toNumber(data?.metrics?.preview_score)
+        const cityCount = toNumber(data?.metrics?.city_count)
+        const siteCount = toNumber(data?.metrics?.strategic_site_count)
+        const powerCapacityMw = toNumber(data?.metrics?.curated_power_capacity_mw)
+        const accent = this._regionalAdminEconomyAccent?.(data) || data?.accent_color || "#2f7ea7"
+        const selectedSector = data?.selected_sector_profile
+        const selectedSectorKey = data?.selected_sector_key
+        const selectedSectorLabel = firstPresent(data?.selected_sector_label, selectedSector?.sector_name)
+        const selectedRank = data?.selected_rank
+        const topSector = Array.isArray(data?.top_sectors) ? data.top_sectors[0] : null
+        const focusBrief = selectedSector
+          ? compactFacts([
+              selectedSectorLabel ? `${selectedSectorLabel}` : null,
+              selectedSector?.signal_count != null ? `${selectedSector.signal_count} signals` : null,
+              selectedSector?.node_count != null ? `${selectedSector.node_count} nodes` : null,
+            ], 3).join(" · ")
+          : selectedSectorKey && selectedSectorKey !== "all"
+            ? compactFacts([
+                selectedSectorLabel ? `${selectedSectorLabel}` : null,
+                "No current signal",
+              ], 2).join(" · ")
+          : compactFacts([
+              topSector?.sector_name ? `${topSector.sector_name}` : null,
+              previewScore != null ? `Signal ${Math.round(previewScore)}` : null,
+              cityCount != null ? `${cityCount} cities` : null,
+            ], 3).join(" · ")
+
+        return makePayload({
+          title: firstPresent(data?.name, "Admin area"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.country_name,
+              selectedRank?.rank != null && selectedRank?.total != null ? `Rank ${selectedRank.rank}/${selectedRank.total}` : null,
+            ], 2).join(" · "),
+            data?.country_code_alpha3,
+            "Admin area structure"
+          ),
+          brief: compactFacts([
+            focusBrief,
+            siteCount != null ? `${siteCount} sites` : null,
+            powerCapacityMw != null && powerCapacityMw > 0 ? `${(powerCapacityMw / 1000).toFixed(1)} GW` : null,
+          ], 4).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Admin"), "warning"),
+            chip(firstPresent(selectedSectorLabel, topSector?.sector_name, "Structure"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 450000,
+          contextAvailable: true,
+        })
+      }
+      case "regional_area_metric": {
+        const selectedMetricValue = toNumber(data?.selected_metric_value)
+        const selectedMetricLabel = firstPresent(data?.selected_metric_short_label, data?.selected_metric_label)
+        const nativeLevel = firstPresent(data?.native_level, "region")
+        const accent = this._regionalAdminEconomyAccent?.(data) || data?.accent_color || "#2f7ea7"
+        const sourceLabel = compactFacts([
+          data?.source_name,
+          data?.latest_year,
+          nativeLevel,
+        ], 3).join(" · ")
+        const selectedMetricDisplay = selectedMetricValue != null
+          ? (
+              data?.selected_metric_key?.includes?.("_usd") ? `$${Math.round(selectedMetricValue).toLocaleString()}` :
+              data?.selected_metric_key?.includes?.("_pct") || data?.selected_metric_key === "energy_imports_net_pct_energy_use" ? `${selectedMetricValue.toFixed(1)}%` :
+              Math.round(selectedMetricValue).toLocaleString()
+            )
+          : null
+
+        return makePayload({
+          title: firstPresent(data?.name, "Region"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.country_name,
+              nativeLevel,
+            ], 2).join(" · "),
+            data?.country_code_alpha3,
+            "Regional metric"
+          ),
+          brief: compactFacts([
+            selectedMetricLabel && selectedMetricDisplay ? `${selectedMetricLabel} ${selectedMetricDisplay}` : null,
+            data?.selected_metric_source || sourceLabel,
+          ], 2).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code_alpha3, "Region"), "warning"),
+            chip(firstPresent(selectedMetricLabel, "Metric"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 450000,
+          contextAvailable: true,
+        })
+      }
+      case "regional_municipality": {
+        const signalScore = toNumber(data?.signal_score)
+        const selectedSectorNames = Array.isArray(data?.selected_sector_names) ? data.selected_sector_names : []
+        const accent = data?.accent_color || "#2f7ea7"
+
+        return makePayload({
+          title: firstPresent(data?.name, "Municipal node"),
+          subtitle: firstPresent(
+            compactFacts([
+              data?.admin_area,
+              data?.country_name,
+            ], 2).join(" · "),
+            data?.country_name,
+            "Municipal node"
+          ),
+          brief: compactFacts([
+            data?.selected_sector_label && data?.selected_sector_key !== "all" ? data.selected_sector_label : null,
+            signalScore != null ? `Signal ${Math.round(signalScore)}` : null,
+            selectedSectorNames.length > 0 ? selectedSectorNames.slice(0, 2).join(" · ") : null,
+          ], 3).join(" · "),
+          chips: [
+            chip(firstPresent(data?.country_code, data?.country_name, "Municipality"), "warning"),
+            chip(firstPresent(data?.selected_sector_label, "Municipal"), "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          focusHeight: 180000,
+          contextAvailable: true,
         })
       }
       case "insight": {

@@ -9,6 +9,9 @@
         <%= link_to root_path, class: "landing-cta" do %>
           Open the Globe
         <% end %>
+        <%= link_to root_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
+          Open DACH Local
+        <% end %>
         <%= link_to "Data Sources", sources_path, class: "landing-cta landing-cta--secondary" %>
       </div>
     </div>
@@ -179,7 +182,10 @@
   <%# ── Bottom ── %>
   <section class="landing-bottom">
     <div class="landing-section-inner">
-      <%= link_to root_path, class: "landing-cta" do %>
+      <%= link_to root_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
+        Open DACH Local
+      <% end %>
+      <%= link_to root_path, class: "landing-cta landing-cta--secondary", style: "margin-left:10px;" do %>
         Open the Globe
       <% end %>
       <p class="landing-bottom-note">Personal project. Feed freshness, confidence, and methodological maturity vary by layer.</p>

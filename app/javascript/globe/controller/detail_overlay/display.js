@@ -392,7 +392,7 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       actionParts.push(`<button class="anchor-action-btn anchor-action-btn--primary" type="button" data-action="click->globe#pinAnchoredDetail" data-anchor-id="${this._escapeHtml(anchorId)}">Pin</button>`)
     }
 
-    if (payload.nodeRequest) {
+    if (payload.nodeRequest || payload.contextAvailable) {
       actionParts.push(`<button class="anchor-action-btn" type="button" data-action="click->globe#showAnchoredContext" data-anchor-id="${this._escapeHtml(anchorId)}">Context</button>`)
     }
 

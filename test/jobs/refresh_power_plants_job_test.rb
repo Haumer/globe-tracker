@@ -12,9 +12,11 @@ class RefreshPowerPlantsJobTest < ActiveSupport::TestCase
 
   test "calls PowerPlantImportService.import! when no power plants exist" do
     called = false
-    PowerPlant.stub(:count, 0) do
-      PowerPlantImportService.stub(:import!, -> { called = true; 100 }) do
-        RefreshPowerPlantsJob.perform_now
+    CuratedPowerPlantSyncService.stub(:sync!, -> { { updated: 0, inserted: 0, total: 0 } }) do
+      PowerPlant.stub(:count, 0) do
+        PowerPlantImportService.stub(:import!, -> { called = true; 100 }) do
+          RefreshPowerPlantsJob.perform_now
+        end
       end
     end
     assert called
@@ -22,9 +24,11 @@ class RefreshPowerPlantsJobTest < ActiveSupport::TestCase
 
   test "skips import when power plants already exist" do
     called = false
-    PowerPlant.stub(:count, 500) do
-      PowerPlantImportService.stub(:import!, -> { called = true; 100 }) do
-        RefreshPowerPlantsJob.perform_now
+    CuratedPowerPlantSyncService.stub(:sync!, -> { { updated: 0, inserted: 0, total: 0 } }) do
+      PowerPlant.stub(:count, 500) do
+        PowerPlantImportService.stub(:import!, -> { called = true; 100 }) do
+          RefreshPowerPlantsJob.perform_now
+        end
       end
     end
     refute called, "Expected PowerPlantImportService.import! NOT to be called when data exists"

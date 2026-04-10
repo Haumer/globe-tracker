@@ -18,6 +18,7 @@ Rails.application.routes.draw do
   post "admin/stop_poller", to: "admin#stop_poller", as: :admin_stop_poller
 
   namespace :api do
+    get "geography/boundaries", to: "geography_boundaries#show"
     resources :flights, only: [:index, :show]
     resources :satellites, only: [:index] do
       collection do
@@ -49,7 +50,14 @@ Rails.application.routes.draw do
     resources :trains, only: [:index]
     resources :internet_outages, only: [:index]
     resources :power_plants, only: [:index]
+    resources :power_plant_profiles, only: [:index]
     resources :commodity_sites, only: [:index]
+    resources :city_profiles, only: [:index]
+    resources :regional_indicators, only: [:index]
+    resources :regional_area_indicators, only: [:index]
+    resources :regional_district_boundaries, only: [:index]
+    resources :regional_admin_profiles, only: [:index]
+    resources :data_sources, only: [:index]
     resources :conflict_events, only: [:index]
     get "conflict_pulse", to: "conflict_pulse#index"
     get "chokepoints", to: "chokepoints#index"

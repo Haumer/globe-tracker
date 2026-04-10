@@ -3,7 +3,7 @@
   <button class="detail-close" data-action="click->globe#closeRightPanel" aria-label="Close panel">&times;</button>
   <div class="right-panel-rail-head">
     <div class="right-panel-rail-copy">
-      <div class="right-panel-rail-title">LIVE CONTEXT</div>
+      <div class="right-panel-rail-title" data-globe-target="rightPanelTitle">LIVE CONTEXT</div>
     </div>
   </div>
 
@@ -11,6 +11,12 @@
   <div class="rp-pane rp-pane--active" data-rp-pane="context" data-globe-target="contextPanel" role="region" aria-label="Selected context">
     <div class="context-rail-list insight-feed-list" data-globe-target="contextContent">
       <div class="context-empty">SELECT A MAP ENTITY</div>
+    </div>
+  </div>
+
+  <div class="rp-pane" data-rp-pane="local-profile" data-globe-target="localProfilePanel" role="region" aria-label="Regional profile">
+    <div class="local-profile-shell" data-globe-target="localProfileContent">
+      <div class="local-profile-empty">Enter a regional profile to switch from the global globe into a denser local operating picture.</div>
     </div>
   </div>
 

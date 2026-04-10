@@ -1,3 +1,17 @@
+function cityPopulationLabel(population) {
+  if (!population || population <= 0) return null
+  if (population >= 1_000_000) return `${(population / 1_000_000).toFixed(1)}M`
+  return `${Math.round(population / 1000)}k`
+}
+
+function citySearchDetail(item) {
+  const sectorLabel = Array.isArray(item.strategicSectors) && item.strategicSectors.length > 0
+    ? item.strategicSectors.slice(0, 2).join(" / ")
+    : null
+  const populationLabel = cityPopulationLabel(item.population)
+  return [item.country, item.adminArea, sectorLabel || populationLabel].filter(Boolean).join(" · ")
+}
+
 export function applySelectionSearchMethods(GlobeController) {
   GlobeController.prototype.onSearchInput = function() {
     clearTimeout(this._searchDebounce)
@@ -96,13 +110,14 @@ export function applySelectionSearchMethods(GlobeController) {
     {
       key: "city",
       getData: (ctrl) => ctrl._citiesData || [],
-      fields: (item) => [item.name, item.country],
+      fields: (item) => [item.name, item.country, item.adminArea, ...(item.aliases || []), ...(item.roleTags || []), ...(item.strategicSectors || [])],
       toResult: (item) => ({
         icon: item.capital ? "fa-landmark" : "fa-city",
-        color: item.capital ? "#ffd54f" : "#e0e0e0",
+        color: item.capital ? "#ffd54f" : (item.isProfiled ? "#80cbc4" : "#e0e0e0"),
         name: item.name,
-        detail: `${item.country} · ${(item.population / 1e6).toFixed(1)}M`,
+        detail: citySearchDetail(item),
         lat: item.lat, lng: item.lng, alt: 200000,
+        data: item,
       }),
     },
     {
@@ -353,6 +368,8 @@ export function applySelectionSearchMethods(GlobeController) {
       if (ship) this._showShipLikeDetail?.(ship)
     } else if (r.type === "earthquake" && r.data) {
       this.showEarthquakeDetail(r.data)
+    } else if (r.type === "city" && r.data) {
+      this.showCityDetail?.(r.data)
     } else if (r.type === "power_plant" && r.data) {
       this.showPowerPlantDetail(r.data)
     } else if (r.type === "conflict" && r.data) {

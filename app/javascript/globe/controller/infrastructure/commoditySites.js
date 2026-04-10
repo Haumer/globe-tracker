@@ -9,6 +9,12 @@ const COMMODITY_STYLE = {
   copper: { color: "#ff7043", symbol: "Cu", icon: "fa-solid fa-industry" },
   iron_ore: { color: "#b0bec5", symbol: "Fe", icon: "fa-solid fa-mountain" },
   fertilizer: { color: "#9ccc65", symbol: "F", icon: "fa-solid fa-seedling" },
+  steel: { color: "#90a4ae", symbol: "St", icon: "fa-solid fa-industry" },
+  semiconductors: { color: "#42a5f5", symbol: "Si", icon: "fa-solid fa-microchip" },
+  chemicals: { color: "#ab47bc", symbol: "Ch", icon: "fa-solid fa-flask-vial" },
+  automotive: { color: "#ef5350", symbol: "Car", icon: "fa-solid fa-car-side" },
+  battery_materials: { color: "#66bb6a", symbol: "Bat", icon: "fa-solid fa-battery-half" },
+  pharmaceuticals: { color: "#ec407a", symbol: "Rx", icon: "fa-solid fa-capsules" },
 }
 
 const iconCache = new Map()

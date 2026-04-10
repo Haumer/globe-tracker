@@ -1,4 +1,10 @@
 export function applySituationalRightPanelMethods(GlobeController) {
+  function availabilityFor(tabKey, availability) {
+    if (tabKey === "local-profile") return availability.localProfile
+    if (tabKey === "localProfile") return availability.localProfile
+    return availability[tabKey]
+  }
+
   GlobeController.prototype._rightPanelHasContext = function() {
     return !!this._selectedContext || ((this._pinnedAnchoredDetails?.length || 0) > 0)
   }
@@ -6,6 +12,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype._rightPanelTabAvailability = function() {
     return {
       context: this._rightPanelHasContext(),
+      localProfile: this._hasActiveLocalProfile?.() || false,
     }
   }
 
@@ -20,7 +27,9 @@ export function applySituationalRightPanelMethods(GlobeController) {
   }
 
   GlobeController.prototype._currentRightPanelTab = function() {
-    return this._isRightPanelVisible() ? "context" : null
+    if (!this._isRightPanelVisible()) return null
+    const pane = this.hasRightPanelTarget ? this.rightPanelTarget.querySelector(".rp-pane.rp-pane--active") : null
+    return pane?.dataset?.rpPane || null
   }
 
   GlobeController.prototype._setRightTabUpdated = function() {}
@@ -28,6 +37,8 @@ export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype._syncRightTabButton = function() {}
 
   GlobeController.prototype._preferredRightPanelTab = function() {
+    if (this._rightPanelHasContext()) return "context"
+    if (this._hasActiveLocalProfile?.()) return "local-profile"
     return "context"
   }
 
@@ -51,7 +62,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
       return
     }
 
-    const hasPanelContent = !!availability.context
+    const hasPanelContent = !!availability.context || !!availability.localProfile
     if (!panelVisible && !hasPanelContent) {
       this._syncPanelToggle(false)
       this._repositionDetailStack(12)
@@ -60,7 +71,8 @@ export function applySituationalRightPanelMethods(GlobeController) {
 
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
     this._syncPanelToggle(true)
-    this._activateRightTab("context")
+    const nextTab = availabilityFor(this._lastRightPanelTab, availability) ? this._lastRightPanelTab : this._preferredRightPanelTab()
+    this._activateRightTab(nextTab)
     this._repositionDetailStack(this._rightPanelWidth())
   }
 
@@ -73,19 +85,32 @@ export function applySituationalRightPanelMethods(GlobeController) {
 
   GlobeController.prototype.switchRightTab = function(event) {
     event?.preventDefault?.()
-    this._activateRightTab("context")
+    this._activateRightTab(this._preferredRightPanelTab())
   }
 
   GlobeController.prototype._activateRightTab = function(tabKey) {
     if (!this.hasRightPanelTarget) return
-    this._lastRightPanelTab = "context"
+    const availability = this._rightPanelTabAvailability()
+    let nextTab = tabKey || this._preferredRightPanelTab()
+    if (nextTab === "localProfile") nextTab = "local-profile"
+    if (nextTab === "local-profile" && !availability.localProfile) nextTab = availability.context ? "context" : null
+    if (nextTab === "context" && !availability.context) nextTab = availability.localProfile ? "local-profile" : null
+    if (!nextTab) return
+
+    this._lastRightPanelTab = nextTab
     this.rightPanelTarget.querySelectorAll(".rp-pane").forEach(pane => pane.classList.remove("rp-pane--active"))
-    const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="context"]`)
+    const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="${nextTab}"]`)
     if (pane) pane.classList.add("rp-pane--active")
+    if (this.hasRightPanelTitleTarget) {
+      this.rightPanelTitleTarget.textContent = nextTab === "local-profile" ? "LOCAL PROFILE" : "LIVE CONTEXT"
+    }
   }
 
   GlobeController.prototype._showRightPanel = function(tabKey) {
-    if (!this._rightPanelHasContext()) {
+    const availability = this._rightPanelTabAvailability()
+    const wantsLocalProfile = tabKey === "localProfile" || tabKey === "local-profile"
+
+    if (!availability.context && !availability.localProfile) {
       this._syncRightPanels()
       return
     }
@@ -93,7 +118,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
     this._deferContextRail = false
     this._rightPanelUserClosed = false
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = ""
-    this._activateRightTab("context")
+    this._activateRightTab(wantsLocalProfile ? "local-profile" : tabKey)
     this._syncRightPanels()
     this._syncPanelToggle(true)
   }

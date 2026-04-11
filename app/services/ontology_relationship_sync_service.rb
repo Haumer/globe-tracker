@@ -53,6 +53,7 @@ class OntologyRelationshipSyncService
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
       chokepoint_entities = sync_chokepoint_entities
       commodity_entities = sync_relevant_commodity_entities
+      identity_result = OntologyV2IdentityService.sync(now: now)
       theater_since = now - window
       direct_story_since = now - DIRECT_STORY_WINDOW
       theaters = build_active_theaters(since: theater_since)
@@ -65,6 +66,7 @@ class OntologyRelationshipSyncService
         theaters: theater_entities.size,
         chokepoints: chokepoint_entities.size,
         commodities: commodity_entities.size,
+        identity_links: identity_result.slice(:actor_country_links, :place_country_links),
         theater_pressure: sync_theater_pressure_relationships(
           theaters: theaters,
           theater_entities: theater_entities,

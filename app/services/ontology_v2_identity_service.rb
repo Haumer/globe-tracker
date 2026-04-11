@@ -15,6 +15,14 @@ class OntologyV2IdentityService
     def health_report
       new.health_report
     end
+
+    def country_for_code(code)
+      new.country_for_code(code)
+    end
+
+    def country_for_name(name)
+      new.country_for_name(name)
+    end
   end
 
   def initialize(now: Time.current)
@@ -49,6 +57,16 @@ class OntologyV2IdentityService
       ambiguous_country_codes: ambiguous_country_codes,
       ambiguous_country_names: ambiguous_country_names,
     }
+  end
+
+  def country_for_code(code)
+    return if code.blank?
+
+    country_entities_by_code[code.to_s.upcase]
+  end
+
+  def country_for_name(name)
+    country_entities_by_name[normalize_name(name)]
   end
 
   private

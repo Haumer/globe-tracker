@@ -54,7 +54,9 @@ class OntologyRelationshipSyncService
       chokepoint_entities = sync_chokepoint_entities
       commodity_entities = sync_relevant_commodity_entities
       identity_result = OntologyV2IdentityService.sync(now: now)
+      asset_graph_result = OntologyV2AssetGraphService.sync(now: now)
       event_graph_result = OntologyV2EventGraphService.sync(now: now)
+      infrastructure_impact_result = OntologyV2InfrastructureImpactService.sync(now: now)
       theater_since = now - window
       direct_story_since = now - DIRECT_STORY_WINDOW
       theaters = build_active_theaters(since: theater_since)
@@ -68,7 +70,9 @@ class OntologyRelationshipSyncService
         chokepoints: chokepoint_entities.size,
         commodities: commodity_entities.size,
         identity_links: identity_result.slice(:actor_country_links, :place_country_links),
+        asset_graph: asset_graph_result.slice(:assets, :country_relationships),
         event_graph: event_graph_result.slice(:events, :place_relationships, :entity_relationships, :relationship_evidences),
+        infrastructure_impact: infrastructure_impact_result.slice(:events, :impact_relationships, :relationship_evidences),
         theater_pressure: sync_theater_pressure_relationships(
           theaters: theaters,
           theater_entities: theater_entities,

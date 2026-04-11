@@ -29,7 +29,8 @@ class OntologyV2InfrastructureImpactService
   ].freeze
   NEARBY_IMPACT_EVENT_PATTERN = /\b(airstrike|attack|crash|earthquake|explosion|fire|flood|geoconfirmed strike|missile attack|storm|strike|wildfire)\b/i
   NEARBY_EXPOSURE_EVENT_PATTERN = /\b(airstrike|attack|blackout|crash|cyberattack|earthquake|explosion|fire|flood|geoconfirmed strike|missile attack|outage|storm|strike|wildfire)\b/i
-  MEDIA_LOCATION_PATTERN = /\b(associated press|bbc|cnn|france 24|guardian|journal|news|nyt|post|repubblica|reuters|times|zeit)\b/i
+  MEDIA_LOCATION_PATTERN = /\b(associated press|bbc|cnn|dw|euronews|france 24|guardian|journal|newshour|npr|nyt|pbs|polsat|post|repubblica|reuters|times|zeit)\b/i
+  SHORT_NEWS_SOURCE_NAMES = %w[ap afp bbc cnn dw npr pbs].freeze
 
   class << self
     def sync(now: Time.current)
@@ -186,7 +187,7 @@ class OntologyV2InfrastructureImpactService
       distance = haversine_km(lat, lng, payload.fetch(:latitude), payload.fetch(:longitude))
       next if distance > radius_km
 
-      relation_type = nearby_impact_event?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
+      relation_type = nearby_impact_allowed?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
       {
         entity: asset,
         relation_type: relation_type,
@@ -368,6 +369,8 @@ class OntologyV2InfrastructureImpactService
   end
 
   def nearby_infrastructure_context?(event)
+    return false if publisher_labeled_coordinates?(event) && !event.event_family.to_s.in?(%w[disaster transport])
+
     relevant_for_infrastructure?(event) && nearby_exposure_event?(event) && trustworthy_point_location?(event)
   end
 
@@ -383,6 +386,12 @@ class OntologyV2InfrastructureImpactService
     return false if non_infrastructure_context_event?(event)
 
     event_type_text(event).match?(NEARBY_IMPACT_EVENT_PATTERN)
+  end
+
+  def nearby_impact_allowed?(event)
+    return false if publisher_labeled_coordinates?(event)
+
+    nearby_impact_event?(event)
   end
 
   def nearby_exposure_event?(event)
@@ -406,9 +415,11 @@ class OntologyV2InfrastructureImpactService
   def trustworthy_point_location?(event)
     lat, lng = event_coordinates(event)
     return false if lat.blank? || lng.blank?
-    return false unless event.geo_precision.to_s == "point"
-    return false if event.geo_confidence.to_f < 0.45
-    return false if publisher_location_name?(event)
+
+    coordinate_payload = event_coordinate_payload(event)
+    return false unless coordinate_payload[:geo_precision].to_s == "point"
+    return false if coordinate_payload[:geo_confidence].to_f < 0.45
+    return false if coordinate_payload[:source] == "place_entity" && publisher_location_name?(event)
 
     true
   end
@@ -423,12 +434,18 @@ class OntologyV2InfrastructureImpactService
     location_names.any? { |value| known_news_source_name?(value) }
   end
 
+  def publisher_labeled_coordinates?(event)
+    event_coordinate_payload(event)[:source] == "primary_story_cluster" && publisher_location_name?(event)
+  end
+
   def known_news_source_name?(value)
     normalized = normalize_source_name(value)
     return false if normalized.blank?
 
     known_news_source_names[normalized] ||
       known_news_source_names[normalized.delete(" ")] ||
+      known_news_source_name_fragments.any? { |source_name| normalized.include?(source_name) } ||
+      (normalized.split & SHORT_NEWS_SOURCE_NAMES).any? ||
       normalized.match?(MEDIA_LOCATION_PATTERN)
   end
 
@@ -440,6 +457,10 @@ class OntologyV2InfrastructureImpactService
       memo[normalized] = true
       memo[normalized.delete(" ")] = true
     end
+  end
+
+  def known_news_source_name_fragments
+    @known_news_source_name_fragments ||= known_news_source_names.keys.select { |name| name.length >= 4 }
   end
 
   def normalize_source_name(value)
@@ -516,11 +537,40 @@ class OntologyV2InfrastructureImpactService
   end
 
   def event_coordinates(event)
+    payload = event_coordinate_payload(event)
+    [payload[:latitude], payload[:longitude]]
+  end
+
+  def event_coordinate_payload(event)
+    cluster = event.primary_story_cluster
+    if cluster&.latitude.present? && cluster&.longitude.present?
+      return {
+        latitude: cluster.latitude,
+        longitude: cluster.longitude,
+        geo_precision: cluster.geo_precision,
+        geo_confidence: cluster.geo_confidence,
+        source: "primary_story_cluster",
+      }
+    end
+
+    if event.metadata["latitude"].present? && event.metadata["longitude"].present?
+      return {
+        latitude: event.metadata["latitude"],
+        longitude: event.metadata["longitude"],
+        geo_precision: event.geo_precision,
+        geo_confidence: event.geo_confidence,
+        source: "event_metadata",
+      }
+    end
+
     place_metadata = event.place_entity&.metadata || {}
-    [
-      place_metadata["latitude"] || event.metadata["latitude"],
-      place_metadata["longitude"] || event.metadata["longitude"],
-    ]
+    {
+      latitude: place_metadata["latitude"],
+      longitude: place_metadata["longitude"],
+      geo_precision: place_metadata["geo_precision"] || event.geo_precision,
+      geo_confidence: event.geo_confidence,
+      source: "place_entity",
+    }
   end
 
   def entity_coordinates(entity)

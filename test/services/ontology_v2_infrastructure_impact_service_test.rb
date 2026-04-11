@@ -204,6 +204,129 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     assert_not OntologyRelationship.exists?(source_node: event, target_node: asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
   end
 
+  test "prefers cluster coordinates over stale publisher place coordinates" do
+    NewsSource.create!(
+      canonical_key: "source:pbs",
+      name: "PBS",
+      source_kind: "publisher",
+      publisher_domain: "pbs.org"
+    )
+    publisher_place = OntologyEntity.create!(
+      canonical_key: "place:pbs-newshour",
+      entity_type: "place",
+      canonical_name: "PBS NewsHour",
+      metadata: { "latitude" => 50.8, "longitude" => 4.4, "geo_precision" => "point" }
+    )
+    belgian_asset = OntologyEntity.create!(
+      canonical_key: "power-plant:belgium-stale-place",
+      entity_type: "power_plant",
+      canonical_name: "Belgium Stale Place Plant",
+      metadata: { "latitude" => 50.81, "longitude" => 4.41 }
+    )
+    afghan_asset = OntologyEntity.create!(
+      canonical_key: "airport:kabul-cluster-coordinate",
+      entity_type: "airport",
+      canonical_name: "Kabul Cluster Coordinate Airport",
+      metadata: { "latitude" => 34.52, "longitude" => 69.19 }
+    )
+    cluster = NewsStoryCluster.create!(
+      cluster_key: "cluster:afghanistan-earthquake",
+      canonical_title: "5.8 magnitude earthquake hits Afghanistan and Pakistan, killing 8 on outskirts of Kabul",
+      content_scope: "core",
+      event_family: "disaster",
+      event_type: "earthquake",
+      location_name: "PBS NewsHour",
+      latitude: 34.515,
+      longitude: 69.185,
+      geo_precision: "point",
+      geo_confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      verification_status: "multi_source"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:afghanistan-earthquake",
+      event_family: "disaster",
+      event_type: "earthquake",
+      status: "active",
+      place_entity: publisher_place,
+      primary_story_cluster: cluster,
+      verification_status: "multi_source",
+      geo_precision: "point",
+      geo_confidence: 0.82,
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: {
+        "canonical_title" => "5.8 magnitude earthquake hits Afghanistan and Pakistan, killing 8 on outskirts of Kabul",
+        "location_name" => "PBS NewsHour",
+      }
+    )
+
+    OntologyV2InfrastructureImpactService.sync_batch(now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_not OntologyRelationship.exists?(source_node: event, target_node: belgian_asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
+    assert OntologyRelationship.exists?(source_node: event, target_node: afghan_asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
+  end
+
+  test "does not use publisher-labeled cluster coordinates for conflict proximity" do
+    NewsSource.create!(
+      canonical_key: "source:euronews",
+      name: "EuroNews",
+      source_kind: "publisher",
+      publisher_domain: "euronews.com"
+    )
+    publisher_place = OntologyEntity.create!(
+      canonical_key: "place:euronews",
+      entity_type: "place",
+      canonical_name: "EuroNews",
+      metadata: { "latitude" => 50.4, "longitude" => 30.5, "geo_precision" => "point" }
+    )
+    nearby_asset = OntologyEntity.create!(
+      canonical_key: "military-base:publisher-labeled-conflict",
+      entity_type: "military_base",
+      canonical_name: "Publisher Labeled Conflict Base",
+      metadata: { "latitude" => 50.401, "longitude" => 30.501 }
+    )
+    cluster = NewsStoryCluster.create!(
+      cluster_key: "cluster:publisher-labeled-conflict",
+      canonical_title: "Ukraine’s Zhytomyr region reels after missile and drone strike",
+      content_scope: "core",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      location_name: "EuroNews",
+      latitude: 50.4,
+      longitude: 30.5,
+      geo_precision: "point",
+      geo_confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      verification_status: "multi_source"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:publisher-labeled-conflict",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      place_entity: publisher_place,
+      primary_story_cluster: cluster,
+      verification_status: "multi_source",
+      geo_precision: "point",
+      geo_confidence: 0.82,
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: {
+        "canonical_title" => "Ukraine’s Zhytomyr region reels after missile and drone strike",
+        "location_name" => "EuroNews",
+      }
+    )
+
+    OntologyV2InfrastructureImpactService.sync_batch(now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_not OntologyRelationship.exists?(source_node: event, target_node: nearby_asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
+  end
+
   private
 
   def create_country

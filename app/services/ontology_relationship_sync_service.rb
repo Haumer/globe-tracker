@@ -20,6 +20,12 @@ class OntologyRelationshipSyncService
   RECENT_JAMMING_WINDOW = Definitions::RECENT_JAMMING_WINDOW
   LIVE_NOTAM_WINDOW = Definitions::LIVE_NOTAM_WINDOW
   RECENT_NOTAM_WINDOW = Definitions::RECENT_NOTAM_WINDOW
+  INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW
+  INFRASTRUCTURE_DISRUPTION_FRESHNESS = Definitions::INFRASTRUCTURE_DISRUPTION_FRESHNESS
+  INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT
+  INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS = Definitions::INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS
+  INFRASTRUCTURE_KINETIC_EVENT_TYPES = Definitions::INFRASTRUCTURE_KINETIC_EVENT_TYPES
+  INFRASTRUCTURE_DISRUPTION_NATURAL_EVENT_CATEGORIES = Definitions::INFRASTRUCTURE_DISRUPTION_NATURAL_EVENT_CATEGORIES
   FLIGHT_THEATER_RADIUS_KM = Definitions::FLIGHT_THEATER_RADIUS_KM
   FLIGHT_STRATEGIC_ASSET_RADIUS_KM = Definitions::FLIGHT_STRATEGIC_ASSET_RADIUS_KM
   CHOKEPOINT_SHIP_DISTANCE_MIN_KM = Definitions::CHOKEPOINT_SHIP_DISTANCE_MIN_KM
@@ -39,6 +45,7 @@ class OntologyRelationshipSyncService
     include FlowDependencyMethods
     include DownstreamExposureMethods
     include OperationalActivityMethods
+    include InfrastructureDisruptionMethods
     include LocalCorroborationMethods
 
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
@@ -81,6 +88,7 @@ class OntologyRelationshipSyncService
           corroborated_story_clusters: corroborated_story_clusters,
           now: now
         ),
+        infrastructure_disruptions: sync_infrastructure_disruption_relationships(now: now),
         local_corroborations: sync_local_corroboration_relationships(now: now),
       }
     end

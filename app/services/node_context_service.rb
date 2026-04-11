@@ -13,6 +13,8 @@ class NodeContextService
       case kind.to_s
       when "news_story_cluster"
         serialize_event_context(resolve_story_cluster_event(id))
+      when "event"
+        serialize_event_context(resolve_generic_event(id))
       when "chokepoint"
         serialize_entity_context(resolve_chokepoint_entity(id))
       when "theater"
@@ -35,6 +37,14 @@ class NodeContextService
         .joins(:primary_story_cluster)
         .find_by(news_story_clusters: { cluster_key: identifier })
       event || raise(NodeNotFoundError, "news story cluster context not found")
+    end
+
+    def resolve_generic_event(identifier)
+      raw = identifier.to_s.strip
+      scope = OntologyEvent.includes(:place_entity, :primary_story_cluster, ontology_event_entities: :ontology_entity, ontology_evidence_links: :evidence)
+      event = scope.find_by(canonical_key: raw) if raw.present?
+      event ||= scope.find_by(id: raw) if raw.match?(/\A\d+\z/)
+      event || raise(NodeNotFoundError, "event context not found")
     end
 
     def resolve_chokepoint_entity(identifier)
@@ -253,6 +263,14 @@ class NodeContextService
         parts << "#{entity.metadata["capacity_mw"].to_f.round} MW" if entity.metadata["capacity_mw"].present?
         parts << entity.country_code if entity.country_code.present?
         parts.join(" · ").presence
+      when "port"
+        parts = []
+        parts << entity.metadata["locode"] if entity.metadata["locode"].present?
+        parts << entity.country_code if entity.country_code.present?
+        parts << entity.metadata["harbor_size"] if entity.metadata["harbor_size"].present?
+        flow_types = Array(entity.metadata["flow_types"]).first(2)
+        parts << flow_types.join(", ") if flow_types.any?
+        parts.join(" · ").presence
       when "submarine_cable"
         parts = []
         parts << pluralize(entity.metadata["landing_point_count"].to_i, "landing point") if entity.metadata["landing_point_count"].present?
@@ -387,6 +405,75 @@ class NodeContextService
           label: evidence.name,
           meta: [evidence.symbol, change].compact.join(" · "),
         }
+      when Earthquake
+        {
+          type: "earthquake",
+          id: evidence.id,
+          label: evidence.title.presence || earthquake_label(evidence),
+          meta: [
+            (evidence.magnitude.present? ? "M#{evidence.magnitude.to_f.round(1)}" : nil),
+            (evidence.depth.present? ? "depth #{evidence.depth.to_f.round(1)}km" : nil),
+            ("tsunami" if evidence.tsunami?),
+            ("alert #{evidence.alert}" if evidence.alert.present?),
+            evidence.event_time&.iso8601,
+          ].compact.join(" · "),
+        }
+      when FireHotspot
+        {
+          type: "fire_hotspot",
+          id: evidence.id,
+          label: "Fire hotspot #{evidence.external_id}",
+          meta: [
+            evidence.confidence,
+            (evidence.frp.present? ? "FRP #{evidence.frp.to_f.round(1)}" : nil),
+            evidence.satellite,
+            evidence.acq_datetime&.iso8601,
+          ].compact.join(" · "),
+        }
+      when NaturalEvent
+        {
+          type: "natural_event",
+          id: evidence.id,
+          label: evidence.title.presence || evidence.category_title.presence || "Natural event",
+          meta: [
+            evidence.category_title,
+            (evidence.magnitude_value.present? ? "#{evidence.magnitude_value.to_f.round(1)} #{evidence.magnitude_unit}".strip : nil),
+            evidence.event_date&.iso8601,
+          ].compact.join(" · "),
+        }
+      when GeoconfirmedEvent
+        {
+          type: "geoconfirmed_event",
+          id: evidence.id,
+          label: evidence.title.presence || "GeoConfirmed event",
+          meta: [
+            evidence.map_region,
+            evidence.posted_at&.iso8601 || evidence.event_time&.iso8601,
+          ].compact.join(" · "),
+        }
+      when InternetOutage
+        {
+          type: "internet_outage",
+          id: evidence.id,
+          label: evidence.entity_name.presence || evidence.entity_code.presence || "Internet outage",
+          meta: [
+            evidence.entity_code,
+            evidence.level,
+            (evidence.score.present? ? "score #{evidence.score.to_f.round(1)}" : nil),
+            evidence.started_at&.iso8601,
+          ].compact.join(" · "),
+        }
+      when TradeLocation
+        {
+          type: "trade_location",
+          id: evidence.id,
+          label: evidence.name,
+          meta: [
+            evidence.locode,
+            evidence.location_kind,
+            evidence.country_code,
+          ].compact.join(" · "),
+        }
       when Flight
         {
           type: "flight",
@@ -484,6 +571,12 @@ class NodeContextService
           label: evidence.try(:canonical_name) || evidence.try(:canonical_title) || evidence.try(:title) || evidence.try(:name) || evidence.class.name,
         }
       end
+    end
+
+    def earthquake_label(earthquake)
+      return "M#{earthquake.magnitude.to_f.round(1)} earthquake" if earthquake.magnitude.present?
+
+      "Earthquake"
     end
 
     def pluralize(count, noun)

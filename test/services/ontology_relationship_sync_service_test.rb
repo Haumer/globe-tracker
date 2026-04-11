@@ -481,6 +481,193 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "builds infrastructure exposure relationships from hazards to nearby strategic assets" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      earthquake = Earthquake.create!(
+        external_id: "eq-hormuz-1",
+        title: "M6.4 earthquake near the Strait of Hormuz",
+        magnitude: 6.4,
+        magnitude_type: "mww",
+        latitude: 26.32,
+        longitude: 56.25,
+        depth: 12.0,
+        event_time: 20.minutes.ago,
+        tsunami: false,
+        alert: "yellow",
+        fetched_at: Time.current
+      )
+      Airport.create!(
+        icao_code: "OOTH",
+        iata_code: "THM",
+        name: "Test Hormuz Airport",
+        airport_type: "large_airport",
+        latitude: 26.36,
+        longitude: 56.28,
+        country_code: "OM",
+        municipality: "Test City",
+        is_military: false
+      )
+      MilitaryBase.create!(
+        external_id: "base-hormuz-hazard-1",
+        name: "Hormuz Hazard Base",
+        base_type: "navy",
+        country: "Oman",
+        operator: "Test Navy",
+        latitude: 26.40,
+        longitude: 56.30,
+        source: "test"
+      )
+      plant = PowerPlant.create!(
+        gppd_idnr: "OM-HORMUZ-HAZARD-1",
+        name: "Hormuz Hazard Gas Plant",
+        country_code: "OM",
+        country_name: "Oman",
+        latitude: 26.38,
+        longitude: 56.32,
+        capacity_mw: 640,
+        primary_fuel: "Gas"
+      )
+
+      result = OntologyRelationshipSyncService.sync_recent
+
+      assert_operator result[:infrastructure_disruptions], :>=, 3
+
+      event = OntologyEvent.find_by!(canonical_key: "event:earthquake:eq-hormuz-1")
+      plant_entity = OntologyEntity.find_by!(canonical_key: "power-plant:om-hormuz-hazard-1")
+      relation = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: plant_entity,
+        relation_type: "infrastructure_exposure"
+      )
+
+      assert relation.active?
+      assert_equal "disaster", event.event_family
+      assert_equal "earthquake", relation.metadata.fetch("event_kind")
+      assert_includes relation.explanation, plant.name
+
+      evidence_roles = relation.ontology_relationship_evidences.includes(:evidence).map { |row| [row.evidence, row.evidence_role] }
+      assert_includes evidence_roles, [earthquake, "hazard_observation"]
+      assert_includes evidence_roles, [plant, "exposed_asset"]
+    end
+  end
+
+  test "links thermal strike signals to ports as disruptions and submarine cables as exposure" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      strike = FireHotspot.create!(
+        external_id: "firms-strike-port-1",
+        latitude: 29.08,
+        longitude: 50.82,
+        brightness: 372.0,
+        confidence: "high",
+        satellite: "Suomi NPP",
+        instrument: "VIIRS",
+        frp: 48.0,
+        daynight: "N",
+        acq_datetime: 15.minutes.ago,
+        fetched_at: Time.current
+      )
+      port = TradeLocation.create!(
+        locode: "IRBND",
+        country_code: "IR",
+        country_code_alpha3: "IRN",
+        country_name: "Iran",
+        name: "Bandar Test Port",
+        normalized_name: "bandar test port",
+        location_kind: "port",
+        function_codes: "1",
+        latitude: 29.081,
+        longitude: 50.821,
+        status: "active",
+        source: "test_feed",
+        fetched_at: Time.current,
+        metadata: { "harbor_size" => "large", "flow_types" => %w[oil trade] }
+      )
+      cable = SubmarineCable.create!(
+        cable_id: "gulf-cable-exposure-1",
+        name: "Gulf Cable Exposure",
+        landing_points: [{ "lat" => 29.082, "lng" => 50.822, "country_code" => "IR" }]
+      )
+
+      result = OntologyRelationshipSyncService.sync_recent
+
+      assert_operator result[:infrastructure_disruptions], :>=, 2
+
+      event = OntologyEvent.find_by!(canonical_key: "event:thermal-strike:firms-strike-port-1")
+      port_entity = OntologyEntity.find_by!(canonical_key: "port:irbnd")
+      cable_entity = OntologyEntity.find_by!(canonical_key: "submarine-cable:gulf-cable-exposure-1")
+
+      port_relation = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: port_entity,
+        relation_type: "infrastructure_disruption"
+      )
+      cable_relation = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: cable_entity,
+        relation_type: "infrastructure_exposure"
+      )
+
+      assert port_relation.active?
+      assert cable_relation.active?
+      assert_equal "thermal_strike", event.event_type
+      assert_equal "port", port_relation.metadata.fetch("asset_type")
+      assert_equal "submarine_cable", cable_relation.metadata.fetch("asset_type")
+      assert_includes port_relation.explanation, port.name
+      assert_includes cable_relation.explanation, cable.name
+      assert_includes port_relation.ontology_relationship_evidences.map(&:evidence), strike
+    end
+  end
+
+  test "promotes submarine cable exposure to disruption when matching outage evidence exists" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      earthquake = Earthquake.create!(
+        external_id: "eq-cable-outage-1",
+        title: "M6.5 earthquake near Gulf cable landing",
+        magnitude: 6.5,
+        latitude: 29.08,
+        longitude: 50.82,
+        depth: 10.0,
+        event_time: 20.minutes.ago,
+        tsunami: false,
+        alert: "yellow",
+        fetched_at: Time.current
+      )
+      cable = SubmarineCable.create!(
+        cable_id: "gulf-cable-outage-1",
+        name: "Gulf Cable Outage",
+        landing_points: [{ "lat" => 29.081, "lng" => 50.821, "country_code" => "IR" }]
+      )
+      outage = InternetOutage.create!(
+        external_id: "IR-ioda-test-1",
+        entity_type: "country",
+        entity_code: "IR",
+        entity_name: "Iran",
+        datasource: "ioda",
+        score: 12_000,
+        level: "severe",
+        condition: "outage",
+        started_at: 10.minutes.ago,
+        fetched_at: Time.current
+      )
+
+      OntologyRelationshipSyncService.sync_recent
+
+      event = OntologyEvent.find_by!(canonical_key: "event:earthquake:eq-cable-outage-1")
+      cable_entity = OntologyEntity.find_by!(canonical_key: "submarine-cable:gulf-cable-outage-1")
+      relation = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: cable_entity,
+        relation_type: "infrastructure_disruption"
+      )
+
+      assert relation.active?
+      assert_includes relation.explanation, cable.name
+      assert_includes relation.ontology_relationship_evidences.map(&:evidence), earthquake
+      assert_includes relation.ontology_relationship_evidences.map(&:evidence), outage
+      assert_includes relation.ontology_relationship_evidences.pluck(:evidence_role), "supporting_outage"
+    end
+  end
+
   private
 
   def create_conflict_cluster(key:, title:, latitude:, longitude:, source_count:, last_seen_at:)

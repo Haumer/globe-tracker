@@ -146,6 +146,60 @@ class Api::NodeContextsControllerTest < ActionDispatch::IntegrationTest
     assert_equal ["lead_article", "primary_cluster"], body.fetch("evidence").map { |item| item.fetch("role") }.sort
   end
 
+  test "returns generic ontology event context with hazard evidence" do
+    earthquake = Earthquake.create!(
+      external_id: "eq-node-context-1",
+      title: "M6.1 earthquake near a port",
+      magnitude: 6.1,
+      magnitude_type: "mww",
+      latitude: 35.2,
+      longitude: 139.7,
+      depth: 9.5,
+      event_time: 20.minutes.ago,
+      tsunami: false,
+      alert: "yellow",
+      fetched_at: Time.current
+    )
+    place = OntologyEntity.create!(
+      canonical_key: "place:hazard:earthquake:eq-node-context-1",
+      entity_type: "place",
+      canonical_name: "M6.1 earthquake near a port",
+      metadata: { "latitude" => 35.2, "longitude" => 139.7 }
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:earthquake:eq-node-context-1",
+      event_family: "infrastructure",
+      event_type: "earthquake",
+      status: "active",
+      place_entity: place,
+      verification_status: "single_source",
+      geo_precision: "point",
+      confidence: 0.84,
+      source_reliability: 0.72,
+      geo_confidence: 0.86,
+      first_seen_at: 20.minutes.ago,
+      last_seen_at: 20.minutes.ago,
+      metadata: { "canonical_title" => "M6.1 earthquake near a port" }
+    )
+    OntologyEvidenceLink.create!(
+      ontology_event: event,
+      evidence: earthquake,
+      evidence_role: "hazard_observation",
+      confidence: 0.84
+    )
+
+    get "/api/node_context", params: { kind: "event", id: "event:earthquake:eq-node-context-1" }
+
+    assert_response :success
+    body = JSON.parse(response.body)
+    assert_equal "M6.1 earthquake near a port", body.dig("node", "name")
+    assert_equal "infrastructure", body.dig("node", "event_family")
+    assert_in_delta 35.2, body.dig("node", "latitude"), 0.001
+    assert_equal "earthquake", body.dig("evidence", 0, "type")
+    assert_equal "hazard_observation", body.dig("evidence", 0, "role")
+    assert_includes body.dig("evidence", 0, "meta"), "M6.1"
+  end
+
   test "returns commodity node context by symbol" do
     hormuz = OntologyEntity.create!(
       canonical_key: "corridor:chokepoint:hormuz",

@@ -71,6 +71,8 @@ Rails.application.routes.draw do
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]
     get "node_context", to: "node_contexts#show"
+    get "situation_assessments", to: "situation_assessments#index"
+    get "situation_assessment", to: "situation_assessments#show"
     resources :military_bases, only: [:index]
     resources :commodities, only: [:index]
     get "supply_chain/dependency_map", to: "supply_chain#dependency_map"

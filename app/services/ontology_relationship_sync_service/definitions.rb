@@ -9,6 +9,7 @@ class OntologyRelationshipSyncService
     ASSET_ENTITY_TYPES = {
       airport: "airport",
       military_base: "military_base",
+      port: "port",
       power_plant: "power_plant",
       submarine_cable: "submarine_cable",
     }.freeze
@@ -43,6 +44,31 @@ class OntologyRelationshipSyncService
       theater_flight: 6,
       strategic_air_asset_flight: 3,
     }.freeze
+    INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW = 72.hours
+    INFRASTRUCTURE_DISRUPTION_FRESHNESS = 72.hours
+    INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT = 80
+    INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS = {
+      airport: 3,
+      military_base: 3,
+      port: 4,
+      power_plant: 4,
+      submarine_cable: 4,
+    }.freeze
+    INFRASTRUCTURE_KINETIC_EVENT_TYPES = %w[
+      airstrike
+      attack
+      drone_attack
+      explosion
+      missile_attack
+      shelling
+      strike
+    ].freeze
+    INFRASTRUCTURE_DISRUPTION_NATURAL_EVENT_CATEGORIES = [
+      "Floods",
+      "Severe Storms",
+      "Volcanoes",
+      "Wildfires",
+    ].freeze
     LIVE_SHIP_WINDOW = 45.minutes
     RECENT_SHIP_WINDOW = 12.hours
     LIVE_FLIGHT_WINDOW = 45.minutes

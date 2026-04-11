@@ -336,6 +336,32 @@ class OntologyRelationshipSyncService
       end
     end
 
+    def sync_port_entity(port)
+      metadata = port.metadata.is_a?(Hash) ? port.metadata : {}
+      OntologySyncSupport.upsert_entity(
+        canonical_key: "port:#{port.locode.to_s.downcase}",
+        entity_type: ASSET_ENTITY_TYPES.fetch(:port),
+        canonical_name: port.name,
+        country_code: port.country_code,
+        metadata: {
+          "locode" => port.locode,
+          "country_code_alpha3" => port.country_code_alpha3,
+          "country_name" => port.country_name,
+          "function_codes" => port.function_codes,
+          "latitude" => port.latitude,
+          "longitude" => port.longitude,
+          "flow_types" => Array(metadata["flow_types"]),
+          "harbor_size" => metadata["harbor_size"],
+          "importance" => metadata["importance"],
+          "source" => port.source,
+        }.compact
+      ).tap do |entity|
+        OntologySyncSupport.upsert_alias(entity, port.name, alias_type: "official")
+        OntologySyncSupport.upsert_alias(entity, port.locode, alias_type: "locode")
+        OntologySyncSupport.upsert_link(entity, port, role: "strategic_port", method: RELATION_DERIVED_BY)
+      end
+    end
+
     def sync_camera_entity(camera)
       OntologySyncSupport.upsert_entity(
         canonical_key: "asset:camera:#{camera.source}:#{camera.webcam_id}",
@@ -365,6 +391,7 @@ class OntologyRelationshipSyncService
       base = {
         airport: 0.56,
         military_base: 0.62,
+        port: 0.6,
         power_plant: 0.58,
         submarine_cable: 0.64,
       }.fetch(asset_type, 0.55)

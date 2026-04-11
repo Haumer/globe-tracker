@@ -244,9 +244,13 @@ class OntologyV2AssetGraphService
   end
 
   def resolve_countries(country_codes:, country_names:)
-    countries = Array(country_codes).filter_map { |code| OntologyV2IdentityService.country_for_code(code) }
-    countries += Array(country_names).filter_map { |name| OntologyV2IdentityService.country_for_name(name) }
+    countries = Array(country_codes).filter_map { |code| identity_resolver.country_for_code(code) }
+    countries += Array(country_names).filter_map { |name| identity_resolver.country_for_name(name) }
     countries.uniq(&:id)
+  end
+
+  def identity_resolver
+    @identity_resolver ||= OntologyV2IdentityService.new(now: now)
   end
 
   def country_relationship_scope

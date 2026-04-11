@@ -115,11 +115,11 @@ class OntologyV2InfrastructureImpactService
     return [] if lat.blank? || lng.blank?
 
     radius_km = event_radius_km(event)
-    asset_scope.filter_map do |asset|
-      asset_lat, asset_lng = entity_coordinates(asset)
-      next if asset_lat.blank? || asset_lng.blank?
-
-      distance = haversine_km(lat.to_f, lng.to_f, asset_lat.to_f, asset_lng.to_f)
+    lat = lat.to_f
+    lng = lng.to_f
+    nearby_asset_payloads(lat: lat, lng: lng, radius_km: radius_km).map do |payload|
+      asset = payload.fetch(:entity)
+      distance = haversine_km(lat, lng, payload.fetch(:latitude), payload.fetch(:longitude))
       next if distance > radius_km
 
       relation_type = disruptive_event?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
@@ -131,7 +131,7 @@ class OntologyV2InfrastructureImpactService
         distance_km: distance,
         radius_km: radius_km,
       }
-    end
+    end.compact
       .sort_by { |candidate| [candidate.fetch(:relation_type) == IMPACTED_INFRASTRUCTURE ? 0 : 1, candidate.fetch(:distance_km), candidate.fetch(:entity).canonical_name] }
       .first(NEARBY_ASSET_LIMIT)
   end
@@ -270,6 +270,29 @@ class OntologyV2InfrastructureImpactService
 
   def asset_scope
     OntologyEntity.where(entity_type: ASSET_ENTITY_TYPES)
+  end
+
+  def nearby_asset_payloads(lat:, lng:, radius_km:)
+    lat_delta = radius_km.to_f / 111.0
+    lng_delta = radius_km.to_f / [111.0 * Math.cos(lat * Math::PI / 180.0).abs, 1.0].max
+
+    asset_coordinate_payloads.select do |payload|
+      (payload.fetch(:latitude) - lat).abs <= lat_delta &&
+        (payload.fetch(:longitude) - lng).abs <= lng_delta
+    end
+  end
+
+  def asset_coordinate_payloads
+    @asset_coordinate_payloads ||= asset_scope.filter_map do |asset|
+      lat, lng = entity_coordinates(asset)
+      next if lat.blank? || lng.blank?
+
+      {
+        entity: asset,
+        latitude: lat.to_f,
+        longitude: lng.to_f,
+      }
+    end
   end
 
   def relevant_for_infrastructure?(event)

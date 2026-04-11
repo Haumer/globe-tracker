@@ -2,6 +2,8 @@
   display: grid;
   gap: 0;
   padding: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .context-section {
@@ -10,6 +12,8 @@
   background: transparent;
   border: none;
   border-bottom: 1px solid #1f2633;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .context-section--summary,
@@ -73,6 +77,8 @@
 .context-brief,
 .context-brief-group {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .context-html,
@@ -91,6 +97,10 @@
 .context-brief-body {
   font: 400 12px/1.58 'Inter', -apple-system, sans-serif;
   color: rgba(236, 241, 248, 0.88);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .context-brief-confidence {
@@ -98,10 +108,12 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  min-width: 0;
 }
 
 .context-brief-confidence-level {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   min-height: 18px;
   padding: 0 8px;
@@ -122,6 +134,11 @@
 .context-brief-state {
   font: 500 9px/1.4 'JetBrains Mono', monospace;
   color: #5c6472;
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .context-brief-state--error {
@@ -133,10 +150,14 @@
   padding-left: 16px;
   display: grid;
   gap: 6px;
+  min-width: 0;
 
   li {
     font: 400 11px/1.5 'Inter', -apple-system, sans-serif;
     color: rgba(229, 236, 244, 0.82);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 

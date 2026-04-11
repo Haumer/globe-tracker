@@ -57,6 +57,8 @@
   transform-origin: top left;
   will-change: left, top, transform;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 
   &[data-mode="docked"] {
     left: 12px !important;
@@ -203,6 +205,8 @@
   display: grid;
   gap: 5px;
   padding: 9px 11px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .anchor-body:empty {
@@ -231,12 +235,14 @@
   gap: 5px;
   padding: 7px 9px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 0;
 }
 
 .anchor-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   min-height: 22px;
   padding: 0 9px;
   border-radius: 2px;
@@ -248,6 +254,8 @@
   letter-spacing: 0.8px;
   text-transform: uppercase;
   cursor: pointer;
+  overflow-wrap: anywhere;
+  white-space: normal;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 
   &:hover {

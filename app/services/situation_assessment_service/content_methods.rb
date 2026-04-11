@@ -21,8 +21,9 @@ class SituationAssessmentService
         .then { |items| unique_strings(items) }
     end
 
-    def inferred_items(relationships)
+    def inferred_items(relationships, node:)
       relationships
+        .reject { |relationship| static_context_relationship?(node, relationship) }
         .select { |relationship| INFERRED_RELATIONSHIP_TYPES.include?(relationship[:relation_type].to_s) }
         .filter_map { |relationship| relationship_explanation(relationship) }
         .then { |items| unique_strings(items) }

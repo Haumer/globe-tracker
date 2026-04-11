@@ -6,6 +6,30 @@ class OntologyV2InfrastructureImpactService
   DIRECT_IMPACT_ROLES = %w[target victim affected_party affected_asset].freeze
   COUNTRY_EXPOSURE_LIMIT = 12
   NEARBY_ASSET_LIMIT = 16
+  NON_INFRASTRUCTURE_EVENT_TYPES = %w[
+    agreement
+    aid_delivery
+    arrest_detention
+    ceasefire
+    diplomatic_contact
+    election
+    negotiation
+    official_visit
+    protest
+    sanction_action
+    summit
+    trade_measure
+  ].freeze
+  NON_INFRASTRUCTURE_EVENT_FAMILIES = %w[
+    diplomacy
+    economy
+    humanitarian
+    justice
+    politics
+  ].freeze
+  NEARBY_IMPACT_EVENT_PATTERN = /\b(airstrike|attack|crash|earthquake|explosion|fire|flood|geoconfirmed strike|missile attack|storm|strike|wildfire)\b/i
+  NEARBY_EXPOSURE_EVENT_PATTERN = /\b(airstrike|attack|blackout|crash|cyberattack|earthquake|explosion|fire|flood|geoconfirmed strike|missile attack|outage|storm|strike|wildfire)\b/i
+  MEDIA_LOCATION_PATTERN = /\b(associated press|bbc|cnn|france 24|guardian|journal|news|nyt|post|repubblica|reuters|times|zeit)\b/i
 
   class << self
     def sync(now: Time.current)
@@ -33,7 +57,7 @@ class OntologyV2InfrastructureImpactService
     }
 
     ActiveRecord::Base.transaction do
-      event_scope.includes(:place_entity, :ontology_evidence_links, ontology_event_entities: :ontology_entity).find_each do |event|
+      event_scope.includes(:place_entity, :primary_story_cluster, :ontology_evidence_links, ontology_event_entities: :ontology_entity).find_each do |event|
         payload = sync_event(event)
         next if payload.fetch(:relationships).zero?
 
@@ -54,7 +78,7 @@ class OntologyV2InfrastructureImpactService
       .where(cursor.present? ? ["ontology_events.id > ?", cursor.to_i] : nil)
       .order(:id)
       .limit(limit)
-      .includes(:place_entity, :ontology_evidence_links, ontology_event_entities: :ontology_entity)
+      .includes(:place_entity, :primary_story_cluster, :ontology_evidence_links, ontology_event_entities: :ontology_entity)
       .to_a
     result = {
       cursor: cursor,
@@ -127,8 +151,8 @@ class OntologyV2InfrastructureImpactService
 
   def infrastructure_candidates_for(event)
     candidates = direct_asset_candidates(event)
-    candidates += nearby_asset_candidates(event) if relevant_for_infrastructure?(event)
-    candidates += country_asset_candidates(event) if relevant_for_infrastructure?(event)
+    candidates += nearby_asset_candidates(event) if nearby_infrastructure_context?(event)
+    candidates += country_asset_candidates(event) if country_infrastructure_context?(event)
     strongest_candidate_per_asset(candidates)
   end
 
@@ -137,10 +161,12 @@ class OntologyV2InfrastructureImpactService
       entity = membership.ontology_entity
       next unless asset_entity?(entity)
       next unless DIRECT_IMPACT_ROLES.include?(membership.role.to_s)
+      next unless relevant_for_infrastructure?(event)
 
+      relation_type = direct_impact_event?(event) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
       {
         entity: entity,
-        relation_type: IMPACTED_INFRASTRUCTURE,
+        relation_type: relation_type,
         confidence: [[membership.confidence.to_f, event.confidence.to_f].max, 0.95].min,
         basis: "direct_event_role",
         role: membership.role.to_s,
@@ -160,12 +186,12 @@ class OntologyV2InfrastructureImpactService
       distance = haversine_km(lat, lng, payload.fetch(:latitude), payload.fetch(:longitude))
       next if distance > radius_km
 
-      relation_type = disruptive_event?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
+      relation_type = nearby_impact_event?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
       {
         entity: asset,
         relation_type: relation_type,
         confidence: proximity_confidence(event, distance, radius_km, relation_type),
-        basis: "event_proximity",
+        basis: relation_type == IMPACTED_INFRASTRUCTURE ? "event_proximity_impact" : "event_proximity_exposure",
         distance_km: distance,
         radius_km: radius_km,
       }
@@ -283,7 +309,7 @@ class OntologyV2InfrastructureImpactService
   def recent_relevant_events_without_infrastructure_context
     linked_event_ids = relationship_scope.where(source_node_type: "OntologyEvent").pluck(:source_node_id).index_with(true)
     event_scope
-      .includes(:place_entity, :ontology_event_entities)
+      .includes(:place_entity, :primary_story_cluster, :ontology_event_entities)
       .select { |event| relevant_for_infrastructure?(event) && !linked_event_ids[event.id] }
       .first(50)
       .map do |event|
@@ -334,17 +360,90 @@ class OntologyV2InfrastructureImpactService
   end
 
   def relevant_for_infrastructure?(event)
-    return false if %w[diplomacy politics economy justice humanitarian].include?(event.event_family.to_s)
+    return false if non_infrastructure_context_event?(event)
 
-    event.event_family.to_s.in?(%w[conflict security infrastructure transport disaster cyber]) ||
-      event.event_type.to_s.match?(/\b(strike|attack|explosion|outage|fire|flood|storm|earthquake|crash)\b/i)
+    direct_impact_event?(event) ||
+      nearby_exposure_event?(event) ||
+      event.event_family.to_s.in?(%w[infrastructure transport disaster cyber])
   end
 
-  def disruptive_event?(event)
-    event_type_text = event.event_type.to_s.tr("_-", " ")
-    title_text = event.metadata["canonical_title"].to_s
-    event_type_text.match?(/\b(strike|attack|explosion|outage|fire|flood|storm|earthquake|crash)\b/i) ||
-      title_text.match?(/\b(hit|strike|strikes|struck|attack|attacks|damag|destroy|burn|closed|outage|blackout|disrupt)\b/i)
+  def nearby_infrastructure_context?(event)
+    relevant_for_infrastructure?(event) && nearby_exposure_event?(event) && trustworthy_point_location?(event)
+  end
+
+  def country_infrastructure_context?(event)
+    relevant_for_infrastructure?(event) && nearby_exposure_event?(event)
+  end
+
+  def direct_impact_event?(event)
+    nearby_impact_event?(event) || event_type_text(event).match?(/\b(outage|cyberattack)\b/i)
+  end
+
+  def nearby_impact_event?(event)
+    return false if non_infrastructure_context_event?(event)
+
+    event_type_text(event).match?(NEARBY_IMPACT_EVENT_PATTERN)
+  end
+
+  def nearby_exposure_event?(event)
+    return false if non_infrastructure_context_event?(event)
+
+    event_type_text(event).match?(NEARBY_EXPOSURE_EVENT_PATTERN) ||
+      event.event_family.to_s.in?(%w[infrastructure transport disaster cyber])
+  end
+
+  def non_infrastructure_context_event?(event)
+    return true if NON_INFRASTRUCTURE_EVENT_TYPES.include?(event.event_type.to_s)
+    return false if event_type_text(event).match?(NEARBY_EXPOSURE_EVENT_PATTERN)
+
+    NON_INFRASTRUCTURE_EVENT_FAMILIES.include?(event.event_family.to_s)
+  end
+
+  def event_type_text(event)
+    event.event_type.to_s.tr("_-", " ")
+  end
+
+  def trustworthy_point_location?(event)
+    lat, lng = event_coordinates(event)
+    return false if lat.blank? || lng.blank?
+    return false unless event.geo_precision.to_s == "point"
+    return false if event.geo_confidence.to_f < 0.45
+    return false if publisher_location_name?(event)
+
+    true
+  end
+
+  def publisher_location_name?(event)
+    location_names = [
+      event.metadata["location_name"],
+      event.primary_story_cluster&.location_name,
+      event.place_entity&.canonical_name,
+    ].compact_blank
+
+    location_names.any? { |value| known_news_source_name?(value) }
+  end
+
+  def known_news_source_name?(value)
+    normalized = normalize_source_name(value)
+    return false if normalized.blank?
+
+    known_news_source_names[normalized] ||
+      known_news_source_names[normalized.delete(" ")] ||
+      normalized.match?(MEDIA_LOCATION_PATTERN)
+  end
+
+  def known_news_source_names
+    @known_news_source_names ||= NewsSource.pluck(:name).each_with_object({}) do |name, memo|
+      normalized = normalize_source_name(name)
+      next if normalized.blank?
+
+      memo[normalized] = true
+      memo[normalized.delete(" ")] = true
+    end
+  end
+
+  def normalize_source_name(value)
+    value.to_s.downcase.gsub(/[^a-z0-9]+/, " ").squish.delete_prefix("the ")
   end
 
   def event_radius_km(event)

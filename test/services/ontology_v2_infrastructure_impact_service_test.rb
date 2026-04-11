@@ -132,6 +132,78 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     assert_not OntologyRelationship.exists?(source_node: second, target_node: asset, relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE)
   end
 
+  test "does not turn ceasefire reporting near an asset into impact" do
+    place = OntologyEntity.create!(
+      canonical_key: "place:tehran",
+      entity_type: "place",
+      canonical_name: "Tehran",
+      metadata: { "latitude" => 35.7, "longitude" => 51.4, "geo_precision" => "point" }
+    )
+    asset = OntologyEntity.create!(
+      canonical_key: "power-plant:tehran-test",
+      entity_type: "power_plant",
+      canonical_name: "Tehran Test Plant",
+      metadata: { "latitude" => 35.705, "longitude" => 51.405 }
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:ceasefire-with-strikes-title",
+      event_family: "conflict",
+      event_type: "ceasefire",
+      status: "active",
+      place_entity: place,
+      verification_status: "multi_source",
+      geo_precision: "point",
+      geo_confidence: 0.9,
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: { "canonical_title" => "Iran ceasefire under pressure as strikes continue" }
+    )
+
+    OntologyV2InfrastructureImpactService.sync_batch(now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_not OntologyRelationship.exists?(source_node: event, target_node: asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
+  end
+
+  test "ignores publisher-like locations for proximity impact" do
+    NewsSource.create!(
+      canonical_key: "source:the-washington-post",
+      name: "The Washington Post",
+      source_kind: "publisher",
+      publisher_domain: "washingtonpost.com"
+    )
+    place = OntologyEntity.create!(
+      canonical_key: "place:washington-post",
+      entity_type: "place",
+      canonical_name: "Washington Post",
+      metadata: { "latitude" => 35.7, "longitude" => 51.4, "geo_precision" => "point" }
+    )
+    asset = OntologyEntity.create!(
+      canonical_key: "military-base:publisher-location-test",
+      entity_type: "military_base",
+      canonical_name: "Publisher Location Test Base",
+      metadata: { "latitude" => 35.701, "longitude" => 51.401 }
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:publisher-location-strike",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      place_entity: place,
+      verification_status: "multi_source",
+      geo_precision: "point",
+      geo_confidence: 0.9,
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: { "canonical_title" => "Missile attack report", "location_name" => "Washington Post" }
+    )
+
+    OntologyV2InfrastructureImpactService.sync_batch(now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_not OntologyRelationship.exists?(source_node: event, target_node: asset, derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY)
+  end
+
   private
 
   def create_country

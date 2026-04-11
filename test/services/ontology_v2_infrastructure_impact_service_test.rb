@@ -100,6 +100,38 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     assert relationship.ontology_relationship_evidences.exists?(evidence: evidence, evidence_role: "event_primary_cluster")
   end
 
+  test "sync batch processes only the requested recent event window" do
+    asset = OntologyEntity.create!(
+      canonical_key: "port:batch-target",
+      entity_type: "port",
+      canonical_name: "Batch Target Port",
+      metadata: { "latitude" => 10.0, "longitude" => 20.0 }
+    )
+    first = create_event(nil)
+    second = OntologyEvent.create!(
+      canonical_key: "event:second-batch-target",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown",
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 46, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 1, 0),
+      metadata: { "canonical_title" => "Second target event" }
+    )
+    OntologyEventEntity.create!(ontology_event: first, ontology_entity: asset, role: "target")
+    OntologyEventEntity.create!(ontology_event: second, ontology_entity: asset, role: "target")
+
+    result = OntologyV2InfrastructureImpactService.sync_batch(batch_size: 1, now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_equal 1, result.fetch(:records_fetched)
+    assert_equal first.id, result.fetch(:next_cursor)
+    assert_not result.fetch(:complete)
+    assert OntologyRelationship.exists?(source_node: first, target_node: asset, relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE)
+    assert_not OntologyRelationship.exists?(source_node: second, target_node: asset, relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE)
+  end
+
   private
 
   def create_country

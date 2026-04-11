@@ -30,8 +30,9 @@ class SituationAssessmentService
 
     def situation_type_for(node, relationships: [])
       relation_types = relationships.map { |relationship| relationship[:relation_type].to_s }
-      return "infrastructure_disruption" if relation_types.include?("infrastructure_disruption")
-      return "infrastructure_exposure" if relation_types.include?("infrastructure_exposure")
+      return "infrastructure_disruption" if (relation_types & %w[infrastructure_disruption impacted_infrastructure]).any?
+      return "infrastructure_exposure" if (relation_types & %w[infrastructure_exposure exposed_infrastructure]).any?
+      return "conflict_report" if (relation_types & %w[targeted_entity affected_entity initiated_event participated_in_event involved_in_event]).any?
 
       if node[:node_type] == "event"
         return event_situation_type(node)

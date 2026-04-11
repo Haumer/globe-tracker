@@ -28,6 +28,10 @@ class OntologyV2EventGraphService
       new(now: now).sync
     end
 
+    def sync_batch(cursor: nil, batch_size: 500, now: Time.current)
+      new(now: now).sync_batch(cursor: cursor, batch_size: batch_size)
+    end
+
     def health_report(limit: 50)
       new.health_report(limit: limit)
     end
@@ -55,6 +59,40 @@ class OntologyV2EventGraphService
       end
 
       result[:health] = health_report
+    end
+
+    result
+  end
+
+  def sync_batch(cursor: nil, batch_size: 500)
+    limit = batch_size.to_i.clamp(1, 5_000)
+    events = event_scope
+      .where(cursor.present? ? ["ontology_events.id > ?", cursor.to_i] : nil)
+      .order(:id)
+      .limit(limit)
+      .includes(:place_entity, :ontology_evidence_links, ontology_event_entities: :ontology_entity)
+      .to_a
+    result = {
+      cursor: cursor,
+      next_cursor: events.size < limit ? nil : events.last&.id,
+      records_fetched: events.size,
+      records_stored: 0,
+      events: 0,
+      place_relationships: 0,
+      entity_relationships: 0,
+      relationship_evidences: 0,
+      complete: events.size < limit,
+    }
+
+    ActiveRecord::Base.transaction do
+      events.each do |event|
+        payload = sync_event(event)
+        result[:records_stored] += payload.fetch(:place_relationships) + payload.fetch(:entity_relationships)
+        result[:events] += 1
+        result[:place_relationships] += payload.fetch(:place_relationships)
+        result[:entity_relationships] += payload.fetch(:entity_relationships)
+        result[:relationship_evidences] += payload.fetch(:relationship_evidences)
+      end
     end
 
     result

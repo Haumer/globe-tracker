@@ -183,6 +183,37 @@ class SituationAssessmentServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "classifies v2 impacted infrastructure relationships as disruptions" do
+    asset = OntologyEntity.create!(
+      canonical_key: "port:v2-impact",
+      entity_type: "port",
+      canonical_name: "V2 Impact Port"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:v2-impact",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown",
+      metadata: { "canonical_title" => "Strike damages V2 Impact Port" }
+    )
+    OntologyRelationship.create!(
+      source_node: event,
+      target_node: asset,
+      relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE,
+      confidence: 0.84,
+      derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY,
+      explanation: "Strike damages V2 Impact Port."
+    )
+
+    assessment = SituationAssessmentService.for_node(kind: "entity", id: "port:v2-impact")
+
+    assert_equal "infrastructure_disruption", assessment[:situation_type]
+    assert_includes assessment[:observed].join(" "), "Strike damages V2 Impact Port"
+    assert_includes assessment[:watch_next].join(" "), "event graph"
+  end
+
   private
 
   def create_story_cluster(key:, title:)

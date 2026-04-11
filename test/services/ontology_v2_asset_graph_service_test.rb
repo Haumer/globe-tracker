@@ -82,6 +82,84 @@ class OntologyV2AssetGraphServiceTest < ActiveSupport::TestCase
     assert OntologyRelationship.exists?(source_node: port_entity, target_node: bahrain, relation_type: OntologyV2AssetGraphService::LOCATED_IN_COUNTRY)
   end
 
+  test "infers military base country from nearby airport when source country is blank" do
+    country = create_country
+    Airport.create!(
+      icao_code: "OKBK",
+      name: "Kuwait International Airport",
+      airport_type: "large_airport",
+      latitude: 29.2266,
+      longitude: 47.9689,
+      country_code: "KW"
+    )
+    base = MilitaryBase.create!(
+      external_id: "osm-base-kuwait",
+      name: "Kuwait Test Base",
+      base_type: "airfield",
+      latitude: 29.25,
+      longitude: 47.95,
+      source: "test"
+    )
+
+    result = OntologyV2AssetGraphService.sync_batch(target: "military_bases", batch_size: 10)
+
+    entity = OntologyEntity.find_by!(canonical_key: "military-base:osm-base-kuwait")
+    relationship = OntologyRelationship.find_by!(
+      source_node: entity,
+      target_node: country,
+      relation_type: OntologyV2AssetGraphService::LOCATED_IN_COUNTRY,
+      derived_by: OntologyV2AssetGraphService::DERIVED_BY
+    )
+
+    assert_equal 1, result.fetch(:records_fetched)
+    assert_equal base, entity.ontology_entity_links.find_by!(role: "military_base").linkable
+    assert_equal "nearest_airport", entity.metadata["country_inference"]
+    assert_equal "KW", entity.metadata["inferred_country_code"]
+    assert_equal OntologyV2AssetGraphService::INFERRED_COUNTRY_CONFIDENCE, relationship.confidence
+  end
+
+  test "infers cable landing countries from coordinate endpoints near ports" do
+    country = create_country
+    TradeLocation.create!(
+      locode: "KWKWI",
+      country_code: "KW",
+      country_code_alpha3: "KWT",
+      country_name: "Kuwait",
+      name: "Shuwaikh Port",
+      normalized_name: "shuwaikh port",
+      location_kind: "port",
+      latitude: 29.35,
+      longitude: 47.93,
+      status: "active",
+      source: "test"
+    )
+    cable = SubmarineCable.create!(
+      cable_id: "coordinate-gulf-link",
+      name: "Coordinate Gulf Link",
+      coordinates: [
+        [
+          [47.931, 29.351],
+          [48.25, 29.10],
+        ],
+      ]
+    )
+
+    OntologyV2AssetGraphService.sync_batch(target: "submarine_cables", batch_size: 10)
+
+    entity = OntologyEntity.find_by!(canonical_key: "submarine-cable:coordinate-gulf-link")
+    relationship = OntologyRelationship.find_by!(
+      source_node: entity,
+      target_node: country,
+      relation_type: OntologyV2AssetGraphService::LANDS_IN_COUNTRY,
+      derived_by: OntologyV2AssetGraphService::DERIVED_BY
+    )
+
+    assert_equal cable, entity.ontology_entity_links.find_by!(role: "submarine_cable").linkable
+    assert_equal "coordinate_endpoint_nearest_port_or_airport", entity.metadata["country_inference"]
+    assert_includes entity.metadata["inferred_country_codes"], "KW"
+    assert_equal OntologyV2AssetGraphService::INFERRED_CABLE_COUNTRY_CONFIDENCE, relationship.confidence
+  end
+
   private
 
   def create_country

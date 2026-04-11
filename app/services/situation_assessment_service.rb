@@ -15,17 +15,45 @@ class SituationAssessmentService
     notam
     ship
   ].freeze
-  OBSERVED_RELATIONSHIP_TYPES = %w[operational_activity local_corroboration].freeze
-  ACTIONABLE_RELATIONSHIP_TYPES = %w[infrastructure_disruption infrastructure_exposure operational_activity local_corroboration theater_pressure].freeze
+  OBSERVED_RELATIONSHIP_TYPES = %w[impacted_infrastructure operational_activity local_corroboration].freeze
+  ACTIONABLE_RELATIONSHIP_TYPES = %w[
+    affected_entity
+    exposed_infrastructure
+    impacted_infrastructure
+    infrastructure_disruption
+    infrastructure_exposure
+    initiated_event
+    involved_in_event
+    local_corroboration
+    occurred_at
+    operational_activity
+    participated_in_event
+    targeted_entity
+    theater_pressure
+  ].freeze
   INFERRED_RELATIONSHIP_TYPES = %w[
+    affected_asset
+    affected_entity
     chokepoint_exposure
     downstream_exposure
     economic_profile
+    exposed_infrastructure
     flow_dependency
+    hosted_event
+    impacted_infrastructure
     infrastructure_disruption
     infrastructure_exposure
+    initiated_event
     import_dependency
+    involved_in_event
+    lands_in_country
+    located_in_country
+    occurred_at
+    participated_in_event
+    place_resolves_to_country
     production_dependency
+    represents_country
+    targeted_entity
     theater_pressure
   ].freeze
 

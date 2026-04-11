@@ -87,6 +87,22 @@ class OntologyV2EventGraphServiceTest < ActiveSupport::TestCase
     assert OntologyRelationship.exists?(source_node: event, target_node: target, relation_type: "targeted_entity")
   end
 
+  test "sync batch processes only the requested cursor window" do
+    first = create_event("event:first")
+    second = create_event("event:second")
+    actor = create_entity("actor:state:ir", "actor", "Iran")
+    OntologyEventEntity.create!(ontology_event: first, ontology_entity: actor, role: "initiator")
+    OntologyEventEntity.create!(ontology_event: second, ontology_entity: actor, role: "initiator")
+
+    result = OntologyV2EventGraphService.sync_batch(batch_size: 1)
+
+    assert_equal 1, result.fetch(:records_fetched)
+    assert_equal first.id, result.fetch(:next_cursor)
+    assert_not result.fetch(:complete)
+    assert OntologyRelationship.exists?(source_node: actor, target_node: first, relation_type: "initiated_event")
+    assert_not OntologyRelationship.exists?(source_node: actor, target_node: second, relation_type: "initiated_event")
+  end
+
   private
 
   def create_event(canonical_key, place_entity: nil)

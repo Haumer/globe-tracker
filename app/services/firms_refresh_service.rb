@@ -6,7 +6,7 @@ class FirmsRefreshService
   include TimelineRecorder
   include RefreshableDataService
 
-  RETENTION_WINDOW = 7.days
+  RETENTION_WINDOW = ENV.fetch("FIRMS_RETENTION_DAYS", 30).to_i.clamp(1, 180).days
 
   SOURCES = {
     "VIIRS_SNPP_NRT" => "Suomi NPP",

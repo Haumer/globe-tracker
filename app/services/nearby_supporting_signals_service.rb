@@ -23,7 +23,7 @@ class NearbySupportingSignalsService
     ).call
   end
 
-  def self.cross_layer_signals(object_kind:, latitude:, longitude:, window: DEFAULT_WINDOW)
+  def self.cross_layer_signals(object_kind:, latitude:, longitude:, window: DEFAULT_WINDOW, conflict_context: false)
     payload = call(
       object_kind: object_kind,
       latitude: latitude,
@@ -40,8 +40,8 @@ class NearbySupportingSignalsService
     {}.tap do |signals|
       thermal_count = aggregate[:thermal_count].to_i
       verified_count = aggregate[:verified_count].to_i
-      signals[:strike_signals_7d] = thermal_count if thermal_count.positive?
       signals[:verified_strike_reports_7d] = verified_count if verified_count.positive?
+      signals[:strike_signals_7d] = thermal_count if thermal_count.positive? && (conflict_context || verified_count.positive?)
     end
   end
 
@@ -113,15 +113,15 @@ class NearbySupportingSignalsService
 
     {
       key: "strikes",
-      title: "Strike Signals",
-      note: "Heat signatures trail live reporting and work best as short-window corroboration around the current focus.",
+      title: verified_count.positive? ? "Strike Reports / Thermal Detections" : "Thermal Detections",
+      note: supporting_signal_note(verified_count: verified_count),
       aggregate: {
         thermal_count: thermal_count,
         verified_count: verified_count,
       },
       metrics: [
-        { label: "Thermal / #{(@window / 1.day).to_i}d", value: thermal_count },
-        { label: "Verified / #{(@window / 1.day).to_i}d", value: verified_count },
+        { label: "Thermal detections / #{(@window / 1.day).to_i}d", value: thermal_count },
+        { label: "Verified strike reports / #{(@window / 1.day).to_i}d", value: verified_count },
         {
           label: "Last Activity",
           value: items.first&.dig(:at),
@@ -135,7 +135,7 @@ class NearbySupportingSignalsService
 
   def hotspot_signal_payload(hotspot)
     observed_at = hotspot.acq_datetime || hotspot.created_at
-    title = hotspot.frp.to_f >= 80 ? "High-FRP thermal strike signal" : "Thermal strike signal"
+    title = hotspot.frp.to_f >= 80 ? "High-FRP thermal detection" : "Thermal detection"
     detail_bits = []
     detail_bits << "FRP #{format('%.1f', hotspot.frp)}" if hotspot.frp.present?
     detail_bits << "#{hotspot.brightness.round} brightness" if hotspot.brightness.present?
@@ -152,6 +152,14 @@ class NearbySupportingSignalsService
       detail: detail_bits.join(" · ").presence,
       at: observed_at,
     }
+  end
+
+  def supporting_signal_note(verified_count:)
+    if verified_count.to_i.positive?
+      "Verified strike reports carry the strike interpretation; thermal detections are only corroborating context."
+    else
+      "Raw satellite fire/heat detections. Treat as environmental or incident context unless corroborated by strike reporting."
+    end
   end
 
   def geoconfirmed_scope

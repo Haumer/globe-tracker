@@ -47,12 +47,12 @@ class FirmsRefreshServiceTest < ActiveSupport::TestCase
     assert FirmsRefreshService::SOURCES.key?("MODIS_NRT")
   end
 
-  test "after_upsert keeps seven days of hotspots and clears stale timeline rows" do
+  test "after_upsert keeps thermal detections for baseline windows and clears stale timeline rows" do
     stale = FireHotspot.create!(
       external_id: "stale-fire",
       latitude: 35.7,
       longitude: 51.4,
-      acq_datetime: 8.days.ago,
+      acq_datetime: 31.days.ago,
       fetched_at: Time.current
     )
     stale_timeline = TimelineEvent.create!(
@@ -67,7 +67,7 @@ class FirmsRefreshServiceTest < ActiveSupport::TestCase
       external_id: "recent-fire",
       latitude: 35.8,
       longitude: 51.5,
-      acq_datetime: 6.days.ago,
+      acq_datetime: 20.days.ago,
       fetched_at: Time.current
     )
 

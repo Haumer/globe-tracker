@@ -166,6 +166,59 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     zone = result.first
     assert zone[:cross_layer_signals][:military_flights], "Should detect military flights"
     assert_equal 1, zone[:cross_layer_signals][:strike_signals_7d]
+    assert_equal "kinetic_conflict", zone[:analysis_context]
+  end
+
+  test "does not treat thermal detections as strike signals in public order contexts" do
+    5.times do |i|
+      NewsEvent.create!(
+        url: "https://example.com/uk-public-order-#{i}",
+        title: "Public order disruption in Bolton #{i}",
+        latitude: 51.0,
+        longitude: -1.0,
+        tone: -5.0,
+        category: "conflict",
+        credibility: "tier4/low",
+        source: ["local-a", "local-b", "local-c"][i % 3],
+        published_at: (i * 2).hours.ago,
+        fetched_at: Time.current,
+      )
+    end
+
+    FireHotspot.create!(
+      external_id: "pulse-public-order-fire-001",
+      latitude: 51.1,
+      longitude: -1.1,
+      brightness: 351.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 60.0,
+      daynight: "N",
+      acq_datetime: 12.hours.ago,
+      fetched_at: Time.current
+    )
+
+    data = ConflictPulseService.analyze
+    zone = (data[:zones] || []).find { |candidate| candidate[:situation_name] == "United Kingdom" }
+
+    assert zone, "Should detect the public order cluster"
+    assert_equal "public_order_or_security", zone[:analysis_context]
+    assert_nil zone[:cross_layer_signals][:strike_signals_7d]
+    assert_nil zone[:cross_layer_signals][:fire_hotspots]
+  end
+
+  test "does not classify generic European drone incidents as kinetic conflict" do
+    article = Struct.new(:title).new("Drone sighting over Denmark disrupts airport operations")
+
+    result = ConflictPulseService.new.send(
+      :kinetic_conflict_context?,
+      theater: "Europe",
+      situation_name: "Denmark",
+      articles: [article]
+    )
+
+    refute result
   end
 
   test "caches results when cache store supports it" do

@@ -1036,7 +1036,7 @@ class CrossLayerAnalyzerTest < ActiveSupport::TestCase
       assert insight
       assert_equal "critical", insight[:severity]
       assert_includes insight[:description], "3 mil flights"
-      assert_includes insight[:description], "2 lagging strike signals"
+      assert_includes insight[:description], "2 thermal detections in kinetic scope"
       assert_equal "Middle East / Iran War", insight.dig(:entities, :theater, :name)
       assert_equal 1, insight.dig(:entities, :supporting_signals, :verified)
     ensure

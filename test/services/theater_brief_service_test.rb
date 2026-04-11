@@ -35,6 +35,43 @@ class TheaterBriefServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "public order theater prompts suppress kinetic thermal signals" do
+    zone = {
+      theater: "Europe",
+      cell_key: "50,-2",
+      situation_name: "United Kingdom",
+      analysis_context: "public_order_or_security",
+      pulse_score: 80,
+      escalation_trend: "escalating",
+      count_24h: 9,
+      source_count: 7,
+      story_count: 8,
+      spike_ratio: 3.0,
+      avg_tone: -5.7,
+      cross_layer_signals: {
+        military_flights: 4,
+        strike_signals_7d: 2704,
+        fire_hotspots: 12,
+      },
+      top_articles: [
+        {
+          title: "Man arrested after crash causes rush hour disruption in Bolton",
+          publisher: "Local outlet",
+          published_at: 2.hours.ago.iso8601,
+        },
+      ],
+      detected_at: Time.current.iso8601,
+    }
+
+    prompt = TheaterBriefService.send(:build_prompt, zone)
+
+    assert_includes prompt, "Analytic context: public_order_or_security"
+    assert_includes prompt, "- nearby military flights count: 4"
+    refute_includes prompt, "strike signals 7d"
+    refute_includes prompt, "fire hotspots"
+    assert_includes prompt, "Do NOT use war, battlefield, strike, operational-tempo, preparatory, or destabilization language"
+  end
+
   private
 
   def sample_zone
@@ -49,6 +86,7 @@ class TheaterBriefServiceTest < ActiveSupport::TestCase
       story_count: 5,
       spike_ratio: 7.0,
       avg_tone: -3.6,
+      analysis_context: "kinetic_conflict",
       cross_layer_signals: { military_flights: 8, gps_jamming: 27 },
       top_articles: [
         {

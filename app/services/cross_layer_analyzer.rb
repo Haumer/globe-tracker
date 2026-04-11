@@ -705,8 +705,8 @@ class CrossLayerAnalyzer
       signal_parts << "#{signals[:military_flights]} mil flights" if signals[:military_flights]
       signal_parts << "GPS jamming #{signals[:gps_jamming]}%" if signals[:gps_jamming]
       signal_parts << "internet outage" if signals[:internet_outage]
-      signal_parts << "#{signals[:fire_hotspots]} fires" if signals[:fire_hotspots]
-      signal_parts << "#{signals[:strike_signals_7d]} lagging strike signals" if signals[:strike_signals_7d]
+      signal_parts << "#{signals[:fire_hotspots]} fire hotspots in kinetic scope" if signals[:fire_hotspots]
+      signal_parts << "#{signals[:strike_signals_7d]} thermal detections in kinetic scope" if signals[:strike_signals_7d]
       signal_parts << "#{signals[:verified_strike_reports_7d]} verified strike reports" if signals[:verified_strike_reports_7d]
 
       desc = "#{zone[:count_24h]} reports from #{zone[:source_count]} sources (#{zone[:escalation_trend]})"

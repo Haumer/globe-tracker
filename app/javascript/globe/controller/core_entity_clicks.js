@@ -325,6 +325,19 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showRailwayDetail(id)
         return true
       }},
+      { prefix: "surface-poly-", skip: [], handler: (id) => {
+        const key = id.replace(/-\d+$/, "")
+        const data = this._situationSurfaceByEntityKey?.(key)
+        if (!data) return false
+        this.showSituationSurfaceDetail(data)
+        return true
+      }},
+      { prefix: "surface-label-", skip: [], handler: (id) => {
+        const data = this._situationSurfaceByEntityKey?.(id)
+        if (!data) return false
+        this.showSituationSurfaceDetail(data)
+        return true
+      }},
       { prefix: "cpulse-arc-lbl-", handler: (id) => {
         const idx = parseInt(id, 10)
         const arc = this._strikeArcData?.[idx]

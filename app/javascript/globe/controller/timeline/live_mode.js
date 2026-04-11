@@ -18,6 +18,7 @@ export function pauseTimelineLive(controller) {
   }
   controller._pauseWeatherForTimeline?.()
   controller._stopInsightPolling?.({ clearData: false })
+  controller._stopSituationSurfaces?.({ clearData: false })
 
   if (controller._conflictPulseInterval) {
     clearInterval(controller._conflictPulseInterval)
@@ -26,7 +27,7 @@ export function pauseTimelineLive(controller) {
   controller._clearConflictPulseEntities?.()
   controller._lastConflictPulseBucket = null
 
-  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflicts", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
+  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflicts", "fires", "weather", "notams", "financial", "insights", "situationSurfaces", "satellites", "sat-orbits"])
   controller._timelineHiddenSources = []
   for (const [name, ds] of Object.entries(controller._ds)) {
     if (!liveDataSources.has(name)) continue
@@ -97,6 +98,7 @@ export function resumeTimelineLive(controller) {
   controller._resumeWeatherFromTimeline?.()
   controller._resumeNotamsFromTimeline?.()
   if (controller.insightsVisible) controller._startInsightPolling?.()
+  if (controller.situationSurfacesVisible) controller._startSituationSurfaces?.()
   if (Object.values(controller.satCategoryVisible || {}).some(Boolean)) {
     controller._refreshLiveSatelliteCategories?.()
   }
@@ -107,7 +109,7 @@ export function resumeTimelineLive(controller) {
 }
 
 export function clearTimelineLiveEntities(controller) {
-  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflicts", "fires", "weather", "notams", "financial", "insights", "satellites", "sat-orbits"])
+  const liveDataSources = new Set(["flights", "mil-flights", "ships", "naval-vessels", "trails", "events", "gpsJamming", "news", "outages", "traffic", "conflicts", "fires", "weather", "notams", "financial", "insights", "situationSurfaces", "satellites", "sat-orbits"])
   for (const [name, source] of Object.entries(controller._ds)) {
     if (liveDataSources.has(name) && source) source.entities.removeAll()
   }
@@ -144,6 +146,7 @@ function restoreHiddenSources(controller) {
   if (controller.notamsVisible) activeDs.add("notams")
   if (controller.financialVisible) activeDs.add("financial")
   if (controller.insightsVisible) activeDs.add("insights")
+  if (controller.situationSurfacesVisible) activeDs.add("situationSurfaces")
   if (controller.fireHotspotsVisible) activeDs.add("fires")
   if (Object.values(controller.satCategoryVisible || {}).some(Boolean)) activeDs.add("satellites")
   if (controller.satOrbitsVisible) activeDs.add("sat-orbits")

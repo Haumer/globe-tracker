@@ -155,6 +155,7 @@ export function applyWorkspaceMethods(GlobeController) {
         powerPlants: this.powerPlantsVisible,
         commoditySites: this.commoditySitesVisible,
         conflicts: this.conflictsVisible,
+        situationSurfaces: this.situationSurfacesVisible,
         traffic: this.trafficVisible,
         notams: this.notamsVisible,
         strikeArcs: this._strikeArcsVisible,
@@ -263,6 +264,7 @@ export function applyWorkspaceMethods(GlobeController) {
       ["powerPlantsVisible", "powerPlantsToggle", "togglePowerPlants"],
       ["commoditySitesVisible", "commoditySitesToggle", "toggleCommoditySites"],
       ["conflictsVisible", "conflictsToggle", "toggleConflicts"],
+      ["situationSurfacesVisible", "situationSurfacesToggle", "toggleSituationSurfaces"],
       ["trafficVisible", "trafficToggle", "toggleTraffic"],
       ["notamsVisible", "notamsToggle", "toggleNotams"],
     ]

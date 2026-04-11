@@ -112,6 +112,7 @@ function buildLayerPrefs() {
     powerPlants: this.powerPlantsVisible,
     commoditySites: this.commoditySitesVisible,
     conflicts: this.conflictsVisible,
+    situationSurfaces: this.situationSurfacesVisible,
     situations: this.situationsVisible,
     traffic: this.trafficVisible,
     notams: this.notamsVisible,
@@ -209,6 +210,7 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.powerPlants, "powerPlantsToggle", "togglePowerPlants")
   toggleIf.call(this, l.commoditySites, "commoditySitesToggle", "toggleCommoditySites")
   toggleIf.call(this, l.conflicts, "conflictsToggle", "toggleConflicts")
+  toggleIf.call(this, l.situationSurfaces, "situationSurfacesToggle", "toggleSituationSurfaces")
 
   if (this.hasStrikeArcsToggleTarget) {
     const enabled = l.strikeArcs === true

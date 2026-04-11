@@ -70,6 +70,7 @@ Rails.application.routes.draw do
     resources :strikes, only: [:index]
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]
+    resources :situation_surfaces, only: [:index]
     get "node_context", to: "node_contexts#show"
     get "situation_assessments", to: "situation_assessments#index"
     get "situation_assessment", to: "situation_assessments#show"

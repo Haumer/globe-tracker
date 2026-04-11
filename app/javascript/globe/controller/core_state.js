@@ -48,6 +48,7 @@ const INTERVAL_PROPS = [
   "_milFlightInterval",
   "_financialInterval",
   "_conflictPulseInterval",
+  "_situationSurfaceInterval",
   "_timelinePlaybackRefreshInterval",
   "_firesInterval",
   "_miniTimelineInterval",
@@ -381,6 +382,17 @@ export function initializeCoreState(controller) {
   controller._hexCellData = []
   controller._strikeArcsVisible = false
   controller._hexTheaterVisible = false
+  controller.situationSurfacesVisible = false
+  controller._situationSurfaceData = []
+  controller._situationSurfaceEntities = []
+  controller._situationSurfaceInterval = null
+  controller._situationSurfaceFetchToken = 0
+  controller._situationSurfaceRenderToken = 0
+  controller._situationSurfaceSnapshotStatus = null
+  controller._situationSurfaceCountryFeatures = []
+  controller._situationSurfaceCountryFetch = null
+  controller._situationSurfaceBoundaryFeatures = {}
+  controller._situationSurfaceBoundaryFetches = {}
   controller.chokepointsVisible = false
   controller._chokepointData = []
   controller._chokepointEntities = []

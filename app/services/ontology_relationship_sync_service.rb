@@ -45,6 +45,8 @@ class OntologyRelationshipSyncService
     include FlowDependencyMethods
     include DownstreamExposureMethods
     include OperationalActivityMethods
+    include InfrastructureDisruptionEventMethods
+    include InfrastructureDisruptionAssetMethods
     include InfrastructureDisruptionMethods
     include LocalCorroborationMethods
 

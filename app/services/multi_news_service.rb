@@ -355,15 +355,20 @@ class MultiNewsService
       }
       next if mapped[:url].blank?
 
-      lat, lng = resolve_location(mapped[:country], mapped[:title], mapped[:url])
-      next unless lat && lng
+      location = LocationResolver.resolve_event(
+        title: mapped[:title],
+        summary: mapped[:summary],
+        country_hint: mapped[:country],
+        url: mapped[:url]
+      )
+      next unless location&.coordinates
 
       records << build_record(
         url: mapped[:url],
         title: mapped[:title],
         summary: mapped[:summary],
         name: mapped[:name],
-        lat: lat, lng: lng,
+        location: location,
         tone: mapped[:tone],
         published_at: parse_time(mapped[:published_at]),
         category: mapped[:category],
@@ -424,17 +429,15 @@ class MultiNewsService
     { records: [], ingest_items: [] }
   end
 
-  def build_record(url:, title:, summary:, name:, lat:, lng:, tone:, published_at:, category:, themes:, source:)
+  def build_record(url:, title:, summary:, name:, location:, tone:, published_at:, category:, themes:, source:)
     now = Time.current
     tone_val = tone.to_f
     classification_text = [ title, summary ].compact.join(" ")
     threat = ThreatClassifier.classify(classification_text)
-    {
+    LocationResolver.news_event_attributes(location).merge(
       url: url,
       title: title&.truncate(500),
       name: name&.truncate(200),
-      latitude: lat,
-      longitude: lng,
       tone: tone_val.round(1),
       level: ThreatClassifier.tone_level(tone_val),
       category: preferred_category(category) || threat[:category],
@@ -444,7 +447,7 @@ class MultiNewsService
       source: source,
       created_at: now,
       updated_at: now,
-    }
+    )
   end
 
   def parse_time(str)

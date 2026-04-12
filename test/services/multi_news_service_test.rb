@@ -19,8 +19,14 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
       title: "Test Article",
       summary: "Missile strike raises tensions",
       name: "Test Source",
-      lat: 48.2,
-      lng: 16.3,
+      location: LocationResolver::Result.new(
+        latitude: 48.2,
+        longitude: 16.3,
+        basis: "test",
+        precision: "point",
+        kind: "event",
+        confidence: 0.9
+      ),
       tone: -3.5,
       published_at: Time.current,
       category: nil,
@@ -35,6 +41,8 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
     assert_in_delta 16.3, record[:longitude], 0.01
     assert_in_delta(-3.5, record[:tone], 0.01)
     assert_equal "worldnews", record[:source]
+    assert_equal "test", record[:geocode_basis]
+    assert_equal "event", record[:geocode_kind]
     assert_kind_of Array, record[:themes]
     assert_not_nil record[:level]
     assert_not_nil record[:fetched_at]
@@ -134,14 +142,11 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
         data: {
           "news" => [
             { "title" => "missing url" },
-            { "url" => "https://example.com/articles/ok", "title" => "Port closures raise costs", "description" => "Example", "published_at" => Time.current.iso8601 },
+            { "url" => "https://example.com/articles/ok", "title" => "Port closures raise costs in London", "description" => "Example", "published_at" => Time.current.iso8601 },
           ],
         },
         http_status: 200,
       }
-    end
-    @service.singleton_class.send(:define_method, :resolve_location) do |_country, _title, _url|
-      [48.2, 16.3]
     end
 
     result = @service.send(:fetch_source, config)

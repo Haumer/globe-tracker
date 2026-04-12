@@ -146,7 +146,8 @@ class TheaterBriefService
           sources: zone[:source_count],
           stories: zone[:story_count],
           spike_ratio: zone[:spike_ratio],
-          corroborating_signals: Array(zone[:cross_layer_signals]).size,
+          analysis_context: analysis_context_for(zone),
+          corroborating_signals: brief_signals(zone).size,
           detected_at: zone[:detected_at],
         }.compact,
       }.deep_stringify_keys
@@ -163,7 +164,8 @@ class TheaterBriefService
         source_count: zone[:source_count].to_i,
         story_count: zone[:story_count].to_i,
         spike_ratio: zone[:spike_ratio].to_f.round(2),
-        signals: (zone[:cross_layer_signals] || {}).to_h.transform_keys(&:to_s).sort.to_h,
+        analysis_context: analysis_context_for(zone),
+        signals: brief_signals(zone).transform_keys(&:to_s).sort.to_h,
         headlines: Array(zone[:top_articles]).first(4).map do |article|
           {
             title: article[:title].to_s,
@@ -180,7 +182,8 @@ class TheaterBriefService
         published = article[:published_at].presence || "unknown time"
         "- #{article[:title]} (#{publisher}; #{published})"
       end
-      signal_lines = (zone[:cross_layer_signals] || {}).map { |key, value| "- #{key.to_s.tr('_', ' ')}: #{value}" }
+      signal_lines = brief_signals(zone).map { |key, value| "- #{brief_signal_label(key)}: #{value}" }
+      analysis_context = analysis_context_for(zone)
 
       <<~PROMPT
         You are writing an operational theater brief for GlobeTracker, a situational-awareness platform.
@@ -200,6 +203,11 @@ class TheaterBriefService
         - NEVER restate metrics the analyst can already see (pulse score, report count, source count, spike ratio). These are displayed separately. Instead, explain WHAT IS HAPPENING and WHY IT MATTERS.
         - Synthesize across signal types: if military flights + GPS jamming + conflict reporting all converge, say what that convergence implies operationally. A good assessment connects dots the dashboard cannot.
         - If corroborating signals (jamming, military flights, outages, fires) are present, the assessment MUST reference what they indicate together — not list them individually.
+        - Treat "military flights" as a count only. NEVER call it an increase, mobilization, preparation, or internal-security response unless the input explicitly gives a baseline delta or reporting that says so.
+        - If Analytic context is "public_order_or_security", write in public-order/cyber/local-disruption terms. Do NOT use war, battlefield, strike, operational-tempo, preparatory, or destabilization language unless reporting explicitly says that.
+        - NEVER claim coordinated pressure, multi-front pressure, or a shared campaign unless the reporting explicitly names coordination, a shared actor, or a linked operation.
+        - Cyber reporting is not critical-infrastructure disruption unless the input says there was an outage, physical impact, operational interruption, or state/critical-infrastructure target. A diverted payment or fraud story is financial/cyber risk, not infrastructure disruption.
+        - Thermal/fire detections are only relevant if they appear below in a kinetic-conflict scope. If absent, do not infer strikes from fires or heat.
         - "why_we_believe_it" should cite the STRONGEST 2-3 evidence pillars, not exhaustively list every metric. Lead with cross-layer corroboration if available.
         - "key_developments" should highlight what CHANGED recently — new reporting, new signals, shifts in pattern — not restate the baseline.
         - "watch_next" should name specific, observable indicators that would confirm or disconfirm the current read.
@@ -211,6 +219,7 @@ class TheaterBriefService
         THEATER
         Name: #{zone[:theater] || "Unattributed theater"}
         Situation: #{zone[:situation_name] || "Developing situation"}
+        Analytic context: #{analysis_context}
         Pulse score: #{zone[:pulse_score] || 0}
         Trend: #{zone[:escalation_trend] || "unknown"}
         Reports / 24h: #{zone[:count_24h] || 0}
@@ -226,6 +235,26 @@ class TheaterBriefService
         TOP REPORTING
         #{top_articles.any? ? top_articles.join("\n") : "- none"}
       PROMPT
+    end
+
+    def analysis_context_for(zone)
+      zone[:analysis_context].presence || "public_order_or_security"
+    end
+
+    def brief_signals(zone)
+      signals = (zone[:cross_layer_signals] || {}).to_h.transform_keys(&:to_sym)
+      return signals if analysis_context_for(zone) == "kinetic_conflict"
+
+      signals.except(:fire_hotspots, :strike_signals_7d)
+    end
+
+    def brief_signal_label(key)
+      {
+        fire_hotspots: "fire hotspots in kinetic conflict scope",
+        military_flights: "nearby military flights count",
+        strike_signals_7d: "thermal detections in kinetic conflict scope",
+        verified_strike_reports_7d: "verified strike reports",
+      }.fetch(key.to_sym, key.to_s.tr("_", " "))
     end
 
     def generate_brief_payload(zone)

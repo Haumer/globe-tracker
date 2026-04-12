@@ -54,6 +54,7 @@ class GlobalPollerService
     { job: RefreshCommodityPricesJob, every: 1.hour, offset: 0.minutes },
     { job: PurgeStaleDataJob, every: 1.hour, offset: 10.minutes },
     { job: RecheckStaleCamerasJob, every: 1.hour, offset: 20.minutes },
+    { job: RefreshNewsGeocodeBackfillJob, every: 1.hour, offset: 25.minutes },
     { job: GenerateBriefJob, every: 1.hour, offset: 50.minutes, conditional: :brief_missing? },
     { job: RefreshAcledJob, every: 6.hours, offset: 0.minutes },
     { job: RefreshGeoconfirmedJob, every: 6.hours, offset: 15.minutes },
@@ -72,6 +73,7 @@ class GlobalPollerService
     { job: RefreshTradeLocationsJob, every: 7.days, offset: 12.hours },
     { job: RefreshSupplyChainDerivationsJob, every: 24.hours, offset: 13.hours },
     { job: RefreshSupplyChainOntologyJob, every: 24.hours, offset: 13.hours + 15.minutes },
+    { job: RefreshPlaceGazetteerJob, every: 24.hours, offset: 14.hours },
   ].freeze
 
   LIVE_LAYER_CADENCES = {

@@ -27,6 +27,9 @@ class NewsEnrichmentServiceTest < ActiveSupport::TestCase
     assert_nil article.story_cluster_id
     assert_in_delta 33.31, article.latitude, 0.5
     assert_in_delta 44.37, article.longitude, 0.5
+    assert_equal "ai_city_country", article.geocode_basis
+    assert_equal "event", article.geocode_kind
+    assert_operator article.geocode_confidence, :>=, NewsEvent::TRUSTED_EVENT_GEOCODE_CONFIDENCE
   end
 
   test "resolve_ai_location finds city coordinates" do

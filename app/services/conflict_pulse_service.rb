@@ -6,6 +6,7 @@ class ConflictPulseService
   MIN_SOURCES = 2      # require multi-source confirmation
   MIN_TONE = 1.5       # filter out low-intensity articles (|tone| < 1.5)
   MIN_PULSE_SCORE = 20
+  MIN_EVENT_LOCATION_CONFIDENCE = 0.7
   MAX_RESULTS = 25
   STRATEGIC_STORY_WINDOW = 7.days
   STRATEGIC_STORY_FRESH_WINDOW = 72.hours
@@ -15,6 +16,8 @@ class ConflictPulseService
   STRATEGIC_MIN_FRESH_CLUSTERS = 3
   STRATEGIC_MIN_TOTAL_SOURCES = 4
   CORROBORATED_CLUSTER_STATUSES = %w[multi_source cross_layer_corroborated].freeze
+  KINETIC_CONFLICT_THEATER_PATTERN = /\b(war|front|gaza|israel|palestine|iran|ukraine|russia|yemen|syria|iraq|afghanistan|pakistan|myanmar|sudan|somalia|libya|hormuz|red sea)\b/i
+  KINETIC_EVENT_PATTERN = /\b(airstrikes?|missiles?|rockets?|shell(?:ing|ed)?|bomb(?:ing|ardment)?|ceasefire|truce|drone\s+(?:strike|attack|attacks)|(?:strike|attack|attacks)\s+(?:by|with\s+)?drones?|pvo|bpla|frappe(?:s)?|frap(?:pe|pes)|attaque russe|russian attack|atakuvali|atakuvaly|atacou|atacaron|atacado)\b/i
   DIRECT_STORY_TERMS = %w[
     shipping ship ships tanker tankers maritime vessel vessels navigation transit
     blockade blocked blocking reopen reopened closure closed lane lanes
@@ -330,7 +333,8 @@ class ConflictPulseService
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :title, :url, :name, :latitude, :longitude, :tone, :source, :category,
-              :threat_level, :credibility, :story_cluster_id, :published_at, :news_source_id)
+              :threat_level, :credibility, :story_cluster_id, :published_at, :news_source_id,
+              :news_ingest_id, :news_article_id, :geocode_basis, :geocode_kind, :geocode_confidence)
     source_names_by_id = NewsSource.where(id: articles.distinct.pluck(:news_source_id).compact)
       .pluck(:id, :name)
       .to_h
@@ -343,20 +347,10 @@ class ConflictPulseService
     articles.find_each do |a|
       next if a.tone && a.tone.abs < MIN_TONE
       next if a.title&.match?(noise_patterns)
-      # Check if headline mentions a conflict region far from the article's stored location
-      event_loc = detect_event_location(a.title)
-      # Also check: article geocoded to a media capital but headline mentions a conflict zone
-      event_loc ||= reaction_city_rebucket(a)
-      if event_loc
-        event_cell = cell_key(event_loc[0], event_loc[1])
-        stored_cell = cell_key(a.latitude, a.longitude)
-        if event_cell != stored_cell
-          # Article is about a conflict elsewhere — count it toward the event location
-          cells[event_cell] << a
-          next
-        end
-      end
-      cells[cell_key(a.latitude, a.longitude)] << a
+      event_loc = article_event_location(a)
+      next unless event_loc
+
+      cells[cell_key(event_loc[0], event_loc[1])] << a
     end
 
     now = @reference_time
@@ -409,11 +403,29 @@ class ConflictPulseService
       # Categories breakdown
       categories = articles_24h.group_by(&:category).transform_values(&:size)
 
-      # Cross-layer signals
-      signals = cross_layer_signals(centroid_lat, centroid_lng)
-
       # Tier breakdown for transparency
       tier_counts = articles_24h.each_with_object(Hash.new(0)) { |a, h| h[extract_tier(a)] += 1 }
+
+      # Top articles — prefer high-tier sources, include URL for clickthrough
+      top_articles = articles_24h
+        .sort_by { |a| [-extract_tier_num(a), -a.published_at.to_i] }
+        .uniq(&:title).first(5)
+      top_headlines = top_articles.map(&:title)
+
+      situation_name = self.class.infer_situation_name(
+        lat: centroid_lat,
+        lng: centroid_lng,
+        text: top_headlines.join(" ")
+      )
+      theater = self.class.infer_theater(lat: centroid_lat, lng: centroid_lng, situation_name: situation_name)
+      kinetic_context = kinetic_conflict_context?(
+        theater: theater,
+        situation_name: situation_name,
+        articles: articles_24h
+      )
+
+      # Cross-layer signals
+      signals = cross_layer_signals(centroid_lat, centroid_lng, conflict_context: kinetic_context)
 
       # Pulse score (0-100) — weighted
       freq_score = [weighted_24h / 6.0 * 25, 25].min        # 6 weighted = max (e.g., 2 tier-1 articles)
@@ -449,16 +461,13 @@ class ConflictPulseService
         "baseline"
       end
 
-      # Top articles — prefer high-tier sources, include URL for clickthrough
-      top_articles = articles_24h
-        .sort_by { |a| [-extract_tier_num(a), -a.published_at.to_i] }
-        .uniq(&:title).first(5)
-      top_headlines = top_articles.map(&:title)
-
       {
         cell_key: key,
         lat: centroid_lat.round(2),
         lng: centroid_lng.round(2),
+        situation_name: situation_name,
+        theater: theater,
+        analysis_context: kinetic_context ? "kinetic_conflict" : "public_order_or_security",
         pulse_score: pulse_score,
         escalation_trend: escalation_trend,
         count_24h: count_24h,
@@ -590,11 +599,11 @@ class ConflictPulseService
   end
 
   SIGNAL_DESCRIPTIONS = {
-    military_flights: "Military aircraft on patrol or reconnaissance near active hostilities",
+    military_flights: "Nearby military aircraft observed in the last 6 hours; this is a count, not a baseline increase",
     gps_jamming: "Electronic warfare degrading civilian aviation navigation in the region",
     internet_outage: "Major internet disruption — possible infrastructure damage or state censorship",
-    fire_hotspots: "Satellite-detected fires consistent with airstrikes or burning infrastructure",
-    strike_signals_7d: "Lagging thermal strike detections within the last 7 days around the current focus",
+    fire_hotspots: "Satellite-detected fires in a kinetic conflict scope; not strike evidence by itself",
+    strike_signals_7d: "Thermal detections within the last 7 days in a kinetic conflict scope",
     verified_strike_reports_7d: "Verified strike reports within the last 7 days around the current focus",
     known_conflict_zone: "Historical conflict events from UCDP database — baseline for current escalation",
     ships_nearby: "Live vessel activity around a strategic corridor",
@@ -607,12 +616,12 @@ class ConflictPulseService
     end
   end
 
-  def cross_layer_signals(lat, lng, radius_km: 250, object_kind: "theater")
+  def cross_layer_signals(lat, lng, radius_km: 250, object_kind: "theater", conflict_context: false)
     bounds = bbox(lat, lng, radius_km)
     signals = {}
 
     mil = Flight.within_bounds(bounds).where(military: true).where("updated_at > ?", @reference_time - 6.hours).count
-    signals[:military_flights] = mil if mil > 0
+    signals[:military_flights] = mil if mil > 0 && conflict_context
 
     jam = GpsJammingSnapshot.where("recorded_at > ? AND percentage > 10", @reference_time - 6.hours)
       .where(cell_lat: bounds[:lamin]..bounds[:lamax], cell_lng: bounds[:lomin]..bounds[:lomax])
@@ -629,13 +638,14 @@ class ConflictPulseService
 
     fires = FireHotspot.where("acq_datetime > ?", @reference_time - 24.hours)
       .where(latitude: bounds[:lamin]..bounds[:lamax], longitude: bounds[:lomin]..bounds[:lomax]).count
-    signals[:fire_hotspots] = fires if fires > 5
+    signals[:fire_hotspots] = fires if fires > 5 && conflict_context
 
     signals.merge!(
       NearbySupportingSignalsService.cross_layer_signals(
         object_kind: object_kind,
         latitude: lat,
-        longitude: lng
+        longitude: lng,
+        conflict_context: conflict_context
       )
     )
 
@@ -653,6 +663,49 @@ class ConflictPulseService
     score += [[signals[:strike_signals_7d].to_i / 3.0, 2].min, 0].max
     score += [[signals[:verified_strike_reports_7d].to_i * 1.5, 3].min, 0].max
     [score.round(1), 15].min
+  end
+
+  def article_event_location(article)
+    detect_event_location(article.title) ||
+      high_confidence_title_location(article) ||
+      reaction_city_rebucket(article) ||
+      trusted_stored_article_location(article)
+  end
+
+  def high_confidence_title_location(article)
+    location = LocationResolver.resolve_event(
+      title: article.title,
+      url: article.url
+    )
+    return nil unless location&.kind == "event"
+    return nil if location.confidence.to_f < MIN_EVENT_LOCATION_CONFIDENCE
+
+    location.coordinates
+  end
+
+  def trusted_stored_article_location(article)
+    return nil if article.latitude.blank? || article.longitude.blank?
+    return [article.latitude, article.longitude] if article.respond_to?(:trusted_event_geocode?) && article.trusted_event_geocode?
+
+    # Backwards-compatible path for direct/manual records that predate provenance.
+    # Ingested news records should carry provenance and are not trusted by default.
+    if article.geocode_basis.blank? && article.news_ingest_id.blank? && article.news_article_id.blank?
+      return [article.latitude, article.longitude]
+    end
+
+    nil
+  end
+
+  def kinetic_conflict_context?(theater:, situation_name:, articles:)
+    return true if self.class::NAMED_THEATERS.key?(situation_name.to_s)
+
+    theater_text = [theater, situation_name].compact.join(" ")
+    return true if theater_text.match?(KINETIC_CONFLICT_THEATER_PATTERN) && !theater.to_s.casecmp?("Europe")
+
+    Array(articles).any? do |article|
+      title = article.title.to_s
+      title.match?(KINETIC_EVENT_PATTERN) && detect_event_location(title).present?
+    end
   end
 
   def build_strategic_situations(zones)
@@ -675,7 +728,7 @@ class ConflictPulseService
       supporting_zone = theater_name.present? ? active_theaters[theater_name] : nil
       next unless strategic_situation_qualifies?(direct_clusters, fresh_clusters, total_sources, supporting_zone)
 
-      signals = strategic_cross_layer_signals(config)
+      signals = strategic_cross_layer_signals(config, conflict_context: supporting_zone.present? && supporting_zone[:analysis_context].to_s == "kinetic_conflict")
       top_clusters = direct_clusters.sort_by do |cluster|
         [-cluster.source_count.to_i, -cluster.cluster_confidence.to_f, -cluster.last_seen_at.to_i]
       end.first(5)
@@ -787,8 +840,8 @@ class ConflictPulseService
     fresh_clusters.size >= STRATEGIC_MIN_FRESH_CLUSTERS
   end
 
-  def strategic_cross_layer_signals(chokepoint)
-    signals = cross_layer_signals(chokepoint[:lat], chokepoint[:lng], radius_km: STRATEGIC_CROSS_LAYER_RADIUS_KM, object_kind: "chokepoint")
+  def strategic_cross_layer_signals(chokepoint, conflict_context: false)
+    signals = cross_layer_signals(chokepoint[:lat], chokepoint[:lng], radius_km: STRATEGIC_CROSS_LAYER_RADIUS_KM, object_kind: "chokepoint", conflict_context: conflict_context)
     ship_bounds = bbox(chokepoint[:lat], chokepoint[:lng], [chokepoint[:radius_km].to_f * 2.0, 120.0].max)
     nearby_ships = Ship.where("updated_at > ?", @reference_time - 45.minutes)
       .where(latitude: ship_bounds[:lamin]..ship_bounds[:lamax], longitude: ship_bounds[:lomin]..ship_bounds[:lomax])

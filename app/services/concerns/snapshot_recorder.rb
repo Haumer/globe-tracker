@@ -1,6 +1,6 @@
 module SnapshotRecorder
   # Minimum thresholds to record a new snapshot.
-  # Balance: frequent enough for smooth playback, sparse enough for 10GB/7d budget.
+  # Balance: frequent enough for smooth playback, sparse enough for the storage budget.
   LAT_LNG_THRESHOLD = 0.002  # ~222 meters — smooth playback at cruise speed
   ALT_THRESHOLD     = 100    # meters
   HEADING_THRESHOLD = 3      # degrees — capture course corrections

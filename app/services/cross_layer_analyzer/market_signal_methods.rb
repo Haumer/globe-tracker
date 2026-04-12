@@ -14,7 +14,8 @@ class CrossLayerAnalyzer
         supporting_signals = NearbySupportingSignalsService.cross_layer_signals(
           object_kind: "chokepoint",
           latitude: cp[:lat],
-          longitude: cp[:lng]
+          longitude: cp[:lng],
+          conflict_context: chokepoint_signal_conflict_context?(cp)
         )
         top_pulse = cp[:conflict_pulse].max_by { |z| z[:score] }
         commodity_parts = cp[:commodity_signals].first(3).filter_map do |signal|
@@ -60,7 +61,8 @@ class CrossLayerAnalyzer
         supporting_signals = NearbySupportingSignalsService.cross_layer_signals(
           object_kind: "chokepoint",
           latitude: cp[:lat],
-          longitude: cp[:lng]
+          longitude: cp[:lng],
+          conflict_context: chokepoint_signal_conflict_context?(cp)
         )
         top_move = market_moves.max_by { |signal| signal[:change_pct].to_f.abs }
         top_pulse = Array(cp[:conflict_pulse]).max_by { |pulse| pulse[:score].to_f }
@@ -158,6 +160,12 @@ class CrossLayerAnalyzer
           price: current_quote&.price&.to_f&.round(2) || signal[:price],
           change_pct: change_pct.round(2)
         )
+      end
+    end
+
+    def chokepoint_signal_conflict_context?(chokepoint)
+      Array(chokepoint[:conflict_pulse]).any? do |pulse|
+        pulse[:score].to_i >= 50 || %w[surging escalating active].include?(pulse[:trend].to_s)
       end
     end
 

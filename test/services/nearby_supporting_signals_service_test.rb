@@ -39,9 +39,9 @@ class NearbySupportingSignalsServiceTest < ActiveSupport::TestCase
     assert_equal "7-day nearby scope", signals[:scope_label]
     assert_equal 1, signals[:groups].size
     group = signals[:groups].first
-    assert_equal "Strike Signals", group[:title]
+    assert_equal "Thermal Detections", group[:title]
     assert_equal 1, group[:metrics].first[:value]
-    assert_equal "Thermal strike signal", group[:items].first[:title]
+    assert_equal "Thermal detection", group[:items].first[:title]
     assert_includes group[:items].first[:meta], "Aqua"
   end
 
@@ -73,10 +73,36 @@ class NearbySupportingSignalsServiceTest < ActiveSupport::TestCase
     signals = NearbySupportingSignalsService.cross_layer_signals(
       object_kind: "chokepoint",
       latitude: 26.55,
-      longitude: 56.3
+      longitude: 56.3,
+      conflict_context: true
     )
 
     assert_equal 1, signals[:strike_signals_7d]
+    assert_nil signals[:verified_strike_reports_7d]
+  end
+
+  test "does not promote thermal detections to strike signals outside conflict context" do
+    FireHotspot.create!(
+      external_id: "svc-non-conflict-thermal-001",
+      latitude: 51.0,
+      longitude: -1.0,
+      brightness: 348.0,
+      confidence: "high",
+      satellite: "Aqua",
+      instrument: "MODIS",
+      frp: 58.2,
+      daynight: "N",
+      acq_datetime: 18.hours.ago,
+      fetched_at: Time.current
+    )
+
+    signals = NearbySupportingSignalsService.cross_layer_signals(
+      object_kind: "theater",
+      latitude: 51.0,
+      longitude: -1.0
+    )
+
+    assert_nil signals[:strike_signals_7d]
     assert_nil signals[:verified_strike_reports_7d]
   end
 end

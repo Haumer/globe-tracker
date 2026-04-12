@@ -91,10 +91,17 @@ class NewsEnrichmentService
         # Location
         city = r["city"]&.strip
         country = r["country"]&.strip
-        lat, lng = resolve_ai_location(city, country)
-        if lat && lng
-          updates[:latitude] = lat
-          updates[:longitude] = lng
+        location = LocationResolver.resolve_event(
+          title: article.title,
+          city: city,
+          country: country
+        )
+        unless location&.coordinates
+          fallback_coords = resolve_ai_location(city, country)
+          location = ai_fallback_location_result(city: city, country: country, coords: fallback_coords) if fallback_coords
+        end
+        if location&.coordinates
+          updates.merge!(LocationResolver.news_event_attributes(location))
         end
 
         # Category — always update if valid (even without location fix)
@@ -245,6 +252,24 @@ class NewsEnrichmentService
       end
 
       nil
+    end
+
+    def ai_fallback_location_result(city:, country:, coords:)
+      return nil unless coords
+
+      has_city = city.present? && city.downcase != "unspecified"
+      LocationResolver::Result.new(
+        latitude: coords[0],
+        longitude: coords[1],
+        place_name: has_city ? city : country,
+        country_code: nil,
+        admin_area: nil,
+        basis: "ai_location_fallback",
+        precision: has_city ? "place" : "country",
+        kind: "event",
+        confidence: has_city ? 0.72 : 0.62,
+        metadata: { "input_city" => city, "input_country" => country }.compact
+      )
     end
 
     # Nominatim (OpenStreetMap) geocoding — only called for locations

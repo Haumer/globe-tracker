@@ -306,9 +306,9 @@ class InvestigationCasesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_includes response.body, "Supporting Signals"
-    assert_includes response.body, "Strike Signals"
-    assert_includes response.body, "short-window corroboration"
-    assert_includes response.body, "Thermal strike signal"
+    assert_includes response.body, "Thermal Detections"
+    assert_includes response.body, "Raw satellite fire/heat detections"
+    assert_includes response.body, "Thermal detection"
     assert_includes response.body, "Aqua"
     assert_not_includes response.body, "No nearby supporting signals are in the current 7-day nearby scope."
   end

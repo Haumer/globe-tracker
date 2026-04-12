@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_12_113000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -715,10 +715,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
     t.bigint "news_source_id"
     t.bigint "news_article_id"
     t.string "content_scope"
+    t.string "geocode_place_name"
+    t.string "geocode_country_code"
+    t.string "geocode_admin_area"
+    t.string "geocode_basis"
+    t.string "geocode_precision", default: "unknown", null: false
+    t.string "geocode_kind", default: "unknown", null: false
+    t.float "geocode_confidence", default: 0.0, null: false
+    t.jsonb "geocode_metadata", default: {}, null: false
     t.index ["ai_enriched"], name: "index_news_events_on_ai_enriched"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["content_scope"], name: "index_news_events_on_content_scope"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
+    t.index ["geocode_basis"], name: "index_news_events_on_geocode_basis"
+    t.index ["geocode_country_code"], name: "index_news_events_on_geocode_country_code"
+    t.index ["geocode_kind", "geocode_confidence"], name: "idx_news_events_on_geocode_kind_confidence"
     t.index ["news_article_id"], name: "index_news_events_on_news_article_id"
     t.index ["news_ingest_id"], name: "index_news_events_on_news_ingest_id"
     t.index ["news_source_id"], name: "index_news_events_on_news_source_id"
@@ -971,6 +982,41 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["pipeline_id"], name: "index_pipelines_on_pipeline_id", unique: true
+  end
+
+  create_table "place_aliases", force: :cascade do |t|
+    t.bigint "place_id", null: false
+    t.string "name", null: false
+    t.string "normalized_name", null: false
+    t.string "alias_type", default: "common", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["normalized_name"], name: "index_place_aliases_on_normalized_name"
+    t.index ["place_id", "normalized_name"], name: "index_place_aliases_on_place_id_and_normalized_name", unique: true
+    t.index ["place_id"], name: "index_place_aliases_on_place_id"
+  end
+
+  create_table "places", force: :cascade do |t|
+    t.string "canonical_key", null: false
+    t.string "name", null: false
+    t.string "normalized_name", null: false
+    t.string "place_type", default: "city", null: false
+    t.string "country_code"
+    t.string "country_name"
+    t.string "admin_area"
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.integer "population"
+    t.float "importance_score", default: 0.0, null: false
+    t.string "source", default: "seed", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["canonical_key"], name: "index_places_on_canonical_key", unique: true
+    t.index ["normalized_name", "country_code"], name: "index_places_on_normalized_name_and_country_code"
+    t.index ["place_type", "country_code"], name: "index_places_on_place_type_and_country_code"
+    t.index ["source"], name: "index_places_on_source"
   end
 
   create_table "polling_stats", force: :cascade do |t|
@@ -1408,6 +1454,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
   add_foreign_key "ontology_events", "ontology_entities", column: "place_entity_id"
   add_foreign_key "ontology_evidence_links", "ontology_events"
   add_foreign_key "ontology_relationship_evidences", "ontology_relationships"
+  add_foreign_key "place_aliases", "places"
   add_foreign_key "train_observations", "railways", column: "matched_railway_id"
   add_foreign_key "train_observations", "train_ingests"
   add_foreign_key "watches", "users"

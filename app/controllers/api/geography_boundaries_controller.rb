@@ -11,7 +11,7 @@ module Api
         }, status: :unprocessable_content
       end
 
-      payload = GeographyBoundaryService.fetch(dataset)
+      payload = GeographyBoundaryService.fetch(dataset, country_codes: params[:country_codes])
       unless payload
         return render json: {
           error: "Boundary dataset unavailable",

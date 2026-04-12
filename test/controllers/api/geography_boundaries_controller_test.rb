@@ -25,6 +25,25 @@ class Api::GeographyBoundariesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, data["features"].size
   end
 
+  test "GET /api/geography/boundaries passes country code filters" do
+    payload = {
+      "type" => "FeatureCollection",
+      "features" => [],
+    }
+
+    fetch = lambda do |dataset, country_codes: nil|
+      assert_equal "admin1", dataset
+      assert_equal "DE,AT,CH", country_codes
+      payload
+    end
+
+    GeographyBoundaryService.stub(:fetch, fetch) do
+      get "/api/geography/boundaries", params: { dataset: "admin1", country_codes: "DE,AT,CH" }
+    end
+
+    assert_response :success
+  end
+
   test "GET /api/geography/boundaries rejects unsupported datasets" do
     get "/api/geography/boundaries", params: { dataset: "districts" }
 

@@ -298,7 +298,15 @@ export function applyRegionalMapMethods(GlobeController) {
       return this._regionalAdminBoundaryCache
     }
 
-    const payload = await fetchRegionalBoundaryDataset(REGIONAL_ADMIN_BOUNDARY_URLS)
+    const region = this._localProfileRegion?.()
+    const countryCodes = Array.isArray(region?.countryCodes) ? region.countryCodes : []
+    const urls = REGIONAL_ADMIN_BOUNDARY_URLS.map(url => {
+      if (!url.startsWith("/") || countryCodes.length === 0) return url
+
+      const separator = url.includes("?") ? "&" : "?"
+      return `${url}${separator}country_codes=${encodeURIComponent(countryCodes.join(","))}`
+    })
+    const payload = await fetchRegionalBoundaryDataset(urls)
     if (!Array.isArray(payload?.features) || payload.features.length === 0) {
       throw new Error("Admin boundary dataset unavailable")
     }

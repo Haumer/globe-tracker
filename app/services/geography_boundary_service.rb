@@ -23,7 +23,20 @@ class GeographyBoundaryService
   class << self
     include HttpClient
 
-    def fetch(dataset)
+    COMPACT_PROPERTY_KEYS = %w[
+      adm0_a3
+      iso_a2
+      iso_3166_2
+      name
+      name_en
+      name_alt
+      woe_name
+      gn_name
+      latitude
+      longitude
+    ].freeze
+
+    def fetch(dataset, country_codes: nil)
       config = DATASETS[dataset.to_s]
       raise UnsupportedDatasetError, "Unsupported dataset: #{dataset}" unless config
 
@@ -35,16 +48,50 @@ class GeographyBoundaryService
           open_timeout: 10,
           read_timeout: 45
         )
-        return payload if valid_feature_collection?(payload)
+        return filtered_payload(payload, country_codes: country_codes) if valid_feature_collection?(payload)
       end
 
       cached = Rails.cache.read(config[:cache_key])
-      return cached if valid_feature_collection?(cached)
+      return filtered_payload(cached, country_codes: country_codes) if valid_feature_collection?(cached)
 
       nil
     end
 
     private
+
+    def filtered_payload(payload, country_codes:)
+      codes = normalize_country_codes(country_codes)
+      return payload if codes.empty?
+
+      features = payload.fetch("features", []).select { |feature| feature_matches_country_codes?(feature, codes) }
+      {
+        "type" => "FeatureCollection",
+        "features" => features.map { |feature| compact_feature(feature) },
+      }
+    end
+
+    def compact_feature(feature)
+      properties = feature.fetch("properties", {})
+      {
+        "type" => "Feature",
+        "geometry" => feature["geometry"],
+        "properties" => properties.slice(*COMPACT_PROPERTY_KEYS),
+      }
+    end
+
+    def feature_matches_country_codes?(feature, codes)
+      properties = feature.fetch("properties", {})
+      feature_codes = %w[adm0_a3 sov_a3 gu_a3 iso_a2].filter_map { |key| properties[key].presence&.upcase }
+      (feature_codes & codes).any?
+    end
+
+    def normalize_country_codes(country_codes)
+      Array(country_codes)
+        .flat_map { |value| value.to_s.split(",") }
+        .map { |value| value.strip.upcase }
+        .reject(&:blank?)
+        .uniq
+    end
 
     def valid_feature_collection?(payload)
       payload.is_a?(Hash) && payload["type"] == "FeatureCollection" && payload["features"].is_a?(Array)

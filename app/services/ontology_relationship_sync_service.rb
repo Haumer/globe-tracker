@@ -22,6 +22,7 @@ class OntologyRelationshipSyncService
   RECENT_NOTAM_WINDOW = Definitions::RECENT_NOTAM_WINDOW
   INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW
   INFRASTRUCTURE_DISRUPTION_FRESHNESS = Definitions::INFRASTRUCTURE_DISRUPTION_FRESHNESS
+  GEOCONFIRMED_LABEL_REPAIR_WINDOW = Definitions::GEOCONFIRMED_LABEL_REPAIR_WINDOW
   INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT
   INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS = Definitions::INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS
   INFRASTRUCTURE_KINETIC_EVENT_TYPES = Definitions::INFRASTRUCTURE_KINETIC_EVENT_TYPES
@@ -100,6 +101,7 @@ class OntologyRelationshipSyncService
         ),
         infrastructure_disruptions: sync_infrastructure_disruption_relationships(now: now),
         local_corroborations: sync_local_corroboration_relationships(now: now),
+        geoconfirmed_label_repairs: repair_geoconfirmed_date_only_labels(now: now),
       }
     end
 

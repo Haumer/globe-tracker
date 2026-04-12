@@ -48,7 +48,11 @@ class OntologyRelationshipSyncService
         else
           stale_scope
         end
-        stale_scope.delete_all
+        stale_relationship_ids = stale_scope.pluck(:id)
+        if stale_relationship_ids.any?
+          OntologyRelationshipEvidence.where(ontology_relationship_id: stale_relationship_ids).delete_all
+          OntologyRelationship.where(id: stale_relationship_ids).delete_all
+        end
 
         created_count
       end

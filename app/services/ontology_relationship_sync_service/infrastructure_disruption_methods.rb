@@ -169,5 +169,57 @@ class OntologyRelationshipSyncService
     def infrastructure_disruption_explanation(payload, candidate)
       "#{payload.fetch(:title)} occurred #{candidate.fetch(:distance_km).round(1)}km from #{candidate.fetch(:entity).canonical_name}, exposing #{candidate.fetch(:asset_type).to_s.tr('_', ' ')} infrastructure"
     end
+
+    def repair_geoconfirmed_date_only_labels(now:)
+      since = now - GEOCONFIRMED_LABEL_REPAIR_WINDOW
+      repaired_count = 0
+
+      OntologyEvent.includes(:place_entity)
+        .where(event_type: "geoconfirmed_strike")
+        .where("canonical_key LIKE ?", "event:geoconfirmed-strike:%")
+        .where("last_seen_at >= ? OR updated_at >= ?", since, since)
+        .find_each do |event|
+          current_title = event.metadata.fetch("canonical_title", "").to_s.scrub("").squish
+          next unless geoconfirmed_date_only_title?(current_title)
+
+          geoconfirmed_event = geoconfirmed_evidence_for_event(event)
+          next if geoconfirmed_event.blank?
+
+          replacement_title = geoconfirmed_event_title(geoconfirmed_event)
+          next if replacement_title.blank? || replacement_title == current_title
+
+          event.metadata = event.metadata.merge("canonical_title" => replacement_title)
+          event.save!
+          repair_geoconfirmed_place_entity_label(event.place_entity, current_title, replacement_title)
+          repair_geoconfirmed_relationship_explanations(event, current_title, replacement_title)
+          repaired_count += 1
+        end
+
+      repaired_count
+    end
+
+    def geoconfirmed_evidence_for_event(event)
+      evidence_link = event.ontology_evidence_links.find_by(evidence_type: "GeoconfirmedEvent")
+      return if evidence_link.blank?
+
+      GeoconfirmedEvent.find_by(id: evidence_link.evidence_id)
+    end
+
+    def repair_geoconfirmed_place_entity_label(place_entity, current_title, replacement_title)
+      return if place_entity.blank?
+      return unless place_entity.canonical_name.to_s.squish == current_title
+
+      place_entity.update!(canonical_name: replacement_title)
+      OntologySyncSupport.upsert_alias(place_entity, replacement_title, alias_type: "event_location")
+    end
+
+    def repair_geoconfirmed_relationship_explanations(event, current_title, replacement_title)
+      event.outgoing_ontology_relationships
+        .where(derived_by: RELATION_DERIVED_BY)
+        .where("explanation LIKE ?", "%#{ActiveRecord::Base.sanitize_sql_like(current_title)}%")
+        .find_each do |relationship|
+          relationship.update!(explanation: relationship.explanation.to_s.gsub(current_title, replacement_title))
+        end
+    end
   end
 end

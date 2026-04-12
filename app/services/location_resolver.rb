@@ -83,6 +83,15 @@ class LocationResolver
     return country_event_candidate(country_code, basis: "ai_country", confidence: 0.64) if city_name.blank? && country_code.present?
     return nil if city_name.blank?
 
+    place = place_candidate(
+      name: city_name,
+      country_code: country_code,
+      basis: country_code.present? ? "ai_place_country" : "ai_place",
+      confidence: country_code.present? ? 0.93 : 0.83,
+      metadata: { "input_city" => city, "input_country" => country }.compact
+    )
+    return place if place
+
     seeded = SEEDED_CITY_COUNTRY_CANDIDATES[[city_name, country_code]] if country_code.present?
     if seeded
       lat, lng = seeded.fetch(:coords)
@@ -117,10 +126,19 @@ class LocationResolver
   end
 
   def title_city_candidate(title:, country_hint:)
-    city_name = city_name_from_title(title)
+    city_name = city_name_from_title(title) || gazetteer_name_from_title(title)
     return nil unless city_name
 
     country_code = normalize_country_code(country_hint)
+    place = place_candidate(
+      name: city_name,
+      country_code: country_code,
+      basis: country_code.present? ? "title_place_country" : "title_place",
+      confidence: country_code.present? ? 0.91 : 0.85,
+      metadata: { "matched_text" => city_name, "country_hint" => country_hint }.compact
+    )
+    return place if place
+
     seeded = SEEDED_CITY_COUNTRY_CANDIDATES[[city_name, country_code]] if country_code.present?
     if seeded
       lat, lng = seeded.fetch(:coords)
@@ -237,10 +255,62 @@ class LocationResolver
     )
   end
 
+  def place_candidate(name:, basis:, confidence:, metadata:, country_code: nil)
+    return nil unless places_available?
+
+    place = Place.lookup(name, country_code: country_code).first
+    return nil unless place
+
+    result(
+      lat: place.latitude,
+      lng: place.longitude,
+      place_name: place.name,
+      country_code: place.country_code,
+      admin_area: place.admin_area,
+      basis: basis,
+      precision: place_precision(place),
+      kind: "event",
+      confidence: place_confidence(place, base: confidence),
+      metadata: metadata.merge(
+        "place_id" => place.id,
+        "place_source" => place.source,
+        "place_canonical_key" => place.canonical_key
+      )
+    )
+  rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
+    nil
+  end
+
+  def places_available?
+    defined?(Place) && ActiveRecord::Base.connection.data_source_exists?("places")
+  end
+
+  def place_precision(place)
+    place.place_type == "city" ? "city" : place.place_type
+  end
+
+  def place_confidence(place, base:)
+    adjustment = place.country_code.present? ? 0.02 : 0.0
+    [base.to_f + adjustment, 0.99].min.round(2)
+  end
+
   def city_name_from_title(title)
     return nil if title.blank?
 
     CITY_PATTERNS.find { |city| CITY_REGEXES[city].match?(title) }
+  end
+
+  def gazetteer_name_from_title(title)
+    return nil if title.blank? || !places_available?
+
+    normalized_title = Place.normalize_name(title)
+    PlaceAlias
+      .select(:normalized_name)
+      .order(Arel.sql("length(normalized_name) DESC"))
+      .find { |place_alias| normalized_title.match?(/(?:\A|\s)#{Regexp.escape(place_alias.normalized_name)}(?:\s|\z)/) }
+      &.normalized_name
+  rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
+    nil
   end
 
   def normalize_country_code(value)

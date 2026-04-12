@@ -42,6 +42,29 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert_in_delta(-81.2453, result.longitude, 0.1)
   end
 
+  test "uses gazetteer places when available" do
+    PlaceGazetteerSyncService.refresh
+
+    result = LocationResolver.resolve_event(title: "London police arrest protesters")
+
+    assert_equal "title_place", result.basis
+    assert_equal "gb", result.country_code
+    assert_equal "London", result.place_name
+    assert_in_delta 51.5074, result.latitude, 0.1
+    assert_equal "seeded_ambiguity", result.metadata["place_source"]
+  end
+
+  test "uses gazetteer aliases from enriched city profiles" do
+    PlaceGazetteerSyncService.refresh
+
+    result = LocationResolver.resolve_event(title: "Industrial disruption reported in Wien")
+
+    assert_equal "title_place", result.basis
+    assert_equal "at", result.country_code
+    assert_equal "Vienna", result.place_name
+    assert_equal "city_profile", result.metadata["place_source"]
+  end
+
   test "news event attributes include provenance fields" do
     result = LocationResolver.resolve_event(title: "Explosion rocks central Kyiv")
     attrs = LocationResolver.news_event_attributes(result)

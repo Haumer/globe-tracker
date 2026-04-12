@@ -93,5 +93,7 @@ class NewsEventGeocodeBackfillServiceTest < ActiveSupport::TestCase
     assert_equal "Sidon", event.geocode_place_name
     assert_in_delta 33.56, event.latitude, 0.1
     assert_in_delta 35.37, event.longitude, 0.1
+
+    assert_equal 0, NewsEventGeocodeBackfillService.backfill_recent(limit: 10)
   end
 end

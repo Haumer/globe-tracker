@@ -34,7 +34,7 @@ class NewsEventGeocodeBackfillService
   def events_to_repair
     NewsEvent
       .where("published_at IS NULL OR published_at > ?", @window.ago)
-      .where(repairable_geocode_condition, *publisher_suffix_values)
+      .where(repairable_geocode_condition, *publisher_suffix_values, publisher_matched_texts)
       .order(Arel.sql("published_at DESC NULLS LAST"))
       .limit(@limit)
       .to_a
@@ -43,11 +43,16 @@ class NewsEventGeocodeBackfillService
   def repairable_geocode_condition
     base = "geocode_basis IS NULL OR geocode_kind = 'unknown' OR geocode_confidence = 0"
     suffix_clause = publisher_suffix_values.size.times.map { "title ILIKE ?" }.join(" OR ")
-    "#{base} OR (geocode_basis LIKE 'title_%' AND (#{suffix_clause}))"
+    matched_text_clause = "LOWER(geocode_metadata ->> 'matched_text') IN (?)"
+    "#{base} OR (geocode_basis LIKE 'title_%' AND (#{suffix_clause}) AND #{matched_text_clause})"
   end
 
   def publisher_suffix_values
     @publisher_suffix_values ||= LocationResolver::LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES.map { |suffix| "%#{suffix}" }
+  end
+
+  def publisher_matched_texts
+    @publisher_matched_texts ||= LocationResolver::LOCATION_AMBIGUOUS_PUBLISHER_SUFFIX_MATCHES.values.uniq
   end
 
   def geocode_attributes_for(event)

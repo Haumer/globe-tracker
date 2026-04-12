@@ -1,18 +1,19 @@
 class LocationResolver
   include NewsGeocodable
 
-  LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES = [
-    "New York Times",
-    "The New York Times",
-    "Washington Post",
-    "The Washington Post",
-    "Los Angeles Times",
-    "The Los Angeles Times",
-    "Wall Street Journal",
-    "The Wall Street Journal",
-    "Times of Israel",
-    "The Times of Israel",
-  ].freeze
+  LOCATION_AMBIGUOUS_PUBLISHER_SUFFIX_MATCHES = {
+    "New York Times" => "new york",
+    "The New York Times" => "new york",
+    "Washington Post" => "washington",
+    "The Washington Post" => "washington",
+    "Los Angeles Times" => "los angeles",
+    "The Los Angeles Times" => "los angeles",
+    "Wall Street Journal" => "new york",
+    "The Wall Street Journal" => "new york",
+    "Times of Israel" => "israel",
+    "The Times of Israel" => "israel",
+  }.freeze
+  LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES = LOCATION_AMBIGUOUS_PUBLISHER_SUFFIX_MATCHES.keys.freeze
   PUBLISHER_SUFFIX_PATTERN = /
     (?:\s+(?:-|\||:)\s*|\s+)
     (?:#{LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES.sort_by { |suffix| -suffix.length }.map { |suffix| Regexp.escape(suffix) }.join("|")})

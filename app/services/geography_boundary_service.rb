@@ -48,21 +48,30 @@ class GeographyBoundaryService
           open_timeout: 10,
           read_timeout: 45
         )
-        return filtered_payload(payload, country_codes: country_codes) if valid_feature_collection?(payload)
+        return filtered_payload(payload, country_codes: country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(payload)
       end
 
       cached = Rails.cache.read(config[:cache_key])
-      return filtered_payload(cached, country_codes: country_codes) if valid_feature_collection?(cached)
+      return filtered_payload(cached, country_codes: country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(cached)
 
       nil
     end
 
     private
 
-    def filtered_payload(payload, country_codes:)
+    def filtered_payload(payload, country_codes:, cache_key: nil, cache_ttl: nil)
       codes = normalize_country_codes(country_codes)
       return payload if codes.empty?
 
+      filtered_cache_key = [cache_key, "filtered", codes.join(","), "v1"].compact.join(":")
+      return Rails.cache.fetch(filtered_cache_key, expires_in: cache_ttl || 12.hours) do
+        compact_filtered_payload(payload, codes)
+      end if cache_key.present?
+
+      compact_filtered_payload(payload, codes)
+    end
+
+    def compact_filtered_payload(payload, codes)
       features = payload.fetch("features", []).select { |feature| feature_matches_country_codes?(feature, codes) }
       {
         "type" => "FeatureCollection",

@@ -29,6 +29,36 @@ class GeographyBoundaryServiceTest < ActiveSupport::TestCase
     assert_same payload, GeographyBoundaryService.send(:filtered_payload, payload, country_codes: nil)
   end
 
+  test "caches filtered boundary variants" do
+    cache = ActiveSupport::Cache::MemoryStore.new
+    payload = {
+      "type" => "FeatureCollection",
+      "features" => [feature("Germany", "DEU", "DE", "DE-BY", "Bayern", 48.7, 11.5, "drop-me")],
+    }
+
+    Rails.stub(:cache, cache) do
+      first = GeographyBoundaryService.send(
+        :filtered_payload,
+        payload,
+        country_codes: "DE",
+        cache_key: "test-boundaries",
+        cache_ttl: 1.hour
+      )
+
+      payload["features"] = []
+      second = GeographyBoundaryService.send(
+        :filtered_payload,
+        payload,
+        country_codes: "DE",
+        cache_key: "test-boundaries",
+        cache_ttl: 1.hour
+      )
+
+      assert_equal first, second
+      assert_equal 1, second["features"].size
+    end
+  end
+
   private
 
   def feature(country, alpha3, alpha2, iso_3166_2, name, lat, lng, unused)

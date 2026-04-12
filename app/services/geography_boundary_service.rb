@@ -40,6 +40,12 @@ class GeographyBoundaryService
       config = DATASETS[dataset.to_s]
       raise UnsupportedDatasetError, "Unsupported dataset: #{dataset}" unless config
 
+      normalized_country_codes = normalize_country_codes(country_codes)
+      if normalized_country_codes.any?
+        cached_filtered = Rails.cache.read(filtered_cache_key(config[:cache_key], normalized_country_codes))
+        return cached_filtered if valid_feature_collection?(cached_filtered)
+      end
+
       config[:urls].each do |url|
         payload = http_get(
           URI(url),
@@ -48,11 +54,11 @@ class GeographyBoundaryService
           open_timeout: 10,
           read_timeout: 45
         )
-        return filtered_payload(payload, country_codes: country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(payload)
+        return filtered_payload(payload, country_codes: normalized_country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(payload)
       end
 
       cached = Rails.cache.read(config[:cache_key])
-      return filtered_payload(cached, country_codes: country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(cached)
+      return filtered_payload(cached, country_codes: normalized_country_codes, cache_key: config[:cache_key], cache_ttl: config[:cache_ttl]) if valid_feature_collection?(cached)
 
       nil
     end
@@ -63,12 +69,12 @@ class GeographyBoundaryService
       codes = normalize_country_codes(country_codes)
       return payload if codes.empty?
 
-      filtered_cache_key = [cache_key, "filtered", codes.join(","), "v1"].compact.join(":")
-      return Rails.cache.fetch(filtered_cache_key, expires_in: cache_ttl || 12.hours) do
-        compact_filtered_payload(payload, codes)
-      end if cache_key.present?
+      return compact_filtered_payload(payload, codes) if cache_key.blank?
 
-      compact_filtered_payload(payload, codes)
+      variant_cache_key = filtered_cache_key(cache_key, codes)
+      Rails.cache.fetch(variant_cache_key, expires_in: cache_ttl || 12.hours) do
+        compact_filtered_payload(payload, codes)
+      end
     end
 
     def compact_filtered_payload(payload, codes)
@@ -100,6 +106,10 @@ class GeographyBoundaryService
         .map { |value| value.strip.upcase }
         .reject(&:blank?)
         .uniq
+    end
+
+    def filtered_cache_key(base_cache_key, codes)
+      [base_cache_key, "filtered", codes.join(","), "v1"].compact.join(":")
     end
 
     def valid_feature_collection?(payload)

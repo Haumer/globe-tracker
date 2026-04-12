@@ -59,6 +59,21 @@ class GeographyBoundaryServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "returns cached filtered boundary before loading global payload" do
+    cache = ActiveSupport::Cache::MemoryStore.new
+    cached = {
+      "type" => "FeatureCollection",
+      "features" => [feature("Germany", "DEU", "DE", "DE-BY", "Bayern", 48.7, 11.5, "cached")],
+    }
+    cache.write("geography-boundaries:admin1:v1:filtered:DE:v1", cached)
+
+    Rails.stub(:cache, cache) do
+      GeographyBoundaryService.stub(:http_get, ->(*) { raise "should not load global payload" }) do
+        assert_equal cached, GeographyBoundaryService.fetch("admin1", country_codes: "DE")
+      end
+    end
+  end
+
   private
 
   def feature(country, alpha3, alpha2, iso_3166_2, name, lat, lng, unused)

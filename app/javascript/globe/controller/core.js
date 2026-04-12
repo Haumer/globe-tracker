@@ -507,7 +507,7 @@ export function applyCoreMethods(GlobeController) {
       flights: "qlFlights", ships: "qlShips", earthquakes: "qlEarthquakes",
       naturalEvents: "qlEvents", news: "qlNews", gpsJamming: "qlGpsJamming",
       cameras: "qlCameras", outages: "qlOutages", conflicts: "qlConflicts",
-      situations: "qlSituations", insights: "qlInsights",
+      situations: "qlSituations", situationSurfaces: "qlSituationSurfaces", insights: "qlInsights",
       traffic: "qlTraffic", cables: "qlCables", ports: "qlPorts", shippingLanes: "qlShippingLanes", powerPlants: "qlPowerPlants",
       notams: "qlNotams", fireHotspots: "qlFireHotspots", weather: "qlWeather",
       financial: "qlFinancial",

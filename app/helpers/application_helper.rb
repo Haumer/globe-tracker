@@ -1,5 +1,6 @@
 module ApplicationHelper
   PRIMARY_SIDEBAR_LAYER_DEFS = [
+    { key: "situationSurfaces", label: "Situation Surfaces", icon: "fa-solid fa-draw-polygon", color: "#d32f2f", target: "qlSituationSurfaces" },
     { key: "situations", label: "Conflict Theaters", icon: "fa-solid fa-wave-square", color: "#ff7043", target: "qlSituations" },
     { key: "insights", label: "Insights", icon: "fa-solid fa-brain", color: "#26c6da", target: "qlInsights" },
     { key: "news", label: "News", icon: "fa-solid fa-newspaper", color: "#ff9800", target: "qlNews" },

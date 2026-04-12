@@ -12,6 +12,7 @@ import { applyPipelinesMethods } from "globe/controller/infrastructure/pipelines
 import { applyRailwaysMethods } from "globe/controller/infrastructure/railways"
 import { applyTrainsMethods } from "globe/controller/infrastructure/trains"
 import { applyConflictPulseMethods } from "globe/controller/infrastructure/conflictPulse"
+import { applySituationSurfaceMethods } from "globe/controller/infrastructure/situationSurfaces"
 import { applyChokepointsMethods } from "globe/controller/infrastructure/chokepoints"
 import { applyStrikesMethods } from "globe/controller/infrastructure/strikes"
 import { applyMilitaryBasesMethods } from "globe/controller/infrastructure/militaryBases"
@@ -33,6 +34,7 @@ export function applyInfrastructureMethods(GlobeController) {
   applyRailwaysMethods(GlobeController)
   applyTrainsMethods(GlobeController)
   applyConflictPulseMethods(GlobeController)
+  applySituationSurfaceMethods(GlobeController)
   applyChokepointsMethods(GlobeController)
   applyStrikesMethods(GlobeController)
   applyMilitaryBasesMethods(GlobeController)

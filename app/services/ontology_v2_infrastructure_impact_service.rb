@@ -187,12 +187,12 @@ class OntologyV2InfrastructureImpactService
       distance = haversine_km(lat, lng, payload.fetch(:latitude), payload.fetch(:longitude))
       next if distance > radius_km
 
-      relation_type = nearby_impact_allowed?(event) && distance <= direct_impact_radius_km(asset.entity_type) ? IMPACTED_INFRASTRUCTURE : EXPOSED_INFRASTRUCTURE
+      relation_type, basis = nearby_asset_relationship_assessment(event, asset, distance)
       {
         entity: asset,
         relation_type: relation_type,
         confidence: proximity_confidence(event, distance, radius_km, relation_type),
-        basis: relation_type == IMPACTED_INFRASTRUCTURE ? "event_proximity_impact" : "event_proximity_exposure",
+        basis: basis,
         distance_km: distance,
         radius_km: radius_km,
       }
@@ -394,6 +394,16 @@ class OntologyV2InfrastructureImpactService
     nearby_impact_event?(event)
   end
 
+  def nearby_asset_relationship_assessment(event, asset, distance)
+    if nearby_impact_allowed?(event) &&
+        distance <= direct_impact_radius_km(asset.entity_type) &&
+        asset_directly_referenced?(event_reference_text(event), asset)
+      return [IMPACTED_INFRASTRUCTURE, "direct_asset_reference"]
+    end
+
+    [EXPOSED_INFRASTRUCTURE, "event_proximity_exposure"]
+  end
+
   def nearby_exposure_event?(event)
     return false if non_infrastructure_context_event?(event)
 
@@ -512,7 +522,11 @@ class OntologyV2InfrastructureImpactService
 
   def impact_explanation(event, candidate)
     if candidate.fetch(:relation_type) == IMPACTED_INFRASTRUCTURE
-      "#{event_label(event)} directly impacts #{candidate.fetch(:entity).canonical_name}."
+      if candidate.fetch(:basis) == "direct_asset_reference"
+        "#{event_label(event)} directly references #{candidate.fetch(:entity).canonical_name}, indicating likely infrastructure impact."
+      else
+        "#{event_label(event)} identifies #{candidate.fetch(:entity).canonical_name} as #{candidate.fetch(:role, 'affected infrastructure').to_s.tr('_', ' ')}."
+      end
     elsif candidate[:distance_km].present?
       "#{event_label(event)} occurred #{candidate.fetch(:distance_km).round(1)}km from #{candidate.fetch(:entity).canonical_name}, exposing nearby infrastructure."
     else
@@ -575,6 +589,38 @@ class OntologyV2InfrastructureImpactService
 
   def entity_coordinates(entity)
     [entity.metadata["latitude"], entity.metadata["longitude"]]
+  end
+
+  def event_reference_text(event)
+    [
+      event.metadata["canonical_title"],
+      event.metadata["location_name"],
+      event.primary_story_cluster&.canonical_title,
+      event.primary_story_cluster&.location_name,
+      event.place_entity&.canonical_name,
+    ].compact_blank.join(" ")
+  end
+
+  def asset_directly_referenced?(text, asset)
+    normalized_text = normalize_asset_reference_text(text)
+    return false if normalized_text.blank?
+
+    asset_reference_terms(asset).any? do |term|
+      normalized_term = normalize_asset_reference_text(term)
+      normalized_term.length >= 5 && normalized_text.include?(normalized_term)
+    end
+  end
+
+  def asset_reference_terms(asset)
+    [
+      asset.canonical_name,
+      asset.canonical_key,
+      *asset.ontology_entity_aliases.pluck(:name),
+    ].compact_blank.uniq
+  end
+
+  def normalize_asset_reference_text(value)
+    value.to_s.downcase.gsub(/[^\p{Alnum}]+/, " ").squish
   end
 
   def relationship_key(relationship)

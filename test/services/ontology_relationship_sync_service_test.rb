@@ -765,10 +765,58 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
       assert_includes event.metadata.fetch("canonical_title"), "Building damage visible"
       refute_equal "08 APR 2026", event.metadata.fetch("canonical_title")
       assert_includes event.place_entity.canonical_name, "Building damage visible"
+      assert_equal "infrastructure_exposure", relationship.relation_type
+      assert_equal "proximity_only", relationship.metadata.fetch("impact_basis")
       assert_includes relationship.explanation, "Building damage visible"
 
       evidence_payload = NodeContextEvidenceSerializer.serialize(geoconfirmed)
       assert_includes evidence_payload.fetch(:label), "Building damage visible"
+    end
+  end
+
+  test "only promotes geoconfirmed asset proximity to disruption when the asset is directly referenced" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      geoconfirmed = GeoconfirmedEvent.create!(
+        external_id: "gc-direct-port-label-1",
+        map_region: "lebanon",
+        title: "08 APR 2026",
+        description: "Missile strike damaged BAYRUT port infrastructure.",
+        latitude: 33.88373,
+        longitude: 35.48747,
+        posted_at: 1.hour.ago,
+        fetched_at: Time.current,
+        icon_key: "airstrike"
+      )
+      port = TradeLocation.create!(
+        locode: "LBDIR",
+        country_code: "LB",
+        country_code_alpha3: "LBN",
+        country_name: "Lebanon",
+        name: "BAYRUT",
+        normalized_name: "bayrut",
+        location_kind: "port",
+        function_codes: "1",
+        latitude: 33.90,
+        longitude: 35.50,
+        status: "active",
+        source: "test_feed",
+        fetched_at: Time.current
+      )
+
+      OntologyRelationshipSyncService.sync_recent
+
+      event = OntologyEvent.find_by!(canonical_key: "event:geoconfirmed-strike:gc-direct-port-label-1")
+      port_entity = OntologyEntity.find_by!(canonical_key: "port:lbdir")
+      relationship = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: port_entity,
+        relation_type: "infrastructure_disruption"
+      )
+
+      assert_equal port, relationship.ontology_relationship_evidences.find_by!(evidence_role: "exposed_asset").evidence
+      assert_equal "direct_asset_reference", relationship.metadata.fetch("impact_basis")
+      assert_equal "likely_disrupted", relationship.metadata.fetch("impact_status")
+      assert_includes relationship.explanation, "directly references"
     end
   end
 
@@ -836,6 +884,9 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
       assert_equal 1, result.fetch(:geoconfirmed_label_repairs)
       assert_includes event.reload.metadata.fetch("canonical_title"), "Building damage visible"
       assert_includes place.reload.canonical_name, "Building damage visible"
+      assert_equal "infrastructure_exposure", relationship.reload.relation_type
+      assert_equal "proximity_only", relationship.metadata.fetch("impact_basis")
+      assert_equal "exposed", relationship.metadata.fetch("impact_status")
       assert_includes relationship.reload.explanation, "Building damage visible"
       refute_includes relationship.explanation, "08 APR 2026"
     end

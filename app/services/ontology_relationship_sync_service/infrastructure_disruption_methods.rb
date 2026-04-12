@@ -61,7 +61,9 @@ class OntologyRelationshipSyncService
       candidates = infrastructure_disruption_asset_candidates(payload, now: now)
 
       relationship_count = candidates.count do |candidate|
-        relation_type = infrastructure_relationship_type(payload, candidate)
+        assessment = infrastructure_relationship_assessment(payload, candidate)
+        relation_type = assessment.fetch(:relation_type)
+        candidate = candidate.merge(assessment)
         desired_relationships << [candidate.fetch(:entity).id, relation_type]
 
         relationship = upsert_infrastructure_relationship(
@@ -113,6 +115,8 @@ class OntologyRelationshipSyncService
         "distance_km" => candidate.fetch(:distance_km).round(1),
         "radius_km" => payload.fetch(:radius_km).round(1),
         "observed_at" => payload.fetch(:observed_at)&.iso8601,
+        "impact_basis" => candidate.fetch(:impact_basis),
+        "impact_status" => candidate.fetch(:impact_status),
       }.compact
     end
 
@@ -167,7 +171,21 @@ class OntologyRelationshipSyncService
     end
 
     def infrastructure_disruption_explanation(payload, candidate)
-      "#{payload.fetch(:title)} occurred #{candidate.fetch(:distance_km).round(1)}km from #{candidate.fetch(:entity).canonical_name}, exposing #{candidate.fetch(:asset_type).to_s.tr('_', ' ')} infrastructure"
+      title = payload.fetch(:title)
+      asset_name = candidate.fetch(:entity).canonical_name
+      distance = candidate.fetch(:distance_km).round(1)
+      asset_type = candidate.fetch(:asset_type).to_s.tr("_", " ")
+
+      case candidate.fetch(:impact_basis)
+      when "corroborated_operational_signal"
+        "#{title} has corroborating operational evidence for #{asset_name}, indicating #{asset_type} disruption"
+      when "direct_asset_reference"
+        "#{title} directly references #{asset_name}, indicating likely #{asset_type} disruption"
+      when "tight_thermal_signal"
+        "#{title} was detected #{distance}km from #{asset_name}, a tight thermal signal indicating likely #{asset_type} disruption"
+      else
+        "#{title} occurred #{distance}km from #{asset_name}, exposing #{asset_type} infrastructure"
+      end
     end
 
     def repair_geoconfirmed_date_only_labels(now:)
@@ -220,6 +238,85 @@ class OntologyRelationshipSyncService
         .find_each do |relationship|
           relationship.update!(explanation: relationship.explanation.to_s.gsub(current_title, replacement_title))
         end
+    end
+
+    def repair_infrastructure_relationship_semantics(now:)
+      since = now - GEOCONFIRMED_LABEL_REPAIR_WINDOW
+      event_ids = OntologyEvent
+        .where(event_type: %w[geoconfirmed_strike thermal_strike fire_hotspot natural_event earthquake])
+        .where("last_seen_at >= ? OR updated_at >= ?", since, since)
+        .pluck(:id)
+      return 0 if event_ids.empty?
+
+      repaired_count = 0
+      OntologyRelationship.includes(:source_node, :target_node, :ontology_relationship_evidences)
+        .where(source_node_type: "OntologyEvent", source_node_id: event_ids, target_node_type: "OntologyEntity")
+        .where(relation_type: %w[infrastructure_disruption infrastructure_exposure], derived_by: RELATION_DERIVED_BY)
+        .find_each do |relationship|
+          event = relationship.source_node
+          target = relationship.target_node
+          next if event.blank? || target.blank?
+
+          payload = infrastructure_repair_payload(event, relationship)
+          candidate = infrastructure_repair_candidate(target, relationship)
+          assessment = infrastructure_relationship_assessment(payload, candidate)
+          next if infrastructure_semantics_current?(relationship, assessment)
+
+          update_infrastructure_relationship_semantics!(relationship, payload, candidate.merge(assessment))
+          repaired_count += 1
+        end
+
+      repaired_count
+    end
+
+    def infrastructure_repair_payload(event, relationship)
+      evidence_text = relationship.ontology_relationship_evidences.filter_map do |link|
+        next unless link.evidence_type == "GeoconfirmedEvent"
+
+        [link.evidence.try(:title), link.evidence.try(:description), link.evidence.try(:icon_key)].compact.join(" ")
+      end.join(" ")
+
+      {
+        kind: event.metadata["event_kind"].presence&.to_sym || event.event_type.to_s.to_sym,
+        title: event.metadata["canonical_title"].presence || event.canonical_key,
+        text: [event.metadata["canonical_title"], evidence_text, event.event_type].compact.join(" "),
+        severity: event.metadata["severity"].presence || "medium",
+        observed_at: event.last_seen_at || event.first_seen_at || event.started_at || event.updated_at,
+        radius_km: relationship.metadata["radius_km"].presence || event.metadata["radius_km"].presence || 0.0,
+      }
+    end
+
+    def infrastructure_repair_candidate(target, relationship)
+      {
+        entity: target,
+        record: target,
+        asset_type: relationship.metadata["asset_type"].presence&.to_sym || target.entity_type.to_s.to_sym,
+        distance_km: relationship.metadata["distance_km"].to_f,
+        confidence: relationship.confidence,
+        supporting_evidence: relationship.ontology_relationship_evidences.select do |link|
+          link.evidence_role.to_s.start_with?("supporting_")
+        end,
+      }
+    end
+
+    def infrastructure_semantics_current?(relationship, assessment)
+      relationship.relation_type == assessment.fetch(:relation_type) &&
+        relationship.metadata["impact_basis"] == assessment.fetch(:impact_basis) &&
+        relationship.metadata["impact_status"] == assessment.fetch(:impact_status)
+    end
+
+    def update_infrastructure_relationship_semantics!(relationship, payload, candidate)
+      relationship.update!(
+        relation_type: candidate.fetch(:relation_type),
+        explanation: infrastructure_disruption_explanation(payload, candidate),
+        metadata: relationship.metadata.merge(
+          "impact_basis" => candidate.fetch(:impact_basis),
+          "impact_status" => candidate.fetch(:impact_status)
+        )
+      )
+    rescue ActiveRecord::RecordNotUnique
+      OntologyRelationshipEvidence.where(ontology_relationship_id: relationship.id).delete_all
+      relationship.destroy!
     end
   end
 end

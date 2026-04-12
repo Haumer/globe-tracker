@@ -49,15 +49,15 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     cable_entity = OntologyEntity.find_by!(canonical_key: "submarine-cable:gulf-link")
     plant_entity = OntologyEntity.find_by!(canonical_key: "power-plant:kw001")
 
-    impacted_plant = OntologyRelationship.find_by!(
+    exposed_plant = OntologyRelationship.find_by!(
       source_node: event,
       target_node: plant_entity,
-      relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE
+      relation_type: OntologyV2InfrastructureImpactService::EXPOSED_INFRASTRUCTURE
     )
-    impacted_port = OntologyRelationship.find_by!(
+    exposed_port = OntologyRelationship.find_by!(
       source_node: event,
       target_node: port_entity,
-      relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE
+      relation_type: OntologyV2InfrastructureImpactService::EXPOSED_INFRASTRUCTURE
     )
     exposed_cable = OntologyRelationship.find_by!(
       source_node: event,
@@ -66,7 +66,7 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     )
 
     assert_operator result.fetch(:impact_relationships), :>=, 3
-    [impacted_plant, impacted_port, exposed_cable].each do |relationship|
+    [exposed_plant, exposed_port, exposed_cable].each do |relationship|
       assert_equal OntologyV2InfrastructureImpactService::DERIVED_BY, relationship.derived_by
       assert relationship.ontology_relationship_evidences.exists?(evidence: evidence, evidence_role: "event_primary_cluster")
     end
@@ -98,6 +98,57 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     assert_equal "direct_event_role", relationship.metadata["basis"]
     assert_equal "target", relationship.metadata["role"]
     assert relationship.ontology_relationship_evidences.exists?(evidence: evidence, evidence_role: "event_primary_cluster")
+  end
+
+  test "promotes nearby infrastructure to impact only when the asset is directly referenced" do
+    place = OntologyEntity.create!(
+      canonical_key: "place:shuwaikh",
+      entity_type: "place",
+      canonical_name: "Shuwaikh",
+      metadata: { "latitude" => 29.3547, "longitude" => 47.9423, "geo_precision" => "point" }
+    )
+    port = TradeLocation.create!(
+      locode: "KWSWK",
+      country_code: "KW",
+      country_code_alpha3: "KWT",
+      country_name: "Kuwait",
+      name: "Shuwaikh Port",
+      location_kind: "port",
+      latitude: 29.35,
+      longitude: 47.93,
+      status: "active",
+      source: "test"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:shuwaikh-port-strike",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      place_entity: place,
+      verification_status: "multi_source",
+      geo_precision: "point",
+      confidence: 0.82,
+      geo_confidence: 0.8,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: { "canonical_title" => "Missile attack hits Shuwaikh Port" }
+    )
+    evidence = create_story_cluster("cluster:shuwaikh-port-strike")
+    OntologyEvidenceLink.create!(ontology_event: event, evidence: evidence, evidence_role: "primary_cluster", confidence: 0.9)
+
+    OntologyV2AssetGraphService.sync
+    OntologyV2InfrastructureImpactService.sync_batch(now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    port_entity = OntologyEntity.find_by!(canonical_key: "port:kwswk")
+    relationship = OntologyRelationship.find_by!(
+      source_node: event,
+      target_node: port_entity,
+      relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE
+    )
+
+    assert_equal "direct_asset_reference", relationship.metadata["basis"]
+    assert_includes relationship.explanation, "directly references"
+    assert_equal port, port_entity.ontology_entity_links.find_by!(role: "port").linkable
   end
 
   test "sync batch processes only the requested recent event window" do

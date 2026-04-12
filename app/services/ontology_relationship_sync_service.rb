@@ -102,6 +102,7 @@ class OntologyRelationshipSyncService
         infrastructure_disruptions: sync_infrastructure_disruption_relationships(now: now),
         local_corroborations: sync_local_corroboration_relationships(now: now),
         geoconfirmed_label_repairs: repair_geoconfirmed_date_only_labels(now: now),
+        infrastructure_semantic_repairs: repair_infrastructure_relationship_semantics(now: now),
       }
     end
 

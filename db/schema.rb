@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_12_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -715,10 +715,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_07_120000) do
     t.bigint "news_source_id"
     t.bigint "news_article_id"
     t.string "content_scope"
+    t.string "geocode_place_name"
+    t.string "geocode_country_code"
+    t.string "geocode_admin_area"
+    t.string "geocode_basis"
+    t.string "geocode_precision", default: "unknown", null: false
+    t.string "geocode_kind", default: "unknown", null: false
+    t.float "geocode_confidence", default: 0.0, null: false
+    t.jsonb "geocode_metadata", default: {}, null: false
     t.index ["ai_enriched"], name: "index_news_events_on_ai_enriched"
     t.index ["category"], name: "index_news_events_on_category"
     t.index ["content_scope"], name: "index_news_events_on_content_scope"
     t.index ["fetched_at"], name: "index_news_events_on_fetched_at"
+    t.index ["geocode_basis"], name: "index_news_events_on_geocode_basis"
+    t.index ["geocode_country_code"], name: "index_news_events_on_geocode_country_code"
+    t.index ["geocode_kind", "geocode_confidence"], name: "idx_news_events_on_geocode_kind_confidence"
     t.index ["news_article_id"], name: "index_news_events_on_news_article_id"
     t.index ["news_ingest_id"], name: "index_news_events_on_news_ingest_id"
     t.index ["news_source_id"], name: "index_news_events_on_news_source_id"

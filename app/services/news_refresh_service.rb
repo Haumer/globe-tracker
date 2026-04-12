@@ -107,12 +107,21 @@ class NewsRefreshService
         }
       )
 
-      records << {
+      location = LocationResolver.resolve_event(
+        title: adapted[:title],
+        summary: adapted[:summary],
+        url: adapted[:url],
+        provided_latitude: lat,
+        provided_longitude: lng,
+        provided_place_name: location_name,
+        provided_basis: "gdelt_geojson"
+      )
+      next unless location&.coordinates
+
+      records << LocationResolver.news_event_attributes(location).merge(
         url: adapted[:url],
         name: adapted[:name],
         title: adapted[:title],
-        latitude: lat,
-        longitude: lng,
         tone: tone.round(1),
         level: ThreatClassifier.tone_level(tone),
         category: adapted[:category],
@@ -122,7 +131,7 @@ class NewsRefreshService
         source: "gdelt",
         created_at: now,
         updated_at: now,
-      }
+      )
     end
 
     # Also fetch targeted conflict queries for active theaters

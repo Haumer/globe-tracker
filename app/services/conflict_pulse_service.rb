@@ -6,6 +6,7 @@ class ConflictPulseService
   MIN_SOURCES = 2      # require multi-source confirmation
   MIN_TONE = 1.5       # filter out low-intensity articles (|tone| < 1.5)
   MIN_PULSE_SCORE = 20
+  MIN_EVENT_LOCATION_CONFIDENCE = 0.7
   MAX_RESULTS = 25
   STRATEGIC_STORY_WINDOW = 7.days
   STRATEGIC_STORY_FRESH_WINDOW = 72.hours
@@ -332,7 +333,8 @@ class ConflictPulseService
       .where.not(latitude: nil, longitude: nil)
       .where(category: CONFLICT_CATEGORIES)
       .select(:id, :title, :url, :name, :latitude, :longitude, :tone, :source, :category,
-              :threat_level, :credibility, :story_cluster_id, :published_at, :news_source_id)
+              :threat_level, :credibility, :story_cluster_id, :published_at, :news_source_id,
+              :news_ingest_id, :news_article_id, :geocode_basis, :geocode_kind, :geocode_confidence)
     source_names_by_id = NewsSource.where(id: articles.distinct.pluck(:news_source_id).compact)
       .pluck(:id, :name)
       .to_h
@@ -345,20 +347,10 @@ class ConflictPulseService
     articles.find_each do |a|
       next if a.tone && a.tone.abs < MIN_TONE
       next if a.title&.match?(noise_patterns)
-      # Check if headline mentions a conflict region far from the article's stored location
-      event_loc = detect_event_location(a.title)
-      # Also check: article geocoded to a media capital but headline mentions a conflict zone
-      event_loc ||= reaction_city_rebucket(a)
-      if event_loc
-        event_cell = cell_key(event_loc[0], event_loc[1])
-        stored_cell = cell_key(a.latitude, a.longitude)
-        if event_cell != stored_cell
-          # Article is about a conflict elsewhere — count it toward the event location
-          cells[event_cell] << a
-          next
-        end
-      end
-      cells[cell_key(a.latitude, a.longitude)] << a
+      event_loc = article_event_location(a)
+      next unless event_loc
+
+      cells[cell_key(event_loc[0], event_loc[1])] << a
     end
 
     now = @reference_time
@@ -629,7 +621,7 @@ class ConflictPulseService
     signals = {}
 
     mil = Flight.within_bounds(bounds).where(military: true).where("updated_at > ?", @reference_time - 6.hours).count
-    signals[:military_flights] = mil if mil > 0
+    signals[:military_flights] = mil if mil > 0 && conflict_context
 
     jam = GpsJammingSnapshot.where("recorded_at > ? AND percentage > 10", @reference_time - 6.hours)
       .where(cell_lat: bounds[:lamin]..bounds[:lamax], cell_lng: bounds[:lomin]..bounds[:lomax])
@@ -671,6 +663,37 @@ class ConflictPulseService
     score += [[signals[:strike_signals_7d].to_i / 3.0, 2].min, 0].max
     score += [[signals[:verified_strike_reports_7d].to_i * 1.5, 3].min, 0].max
     [score.round(1), 15].min
+  end
+
+  def article_event_location(article)
+    detect_event_location(article.title) ||
+      high_confidence_title_location(article) ||
+      reaction_city_rebucket(article) ||
+      trusted_stored_article_location(article)
+  end
+
+  def high_confidence_title_location(article)
+    location = LocationResolver.resolve_event(
+      title: article.title,
+      url: article.url
+    )
+    return nil unless location&.kind == "event"
+    return nil if location.confidence.to_f < MIN_EVENT_LOCATION_CONFIDENCE
+
+    location.coordinates
+  end
+
+  def trusted_stored_article_location(article)
+    return nil if article.latitude.blank? || article.longitude.blank?
+    return [article.latitude, article.longitude] if article.respond_to?(:trusted_event_geocode?) && article.trusted_event_geocode?
+
+    # Backwards-compatible path for direct/manual records that predate provenance.
+    # Ingested news records should carry provenance and are not trusted by default.
+    if article.geocode_basis.blank? && article.news_ingest_id.blank? && article.news_article_id.blank?
+      return [article.latitude, article.longitude]
+    end
+
+    nil
   end
 
   def kinetic_conflict_context?(theater:, situation_name:, articles:)

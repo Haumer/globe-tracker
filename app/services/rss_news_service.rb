@@ -568,18 +568,20 @@ class RssNewsService
         http_status: response.code.to_i,
       }
 
-      lat, lng = geocode_title(adapted[:title])
-      next unless lat && lng
+      location = LocationResolver.resolve_event(
+        title: adapted[:title],
+        summary: adapted[:summary],
+        url: adapted[:url]
+      )
+      next unless location&.coordinates
 
       threat = ThreatClassifier.classify([ adapted[:title], adapted[:summary] ].compact.join(" "))
       credibility = [("tier#{meta[:tier]}"), meta[:risk], meta[:affiliation]].compact.join("/")
 
-      records << {
+      records << LocationResolver.news_event_attributes(location).merge(
         url: adapted[:url],
         title: adapted[:title],
         name: adapted[:name],
-        latitude: lat,
-        longitude: lng,
         tone: threat[:tone],
         level: threat[:level],
         category: threat[:category],
@@ -591,7 +593,7 @@ class RssNewsService
         source: "rss",
         created_at: now,
         updated_at: now,
-      }
+      )
     end
     SourceFeedStatusRecorder.record(
       provider: "rss",

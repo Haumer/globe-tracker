@@ -24,6 +24,8 @@ class NearbySupportingSignalsService
   end
 
   def self.cross_layer_signals(object_kind:, latitude:, longitude:, window: DEFAULT_WINDOW, conflict_context: false)
+    return {} unless conflict_context
+
     payload = call(
       object_kind: object_kind,
       latitude: latitude,

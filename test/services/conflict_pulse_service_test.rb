@@ -208,6 +208,74 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     assert_nil zone[:cross_layer_signals][:fire_hotspots]
   end
 
+  test "does not cluster ingested records with untrusted stored coordinates" do
+    source = NewsSource.create!(canonical_key: "untrusted-source", name: "Untrusted Source", source_kind: "wire")
+
+    5.times do |i|
+      article = NewsArticle.create!(
+        news_source: source,
+        url: "https://example.com/untrusted-#{i}",
+        canonical_url: "https://example.com/untrusted-#{i}",
+        title: "Unclear security update #{i}",
+        normalization_status: "normalized"
+      )
+      NewsEvent.create!(
+        news_source: source,
+        news_article: article,
+        url: article.url,
+        title: article.title,
+        latitude: 43.0,
+        longitude: -81.0,
+        tone: -5.0,
+        category: "conflict",
+        credibility: "tier2/low",
+        source: ["wire-a", "wire-b", "wire-c"][i % 3],
+        published_at: (i * 2).hours.ago,
+        fetched_at: Time.current
+      )
+    end
+
+    data = ConflictPulseService.analyze
+    assert_empty data[:zones] || []
+  end
+
+  test "uses title event location over bad stored coordinates" do
+    source = NewsSource.create!(canonical_key: "london-wire", name: "London Wire", source_kind: "wire")
+
+    5.times do |i|
+      article = NewsArticle.create!(
+        news_source: source,
+        url: "https://example.com/london-#{i}",
+        canonical_url: "https://example.com/london-#{i}",
+        title: "London police arrest protesters #{i}",
+        normalization_status: "normalized"
+      )
+      NewsEvent.create!(
+        news_source: source,
+        news_article: article,
+        url: article.url,
+        title: article.title,
+        latitude: 43.0,
+        longitude: -81.0,
+        tone: -5.0,
+        category: "unrest",
+        credibility: "tier2/low",
+        source: ["wire-a", "wire-b", "wire-c"][i % 3],
+        published_at: (i * 2).hours.ago,
+        fetched_at: Time.current
+      )
+    end
+
+    data = ConflictPulseService.analyze
+    zones = data[:zones] || []
+    london = zones.find { |zone| zone[:situation_name] == "United Kingdom" }
+
+    assert london, "Expected London UK title location to create a UK public-order zone"
+    assert_in_delta 51.0, london[:lat], 0.1
+    assert_in_delta(-1.0, london[:lng], 0.1)
+    refute zones.any? { |zone| zone[:lat] == 43.0 && zone[:lng] == -81.0 }
+  end
+
   test "does not classify generic European drone incidents as kinetic conflict" do
     article = Struct.new(:title).new("Drone sighting over Denmark disrupts airport operations")
 

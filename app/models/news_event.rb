@@ -1,4 +1,6 @@
 class NewsEvent < ApplicationRecord
+  TRUSTED_EVENT_GEOCODE_CONFIDENCE = 0.7
+
   include BoundsFilterable
   include TimeRangeQueries
 
@@ -9,4 +11,8 @@ class NewsEvent < ApplicationRecord
 
   time_range_column :published_at, recent: 24.hours
   scope :recent, -> { where("fetched_at > ?", 24.hours.ago) }
+
+  def trusted_event_geocode?
+    geocode_kind == "event" && geocode_confidence.to_f >= TRUSTED_EVENT_GEOCODE_CONFIDENCE
+  end
 end

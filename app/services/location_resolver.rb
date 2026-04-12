@@ -1,6 +1,24 @@
 class LocationResolver
   include NewsGeocodable
 
+  LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES = [
+    "New York Times",
+    "The New York Times",
+    "Washington Post",
+    "The Washington Post",
+    "Los Angeles Times",
+    "The Los Angeles Times",
+    "Wall Street Journal",
+    "The Wall Street Journal",
+    "Times of Israel",
+    "The Times of Israel",
+  ].freeze
+  PUBLISHER_SUFFIX_PATTERN = /
+    (?:\s+(?:-|\||:)\s*|\s+)
+    (?:#{LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES.sort_by { |suffix| -suffix.length }.map { |suffix| Regexp.escape(suffix) }.join("|")})
+    \z
+  /ix
+
   Result = Struct.new(
     :latitude,
     :longitude,
@@ -58,16 +76,18 @@ class LocationResolver
   def resolve_event(title:, summary: nil, country_hint: nil, url: nil, city: nil, country: nil,
                     provided_latitude: nil, provided_longitude: nil, provided_place_name: nil,
                     provided_basis: nil)
+    title_for_matching = title_without_publisher_suffix(title)
+
     candidates = [
       ai_city_candidate(city: city, country: country),
-      title_city_candidate(title: title, country_hint: country_hint),
+      title_city_candidate(title: title_for_matching, country_hint: country_hint),
       provided_coordinate_candidate(
         latitude: provided_latitude,
         longitude: provided_longitude,
         place_name: provided_place_name,
         basis: provided_basis
       ),
-      title_country_candidate(title: [title, summary].compact.join(" ")),
+      title_country_candidate(title: [title_for_matching, summary].compact.join(" ")),
       country_hint_candidate(country_hint),
       domain_candidate(url),
     ].compact
@@ -329,6 +349,10 @@ class LocationResolver
     return nil if normalized.blank? || normalized == "unspecified"
 
     normalized
+  end
+
+  def title_without_publisher_suffix(title)
+    title.to_s.squish.sub(PUBLISHER_SUFFIX_PATTERN, "").squish
   end
 
   def result(lat:, lng:, basis:, precision:, kind:, confidence:, place_name: nil, country_code: nil, admin_area: nil, metadata: {})

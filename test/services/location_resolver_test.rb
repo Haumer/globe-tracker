@@ -65,6 +65,17 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert_equal "city_profile", result.metadata["place_source"]
   end
 
+  test "ignores location-bearing publisher suffixes when matching title places" do
+    result = LocationResolver.resolve_event(
+      title: "Mourning In Sidon After Israeli Strike Kills 13 Lebanese Security Personnel New York Times"
+    )
+
+    assert_equal "title_city", result.basis
+    assert_equal "Sidon", result.place_name
+    assert_in_delta 33.56, result.latitude, 0.1
+    assert_in_delta 35.37, result.longitude, 0.1
+  end
+
   test "news event attributes include provenance fields" do
     result = LocationResolver.resolve_event(title: "Explosion rocks central Kyiv")
     attrs = LocationResolver.news_event_attributes(result)

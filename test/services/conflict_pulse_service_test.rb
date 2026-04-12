@@ -276,6 +276,20 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     refute zones.any? { |zone| zone[:lat] == 43.0 && zone[:lng] == -81.0 }
   end
 
+  test "does not geocode conflict headlines to location-bearing publisher suffixes" do
+    title = "Mourning In Sidon After Israeli Strike Kills 13 Lebanese Security Personnel New York Times"
+    article = Struct.new(:title, :url).new(title, "https://example.com/sidon-strike")
+    service = ConflictPulseService.new
+
+    assert_equal [33.6, 35.4], service.send(:detect_event_location, title)
+
+    resolved = service.send(:high_confidence_title_location, article)
+    assert_in_delta 33.56, resolved[0], 0.1
+    assert_in_delta 35.37, resolved[1], 0.1
+    refute_in_delta 40.71, resolved[0], 0.1
+    refute_in_delta(-74.01, resolved[1], 0.1)
+  end
+
   test "does not classify generic European drone incidents as kinetic conflict" do
     article = Struct.new(:title).new("Drone sighting over Denmark disrupts airport operations")
 

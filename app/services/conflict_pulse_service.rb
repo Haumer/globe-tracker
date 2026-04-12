@@ -508,6 +508,7 @@ class ConflictPulseService
     "iraq" => [33.3, 44.4], "baghdad" => [33.3, 44.4],
     "syria" => [33.5, 36.3], "damascus" => [33.5, 36.3],
     "lebanon" => [33.9, 35.5], "beirut" => [33.9, 35.5],
+    "sidon" => [33.6, 35.4],
     "yemen" => [15.4, 44.2], "sanaa" => [15.4, 44.2],
     "sudan" => [15.6, 32.5], "khartoum" => [15.6, 32.5],
     "myanmar" => [19.8, 96.1],
@@ -540,7 +541,7 @@ class ConflictPulseService
 
     # Fallback: any mention of an active conflict zone gets credit
     # but only for very specific conflict location names (not country names that could be the source)
-    specific_locations = %w[gaza hormuz donbas kharkiv kyiv baghdad beirut sanaa mogadishu kabul damascus]
+    specific_locations = %w[gaza hormuz donbas kharkiv kyiv baghdad beirut sidon sanaa mogadishu kabul damascus]
     specific_locations.each do |loc|
       return EVENT_LOCATIONS[loc] if lower.include?(loc)
     end

@@ -34,10 +34,20 @@ class NewsEventGeocodeBackfillService
   def events_to_repair
     NewsEvent
       .where("published_at IS NULL OR published_at > ?", @window.ago)
-      .where("geocode_basis IS NULL OR geocode_kind = 'unknown' OR geocode_confidence = 0")
+      .where(repairable_geocode_condition, *publisher_suffix_values)
       .order(Arel.sql("published_at DESC NULLS LAST"))
       .limit(@limit)
       .to_a
+  end
+
+  def repairable_geocode_condition
+    base = "geocode_basis IS NULL OR geocode_kind = 'unknown' OR geocode_confidence = 0"
+    suffix_clause = publisher_suffix_values.size.times.map { "title ILIKE ?" }.join(" OR ")
+    "#{base} OR (geocode_basis LIKE 'title_%' AND (#{suffix_clause}))"
+  end
+
+  def publisher_suffix_values
+    @publisher_suffix_values ||= LocationResolver::LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES.map { |suffix| "%#{suffix}" }
   end
 
   def geocode_attributes_for(event)

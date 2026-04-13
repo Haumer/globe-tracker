@@ -133,12 +133,38 @@ class NodeContextEvidenceSerializer
     {
       type: "geoconfirmed_event",
       id: evidence.id,
-      label: evidence.title.presence || "GeoConfirmed event",
+      label: geoconfirmed_event_label,
       meta: [
         evidence.map_region,
         evidence.posted_at&.iso8601 || evidence.event_time&.iso8601,
       ].compact.join(" · "),
     }
+  end
+
+  def geoconfirmed_event_label
+    description_label = geoconfirmed_description_label(evidence.description)
+    return description_label if description_label.present?
+
+    title = evidence.title.to_s.scrub("").squish
+    return title if title.present? && !geoconfirmed_date_only_title?(title)
+
+    location_hint = evidence.map_region.to_s.tr("_-", " ").squish.presence
+    coordinate_hint = format("%.4f, %.4f", evidence.latitude.to_f, evidence.longitude.to_f)
+    date_hint = (evidence.posted_at || evidence.event_time)&.strftime("%d %b %Y")
+    ["GeoConfirmed event", location_hint, coordinate_hint, date_hint].compact_blank.join(" · ")
+  end
+
+  def geoconfirmed_description_label(description)
+    first_line = description.to_s.lines.map do |line|
+      line.to_s.strip.sub(/\ASource\(s\):.*\z/i, "").sub(/\AGeolocation\(s\):.*\z/i, "").strip
+    end.find(&:present?)
+    return if first_line.blank?
+
+    first_line.to_s.scrub("").squish.slice(0, 220)
+  end
+
+  def geoconfirmed_date_only_title?(title)
+    title.match?(/\A\d{1,2}\s+[[:alpha:]]{3,9}\s+\d{4}\z/)
   end
 
   def internet_outage

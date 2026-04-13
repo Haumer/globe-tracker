@@ -21,8 +21,9 @@ class SituationAssessmentService
         .then { |items| unique_strings(items) }
     end
 
-    def inferred_items(relationships)
+    def inferred_items(relationships, node:)
       relationships
+        .reject { |relationship| static_context_relationship?(node, relationship) }
         .select { |relationship| INFERRED_RELATIONSHIP_TYPES.include?(relationship[:relation_type].to_s) }
         .filter_map { |relationship| relationship_explanation(relationship) }
         .then { |items| unique_strings(items) }
@@ -72,13 +73,13 @@ class SituationAssessmentService
         [
           "new corroborated reporting tied to this node",
           "operational_activity edges from flights, ships, NOTAMs, GPS interference, or outages",
-          "fresh downstream_exposure links to infrastructure or commodities",
+          "fresh impacted_infrastructure or exposed_infrastructure links from nearby event geometry",
         ]
       when "infrastructure_disruption", "infrastructure_exposure", "natural_hazard", "infrastructure_asset"
         [
           "new local_corroboration edges from cameras or other ground observations",
           "fresh outage, fire, NOTAM, or transport evidence near exposed assets",
-          "new downstream_exposure links from nearby corridors or theaters",
+          "new event graph links that identify initiators, targets, affected parties, or nearby places",
         ]
       when "market_exposure", "supply_chain_exposure"
         [

@@ -129,29 +129,86 @@ class OntologyRelationshipSyncService
         .first(INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS.fetch(:submarine_cable))
     end
 
-    def infrastructure_relationship_type(payload, candidate)
-      confirmed_infrastructure_disruption?(payload, candidate) ? "infrastructure_disruption" : "infrastructure_exposure"
+    def infrastructure_relationship_assessment(payload, candidate)
+      basis = infrastructure_impact_basis(payload, candidate)
+      if basis.present?
+        {
+          relation_type: "infrastructure_disruption",
+          impact_basis: basis,
+          impact_status: basis == "corroborated_operational_signal" ? "confirmed_disrupted" : "likely_disrupted",
+        }
+      else
+        {
+          relation_type: "infrastructure_exposure",
+          impact_basis: "proximity_only",
+          impact_status: "exposed",
+        }
+      end
     end
 
-    def confirmed_infrastructure_disruption?(payload, candidate)
+    def infrastructure_impact_basis(payload, candidate)
       asset_type = candidate.fetch(:asset_type)
-      return Array(candidate[:supporting_evidence]).any? if asset_type == :submarine_cable
+      return "corroborated_operational_signal" if Array(candidate[:supporting_evidence]).any?
+      return "direct_asset_reference" if directly_referenced_asset_impact?(payload, candidate)
+      return "tight_thermal_signal" if tight_thermal_signal?(payload, candidate)
 
-      distance = candidate.fetch(:distance_km).to_f
-      radius = kinetic_disruption_radius_km(asset_type)
-      return true if payload.fetch(:kind) == :thermal_strike && distance <= radius
-
-      kinetic_event = %i[geoconfirmed_strike news_kinetic_event].include?(payload.fetch(:kind))
-      kinetic_event && disruption_language?(payload[:text]) && distance <= (radius * 2.0)
+      nil
     end
 
-    def kinetic_disruption_radius_km(asset_type)
+    def directly_referenced_asset_impact?(payload, candidate)
+      return false unless disruption_language?(payload[:text])
+
+      asset_directly_referenced?(payload, candidate)
+    end
+
+    def tight_thermal_signal?(payload, candidate)
+      return false unless payload.fetch(:kind) == :thermal_strike
+
+      asset_type = candidate.fetch(:asset_type)
+      return false if asset_type == :submarine_cable
+
+      candidate.fetch(:distance_km).to_f <= tight_thermal_signal_radius_km(asset_type)
+    end
+
+    def tight_thermal_signal_radius_km(asset_type)
       {
-        airport: 8.0,
-        military_base: 10.0,
-        port: 10.0,
-        power_plant: 8.0,
-      }.fetch(asset_type, 6.0)
+        airport: 1.5,
+        military_base: 1.5,
+        port: 1.5,
+        power_plant: 1.5,
+      }.fetch(asset_type, 1.0)
+    end
+
+    def asset_directly_referenced?(payload, candidate)
+      text = normalize_asset_reference_text([payload[:title], payload[:text]].compact.join(" "))
+      return false if text.blank?
+
+      asset_reference_terms(candidate).any? do |term|
+        normalized_term = normalize_asset_reference_text(term)
+        normalized_term.length >= 5 && text.include?(normalized_term)
+      end
+    end
+
+    def asset_reference_terms(candidate)
+      entity = candidate.fetch(:entity)
+      record = candidate.fetch(:record)
+      [
+        entity.canonical_name,
+        entity.try(:canonical_key),
+        *entity.ontology_entity_aliases.pluck(:name),
+        record.try(:name),
+        record.try(:normalized_name),
+        record.try(:icao_code),
+        record.try(:iata_code),
+        record.try(:locode),
+        record.try(:gppd_idnr),
+        record.try(:external_id),
+        record.try(:cable_id),
+      ].compact_blank.uniq
+    end
+
+    def normalize_asset_reference_text(value)
+      value.to_s.downcase.gsub(/[^\p{Alnum}]+/, " ").squish
     end
 
     def supporting_cable_outages(cable, now:)

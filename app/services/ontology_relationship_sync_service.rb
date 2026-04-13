@@ -22,6 +22,7 @@ class OntologyRelationshipSyncService
   RECENT_NOTAM_WINDOW = Definitions::RECENT_NOTAM_WINDOW
   INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW
   INFRASTRUCTURE_DISRUPTION_FRESHNESS = Definitions::INFRASTRUCTURE_DISRUPTION_FRESHNESS
+  GEOCONFIRMED_LABEL_REPAIR_WINDOW = Definitions::GEOCONFIRMED_LABEL_REPAIR_WINDOW
   INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT = Definitions::INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT
   INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS = Definitions::INFRASTRUCTURE_DISRUPTION_ASSET_LIMITS
   INFRASTRUCTURE_KINETIC_EVENT_TYPES = Definitions::INFRASTRUCTURE_KINETIC_EVENT_TYPES
@@ -53,6 +54,10 @@ class OntologyRelationshipSyncService
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
       chokepoint_entities = sync_chokepoint_entities
       commodity_entities = sync_relevant_commodity_entities
+      identity_result = OntologyV2IdentityService.sync(now: now)
+      asset_graph_result = OntologyV2AssetGraphService.sync(now: now)
+      event_graph_result = OntologyV2EventGraphService.sync(now: now)
+      infrastructure_impact_result = OntologyV2InfrastructureImpactService.sync(now: now)
       theater_since = now - window
       direct_story_since = now - DIRECT_STORY_WINDOW
       theaters = build_active_theaters(since: theater_since)
@@ -65,6 +70,10 @@ class OntologyRelationshipSyncService
         theaters: theater_entities.size,
         chokepoints: chokepoint_entities.size,
         commodities: commodity_entities.size,
+        identity_links: identity_result.slice(:actor_country_links, :place_country_links),
+        asset_graph: asset_graph_result.slice(:assets, :country_relationships),
+        event_graph: event_graph_result.slice(:events, :place_relationships, :entity_relationships, :relationship_evidences),
+        infrastructure_impact: infrastructure_impact_result.slice(:events, :impact_relationships, :relationship_evidences),
         theater_pressure: sync_theater_pressure_relationships(
           theaters: theaters,
           theater_entities: theater_entities,
@@ -92,6 +101,8 @@ class OntologyRelationshipSyncService
         ),
         infrastructure_disruptions: sync_infrastructure_disruption_relationships(now: now),
         local_corroborations: sync_local_corroboration_relationships(now: now),
+        geoconfirmed_label_repairs: repair_geoconfirmed_date_only_labels(now: now),
+        infrastructure_semantic_repairs: repair_infrastructure_relationship_semantics(now: now),
       }
     end
 

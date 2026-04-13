@@ -96,7 +96,7 @@ class OntologyRelationshipSyncService
           {
             kind: :geoconfirmed_strike,
             record: event,
-            title: event.title.presence || "GeoConfirmed kinetic event",
+            title: geoconfirmed_event_title(event),
             text: text,
             event_family: "conflict",
             event_type: "geoconfirmed_strike",
@@ -108,6 +108,32 @@ class OntologyRelationshipSyncService
             confidence: 0.82,
           }
         end
+    end
+
+    def geoconfirmed_event_title(event)
+      description_title = geoconfirmed_description_title(event.description)
+      return description_title if description_title.present?
+
+      title = event.title.to_s.scrub("").squish
+      return title if title.present? && !geoconfirmed_date_only_title?(title)
+
+      location_hint = event.map_region.to_s.tr("_-", " ").squish.presence
+      coordinate_hint = format("%.4f, %.4f", event.latitude.to_f, event.longitude.to_f)
+      date_hint = (event.posted_at || event.event_time)&.strftime("%d %b %Y")
+      ["Geoconfirmed strike", location_hint, coordinate_hint, date_hint].compact_blank.join(" · ")
+    end
+
+    def geoconfirmed_description_title(description)
+      first_line = description.to_s.lines.map do |line|
+        line.to_s.strip.sub(/\ASource\(s\):.*\z/i, "").sub(/\AGeolocation\(s\):.*\z/i, "").strip
+      end.find(&:present?)
+      return if first_line.blank?
+
+      first_line.to_s.scrub("").squish.slice(0, 220)
+    end
+
+    def geoconfirmed_date_only_title?(title)
+      title.match?(/\A\d{1,2}\s+[[:alpha:]]{3,9}\s+\d{4}\z/)
     end
 
     def recent_news_kinetic_events(now:)

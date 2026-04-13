@@ -7,6 +7,26 @@ class NodeContextService
     "CountrySectorProfile" => "Country sector profile",
     "SectorInputProfile" => "Sector input profile",
   }.freeze
+  RELATIONSHIP_DISPLAY_LIMIT = 16
+  RELATIONSHIP_PRIORITY = {
+    "impacted_infrastructure" => 0,
+    "exposed_infrastructure" => 1,
+    "infrastructure_disruption" => 2,
+    "infrastructure_exposure" => 3,
+    "targeted_entity" => 4,
+    "affected_entity" => 5,
+    "initiated_event" => 6,
+    "participated_in_event" => 7,
+    "involved_in_event" => 8,
+    "occurred_at" => 9,
+    "operational_activity" => 10,
+    "local_corroboration" => 11,
+    "theater_pressure" => 12,
+    "located_in_country" => 20,
+    "lands_in_country" => 21,
+    "represents_country" => 22,
+    "place_resolves_to_country" => 23,
+  }.freeze
 
   class << self
     def resolve(kind:, id:)
@@ -137,8 +157,16 @@ class NodeContextService
       end
 
       (outgoing + incoming)
-        .sort_by { |relationship| [-relationship.fetch(:confidence), relationship.fetch(:node).fetch(:name).to_s] }
-        .first(8)
+        .sort_by { |relationship| relationship_sort_key(relationship) }
+        .first(RELATIONSHIP_DISPLAY_LIMIT)
+    end
+
+    def relationship_sort_key(relationship)
+      [
+        RELATIONSHIP_PRIORITY.fetch(relationship.fetch(:relation_type).to_s, 100),
+        -relationship.fetch(:confidence),
+        relationship.fetch(:node).fetch(:name).to_s,
+      ]
     end
 
     def serialize_entity_evidence(entity)

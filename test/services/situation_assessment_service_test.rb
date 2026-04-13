@@ -183,6 +183,122 @@ class SituationAssessmentServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "classifies v2 impacted infrastructure relationships as disruptions" do
+    asset = OntologyEntity.create!(
+      canonical_key: "port:v2-impact",
+      entity_type: "port",
+      canonical_name: "V2 Impact Port"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:v2-impact",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown",
+      metadata: { "canonical_title" => "Strike damages V2 Impact Port" }
+    )
+    OntologyRelationship.create!(
+      source_node: event,
+      target_node: asset,
+      relation_type: OntologyV2InfrastructureImpactService::IMPACTED_INFRASTRUCTURE,
+      confidence: 0.84,
+      derived_by: OntologyV2InfrastructureImpactService::DERIVED_BY,
+      explanation: "Strike damages V2 Impact Port."
+    )
+
+    assessment = SituationAssessmentService.for_node(kind: "entity", id: "port:v2-impact")
+
+    assert_equal "infrastructure_disruption", assessment[:situation_type]
+    assert_includes assessment[:observed].join(" "), "Strike damages V2 Impact Port"
+    assert_includes assessment[:watch_next].join(" "), "event graph"
+  end
+
+  test "country assessment leads with recent state actor events instead of static asset inventory" do
+    country = OntologyEntity.create!(
+      canonical_key: "country:irn",
+      entity_type: "country",
+      canonical_name: "Iran",
+      country_code: "IR",
+      metadata: { "country_code_alpha3" => "IRN" }
+    )
+    actor = OntologyEntity.create!(
+      canonical_key: "actor:state:ir",
+      entity_type: "actor",
+      canonical_name: "Iran",
+      country_code: "IR"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:iran-negotiation-pressure",
+      event_family: "conflict",
+      event_type: "ceasefire",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown",
+      confidence: 0.82,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 45, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 0, 0),
+      metadata: { "canonical_title" => "Iran ceasefire talks under pressure" }
+    )
+    adjacent_event = OntologyEvent.create!(
+      canonical_key: "event:adjacent-iran-threat",
+      event_family: "diplomacy",
+      event_type: "negotiation",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown",
+      confidence: 0.9,
+      first_seen_at: Time.utc(2026, 4, 11, 11, 50, 0),
+      last_seen_at: Time.utc(2026, 4, 11, 12, 5, 0),
+      metadata: { "canonical_title" => "Adjacent Iran threat commentary", "content_scope" => "adjacent" }
+    )
+    asset = OntologyEntity.create!(
+      canonical_key: "port:static-iran-port",
+      entity_type: "port",
+      canonical_name: "Static Iran Port"
+    )
+    OntologyRelationship.create!(
+      source_node: actor,
+      target_node: country,
+      relation_type: OntologyV2IdentityService::REPRESENTS_COUNTRY,
+      confidence: 0.95,
+      derived_by: OntologyV2IdentityService::DERIVED_BY
+    )
+    OntologyRelationship.create!(
+      source_node: actor,
+      target_node: event,
+      relation_type: "participated_in_event",
+      confidence: 0.84,
+      derived_by: OntologyV2EventGraphService::DERIVED_BY,
+      explanation: "Iran is participating in Iran ceasefire talks under pressure."
+    )
+    OntologyRelationship.create!(
+      source_node: actor,
+      target_node: adjacent_event,
+      relation_type: "participated_in_event",
+      confidence: 0.95,
+      derived_by: OntologyV2EventGraphService::DERIVED_BY,
+      explanation: "Iran is participating in adjacent Iran threat commentary."
+    )
+    OntologyRelationship.create!(
+      source_node: asset,
+      target_node: country,
+      relation_type: OntologyV2AssetGraphService::LOCATED_IN_COUNTRY,
+      confidence: 0.99,
+      derived_by: OntologyV2AssetGraphService::DERIVED_BY,
+      explanation: "Static Iran Port is located in country Iran."
+    )
+
+    assessment = SituationAssessmentService.for_node(kind: "entity", id: "country:irn", now: Time.utc(2026, 4, 11, 12, 0, 0))
+
+    assert_equal "conflict_report", assessment[:situation_type]
+    assert_includes assessment[:inferred].join(" "), "Iran ceasefire talks under pressure"
+    refute_includes assessment[:inferred].join(" "), "Static Iran Port"
+    refute_includes assessment[:inferred].join(" "), "adjacent Iran threat"
+    assert_equal "participated_in_event", assessment[:relationships].first[:relation_type]
+    assert_equal "Iran", assessment[:relationships].first.dig(:via_node, :name)
+  end
+
   private
 
   def create_story_cluster(key:, title:)

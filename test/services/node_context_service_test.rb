@@ -112,4 +112,43 @@ class NodeContextServiceTest < ActiveSupport::TestCase
     assert_equal "Country chokepoint exposure", NodeContextService::LEGACY_EVIDENCE_LABELS["CountryChokepointExposure"]
     assert_equal "Country commodity dependency", NodeContextService::LEGACY_EVIDENCE_LABELS["CountryCommodityDependency"]
   end
+
+  test "resolve prioritizes v2 impact relationships over weaker static context" do
+    asset = OntologyEntity.create!(
+      canonical_key: "port:priority-test",
+      entity_type: "port",
+      canonical_name: "Priority Port"
+    )
+    country = OntologyEntity.create!(
+      canonical_key: "country:priority-test",
+      entity_type: "country",
+      canonical_name: "Priority Country"
+    )
+    event = OntologyEvent.create!(
+      canonical_key: "event:priority-impact",
+      event_family: "conflict",
+      event_type: "missile_attack",
+      status: "active",
+      verification_status: "multi_source",
+      geo_precision: "unknown"
+    )
+    OntologyRelationship.create!(
+      source_node: asset,
+      target_node: country,
+      relation_type: "located_in_country",
+      confidence: 0.99,
+      derived_by: "test"
+    )
+    OntologyRelationship.create!(
+      source_node: event,
+      target_node: asset,
+      relation_type: "impacted_infrastructure",
+      confidence: 0.7,
+      derived_by: "test"
+    )
+
+    context = NodeContextService.resolve(kind: "entity", id: "port:priority-test")
+
+    assert_equal "impacted_infrastructure", context.fetch(:relationships).first.fetch(:relation_type)
+  end
 end

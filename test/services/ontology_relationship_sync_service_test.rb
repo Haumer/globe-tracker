@@ -518,6 +518,65 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "removes stale local corroboration evidence before deleting stale relationships" do
+    travel_to Time.utc(2026, 3, 26, 10, 0, 0) do
+      cluster = create_story_cluster(
+        key: "cluster:stale-sharjah-flood",
+        title: "Flooded streets in Sharjah after heavy rain hits the United Arab Emirates",
+        family: "weather",
+        event_type: "flood",
+        latitude: 25.35,
+        longitude: 55.39,
+        source_count: 4,
+        last_seen_at: 25.minutes.ago
+      )
+      event = NewsOntologySyncService.sync_story_cluster(cluster)
+      stale_camera = Camera.create!(
+        webcam_id: "windy-stale-sharjah",
+        source: "windy",
+        title: "Stale Sharjah Cam",
+        latitude: 25.37,
+        longitude: 55.40,
+        city: "Sharjah",
+        country: "AE",
+        fetched_at: 3.days.ago,
+        expires_at: 2.days.from_now,
+        is_live: true
+      )
+      stale_camera_entity = OntologySyncSupport.upsert_entity(
+        canonical_key: "asset:camera:windy:windy-stale-sharjah",
+        entity_type: "camera",
+        canonical_name: stale_camera.title,
+        metadata: { "latitude" => stale_camera.latitude, "longitude" => stale_camera.longitude }
+      )
+      stale_relation = OntologySyncSupport.upsert_relationship(
+        source_node: event,
+        target_node: stale_camera_entity,
+        relation_type: "local_corroboration",
+        confidence: 0.8,
+        fresh_until: 1.day.from_now,
+        derived_by: OntologyRelationshipSyncService::RELATION_DERIVED_BY,
+        explanation: "stale camera relation",
+        metadata: { "target_kind" => "camera" }
+      )
+      OntologySyncSupport.upsert_relationship_evidence(
+        stale_relation,
+        stale_camera,
+        evidence_role: "observation_camera",
+        confidence: 0.8,
+        metadata: {}
+      )
+
+      assert_difference -> { OntologyRelationship.where(id: stale_relation.id).count }, -1 do
+        assert_difference -> { OntologyRelationshipEvidence.where(ontology_relationship_id: stale_relation.id).count }, -1 do
+          OntologyRelationshipSyncService.sync_recent
+        end
+      end
+      refute OntologyRelationship.exists?(stale_relation.id)
+      refute OntologyRelationshipEvidence.exists?(ontology_relationship_id: stale_relation.id)
+    end
+  end
+
   test "builds infrastructure exposure relationships from hazards to nearby strategic assets" do
     travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
       earthquake = Earthquake.create!(
@@ -702,6 +761,171 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
       assert_includes relation.ontology_relationship_evidences.map(&:evidence), earthquake
       assert_includes relation.ontology_relationship_evidences.map(&:evidence), outage
       assert_includes relation.ontology_relationship_evidences.pluck(:evidence_role), "supporting_outage"
+    end
+  end
+
+  test "uses geoconfirmed event descriptions as ontology event labels instead of date-only titles" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      geoconfirmed = GeoconfirmedEvent.create!(
+        external_id: "gc-label-1",
+        map_region: "iran",
+        title: "08 APR 2026",
+        description: "Building damage visible following air strike impact near the Establishment of The Water of Beirut and Mount Lebanon (EBML) in Tallet El Khayat, Beirut.\n\nSource(s): https://example.test/source",
+        latitude: 33.88373,
+        longitude: 35.48747,
+        posted_at: 1.hour.ago,
+        fetched_at: Time.current,
+        icon_key: "airstrike"
+      )
+      port = TradeLocation.create!(
+        locode: "LBBEY",
+        country_code: "LB",
+        country_code_alpha3: "LBN",
+        country_name: "Lebanon",
+        name: "BAYRUT",
+        normalized_name: "bayrut",
+        location_kind: "port",
+        function_codes: "1",
+        latitude: 33.90,
+        longitude: 35.50,
+        status: "active",
+        source: "test_feed",
+        fetched_at: Time.current
+      )
+
+      OntologyRelationshipSyncService.sync_recent
+
+      event = OntologyEvent.find_by!(canonical_key: "event:geoconfirmed-strike:gc-label-1")
+      port_entity = OntologyEntity.find_by!(canonical_key: "port:lbbey")
+      relationship = OntologyRelationship.find_by!(source_node: event, target_node: port_entity)
+
+      assert_includes event.metadata.fetch("canonical_title"), "Building damage visible"
+      refute_equal "08 APR 2026", event.metadata.fetch("canonical_title")
+      assert_includes event.place_entity.canonical_name, "Building damage visible"
+      assert_equal "infrastructure_exposure", relationship.relation_type
+      assert_equal "proximity_only", relationship.metadata.fetch("impact_basis")
+      assert_includes relationship.explanation, "Building damage visible"
+
+      evidence_payload = NodeContextEvidenceSerializer.serialize(geoconfirmed)
+      assert_includes evidence_payload.fetch(:label), "Building damage visible"
+    end
+  end
+
+  test "only promotes geoconfirmed asset proximity to disruption when the asset is directly referenced" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      geoconfirmed = GeoconfirmedEvent.create!(
+        external_id: "gc-direct-port-label-1",
+        map_region: "lebanon",
+        title: "08 APR 2026",
+        description: "Missile strike damaged BAYRUT port infrastructure.",
+        latitude: 33.88373,
+        longitude: 35.48747,
+        posted_at: 1.hour.ago,
+        fetched_at: Time.current,
+        icon_key: "airstrike"
+      )
+      port = TradeLocation.create!(
+        locode: "LBDIR",
+        country_code: "LB",
+        country_code_alpha3: "LBN",
+        country_name: "Lebanon",
+        name: "BAYRUT",
+        normalized_name: "bayrut",
+        location_kind: "port",
+        function_codes: "1",
+        latitude: 33.90,
+        longitude: 35.50,
+        status: "active",
+        source: "test_feed",
+        fetched_at: Time.current
+      )
+
+      OntologyRelationshipSyncService.sync_recent
+
+      event = OntologyEvent.find_by!(canonical_key: "event:geoconfirmed-strike:gc-direct-port-label-1")
+      port_entity = OntologyEntity.find_by!(canonical_key: "port:lbdir")
+      relationship = OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: port_entity,
+        relation_type: "infrastructure_disruption"
+      )
+
+      assert_equal port, relationship.ontology_relationship_evidences.find_by!(evidence_role: "exposed_asset").evidence
+      assert_equal "direct_asset_reference", relationship.metadata.fetch("impact_basis")
+      assert_equal "likely_disrupted", relationship.metadata.fetch("impact_status")
+      assert_includes relationship.explanation, "directly references"
+    end
+  end
+
+  test "repairs existing date-only geoconfirmed ontology labels outside the recent event window" do
+    travel_to Time.utc(2026, 4, 12, 12, 0, 0) do
+      geoconfirmed = GeoconfirmedEvent.create!(
+        external_id: "gc-old-label-1",
+        map_region: "lebanon",
+        title: "08 APR 2026",
+        description: "Building damage visible following air strike impact near Tallet El Khayat, Beirut.",
+        latitude: 33.88373,
+        longitude: 35.48747,
+        posted_at: 4.days.ago,
+        fetched_at: Time.current,
+        icon_key: "airstrike"
+      )
+      place = OntologySyncSupport.upsert_entity(
+        canonical_key: "place:hazard:geoconfirmed_strike:gc-old-label-1",
+        entity_type: "place",
+        canonical_name: "08 APR 2026",
+        metadata: { "latitude" => 33.88373, "longitude" => 35.48747 }
+      )
+      event = OntologyEvent.create!(
+        canonical_key: "event:geoconfirmed-strike:gc-old-label-1",
+        place_entity: place,
+        event_family: "conflict",
+        event_type: "geoconfirmed_strike",
+        status: "active",
+        verification_status: "single_source",
+        geo_precision: "point",
+        confidence: 0.82,
+        source_reliability: 0.72,
+        geo_confidence: 0.86,
+        started_at: geoconfirmed.posted_at,
+        first_seen_at: geoconfirmed.posted_at,
+        last_seen_at: geoconfirmed.posted_at,
+        metadata: { "canonical_title" => "08 APR 2026" }
+      )
+      OntologySyncSupport.upsert_evidence_link(
+        event,
+        geoconfirmed,
+        evidence_role: "hazard_observation",
+        confidence: 0.82,
+        metadata: {}
+      )
+      port = OntologySyncSupport.upsert_entity(
+        canonical_key: "port:lbbey-repair",
+        entity_type: "port",
+        canonical_name: "BAYRUT",
+        metadata: {}
+      )
+      relationship = OntologySyncSupport.upsert_relationship(
+        source_node: event,
+        target_node: port,
+        relation_type: "infrastructure_disruption",
+        confidence: 0.86,
+        fresh_until: 1.day.from_now,
+        derived_by: OntologyRelationshipSyncService::RELATION_DERIVED_BY,
+        explanation: "08 APR 2026 occurred 2.1km from BAYRUT",
+        metadata: {}
+      )
+
+      result = OntologyRelationshipSyncService.sync_recent
+
+      assert_equal 1, result.fetch(:geoconfirmed_label_repairs)
+      assert_includes event.reload.metadata.fetch("canonical_title"), "Building damage visible"
+      assert_includes place.reload.canonical_name, "Building damage visible"
+      assert_equal "infrastructure_exposure", relationship.reload.relation_type
+      assert_equal "proximity_only", relationship.metadata.fetch("impact_basis")
+      assert_equal "exposed", relationship.metadata.fetch("impact_status")
+      assert_includes relationship.reload.explanation, "Building damage visible"
+      refute_includes relationship.explanation, "08 APR 2026"
     end
   end
 

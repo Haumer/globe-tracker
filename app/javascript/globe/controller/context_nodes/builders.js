@@ -585,12 +585,12 @@ export function applyContextNodeBuilderMethods(GlobeController) {
   GlobeController.prototype._buildTheaterContext = function(zoneLike) {
     const zone = typeof zoneLike === "string" ? (this._findConflictZoneForTheater(zoneLike) || { theater: zoneLike }) : (zoneLike || {})
     const theaterIdentifier = zone.theater || (typeof zoneLike === "string" ? zoneLike : null)
-    const theaterName = theaterIdentifier || zone.situation_name || zone.name || "Conflict theater"
+    const theaterName = theaterIdentifier || zone.situation_name || zone.name || "Attention region"
     const trend = zone.escalation_trend || zone.trend
     const pulseScore = zone.pulse_score || zone.score
     const summaryBits = []
 
-    if (pulseScore) summaryBits.push(`Pulse ${pulseScore}`)
+    if (pulseScore) summaryBits.push(`Attention ${pulseScore}`)
     if (zone.count_24h) summaryBits.push(`${zone.count_24h} reports / 24h`)
     if (zone.source_count) summaryBits.push(`${zone.source_count} sources`)
     if (trend) summaryBits.push(trend.replace(/_/g, " "))
@@ -598,7 +598,7 @@ export function applyContextNodeBuilderMethods(GlobeController) {
     const context = {
       kind: "theater",
       severity: pulseScore >= 80 ? "critical" : pulseScore >= 60 ? "high" : pulseScore >= 40 ? "medium" : "low",
-      statusLabel: trend || (pulseScore ? `pulse ${pulseScore}` : "monitoring"),
+      statusLabel: trend || (pulseScore ? `attention ${pulseScore}` : "monitoring"),
       icon: "fa-layer-group",
       accentColor: pulseScore >= 80 ? "#f44336" : pulseScore >= 60 ? "#ff9800" : pulseScore >= 40 ? "#ffc107" : "#4fc3f7",
       eyebrow: "THEATER CONTEXT",

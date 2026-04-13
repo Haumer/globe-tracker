@@ -1,10 +1,10 @@
-const TREND_COLORS = {
-  surging: "#f44336",
-  active: "#f44336",
-  escalating: "#ff9800",
-  elevated: "#ffc107",
-  baseline: "#66bb6a",
-}
+import {
+  attentionAssessment,
+  attentionContextLabel,
+  attentionEvidenceItems,
+  attentionPalette,
+  attentionSeverityLabel,
+} from "globe/controller/infrastructure/conflict_pulse_attention"
 
 const TREND_ARROWS = {
   surging: "▲",
@@ -21,10 +21,17 @@ const STRATEGIC_STATUS_COLORS = {
 }
 
 export function renderConflictPulseDetailHtml(controller, zone) {
-  const color = TREND_COLORS[zone.escalation_trend] || "#ff9800"
+  const palette = attentionPalette(zone)
+  const color = palette.stroke
+  const severityLabel = attentionSeverityLabel(zone)
+  const contextLabel = attentionContextLabel(zone)
+  const assessment = attentionAssessment(zone)
   const crossLayerSignals = zone.cross_layer_signals || {}
   const casePath = controller._caseIntakePathForPayload?.(controller._caseSourcePayloadForTheater?.(zone))
   const signalHtml = buildConflictSignalHtml(controller, zone, crossLayerSignals)
+  const evidenceHtml = attentionEvidenceItems(zone).slice(0, 8).map(item =>
+    `<span class="detail-chip" style="background:rgba(148,163,184,0.12);color:#d7dde7;">${controller._escapeHtml(item.label)}</span>`
+  ).join("")
   const tierHtml = Object.entries(zone.tier_breakdown || {})
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([tier, count]) => `<span style="color:#888;">${tier}:</span>${count}`)
@@ -56,16 +63,26 @@ export function renderConflictPulseDetailHtml(controller, zone) {
 
   return `
     <div class="detail-callsign" style="color:${color};">
-      <i class="fa-solid fa-bolt" style="margin-right:6px;"></i>${zone.situation_name ? controller._escapeHtml(zone.situation_name) : "DEVELOPING SITUATION"}
+      <i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>${zone.situation_name ? controller._escapeHtml(zone.situation_name) : "ATTENTION REGION"}
     </div>
     <div style="display:inline-block;padding:2px 8px;border-radius:3px;background:${color};color:#000;font:700 10px var(--gt-mono,monospace);letter-spacing:1px;margin-bottom:8px;">
-      ${zone.escalation_trend.toUpperCase()} — PULSE ${zone.pulse_score}
+      ${controller._escapeHtml(severityLabel.toUpperCase())} - ${controller._escapeHtml(contextLabel.toUpperCase())}
+    </div>
+
+    <div style="margin:2px 0 10px;padding:9px 10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.035);border-radius:6px;">
+      <div style="font:700 9px var(--gt-mono,monospace);color:${color};letter-spacing:1px;margin-bottom:5px;">WHY THIS REGION IS SHADED</div>
+      <div style="font:500 11px/1.55 var(--gt-sans,sans-serif);color:rgba(220,230,245,0.82);white-space:normal;overflow-wrap:anywhere;">${controller._escapeHtml(assessment)}</div>
+      ${evidenceHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${evidenceHtml}</div>` : ""}
     </div>
 
     <div class="detail-grid">
       <div class="detail-field">
+        <span class="detail-label">Attention index</span>
+        <span class="detail-value" style="color:${color};">${zone.pulse_score}</span>
+      </div>
+      <div class="detail-field">
         <span class="detail-label">Reports (24h)</span>
-        <span class="detail-value" style="color:${color};">${zone.count_24h}</span>
+        <span class="detail-value">${zone.count_24h}</span>
       </div>
       <div class="detail-field">
         <span class="detail-label">Reports (7d)</span>
@@ -82,7 +99,7 @@ export function renderConflictPulseDetailHtml(controller, zone) {
     </div>
 
     <div style="margin:7px 0;">
-      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">FREQUENCY SPIKE</div>
+      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">REPORTING SPIKE</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
           <div style="width:${spikeBar}%;height:100%;background:${color};border-radius:3px;"></div>
@@ -92,7 +109,7 @@ export function renderConflictPulseDetailHtml(controller, zone) {
     </div>
 
     <div style="margin:7px 0;">
-      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">TONE SEVERITY</div>
+      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:4px;">NEGATIVE TONE</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
           <div style="width:${toneBar}%;height:100%;background:#ef5350;border-radius:3px;"></div>
@@ -103,13 +120,13 @@ export function renderConflictPulseDetailHtml(controller, zone) {
 
     ${signalHtml ? `
       <div style="margin:8px 0;">
-        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">CROSS-LAYER SIGNALS</div>
+        <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">EVIDENCE SIGNALS</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">${signalHtml}</div>
       </div>
     ` : ""}
 
     <div style="margin:8px 0;">
-      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">TOP HEADLINES</div>
+      <div style="font:600 9px var(--gt-mono,monospace);color:#888;letter-spacing:1px;margin-bottom:6px;">TOP REPORTING</div>
       ${headlinesHtml}
     </div>
 
@@ -235,7 +252,7 @@ export function renderStrikeArcDetailHtml(controller, arc) {
 
 export function renderHexDetailHtml(controller, cell, zone, localName, connectionHtml, headlinesHtml) {
   const trendHtml = zone
-    ? `<div style="font:600 10px var(--gt-mono);color:${TREND_COLORS[zone.escalation_trend] || "#ff9800"};letter-spacing:0.5px;margin:4px 0;">${(zone.escalation_trend || "").toUpperCase()} — PULSE ${zone.pulse_score}</div>`
+    ? `<div style="font:600 10px var(--gt-mono);color:${attentionPalette(zone).stroke};letter-spacing:0.5px;margin:4px 0;">${controller._escapeHtml(attentionSeverityLabel(zone).toUpperCase())} - ATTENTION ${zone.pulse_score}</div>`
     : ""
 
   return `
@@ -281,10 +298,10 @@ export function renderSituationPanelHtml(controller, zones, strategic, snapshotS
 
   if (!zones.length && !strategic.length) {
     const emptyLabel = {
-      pending: "Conflict pulse snapshot pending.",
-      stale: "Showing no active zones from the latest stored snapshot.",
-      error: "Conflict pulse snapshot unavailable.",
-    }[snapshotStatus] || "No active zones."
+      pending: "Attention snapshot pending.",
+      stale: "Showing no active attention regions from the latest stored snapshot.",
+      error: "Attention snapshot unavailable.",
+    }[snapshotStatus] || "No active attention regions."
 
     return {
       countSummary,
@@ -372,14 +389,14 @@ function renderTheaterZoneSection(controller, theater, theaterZones, theaterInde
 }
 
 function renderSituationZoneCard(controller, zone, state) {
-  const color = TREND_COLORS[zone.escalation_trend] || "#ff9800"
+  const color = attentionPalette(zone).stroke
   const arrow = TREND_ARROWS[zone.escalation_trend] || ""
   const key = zone.cell_key
 
   let html = `<div class="sit-zone sit-zone--${state}" data-zone-key="${controller._escapeHtml(key)}">`
   html += `<div class="sit-zone-header" data-action="click->globe#toggleSitZone" data-zone-key="${controller._escapeHtml(key)}">
     <span class="sit-zone-name">${controller._escapeHtml(zone.situation_name || "Developing")}</span>
-    <span class="sit-zone-score" style="color:${color};">${zone.pulse_score} ${arrow} <span class="sit-zone-trend">${zone.escalation_trend.toUpperCase()}</span></span>
+    <span class="sit-zone-score" style="color:${color};">${controller._escapeHtml(attentionSeverityLabel(zone))} <span class="sit-zone-trend">ATTN ${zone.pulse_score} ${arrow}</span></span>
   </div>`
 
   if (state === "summary" || state === "expanded") {
@@ -396,15 +413,13 @@ function renderSituationZoneCard(controller, zone, state) {
 
 function renderSituationZoneSummary(controller, zone) {
   const topArticle = (zone.top_articles || [])[0]
-  const chips = []
-  const signals = zone.cross_layer_signals || {}
-  if (signals.military_flights) chips.push(`<span class="sit-chip sit-chip--mil">🛩 ${signals.military_flights}</span>`)
-  if (signals.gps_jamming) chips.push(`<span class="sit-chip sit-chip--jam">📡 ${signals.gps_jamming}%</span>`)
-  if (signals.fire_hotspots) chips.push(`<span class="sit-chip sit-chip--fire">🔥 ${signals.fire_hotspots}</span>`)
-  if (signals.known_conflict_zone) chips.push(`<span class="sit-chip sit-chip--hist">📊 ${signals.known_conflict_zone}</span>`)
-  if (signals.internet_outage) chips.push(`<span class="sit-chip sit-chip--out">⚡ outage</span>`)
+  const chips = attentionEvidenceItems(zone).slice(0, 5).map(item =>
+    `<span class="sit-chip sit-chip--${controller._escapeHtml(item.key)}">${controller._escapeHtml(item.label)}</span>`
+  )
 
   let html = `<div class="sit-zone-summary">`
+  html += `<div class="sit-zone-context">${controller._escapeHtml(attentionContextLabel(zone))}</div>`
+  html += `<div class="sit-zone-assessment">${controller._escapeHtml(attentionAssessment(zone))}</div>`
   if (topArticle) {
     const timeAgo = topArticle.published_at ? controller._timeAgo(new Date(topArticle.published_at)) : ""
     if (topArticle.cluster_id) {
@@ -455,7 +470,7 @@ function renderSituationZoneExpanded(controller, zone) {
   const context = zone.signal_context || {}
   const signalEntries = Object.entries(signals).filter(([, value]) => value)
   if (signalEntries.length) {
-    html += `<div class="sit-section-label">WHY THESE LAYERS MATTER</div>`
+    html += `<div class="sit-section-label">EVIDENCE AND CORROBORATION</div>`
     html += signalEntries.map(([key, value]) => renderSituationSignal(controller, key, value, context[key] || "")).join("")
   }
 
@@ -468,11 +483,13 @@ function renderSituationZoneExpanded(controller, zone) {
 
 function renderSituationSignal(controller, key, value, description) {
   const signalIcons = {
-    military_flights: "🛩",
-    gps_jamming: "📡",
-    fire_hotspots: "🔥",
-    known_conflict_zone: "📊",
-    internet_outage: "⚡",
+    military_flights: "MIL",
+    gps_jamming: "GPS",
+    fire_hotspots: "FIRE",
+    known_conflict_zone: "HIST",
+    internet_outage: "OUT",
+    strike_signals_7d: "STRIKE",
+    verified_strike_reports_7d: "VERIFIED",
   }
   const signalLabels = {
     military_flights: "military flights",
@@ -480,10 +497,12 @@ function renderSituationSignal(controller, key, value, description) {
     fire_hotspots: "fire hotspots",
     known_conflict_zone: "historical incidents",
     internet_outage: "internet outage",
+    strike_signals_7d: "strike-linked signals",
+    verified_strike_reports_7d: "verified strike reports",
   }
   const valueString = typeof value === "number" ? (key === "gps_jamming" ? `${value}%` : value) : value
   return `<div class="sit-signal">
-    <div class="sit-signal-header">${signalIcons[key] || "📎"} ${valueString} ${controller._escapeHtml(signalLabels[key] || key.replace(/_/g, " "))}</div>
+    <div class="sit-signal-header">${signalIcons[key] || "SIG"} ${valueString} ${controller._escapeHtml(signalLabels[key] || key.replace(/_/g, " "))}</div>
     ${description ? `<div class="sit-signal-desc">${controller._escapeHtml(description)}</div>` : ""}
   </div>`
 }
@@ -511,6 +530,8 @@ function renderConflictArticle(controller, article) {
 
 function buildConflictSignalHtml(controller, zone, signals) {
   let html = ""
+  if (signals.verified_strike_reports_7d) html += `<span class="detail-chip" style="background:rgba(239,68,68,0.15);color:#fecaca;"><i class="fa-solid fa-check-double"></i> ${signals.verified_strike_reports_7d} verified strike reports</span>`
+  if (signals.strike_signals_7d) html += `<span class="detail-chip" style="background:rgba(249,115,22,0.15);color:#fed7aa;"><i class="fa-solid fa-crosshairs"></i> ${signals.strike_signals_7d} strike-linked signals</span>`
   if (signals.military_flights) html += `<span class="detail-chip" style="cursor:pointer;background:rgba(239,83,80,0.15);color:#ef5350;" data-action="click->globe#pulseSignalClick" data-signal="militaryFlights" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-jet-fighter"></i> ${signals.military_flights} mil flights</span>`
   if (signals.gps_jamming) html += `<span class="detail-chip" style="cursor:pointer;background:rgba(255,193,7,0.15);color:#ffc107;" data-action="click->globe#pulseSignalClick" data-signal="gpsJamming" data-lat="${zone.lat}" data-lng="${zone.lng}"><i class="fa-solid fa-satellite-dish"></i> ${signals.gps_jamming}% jamming</span>`
   if (signals.internet_outage) html += `<span class="detail-chip" style="background:rgba(156,39,176,0.15);color:#ce93d8;"><i class="fa-solid fa-plug"></i> outage: ${signals.internet_outage}</span>`

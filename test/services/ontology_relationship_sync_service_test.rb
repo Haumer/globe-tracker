@@ -129,6 +129,43 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "does not treat generic strait wording as direct Bosphorus evidence" do
+    travel_to Time.utc(2026, 3, 25, 16, 0, 0) do
+      create_conflict_cluster(
+        key: "cluster:ukraine-front-generic-strait",
+        title: "Ukraine war escalation threatens Black Sea shipping",
+        latitude: 50.45,
+        longitude: 30.52,
+        source_count: 6,
+        last_seen_at: 30.minutes.ago
+      )
+      hormuz_cluster = create_story_cluster(
+        key: "cluster:hormuz-generic-strait",
+        title: "Strait of Hormuz shipping traffic remains under pressure",
+        family: "conflict",
+        event_type: "military_activity",
+        latitude: 26.56,
+        longitude: 56.27,
+        source_count: 4,
+        last_seen_at: 10.minutes.ago
+      )
+
+      OntologyRelationshipSyncService.sync_recent
+
+      theater = OntologyEntity.find_by!(canonical_key: "theater:russia-ukraine-war")
+      bosphorus = OntologyEntity.find_by!(canonical_key: "corridor:chokepoint:bosphorus")
+      relation = OntologyRelationship.find_by!(
+        source_node: theater,
+        target_node: bosphorus,
+        relation_type: "theater_pressure"
+      )
+
+      refute_includes relation.ontology_relationship_evidences.map(&:evidence), hormuz_cluster
+      assert_equal ["supporting_story"], relation.ontology_relationship_evidences.pluck(:evidence_role).uniq
+      refute_includes relation.explanation, "directly about the chokepoint"
+    end
+  end
+
   test "builds downstream exposure from pressured corridors and theaters to strategic assets" do
     travel_to Time.utc(2026, 3, 25, 16, 0, 0) do
       supporting_cluster = create_conflict_cluster(

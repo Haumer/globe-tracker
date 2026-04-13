@@ -1,4 +1,5 @@
 import { getDataSource } from "globe/utils"
+import { situationClassLabel } from "globe/controller/detail_overlay/shared"
 
 const BOUNDARY_URLS = {
   countries: [
@@ -108,16 +109,23 @@ export function applySituationSurfaceMethods(GlobeController) {
 
     ds.entities.suspendEvents()
     surfacesWithRings.forEach(({ surface, rings }, surfaceIdx) => {
-      const style = SURFACE_STYLES[surface.severity_tier] || SURFACE_STYLES.watch
+      const style = surfaceStyle(surface)
       const color = Cesium.Color.fromCssColorString(style.color)
       const confidence = Math.max(0.2, Math.min(parseFloat(surface.confidence || 0.55), 1))
       const alpha = style.alpha * (0.65 + confidence * 0.35)
       const key = this._situationSurfaceEntityKey(surface.id || `surface-${surfaceIdx}`)
+      const center = centroidForRings(rings)
+      if (center) {
+        if (surface.lat == null) surface.lat = center.lat
+        if (surface.lng == null) surface.lng = center.lng
+        surface.center_lat = center.lat
+        surface.center_lng = center.lng
+      }
 
       rings.forEach((ring, ringIdx) => {
         const positions = ring
           .filter(coord => Array.isArray(coord) && coord.length >= 2)
-          .map(coord => Cesium.Cartesian3.fromDegrees(coord[1], coord[0], 2400 + surfaceIdx * 12 + ringIdx))
+          .map(coord => Cesium.Cartesian3.fromDegrees(coord[1], coord[0]))
         if (positions.length < 3) return
 
         const entity = ds.entities.add({
@@ -128,7 +136,10 @@ export function applySituationSurfaceMethods(GlobeController) {
             outline: true,
             outlineColor: color.withAlpha(style.outline),
             outlineWidth: surface.scope === "local" ? 1.5 : 2.5,
-            height: 2400 + surfaceIdx * 12 + ringIdx,
+            height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
+            zIndex: 2000 + surfaceIdx * 10 + ringIdx,
           },
           properties: {
             surfaceId: surface.id || "",
@@ -141,7 +152,6 @@ export function applySituationSurfaceMethods(GlobeController) {
       })
 
       if (shouldLabelSurface(surface)) {
-        const center = centroidForRings(rings)
         if (center) {
           const label = ds.entities.add({
             id: `surface-label-${key}`,
@@ -189,7 +199,10 @@ export function applySituationSurfaceMethods(GlobeController) {
     return (this._situationSurfaceData || []).find(surface => `${surface.id}` === key)
   }
 
-  GlobeController.prototype.showSituationSurfaceDetail = function(surface) {
+  GlobeController.prototype.showSituationSurfaceDetail = function(surface, options = {}) {
+    if (!surface) return
+    if (this._showCompactEntityDetail?.("situation_surface", surface, options)) return
+
     const style = SURFACE_STYLES[surface.severity_tier] || SURFACE_STYLES.watch
     const evidence = (surface.evidence || []).slice(0, 4).map(item => {
       const title = this._escapeHtml(item.title || "Supporting evidence")
@@ -210,8 +223,8 @@ export function applySituationSurfaceMethods(GlobeController) {
         ${(surface.severity_tier || "watch").toUpperCase()} · ${this._escapeHtml(surface.scope || "local")}
       </div>
       <div class="detail-grid">
-        <div class="detail-field"><span class="detail-label">Class</span><span class="detail-value">${this._escapeHtml((surface.situation_class || "unknown").replaceAll("_", " "))}</span></div>
-        <div class="detail-field"><span class="detail-label">Attention</span><span class="detail-value">${surface.attention_score || 0}</span></div>
+        <div class="detail-field"><span class="detail-label">Class</span><span class="detail-value">${this._escapeHtml(situationClassLabel(surface.situation_class))}</span></div>
+        <div class="detail-field"><span class="detail-label">Graph</span><span class="detail-value">${surface.ontology?.graph_link_count || 0} links</span></div>
         <div class="detail-field"><span class="detail-label">Sources</span><span class="detail-value">${surface.source_count || 0}</span></div>
         <div class="detail-field"><span class="detail-label">Confidence</span><span class="detail-value">${Math.round((surface.confidence || 0) * 100)}%</span></div>
       </div>
@@ -331,6 +344,13 @@ function shouldLabelSurface(surface) {
 }
 
 function surfaceLabel(surface) {
-  const tier = `${surface.severity_tier || "watch"}`.toUpperCase()
-  return `${tier} · ${surface.label || "Surface"}`
+  return `${situationClassLabel(surface.situation_class).toUpperCase()} · ${surface.label || "Surface"}`
+}
+
+function surfaceStyle(surface) {
+  if (surface?.situation_class === "strategic_chokepoint" && surface?.severity_tier === "high") {
+    return { color: "#f57c00", alpha: 0.26, outline: 0.72 }
+  }
+
+  return SURFACE_STYLES[surface?.severity_tier] || SURFACE_STYLES.watch
 }

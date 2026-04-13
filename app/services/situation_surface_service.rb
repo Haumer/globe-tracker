@@ -5,6 +5,17 @@ class SituationSurfaceService
     "high" => 3,
     "critical" => 4,
   }.freeze
+  OUTAGE_SURFACE_LEVELS = %w[critical].freeze
+  MAX_OUTAGE_SURFACES = 1
+  MAX_ONTOLOGY_PRESSURE_SURFACES = 8
+  VERIFIED_STRIKE_SURFACE_WINDOW = 72.hours
+  ONTOLOGY_SURFACE_RELATION_TYPES = %w[
+    chokepoint_exposure
+    downstream_exposure
+    flow_dependency
+    operational_activity
+    theater_pressure
+  ].freeze
 
   CHOKEPOINT_GEOMETRIES = {
     "hormuz" => {
@@ -55,6 +66,20 @@ class SituationSurfaceService
           [41.35, 28.55],
           [41.45, 29.35],
           [40.85, 29.45],
+        ],
+      ],
+    },
+    "danish-straits" => {
+      label: "Danish Straits",
+      scope: "corridor",
+      rings: [
+        [
+          [54.35, 9.8],
+          [56.25, 9.95],
+          [56.45, 12.85],
+          [55.75, 13.35],
+          [54.55, 12.65],
+          [54.2, 11.05],
         ],
       ],
     },
@@ -115,6 +140,30 @@ class SituationSurfaceService
     "Kuwait" => [[[28.5, 46.45], [30.1, 46.45], [30.1, 48.65], [28.5, 48.65]]],
   }.freeze
 
+  VERIFIED_STRIKE_REGIONS = [
+    {
+      key: "northern-israel",
+      label: "Northern Israel verified strike reports",
+      theater: "Middle East / Iran War",
+      bounds: { lat: 32.55..33.45, lng: 34.8..35.9 },
+      boundary_ref: { dataset: "admin1", name: "HaZafon", admin: "Israel", iso_3166_2: "IL-Z" },
+    },
+    {
+      key: "gaza",
+      label: "Gaza verified strike reports",
+      theater: "Middle East / Iran War",
+      bounds: { lat: 31.1..31.65, lng: 34.1..34.65 },
+      boundary_ref: { dataset: "admin1", name: "Gaza Strip", admin: "Gaza Strip", iso_3166_2: "PS-GZZ" },
+    },
+    {
+      key: "iran",
+      label: "Iran verified strike reports",
+      theater: "Middle East / Iran War",
+      bounds: { lat: 25.0..40.0, lng: 44.0..64.0 },
+      boundary_ref: { dataset: "countries", name: "Iran", iso_a2: "IR" },
+    },
+  ].freeze
+
   OUTAGE_COUNTRY_CODES = {
     "CM" => "Cameroon",
     "NA" => "Namibia",
@@ -132,9 +181,11 @@ class SituationSurfaceService
 
       surfaces = []
       surfaces.concat(build_strategic_surfaces(strategic, now: now))
+      surfaces.concat(build_ontology_relationship_surfaces(now: now, covered_labels: surfaces.map { |surface| surface[:label] }))
       surfaces.concat(build_systemic_surfaces(zones, now: now))
       surfaces.concat(build_zone_surfaces(zones, hex_cells, now: now))
       if include_live_events
+        surfaces.concat(build_verified_strike_surfaces(now: now))
         surfaces.concat(build_natural_event_surfaces(now: now))
         surfaces.concat(build_outage_surfaces(now: now))
       end
@@ -185,8 +236,64 @@ class SituationSurfaceService
           detected_at: value(item, :detected_at) || now.iso8601,
           render_order: 10,
           evidence: evidence_from_articles(value(item, :top_articles), value(item, :top_headlines)),
+          ontology: ontology_context_for_chokepoint(value(item, :node_id).presence || value(item, :name).presence || geometry[:label]),
         )
       end
+    end
+
+    def build_ontology_relationship_surfaces(now:, covered_labels:)
+      covered = covered_labels.map { |label| normalized_label(label) }.compact
+      surfaces = []
+
+      OntologyRelationship.active
+        .includes(:source_node, :target_node, :ontology_relationship_evidences)
+        .where(relation_type: "theater_pressure", target_node_type: "OntologyEntity")
+        .order(confidence: :desc, updated_at: :desc)
+        .limit(MAX_ONTOLOGY_PRESSURE_SURFACES * 2)
+        .each do |relationship|
+          target = relationship.target_node
+          next unless target.is_a?(OntologyEntity) && target.entity_type == "corridor"
+
+          label = target.canonical_name
+          normalized = normalized_label(label)
+          next if normalized.blank? || covered.include?(normalized) || surfaces.any? { |surface| normalized_label(surface[:label]) == normalized }
+          next unless direct_theater_pressure?(relationship)
+
+          geometry = geometry_for_chokepoint(target.canonical_key, label)
+          next unless geometry
+
+          ontology = ontology_context_for_node(target, relationship: relationship)
+          metadata = relationship.metadata || {}
+          surfaces << surface(
+            id: "ontology:pressure:#{target.canonical_key}",
+            label: geometry[:label] || label,
+            situation_class: "strategic_chokepoint",
+            severity_tier: ontology_pressure_severity(relationship),
+            attention_score: ontology_pressure_score(relationship, ontology),
+            scope: geometry[:scope],
+            geometry: { source: "ontology_theater_pressure", rings: geometry[:rings] },
+            confidence: relationship.confidence.to_f.round(2),
+            evidence_summary: relationship.explanation.presence || "#{relationship.source_node&.canonical_name || "Theater"} is exerting pressure on #{label}.",
+            source_count: metadata["total_sources"].to_i,
+            story_count: metadata["cluster_count"].to_i,
+            detected_at: relationship.updated_at&.iso8601 || now.iso8601,
+            render_order: 12,
+            evidence: evidence_from_relationship(relationship),
+            source: {
+              ontology_relationship_id: relationship.id,
+              relation_type: relationship.relation_type,
+              theater: relationship.source_node&.canonical_name,
+              target_node: target.canonical_key,
+            }.compact,
+            ontology: ontology,
+          )
+
+          break if surfaces.size >= MAX_ONTOLOGY_PRESSURE_SURFACES
+        end
+
+      surfaces
+    rescue ActiveRecord::StatementInvalid
+      []
     end
 
     def build_systemic_surfaces(zones, now:)
@@ -249,6 +356,7 @@ class SituationSurfaceService
         lat = value(zone, :lat).to_f
         lng = value(zone, :lng).to_f
         next if lat.zero? && lng.zero?
+        next if strategic_pressure_zone?(zone)
 
         classification = situation_class_for(zone)
         next if classification == "reported_disruption" && diplomacy_only_text?(headline_text(zone))
@@ -258,7 +366,8 @@ class SituationSurfaceService
 
         label = label_for_zone(zone, classification)
         boundary_ref = boundary_ref_for_zone(zone)
-        geometry = boundary_ref ? nil : local_geometry_for(zone, hex_cells: hex_cells)
+        geometry = boundary_ref ? nil : local_geometry_for(zone, hex_cells: hex_cells, classification: classification)
+        next if boundary_ref.blank? && geometry.blank?
 
         surface(
           id: "zone:#{value(zone, :cell_key).presence || "#{lat.round(2)}:#{lng.round(2)}"}",
@@ -315,33 +424,88 @@ class SituationSurfaceService
       []
     end
 
+    def build_verified_strike_surfaces(now:)
+      recent_geoconfirmed_events(now: now)
+        .group_by { |event| verified_strike_region_for(event) }
+        .filter_map do |region, events|
+          next unless region
+
+          events = events.sort_by { |event| event.posted_at || event.event_time || event.fetched_at }.reverse
+          surface(
+            id: "verified-strike:#{region.fetch(:key)}",
+            label: region.fetch(:label),
+            situation_class: "kinetic_conflict",
+            severity_tier: events.size >= 2 ? "high" : "moderate",
+            attention_score: [70 + events.size * 5, 92].min,
+            scope: "admin_region",
+            geometry: nil,
+            boundary_ref: region.fetch(:boundary_ref),
+            confidence: 0.82,
+            evidence_summary: "#{events.size} verified geolocation#{events.size == 1 ? "" : "s"} in the last #{(VERIFIED_STRIKE_SURFACE_WINDOW / 1.hour).to_i}h.",
+            source_count: events.flat_map { |event| Array(event.source_urls) }.compact_blank.uniq.size,
+            story_count: events.size,
+            detected_at: (events.first.posted_at || events.first.event_time || events.first.fetched_at || now).iso8601,
+            render_order: 26,
+            evidence: events.first(4).map { |event| evidence_from_geoconfirmed_event(event) },
+            source: { theater: region.fetch(:theater), source_type: "geoconfirmed" },
+          )
+        end
+    rescue ActiveRecord::StatementInvalid
+      []
+    end
+
+    def recent_geoconfirmed_events(now:)
+      GeoconfirmedEvent
+        .where("COALESCE(posted_at, event_time, fetched_at) >= ?", now - VERIFIED_STRIKE_SURFACE_WINDOW)
+        .where("COALESCE(posted_at, event_time, fetched_at) <= ?", now)
+        .where.not(latitude: nil, longitude: nil)
+    end
+
+    def verified_strike_region_for(event)
+      VERIFIED_STRIKE_REGIONS.find do |region|
+        region.fetch(:bounds).fetch(:lat).cover?(event.latitude.to_f) &&
+          region.fetch(:bounds).fetch(:lng).cover?(event.longitude.to_f)
+      end
+    end
+
+    def evidence_from_geoconfirmed_event(event)
+      {
+        title: event.title.presence || "GeoConfirmed event",
+        source: [event.map_region, (event.posted_at || event.event_time || event.fetched_at)&.iso8601].compact_blank.join(" · "),
+        url: Array(event.geolocation_urls).first || Array(event.source_urls).first,
+      }.compact
+    end
+
     def build_outage_surfaces(now:)
       outages = outage_summary
-      outages.filter_map do |outage|
-        score = value(outage, :score).to_f
-        level = value(outage, :level).presence || "minor"
-        next if score < 1_000 && !%w[moderate severe critical].include?(level)
+      outages
+        .select { |outage| OUTAGE_SURFACE_LEVELS.include?(value(outage, :level).to_s) }
+        .sort_by { |outage| -value(outage, :score).to_f }
+        .first(MAX_OUTAGE_SURFACES)
+        .filter_map do |outage|
+          score = value(outage, :score).to_f
+          level = value(outage, :level).presence || "minor"
 
-        code = value(outage, :code).to_s.upcase
-        name = value(outage, :name).presence || OUTAGE_COUNTRY_CODES[code] || code
-        surface(
-          id: "outage:#{code.presence || name}",
-          label: "#{name} internet outage",
-          situation_class: "internet_outage",
-          severity_tier: level.in?(%w[severe critical]) ? "high" : "moderate",
-          attention_score: [score / 100.0, 70].min.round,
-          scope: "national",
-          geometry: nil,
-          boundary_ref: { dataset: "countries", iso_a2: code, name: name },
-          confidence: 0.62,
-          evidence_summary: "#{level} IODA outage signal, score #{score.round(1)}",
-          source_count: value(outage, :eventCount).to_i,
-          story_count: value(outage, :eventCount).to_i,
-          detected_at: now.iso8601,
-          render_order: 50,
-          evidence: [],
-        )
-      end
+          code = value(outage, :code).to_s.upcase
+          name = value(outage, :name).presence || OUTAGE_COUNTRY_CODES[code] || code
+          surface(
+            id: "outage:#{code.presence || name}",
+            label: "#{name} internet outage",
+            situation_class: "internet_outage",
+            severity_tier: level.in?(%w[severe critical]) ? "high" : "moderate",
+            attention_score: [score / 100.0, 70].min.round,
+            scope: "national",
+            geometry: nil,
+            boundary_ref: { dataset: "countries", iso_a2: code, name: name },
+            confidence: 0.62,
+            evidence_summary: "#{level} IODA outage signal, score #{score.round(1)}",
+            source_count: value(outage, :eventCount).to_i,
+            story_count: value(outage, :eventCount).to_i,
+            detected_at: now.iso8601,
+            render_order: 50,
+            evidence: [],
+          )
+        end
     end
 
     def systemic_surface(id:, label:, country:, severity_tier:, attention_score:, evidence_summary:, source_count:, story_count:, now:)
@@ -365,8 +529,8 @@ class SituationSurfaceService
     end
 
     def situation_class_for(zone)
-      return "public_order" if public_order?(zone)
       return "kinetic_conflict" if kinetic_conflict?(zone)
+      return "public_order" if public_order?(zone)
 
       "reported_disruption"
     end
@@ -405,11 +569,36 @@ class SituationSurfaceService
       value(zone, :situation_name).presence || value(zone, :theater).presence || "Developing situation"
     end
 
-    def local_geometry_for(zone, hex_cells:)
+    def local_geometry_for(zone, hex_cells:, classification:)
       name = value(zone, :situation_name).to_s
       return { source: "curated_local_region", rings: LOCAL_REGION_GEOMETRIES.fetch(name) } if LOCAL_REGION_GEOMETRIES.key?(name)
+      return nil unless classification == "kinetic_conflict" && value(zone, :use_reporting_cell_surface)
+
+      rings = reporting_cell_rings_for_zone(zone, hex_cells)
+      return { source: "reporting_cells", rings: rings } if rings.any?
 
       nil
+    end
+
+    def reporting_cell_rings_for_zone(zone, hex_cells)
+      zone_key = value(zone, :cell_key).to_s
+      return [] if zone_key.blank?
+
+      Array(hex_cells).filter_map do |cell|
+        next unless value(cell, :zone_key).to_s == zone_key
+
+        ring = Array(value(cell, :vertices)).filter_map do |vertex|
+          if vertex.is_a?(Hash)
+            lat = value(vertex, :lat) || value(vertex, :latitude)
+            lng = value(vertex, :lng) || value(vertex, :lon) || value(vertex, :longitude)
+            [lat.to_f, lng.to_f] if lat.present? && lng.present?
+          elsif vertex.is_a?(Array) && vertex.size >= 2
+            [vertex[0].to_f, vertex[1].to_f]
+          end
+        end
+
+        ring if ring.size >= 3
+      end
     end
 
     def boundary_ref_for_zone(zone)
@@ -420,6 +609,8 @@ class SituationSurfaceService
       return { dataset: "admin1", name: "Odessa", admin: "Ukraine", iso_3166_2: "UA-51" } if name == "Odesa Region" || text.match?(/\bodesa|odessa\b/i)
       return { dataset: "admin1", name: "Gaza Strip", admin: "Gaza Strip", iso_3166_2: "PS-GZZ" } if text.match?(/\bgaza\b/i)
       return { dataset: "admin1", name: "HaZafon", admin: "Israel", iso_3166_2: "IL-Z" } if text.match?(/\bhezbollah|lebanon|safed|northern israel\b/i)
+      return { dataset: "countries", name: "Iran", iso_a2: "IR" } if name == "Iran Theater" || name == "Iran"
+      return { dataset: "countries", name: "Ukraine", iso_a2: "UA" } if name == "Ukraine" || name == "Ukraine Theater"
 
       nil
     end
@@ -468,8 +659,177 @@ class SituationSurfaceService
       return CHOKEPOINT_GEOMETRIES["bab-el-mandeb"] if key.match?(/bab|mandeb/)
       return CHOKEPOINT_GEOMETRIES["suez"] if key.include?("suez")
       return CHOKEPOINT_GEOMETRIES["bosphorus"] if key.include?("bosphorus")
+      return CHOKEPOINT_GEOMETRIES["danish-straits"] if key.match?(/danish|oresund|øresund|great belt/)
 
       nil
+    end
+
+    def ontology_context_for_chokepoint(identifier)
+      entity = ontology_chokepoint_entity(identifier)
+      ontology_context_for_node(entity) if entity
+    rescue ActiveRecord::StatementInvalid
+      nil
+    end
+
+    def ontology_chokepoint_entity(identifier)
+      key = chokepoint_key_for(identifier)
+      entity = OntologyEntity.find_by(canonical_key: "corridor:chokepoint:#{key}") if key.present?
+      entity ||= OntologyEntity.where(entity_type: "corridor").find_by("LOWER(canonical_name) = ?", identifier.to_s.downcase) if identifier.present?
+      entity
+    end
+
+    def chokepoint_key_for(identifier)
+      raw = identifier.to_s.strip
+      return if raw.blank?
+
+      ChokepointMonitorService::CHOKEPOINTS.find do |key, config|
+        candidates = [
+          key.to_s,
+          key.to_s.tr("_", " "),
+          config[:name],
+          OntologySyncSupport.slugify(config[:name].to_s),
+        ]
+        candidates.any? { |candidate| candidate.to_s.casecmp?(raw) }
+      end&.first
+    end
+
+    def ontology_context_for_node(node, relationship: nil)
+      return unless node
+
+      outgoing_counts = node.outgoing_ontology_relationships.active.where(relation_type: ONTOLOGY_SURFACE_RELATION_TYPES).group(:relation_type).count
+      incoming_counts = node.incoming_ontology_relationships.active.where(relation_type: ONTOLOGY_SURFACE_RELATION_TYPES).group(:relation_type).count
+      counts = outgoing_counts.merge(incoming_counts) { |_relation_type, outgoing, incoming| outgoing + incoming }
+
+      {
+        node_key: node.canonical_key,
+        request: ontology_request_for_node(node),
+        relationship_id: relationship&.id,
+        relation_type: relationship&.relation_type,
+        graph_link_count: counts.values.sum,
+        downstream_exposure_count: counts["downstream_exposure"].to_i,
+        flow_dependency_count: counts["flow_dependency"].to_i,
+        chokepoint_exposure_count: counts["chokepoint_exposure"].to_i,
+        theater_pressure_count: counts["theater_pressure"].to_i,
+        evidence_count: relationship ? relationship.ontology_relationship_evidences.size : 0,
+      }.compact
+    end
+
+    def ontology_request_for_node(node)
+      if node.entity_type == "corridor" && node.canonical_key.to_s.start_with?("corridor:chokepoint:")
+        { kind: "chokepoint", id: node.canonical_name }
+      else
+        { kind: "entity", id: node.canonical_key }
+      end
+    end
+
+    def ontology_pressure_score(relationship, ontology)
+      ontology ||= {}
+      base = (relationship.confidence.to_f * 100).round
+      base += [ontology[:downstream_exposure_count].to_i / 4, 10].min
+      base += [ontology[:flow_dependency_count].to_i * 2, 8].min
+      [base, 98].min
+    end
+
+    def direct_theater_pressure?(relationship)
+      direct_chokepoint_evidence_links(relationship).any?
+    end
+
+    def ontology_pressure_severity(relationship)
+      local_count = direct_chokepoint_evidence_links(relationship).size
+      return "critical" if relationship.confidence.to_f >= 0.9 && local_count >= 2
+
+      "high"
+    end
+
+    def direct_chokepoint_evidence_links(relationship)
+      relationship.ontology_relationship_evidences.select do |evidence|
+        evidence.evidence_role == "local_story" && evidence_matches_chokepoint?(evidence, relationship.target_node)
+      end
+    end
+
+    def evidence_matches_chokepoint?(evidence_link, target)
+      return false unless target.is_a?(OntologyEntity)
+
+      evidence = load_relationship_evidence_record(evidence_link)
+      return false unless evidence
+
+      config = chokepoint_config_for(target)
+      evidence_mentions_chokepoint?(evidence, target, config) || evidence_geolocates_near_chokepoint?(evidence, config)
+    end
+
+    def chokepoint_config_for(target)
+      key = chokepoint_key_for(target.canonical_name) || target.canonical_key.to_s.split(":").last&.to_sym
+      ChokepointMonitorService::CHOKEPOINTS[key&.to_sym]
+    end
+
+    def evidence_mentions_chokepoint?(evidence, target, config)
+      text = [
+        evidence.try(:canonical_title),
+        evidence.try(:title),
+        evidence.try(:location_name),
+        evidence.try(:name),
+      ].compact.join(" ").downcase
+      return false if text.blank?
+
+      chokepoint_surface_terms(target, config).any? { |term| text.include?(term) }
+    end
+
+    def chokepoint_surface_terms(target, config)
+      generic_terms = %w[canal cape channel chokepoint corridor strait straits]
+      name = (config&.fetch(:name, nil).presence || target.canonical_name).to_s
+      [
+        name.downcase,
+        target.canonical_key.to_s.split(":").last.to_s.tr("_", " "),
+        OntologySyncSupport.slugify(name).tr("-", " "),
+        *name.downcase.split(/[^a-z0-9]+/).select { |token| token.length >= 5 && generic_terms.exclude?(token) },
+      ].compact_blank.uniq
+    end
+
+    def evidence_geolocates_near_chokepoint?(evidence, config)
+      return false unless config
+
+      lat = evidence.try(:latitude)
+      lng = evidence.try(:longitude)
+      return false if lat.blank? || lng.blank?
+
+      haversine_km(lat.to_f, lng.to_f, config.fetch(:lat).to_f, config.fetch(:lng).to_f) <= [config.fetch(:radius_km, 50).to_f * 4.0, 250.0].max
+    end
+
+    def haversine_km(lat1, lng1, lat2, lng2)
+      radians_per_degree = Math::PI / 180.0
+      dlat = (lat2 - lat1) * radians_per_degree
+      dlng = (lng2 - lng1) * radians_per_degree
+      a = Math.sin(dlat / 2)**2 +
+        Math.cos(lat1 * radians_per_degree) *
+        Math.cos(lat2 * radians_per_degree) *
+        Math.sin(dlng / 2)**2
+
+      6371.0 * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+    end
+
+    def evidence_from_relationship(relationship)
+      relationship.ontology_relationship_evidences.to_a.first(4).filter_map do |link|
+        evidence = load_relationship_evidence_record(link)
+        serialized = evidence ? NodeContextEvidenceSerializer.serialize(evidence) : nil
+        label = serialized&.fetch(:label, nil).presence || "#{link.evidence_type.to_s.demodulize} ##{link.evidence_id}"
+
+        {
+          title: label,
+          source: [link.evidence_role, serialized&.fetch(:meta, nil)].compact_blank.join(" · "),
+          url: serialized&.fetch(:url, nil),
+        }.compact
+      end
+    end
+
+    def load_relationship_evidence_record(link)
+      klass = link.evidence_type.to_s.safe_constantize
+      klass&.find_by(id: link.evidence_id) if klass&.respond_to?(:find_by)
+    rescue StandardError
+      nil
+    end
+
+    def normalized_label(label)
+      label.to_s.strip.downcase.presence
     end
 
     def confidence_for_zone(zone, classification)
@@ -496,6 +856,10 @@ class SituationSurfaceService
       return false if kinetic_headline?(zone)
 
       headline_text(zone).match?(/\b(protest|protests|demonstrat|unrest|riot|blockade|fuel|refinery|shortage|supply chain|strike action)\b/i)
+    end
+
+    def strategic_pressure_zone?(zone)
+      value(zone, :attention_state).to_s == "strategic_pressure"
     end
 
     def systemic_public_order?(zone)
@@ -587,7 +951,7 @@ class SituationSurfaceService
       end.values
     end
 
-    def surface(id:, label:, situation_class:, severity_tier:, attention_score:, scope:, geometry:, confidence:, evidence_summary:, source_count:, story_count:, detected_at:, render_order:, evidence:, boundary_ref: nil, source: nil)
+    def surface(id:, label:, situation_class:, severity_tier:, attention_score:, scope:, geometry:, confidence:, evidence_summary:, source_count:, story_count:, detected_at:, render_order:, evidence:, boundary_ref: nil, source: nil, ontology: nil)
       {
         id: id,
         label: label,
@@ -606,6 +970,7 @@ class SituationSurfaceService
         render_order: render_order,
         evidence: Array(evidence).compact,
         source: source,
+        ontology: ontology,
       }.compact
     end
 

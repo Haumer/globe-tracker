@@ -255,7 +255,7 @@
             <article class="area-list-item">
               <div class="case-list-top">
                 <h3><%= situation[:name] %></h3>
-                <span class="case-badge">Pulse <%= situation[:pulse_score] %></span>
+                <span class="case-badge">Attention <%= situation[:pulse_score] %></span>
               </div>
               <p><%= [situation[:theater], situation[:trend].to_s.titleize].compact.join(" · ") %></p>
               <div class="case-list-meta">
@@ -266,7 +266,7 @@
           <% end %>
         </div>
       <% else %>
-        <div class="case-empty case-empty--inline">No active theater bubbles intersect this area right now.</div>
+        <div class="case-empty case-empty--inline">No active attention regions intersect this area right now.</div>
       <% end %>
     </section>
 

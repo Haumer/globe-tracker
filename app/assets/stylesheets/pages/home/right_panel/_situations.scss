@@ -81,6 +81,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 8px 0;
   cursor: pointer;
   user-select: none;
@@ -90,6 +91,8 @@
   font: 500 12px 'Inter', -apple-system, sans-serif;
   color: #e6ecf3;
   letter-spacing: -0.1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .sit-zone-score {
@@ -98,6 +101,8 @@
   flex-shrink: 0;
   color: #a8c2db;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  max-width: 46%;
 }
 
 .sit-zone-trend {
@@ -109,6 +114,26 @@
 // Summary state
 .sit-zone-summary {
   padding: 0 0 9px;
+}
+
+.sit-zone-context {
+  display: inline-flex;
+  margin-bottom: 6px;
+  padding: 2px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  color: rgba(215, 221, 231, 0.8);
+  font: 700 8px 'JetBrains Mono', monospace;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.sit-zone-assessment {
+  margin-bottom: 8px;
+  color: rgba(220, 230, 245, 0.72);
+  font: 500 11px/1.55 'Inter', -apple-system, sans-serif;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .sit-zone-headline {
@@ -146,6 +171,31 @@
 .sit-chip--fire { color: #d87872; border-color: rgba(216, 120, 114, 0.32); }
 .sit-chip--hist { color: #8a94a6; }
 .sit-chip--out  { color: #a8c2db; border-color: rgba(168, 194, 219, 0.3); }
+.sit-chip--reports,
+.sit-chip--sources,
+.sit-chip--spike,
+.sit-chip--context {
+  color: #d7dde7;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+.sit-chip--strike_signals,
+.sit-chip--strike_signals_7d,
+.sit-chip--verified_strikes,
+.sit-chip--verified_strike_reports_7d {
+  color: #fed7aa;
+  border-color: rgba(249, 115, 22, 0.36);
+}
+.sit-chip--gps_jamming,
+.sit-chip--internet_outage {
+  color: #fef08a;
+  border-color: rgba(250, 204, 21, 0.34);
+}
+.sit-chip--military_flights,
+.sit-chip--fire_hotspots,
+.sit-chip--known_conflict_zone {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.3);
+}
 
 // Expanded state
 .sit-zone-detail {

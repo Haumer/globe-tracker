@@ -338,7 +338,7 @@ export function applyContextNodeTheaterDossierMethods(GlobeController) {
     const pulseDelta = current.pulse_score - previous.pulse_score
     if (pulseDelta !== 0) {
       const arrow = pulseDelta > 0 ? "↑" : "↓"
-      changes.push(`Pulse ${current.pulse_score} ${arrow} from ${previous.pulse_score}`)
+      changes.push(`Attention ${current.pulse_score} ${arrow} from ${previous.pulse_score}`)
     }
 
     const reportDelta = current.count_24h - previous.count_24h

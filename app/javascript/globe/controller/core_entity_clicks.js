@@ -1,9 +1,24 @@
 export function applyCoreEntityClickMethods(GlobeController) {
-  GlobeController.prototype._handleEntityClick = function(entityId, picked) {
+  GlobeController.prototype._handleEntityClick = function(entityId, picked, screenPosition = null) {
+    const clickAnchor = this._anchoredDetailClickAnchor?.(screenPosition)
+    if (clickAnchor) {
+      picked = picked
+        ? { ...picked, id: picked.id, primitive: picked.primitive, clickAnchor }
+        : { clickAnchor }
+    }
+
+    const showAnchored = (kind, data, options = {}, fallback = null) => {
+      if (data && this._showCompactEntityDetail?.(kind, data, { ...options, picked })) return true
+      if (typeof fallback === "function") return fallback() !== false
+      return false
+    }
+
     const flightData = this.flightData.get(entityId)
     if (flightData) {
       this.toggleFlightSelection(entityId)
-      this.showDetail(entityId, flightData)
+      if (!showAnchored("flight", flightData, { id: entityId, focusSelection: { type: "flight", id: entityId } })) {
+        this.showDetail(entityId, flightData)
+      }
       return true
     }
 
@@ -26,7 +41,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const data = this.shipData.get(id)
         if (!data) return false
         this.toggleShipSelection(id)
-        this.showShipDetail(data)
+        if (!showAnchored("ship", data, { id, focusSelection: { type: "ship", id } })) this.showShipDetail(data)
         return true
       }},
       { prefix: "border-fill-", skip: [], handler: (id) => {
@@ -52,27 +67,32 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const data = this.satelliteData.find(sat => sat.norad_id === noradId)
         if (!data) return false
         this.toggleSatSelection(noradId)
-        this.showSatelliteDetail(data)
+        if (!showAnchored("satellite", data, { id, focusSelection: { type: "sat", id: noradId } })) this.showSatelliteDetail(data)
         return true
       }},
       { prefix: "train-", skip: [], handler: (id) => {
         const data = this._trainData?.find(train => train.id === id)
         if (!data) return false
-        this.showTrainDetail(data)
+        if (!showAnchored("train", data, { id })) this.showTrainDetail(data)
         return true
       }},
-      { prefix: "airport-", skip: [], handler: (id) => { this.showAirportDetail(id); return true }},
+      { prefix: "airport-", skip: [], handler: (id) => {
+        const data = this._getAirport?.(id)
+        if (!data) return false
+        if (!showAnchored("airport", data, { id })) this.showAirportDetail(id)
+        return true
+      }},
       { prefix: "eq-", skip: [], handler: (id) => {
         const data = this._earthquakeData.find(quake => quake.id === id)
         if (!data) return false
-        this.showEarthquakeDetail(data)
+        if (!showAnchored("earthquake", data, { id })) this.showEarthquakeDetail(data)
         return true
       }},
       { prefix: "gc-", skip: [], handler: (id) => {
         const data = this._gcDetections?.find(gc => gc.id === id)
         if (!data) return false
         if (this._showCompactEntityDetail) {
-          this._showCompactEntityDetail("geoconfirmed", data, { id })
+          this._showCompactEntityDetail("geoconfirmed", data, { id, picked })
         } else {
           this.showGeoconfirmedDetail(data)
         }
@@ -87,7 +107,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "milflt-", skip: [], handler: (id) => {
         const data = this._milFlightData?.find(flight => flight.icao24 === id)
         if (!data) return false
-        this.showDetail(id, {
+        const detailData = {
           ...data,
           id,
           currentLat: data.latitude,
@@ -95,7 +115,8 @@ export function applyCoreEntityClickMethods(GlobeController) {
           currentAlt: data.altitude,
           verticalRate: data.vertical_rate,
           originCountry: data.origin_country,
-        })
+        }
+        if (!showAnchored("flight", detailData, { id, focusSelection: { type: "flight", id } })) this.showDetail(id, detailData)
         return true
       }},
       { prefix: "strike-", skip: [], handler: (id) => {
@@ -108,61 +129,84 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const idx = parseInt(id, 10)
         const data = this._fireHotspotClusterData?.[idx]
         if (!data) return false
-        this.showFireClusterDetail(data)
+        if (!showAnchored("fire_cluster", data, { id })) this.showFireClusterDetail(data)
         return true
       }},
       { prefix: "fire-cluster-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const data = this._fireHotspotClusterData?.[idx]
         if (!data) return false
-        this.showFireClusterDetail(data)
+        if (!showAnchored("fire_cluster", data, { id })) this.showFireClusterDetail(data)
         return true
       }},
       { prefix: "fire-ring-", skip: [], handler: (id) => {
         const data = this._fireHotspotData?.find(fire => fire.id === id)
         if (!data) return false
-        this.showFireHotspotDetail(data)
+        if (!showAnchored("fire_hotspot", data, { id })) this.showFireHotspotDetail(data)
         return true
       }},
       { prefix: "fire-", skip: [], handler: (id) => {
         const data = this._fireHotspotData?.find(fire => fire.id === id)
         if (!data) return false
-        this.showFireHotspotDetail(data)
+        if (!showAnchored("fire_hotspot", data, { id })) this.showFireHotspotDetail(data)
         return true
       }},
       { prefix: "eonet-ring-", skip: [], handler: (id) => {
         const data = this._naturalEventData.find(event => event.id === id)
         if (!data) return false
-        this.showNaturalEventDetail(data)
+        if (!showAnchored("natural_event", data, { id })) this.showNaturalEventDetail(data)
         return true
       }},
       { prefix: "eonet-", skip: [], handler: (id) => {
         const data = this._naturalEventData.find(event => event.id === id)
         if (!data) return false
-        this.showNaturalEventDetail(data)
+        if (!showAnchored("natural_event", data, { id })) this.showNaturalEventDetail(data)
         return true
       }},
       { prefix: "news-arc-", skip: [], handler: () => {
         const idx = parseInt(entityId.replace(/^news-arc-(?:lbl-|arr-)?/, ""), 10)
         if (Number.isNaN(idx)) return false
+        const data = this._newsArcData?.[idx]
+        if (data && showAnchored("news_arc", data, { id: idx })) return true
         this.showNewsArcDetail(idx)
         return true
       }},
       { prefix: "news-", skip: ["news-arc-"], handler: (id) => {
         const data = this._newsData?.[parseInt(id, 10)]
         if (!data) return false
-        this.showNewsDetail(data)
+        if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
         return true
       }},
-      { prefix: "outage-ring-", skip: [], handler: (id) => { this.showOutageDetail(id); return true }},
-      { prefix: "outage-", skip: [], handler: (id) => { this.showOutageDetail(id); return true }},
-      { prefix: "jam-lbl-", skip: [], handler: (id) => this.showGpsJammingDetail(id) },
-      { prefix: "jam-", skip: ["jam-lbl-"], handler: (id) => this.showGpsJammingDetail(id) },
+      { prefix: "outage-ring-", skip: [], handler: (id) => {
+        const data = this._outageData?.find(outage => outage.code === id)
+        if (!data) return false
+        if (!showAnchored("outage", data, { id })) this.showOutageDetail(id)
+        return true
+      }},
+      { prefix: "outage-", skip: [], handler: (id) => {
+        const data = this._outageData?.find(outage => outage.code === id)
+        if (!data) return false
+        if (!showAnchored("outage", data, { id })) this.showOutageDetail(id)
+        return true
+      }},
+      { prefix: "jam-lbl-", skip: [], handler: (id) => {
+        const data = (this._gpsJammingData || []).find(entry => `${entry.lat}-${entry.lng}` === id)
+        if (!data) return false
+        if (!showAnchored("gps_jamming", data, { id })) return this.showGpsJammingDetail(id)
+        return true
+      }},
+      { prefix: "jam-", skip: ["jam-lbl-"], handler: (id) => {
+        const data = (this._gpsJammingData || []).find(entry => `${entry.lat}-${entry.lng}` === id)
+        if (!data) return false
+        if (!showAnchored("gps_jamming", data, { id })) return this.showGpsJammingDetail(id)
+        return true
+      }},
       { prefix: "cable-", skip: [], handler: () => {
         const props = picked.id.properties
         if (!props) return false
         this._highlightPolyline(picked.id)
         const name = props.cableName?.getValue() || "Unknown cable"
+        if (showAnchored("cable", { name, id: props.cableId?.getValue?.() }, { id: props.cableId?.getValue?.() })) return true
         this.detailContentTarget.innerHTML = `
           <div class="detail-callsign" style="color:#00bcd4;">
             <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>Submarine Cable
@@ -174,26 +218,34 @@ export function applyCoreEntityClickMethods(GlobeController) {
         return true
       }},
       { prefix: "port-", skip: [], handler: (id) => {
-        this.showPortDetail(id)
+        const data = (this._portAll || []).find(item => String(item.id) === String(id))
+        if (!data) return false
+        if (!showAnchored("port", data, { id })) this.showPortDetail(id)
         return true
       }},
       { prefix: "shipping-lane-", skip: ["shipping-label-"], handler: () => {
         const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
         if (!laneId) return false
         this._highlightPolyline(picked.id)
-        this.showShippingLaneDetail(laneId)
+        const data = (this._shippingLaneData || []).find(item => String(item.id) === String(laneId))
+        if (!data) return false
+        if (!showAnchored("shipping_lane", data, { id: laneId })) this.showShippingLaneDetail(laneId)
         return true
       }},
       { prefix: "shipping-port-", skip: [], handler: () => {
         const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
         if (!laneId) return false
-        this.showShippingLaneDetail(laneId)
+        const data = (this._shippingLaneData || []).find(item => String(item.id) === String(laneId))
+        if (!data) return false
+        if (!showAnchored("shipping_lane", data, { id: laneId })) this.showShippingLaneDetail(laneId)
         return true
       }},
       { prefix: "shipping-stop-", skip: [], handler: () => {
         const laneId = picked.id.properties?.shippingLaneId?.getValue?.()
         if (!laneId) return false
-        this.showShippingLaneDetail(laneId)
+        const data = (this._shippingLaneData || []).find(item => String(item.id) === String(laneId))
+        if (!data) return false
+        if (!showAnchored("shipping_lane", data, { id: laneId })) this.showShippingLaneDetail(laneId)
         return true
       }},
       { prefix: "pipeline-", skip: ["pipeline-label-"], handler: () => {
@@ -202,7 +254,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const pipeId = props.pipelineId?.getValue()
         if (!pipeId) return false
         this._highlightPolyline(picked.id)
-        this.showPipelineDetail(pipeId)
+        this.showPipelineDetail(pipeId, { picked })
         return true
       }},
       { prefix: "cam-", skip: [], handler: (id) => {
@@ -210,27 +262,32 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const data = this._webcamEntityMap.get("cam-" + id) ||
           this._webcamData.find(cam => String(cam.id) === id || String(cam.id) === String(webcamId))
         if (!data) return false
-        this.showWebcamDetail(data)
+        if (!showAnchored("webcam", data, { id })) this.showWebcamDetail(data)
         return true
       }},
       { prefix: "milbase-", skip: [], handler: (id) => {
         const data = this._militaryBaseData?.find(base => String(base.id) === id)
         if (!data) return false
-        this.showMilitaryBaseDetail(data)
+        if (!showAnchored("military_base", data, { id })) this.showMilitaryBaseDetail(data)
         return true
       }},
-      { prefix: "airbase-", skip: [], handler: (id) => { this.showAirbaseDetail(id); return true }},
+      { prefix: "airbase-", skip: [], handler: (id) => {
+        const data = this._airportDb?.[id]
+        if (!data) return false
+        if (!showAnchored("airbase", data, { id })) this.showAirbaseDetail(id)
+        return true
+      }},
       { prefix: "naval-", skip: [], handler: (id) => {
         const data = this._navalShipData.get(id) || this._navalShipData.get(`${id}`)
         if (!data) return false
-        this.showNavalVesselDetail(data)
+        if (!showAnchored("naval_vessel", data, { id })) this.showNavalVesselDetail(data)
         return true
       }},
       { prefix: "city-", skip: [], handler: (id) => {
         const cityId = picked.id.properties?.cityId?.getValue?.() || id
         const data = this._citiesData?.find(city => `${city.id}` === `${cityId}`)
         if (!data) return false
-        this.showCityDetail?.(data)
+        if (!showAnchored("city", data, { id: cityId })) this.showCityDetail?.(data)
         return true
       }},
       { prefix: "rdist-fill-", skip: [], handler: (id) => {
@@ -286,70 +343,72 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "pp-atk-", skip: [], handler: (id) => {
         const data = this._powerPlantData.find(plant => plant.id === parseInt(id, 10))
         if (!data) return false
-        this.showPowerPlantDetail(data)
+        if (!showAnchored("power_plant", data, { id })) this.showPowerPlantDetail(data)
         return true
       }},
       { prefix: "pp-", skip: [], handler: (id) => {
         const data = this._powerPlantData.find(plant => plant.id === parseInt(id, 10))
         if (!data) return false
-        this.showPowerPlantDetail(data)
+        if (!showAnchored("power_plant", data, { id })) this.showPowerPlantDetail(data)
         return true
       }},
       { prefix: "comsite-", skip: [], handler: (id) => {
         const data = this._commoditySiteData?.find(site => `${site.id}` === `${id}`) ||
           this._commoditySiteAll?.find(site => `${site.id}` === `${id}`)
         if (!data) return false
-        this.showCommoditySiteDetail(data)
+        if (!showAnchored("commodity_site", data, { id })) this.showCommoditySiteDetail(data)
         return true
       }},
       { prefix: "choke-zone-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "choke-ships-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "choke-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "rw-", skip: [], handler: (id) => {
         this._highlightPolyline(picked.id)
-        this.showRailwayDetail(id)
+        const data = (this._railwayData || []).find(rw => String(rw.id) === String(id))
+        if (!data) return false
+        if (!showAnchored("railway", data, { id })) this.showRailwayDetail(id)
         return true
       }},
       { prefix: "surface-poly-", skip: [], handler: (id) => {
         const key = id.replace(/-\d+$/, "")
         const data = this._situationSurfaceByEntityKey?.(key)
         if (!data) return false
-        this.showSituationSurfaceDetail(data)
+        this.showSituationSurfaceDetail(data, { picked })
         return true
       }},
       { prefix: "surface-label-", skip: [], handler: (id) => {
         const data = this._situationSurfaceByEntityKey?.(id)
         if (!data) return false
-        this.showSituationSurfaceDetail(data)
+        this.showSituationSurfaceDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-arc-lbl-", handler: (id) => {
         const idx = parseInt(id, 10)
         const arc = this._strikeArcData?.[idx]
         if (!arc) return false
-        this.showStrikeArcDetail(arc)
+        if (!showAnchored("strike_arc", arc, { id })) this.showStrikeArcDetail(arc)
         return true
       }},
       { prefix: "cpulse-arc-", handler: (id) => {
         const idx = parseInt(id, 10)
         const arc = this._strikeArcData?.[idx]
         if (!arc) return false
-        this.showStrikeArcDetail(arc)
+        if (!showAnchored("strike_arc", arc, { id })) this.showStrikeArcDetail(arc)
         return true
       }},
       { prefix: "cpulse-hex-", handler: (id) => {
@@ -357,6 +416,13 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const cell = this._hexCellData?.[idx]
         if (!cell) return false
         this._showHexDetail(cell)
+        return true
+      }},
+      { prefix: "cpulse-surface-", skip: [], handler: (id) => {
+        const key = decodeURIComponent(id)
+        const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
+        if (!data) return false
+        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-strat-ring-", skip: [], handler: (id) => {
@@ -419,59 +485,73 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const conflictId = /^\d+$/.test(id) ? parseInt(id, 10) : id
         const data = this._conflictData.find(event => `${event.id}` === `${conflictId}`)
         if (!data) return false
-        this.showConflictDetail(data)
+        if (!showAnchored("conflict_event", data, { id })) this.showConflictDetail(data)
         return true
       }},
       { prefix: "conf-", skip: [], handler: (id) => {
         const conflictId = /^\d+$/.test(id) ? parseInt(id, 10) : id
         const data = this._conflictData.find(event => `${event.id}` === `${conflictId}`)
         if (!data) return false
-        this.showConflictDetail(data)
+        if (!showAnchored("conflict_event", data, { id })) this.showConflictDetail(data)
         return true
       }},
       { prefix: "traf-lbl-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const arc = this._attackArcData?.[idx]
         if (arc?.target) {
+          const data = this._trafficData?.traffic?.find(item => item.code === arc.target)
+          if (data && showAnchored("traffic", data, { id: arc.target })) return true
           this.showTrafficDetail(arc.target)
           return true
         }
         return false
       }},
-      { prefix: "traf-atk-", skip: [], handler: (id) => { this.showTrafficDetail(id); return true }},
+      { prefix: "traf-atk-", skip: [], handler: (id) => {
+        const data = this._trafficData?.traffic?.find(item => item.code === id)
+        if (!data) return false
+        if (!showAnchored("traffic", data, { id })) this.showTrafficDetail(id)
+        return true
+      }},
       { prefix: "traf-arc-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const arc = this._attackArcData?.[idx]
         if (arc?.target) {
+          const data = this._trafficData?.traffic?.find(item => item.code === arc.target)
+          if (data && showAnchored("traffic", data, { id: arc.target })) return true
           this.showTrafficDetail(arc.target)
           return true
         }
         return false
       }},
-      { prefix: "traf-", skip: [], handler: (id) => { this.showTrafficDetail(id); return true }},
+      { prefix: "traf-", skip: [], handler: (id) => {
+        const data = this._trafficData?.traffic?.find(item => item.code === id)
+        if (!data) return false
+        if (!showAnchored("traffic", data, { id })) this.showTrafficDetail(id)
+        return true
+      }},
       { prefix: "notam-lbl-", skip: [], handler: (id) => {
         const data = this._notamData?.find(notam => String(notam.id) === id)
         if (!data) return false
-        this.showNotamDetail(data)
+        if (!showAnchored("notam", data, { id })) this.showNotamDetail(data)
         return true
       }},
       { prefix: "notam-", skip: ["notam-warn-", "notam-lbl-"], handler: (id) => {
         const data = this._notamData?.find(notam => String(notam.id) === id)
         if (!data) return false
-        this.showNotamDetail(data)
+        if (!showAnchored("notam", data, { id })) this.showNotamDetail(data)
         return true
       }},
       { prefix: "wx-alert-", skip: [], handler: (id) => {
         const data = this._weatherAlerts?.[parseInt(id, 10)]
         if (!data) return false
-        this.showWeatherAlertDetail(data)
+        if (!showAnchored("weather_alert", data, { id })) this.showWeatherAlertDetail(data)
         return true
       }},
       { prefix: "fin-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const data = this._commodityData?.[idx]
         if (!data) return false
-        this.showCommodityDetail(data)
+        this.showCommodityDetail(data, { picked })
         return true
       }},
       { prefix: "insight-ring-", skip: [], handler: (id) => {

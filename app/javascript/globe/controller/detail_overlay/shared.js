@@ -45,6 +45,17 @@ export function kindLabel(kind) {
   return (kind || "item").replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase())
 }
 
+export function situationClassLabel(value) {
+  return {
+    internet_outage: "Internet outage",
+    kinetic_conflict: "Armed conflict",
+    natural_hazard: "Natural hazard",
+    public_order: "Public order",
+    reported_disruption: "Reported disruption",
+    strategic_chokepoint: "Strategic chokepoint",
+  }[value] || kindLabel(value || "surface")
+}
+
 export function shortLine(value, maxLength = 96) {
   if (value == null) return null
   const normalized = `${value}`.replace(/\s+/g, " ").trim()

@@ -1,8 +1,8 @@
 export function applyUiStatMethods(GlobeController) {
   GlobeController.prototype._updateStats = function() {
-    // Theater count from conflict pulse zones
-    const theaterCount = (this._hexCellData || []).length
-    updateStat("stat-theaters", theaterCount)
+    // Attention region count from conflict pulse zones
+    const regionCount = (this._conflictPulseData || []).length
+    updateStat("stat-theaters", regionCount)
 
     // News article count
     const newsCount = (this._newsData || []).length

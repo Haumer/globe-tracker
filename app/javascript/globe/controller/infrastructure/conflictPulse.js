@@ -1,5 +1,10 @@
 import { applyConflictPulseInteractionMethods } from "globe/controller/infrastructure/conflict_pulse_interactions"
 import { applyConflictPulseRenderingMethods } from "globe/controller/infrastructure/conflict_pulse_rendering"
+import {
+  attentionContextLabel,
+  attentionSeverityLabel,
+  decorateAttentionZones,
+} from "globe/controller/infrastructure/conflict_pulse_attention"
 
 export function applyConflictPulseMethods(GlobeController) {
   applyConflictPulseRenderingMethods(GlobeController)
@@ -77,7 +82,8 @@ export function applyConflictPulseMethods(GlobeController) {
       if (!resp.ok) return
       const data = await resp.json()
       if (fetchToken !== this._conflictPulseFetchToken || !this.situationsVisible || this._timelineActive) return
-      const zones = data.zones || []
+      const strategicSituations = data.strategic_situations || []
+      const zones = decorateAttentionZones(data.zones || [], strategicSituations)
       this._conflictPulseSnapshotStatus = data.snapshot_status || "ready"
 
       // Detect new surges — compare to previous state
@@ -105,7 +111,7 @@ export function applyConflictPulseMethods(GlobeController) {
 
       this._conflictPulseData = zones
       this._conflictPulseZones = zones
-      this._strategicSituationData = data.strategic_situations || []
+      this._strategicSituationData = strategicSituations
       this._strikeArcData = data.strike_arcs || []
       this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
@@ -122,7 +128,8 @@ export function applyConflictPulseMethods(GlobeController) {
     this._conflictPulseToastSeenAt[`${zone?.cell_key || "unknown"}`] = Date.now()
 
     const headline = zone.top_headlines?.[0] || "Developing situation detected"
-    const trend = zone.escalation_trend.toUpperCase()
+    const severity = attentionSeverityLabel(zone).toUpperCase()
+    const context = attentionContextLabel(zone).toUpperCase()
     const el = document.getElementById("gt-toast")
     if (!el) return
 
@@ -134,7 +141,7 @@ export function applyConflictPulseMethods(GlobeController) {
     const container = document.createElement("div")
     container.style.cssText = "display:flex;flex-direction:column;gap:4px;max-width:400px;cursor:pointer;"
     container.innerHTML = `
-      <div style="font:600 10px var(--gt-mono,monospace);letter-spacing:1px;color:#ff5252;">${trend} — CONFLICT PULSE ${zone.pulse_score}</div>
+      <div style="font:600 10px var(--gt-mono,monospace);letter-spacing:1px;color:#ff5252;">${severity} - ${context} - ATTN ${zone.pulse_score}</div>
       <div style="font:400 11px var(--gt-mono,monospace);color:#fff;line-height:1.3;">${headline.slice(0, 100)}</div>
       <div style="font:400 9px var(--gt-mono,monospace);color:#aaa;">${zone.count_24h} reports · ${zone.source_count} sources · Click to focus</div>
     `

@@ -5,8 +5,17 @@ import {
   firstPresent,
   kindLabel,
   shortLine,
+  situationClassLabel,
   toNumber,
 } from "globe/controller/detail_overlay/shared"
+import {
+  attentionAssessment,
+  attentionContextLabel,
+  attentionEvidenceItems,
+  attentionPalette,
+  attentionSeverity,
+  attentionSeverityLabel,
+} from "globe/controller/infrastructure/conflict_pulse_attention"
 
 export function applyDetailOverlayPayloadMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailMarkerStroke = function(kind, data) {
@@ -33,7 +42,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           other: "#90a4ae",
         }[data?.category] || "#90a4ae"
       case "conflict_pulse":
-        return conflictPulseStroke(toNumber(data?.pulse_score) || 0)
+        return attentionPalette(data).stroke || conflictPulseStroke(toNumber(data?.pulse_score) || 0)
       case "strategic_situation": {
         return {
           critical: "#ff7043",
@@ -41,6 +50,25 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           monitoring: "#26c6da",
         }[data?.status] || "#26c6da"
       }
+      case "situation_surface": {
+        if (data?.situation_class === "strategic_chokepoint" && data?.severity_tier === "high") return "#f57c00"
+        return {
+          critical: "#9b111e",
+          high: "#d32f2f",
+          moderate: "#f57c00",
+          watch: "#fbc02d",
+        }[data?.severity_tier] || "#f57c00"
+      }
+      case "gps_jamming":
+        return data?.level === "high" ? "#ff5252" : data?.level === "medium" ? "#ff7043" : "#ffca28"
+      case "port":
+        return firstPresent(data?.color, data?.primary_flow_color, "#26c6da")
+      case "shipping_lane":
+        return firstPresent(data?.color, "#90a4ae")
+      case "commodity_site":
+        return firstPresent(data?.color, "#ffb300")
+      case "city":
+        return "#80cbc4"
       case "insight":
         return { critical: "#f44336", high: "#ff9800", medium: "#ffc107", low: "#4caf50" }[data?.severity] || "#8bd8ff"
       case "airport":
@@ -72,7 +100,13 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       case "geoconfirmed":
         return 10
       case "chokepoint":
+      case "situation_surface":
         return 12
+      case "port":
+      case "commodity_site":
+      case "gps_jamming":
+      case "city":
+        return 10
       default:
         return 0
     }
@@ -109,6 +143,11 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       case "outage":
       case "chokepoint":
       case "commodity":
+      case "commodity_site":
+      case "gps_jamming":
+      case "port":
+      case "situation_surface":
+      case "city":
         return 2400
       case "ship":
       case "naval_vessel":
@@ -265,6 +304,18 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           accent: data?.military ? "#ff7043" : "#ffd54f",
         })
       }
+      case "city": {
+        return makePayload({
+          title: firstPresent(data?.name, "City"),
+          subtitle: firstPresent(data?.country_name, data?.country, data?.admin1, "City"),
+          facts: [
+            data?.population != null ? `${Math.round(data.population).toLocaleString()} people` : null,
+            firstPresent(data?.admin1, data?.timezone),
+          ],
+          chips: [chip("City", "accent")],
+          accent: "#80cbc4",
+        })
+      }
       case "earthquake": {
         const mag = toNumber(data?.mag ?? data?.magnitude)
         const depth = toNumber(data?.depth)
@@ -340,6 +391,27 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           accent: data?.level === "critical" || data?.level === "severe" ? "#f44336" : "#ffc107",
         })
       }
+      case "gps_jamming": {
+        const level = firstPresent(data?.level, "interference")
+        const pct = toNumber(data?.pct)
+        const bad = toNumber(data?.bad)
+        const total = toNumber(data?.total)
+        const accent = this._anchoredDetailMarkerStroke(kind, data) || "#ffca28"
+        return makePayload({
+          title: "GPS interference",
+          subtitle: `${`${level}`.toUpperCase()} cell`,
+          facts: [
+            pct != null ? `${pct}% degraded` : null,
+            bad != null && total != null ? `${bad} / ${total} aircraft` : null,
+          ],
+          chips: [
+            chip(level, level === "high" ? "critical" : "warning"),
+            chip("GPS", "neutral"),
+          ],
+          accent,
+          stroke: accent,
+        })
+      }
       case "cable": {
         return makePayload({
           title: firstPresent(data?.name, "Submarine cable"),
@@ -347,6 +419,50 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           facts: [firstPresent(data?.source, "TeleGeography")],
           chips: [chip("Cable", "accent")],
           accent: "#00bcd4",
+        })
+      }
+      case "port": {
+        const goods = Array.isArray(data?.estimated_commodity_names) ? data.estimated_commodity_names.slice(0, 2).join(", ") : null
+        return makePayload({
+          title: firstPresent(data?.name, "Port"),
+          subtitle: firstPresent(data?.place_label, data?.country_name, data?.country_code_alpha3, "Port"),
+          brief: compactFacts([
+            firstPresent(data?.importance_tier, data?.primary_flow_type),
+            goods,
+          ]).join(" · "),
+          facts: [
+            firstPresent(data?.importance_tier, data?.source),
+            firstPresent(data?.locode ? `LOCODE ${data.locode}` : null, data?.primary_flow_type),
+          ],
+          chips: [
+            chip("Port", "accent"),
+            data?.estimated ? chip("Modeled", "neutral") : chip("Observed", "neutral"),
+          ],
+          accent: this._anchoredDetailMarkerStroke(kind, data) || "#26c6da",
+          nodeRequest: data?.id ? { kind: "port", id: data.id } : null,
+        })
+      }
+      case "shipping_lane": {
+        const origin = firstPresent(data?.source_anchor?.name, data?.source_country?.name)
+        const destination = firstPresent(data?.destination_anchor?.name, data?.destination_country?.name)
+        const vulnerability = toNumber(data?.vulnerability_score)
+        const dependency = toNumber(data?.dependency_score)
+        return makePayload({
+          title: firstPresent(data?.commodity_name, "Shipping lane"),
+          subtitle: firstPresent(data?.name, origin && destination ? `${origin} → ${destination}` : null, "Shipping corridor"),
+          brief: compactFacts([
+            origin && destination ? `${origin} → ${destination}` : null,
+            vulnerability != null ? `Vulnerability ${Math.round(vulnerability * 100)}%` : null,
+          ]).join(" · "),
+          facts: [
+            firstPresent(data?.status, data?.commodity_name),
+            dependency != null ? `Dependency ${Math.round(dependency * 100)}%` : null,
+          ],
+          chips: [
+            chip(firstPresent(data?.status, "Lane"), data?.status === "observed" ? "accent" : "neutral"),
+            chip("Shipping", "neutral"),
+          ],
+          accent: this._anchoredDetailMarkerStroke(kind, data) || "#90a4ae",
         })
       }
       case "pipeline": {
@@ -493,6 +609,47 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           accent: "#ef5350",
         })
       }
+      case "situation_surface": {
+        const severity = firstPresent(data?.severity_tier, "watch")
+        const scope = firstPresent(data?.scope, "local")
+        const confidence = toNumber(data?.confidence)
+        const accent = this._anchoredDetailMarkerStroke(kind, data) || "#f57c00"
+        const classLabel = situationClassLabel(data?.situation_class)
+        const ontology = data?.ontology || {}
+        const nodeRequest = ontology?.request
+          ? ontology.request
+          : data?.situation_class === "strategic_chokepoint" && data?.label
+            ? { kind: "chokepoint", id: data.label }
+            : data?.source?.theater
+              ? { kind: "theater", id: data.source.theater }
+              : null
+        return makePayload({
+          title: firstPresent(data?.label, "Situation surface"),
+          subtitle: compactFacts([
+            `${severity}`.replace(/_/g, " "),
+            `${scope}`.replace(/_/g, " "),
+            classLabel,
+          ], 3).join(" · "),
+          brief: firstPresent(data?.evidence_summary, "Derived from current live signals."),
+          facts: [
+            ontology?.downstream_exposure_count ? `${ontology.downstream_exposure_count} exposed assets` : null,
+            ontology?.flow_dependency_count ? `${ontology.flow_dependency_count} flow links` : null,
+            ontology?.graph_link_count ? `${ontology.graph_link_count} graph links` : null,
+            data?.source_count != null ? `${data.source_count} sources` : null,
+            confidence != null ? `${Math.round(confidence * 100)}% confidence` : null,
+          ],
+          chips: [
+            chip(severity, severity === "critical" || severity === "high" ? "critical" : "warning"),
+            chip(classLabel, "neutral"),
+          ],
+          accent,
+          stroke: accent,
+          timeLabel: null,
+          nodeRequest,
+          focusHeight: scope === "national" ? 1400000 : scope === "corridor" ? 900000 : 600000,
+          contextAvailable: true,
+        })
+      }
       case "strategic_situation": {
         const clusterCount = data?.direct_cluster_count != null
           ? `${data.direct_cluster_count} corroborated cluster${data.direct_cluster_count === 1 ? "" : "s"}`
@@ -528,25 +685,29 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         })
       }
       case "conflict_pulse": {
-        const stroke = conflictPulseStroke(toNumber(data?.pulse_score) || 0)
+        const stroke = attentionPalette(data).stroke || conflictPulseStroke(toNumber(data?.pulse_score) || 0)
         const reportCount = data?.count_24h != null
           ? `${data.count_24h} report${data.count_24h === 1 ? "" : "s"} / 24h`
           : null
         const theaterIdentifier = firstPresent(data?.theater, data?.situation_name, data?.conflict_name)
+        const severityLabel = attentionSeverityLabel(data)
+        const contextLabel = attentionContextLabel(data)
+        const evidenceLabel = attentionEvidenceItems(data).slice(0, 3).map(item => item.label).join(" / ")
         const casePath = theaterIdentifier && this._caseSourcePayloadForTheater && this._caseIntakePathForPayload
           ? this._caseIntakePathForPayload(this._caseSourcePayloadForTheater(data))
           : null
         return makePayload({
-          title: firstPresent(data?.situation_name, data?.theater, data?.conflict_name, "Conflict theater"),
-          subtitle: firstPresent(data?.theater, data?.country, "Conflict pulse"),
-          brief: compactFacts([
-            data?.pulse_score != null ? `Pulse ${Math.round(data.pulse_score)}` : null,
+          title: firstPresent(data?.situation_name, data?.theater, data?.conflict_name, "Attention region"),
+          subtitle: firstPresent(data?.theater, data?.country, contextLabel),
+          brief: firstPresent(attentionAssessment(data), data?.top_headlines?.[0], data?.country),
+          facts: compactFacts([
+            data?.pulse_score != null ? `Attention ${Math.round(data.pulse_score)}` : null,
             reportCount,
-            firstPresent(data?.top_headlines?.[0], data?.country),
-          ]).join(" • "),
+            evidenceLabel,
+          ], 3),
           chips: [
-            chip(firstPresent(data?.escalation_trend, "Monitoring"), data?.escalation_trend === "surging" || data?.escalation_trend === "escalating" ? "critical" : "warning"),
-            chip("Theater", "neutral"),
+            chip(severityLabel, attentionSeverity(data) === "critical" ? "critical" : "warning"),
+            chip(contextLabel, "neutral"),
           ],
           accent: stroke,
           stroke,
@@ -631,6 +792,23 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           chips: [chip(firstPresent(data?.category, "Market"), change < 0 ? "critical" : change > 0 ? "accent" : "neutral")],
           accent: change < 0 ? "#ef5350" : change > 0 ? "#4caf50" : "#ffc107",
           nodeRequest: firstPresent(data?.symbol, data?.name) ? { kind: "commodity", id: firstPresent(data?.symbol, data?.name) } : null,
+        })
+      }
+      case "commodity_site": {
+        return makePayload({
+          title: firstPresent(data?.name, "Commodity site"),
+          subtitle: firstPresent(data?.location_label, data?.country_name, data?.commodity_name, "Commodity infrastructure"),
+          brief: firstPresent(data?.summary, compactFacts([data?.commodity_name, data?.stage, data?.site_kind]).join(" · ")),
+          facts: [
+            firstPresent(data?.commodity_name, data?.commodity_key),
+            firstPresent(data?.stage, data?.site_kind, data?.operator),
+          ],
+          chips: [
+            chip(firstPresent(data?.commodity_name, "Commodity"), "warning"),
+            chip(firstPresent(data?.stage, data?.site_kind), "neutral"),
+          ],
+          accent: this._anchoredDetailMarkerStroke(kind, data) || "#ffb300",
+          nodeRequest: data?.id ? { kind: "commodity_site", id: data.id } : null,
         })
       }
       case "regional_economy": {

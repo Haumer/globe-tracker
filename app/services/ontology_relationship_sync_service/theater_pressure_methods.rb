@@ -107,11 +107,12 @@ class OntologyRelationshipSyncService
     end
 
     def chokepoint_terms(chokepoint_key, chokepoint)
+      generic_terms = %w[canal cape channel chokepoint corridor strait straits]
       [
         chokepoint.fetch(:name).downcase,
         chokepoint_key.to_s.tr("_", " "),
         OntologySyncSupport.slugify(chokepoint.fetch(:name)).tr("-", " "),
-        *chokepoint.fetch(:name).downcase.split(/[^a-z0-9]+/).select { |token| token.length >= 5 },
+        *chokepoint.fetch(:name).downcase.split(/[^a-z0-9]+/).select { |token| token.length >= 5 && generic_terms.exclude?(token) },
       ].uniq
     end
 

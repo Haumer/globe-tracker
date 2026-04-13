@@ -243,7 +243,7 @@ function buildInsightChips(controller, insight) {
   if (entities.hotspot) chips += `<span class="ins-chip ins-chip--conf">${entities.hotspot.label}</span>`
   if (entities.weather) chips += `<span class="ins-chip ins-chip--outage">${entities.weather.event}</span>`
   if (entities.conflicts?.length) chips += `<span class="ins-chip ins-chip--conf">${entities.conflicts.length} conflicts</span>`
-  if (entities.pulse) chips += `<span class="ins-chip ins-chip--conf">${entities.pulse.score} pulse · ${entities.pulse.trend}</span>`
+  if (entities.pulse) chips += `<span class="ins-chip ins-chip--conf">attention ${entities.pulse.score} · ${entities.pulse.trend}</span>`
   if (entities.news?.count_24h) chips += `<span class="ins-chip ins-chip--fire">${entities.news.count_24h} reports · ${entities.news.sources} sources</span>`
   if (entities.headlines?.length) chips += entities.headlines.map(headline => `<span class="ins-chip ins-chip--eq" style="white-space:normal;text-align:left;font-size:8px;line-height:1.2;">${headline.slice(0, 60)}</span>`).join("")
   if (entities.cross_layer?.military_flights) chips += `<span class="ins-chip ins-chip--flight">${entities.cross_layer.military_flights} mil flights</span>`

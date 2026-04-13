@@ -1,4 +1,11 @@
 import { getDataSource } from "globe/utils"
+import {
+  attentionAnchorLabel,
+  attentionPalette,
+  attentionSeverity,
+  attentionSurfaceAlpha,
+  shouldRenderAttentionSurface,
+} from "globe/controller/infrastructure/conflict_pulse_attention"
 
 export function applyConflictPulseRenderingMethods(GlobeController) {
   GlobeController.prototype._conflictPulseEntityKey = function(value, fallback = "unknown") {
@@ -19,40 +26,48 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
     const Cesium = window.Cesium
     const ds = getDataSource(this.viewer, this._ds, "conflictPulse")
 
-    if (!this._conflictPulseData?.length) return
+    const zones = this._conflictPulseData || []
+    const hexCells = this._hexCellData || []
+    const strategicSituations = this._strategicSituationData || []
+    if (!zones.length && !hexCells.length && !strategicSituations.length) return
 
     const prev = this._conflictPulsePrevScores || {}
     const increased = new Set()
-    this._conflictPulseData.forEach(z => {
+    zones.forEach(z => {
       const prevScore = prev[z.cell_key]
       if (prevScore !== undefined && z.pulse_score >= prevScore + 5) increased.add(z.cell_key)
     })
     this._conflictPulsePrevScores = {}
-    this._conflictPulseData.forEach(z => { this._conflictPulsePrevScores[z.cell_key] = z.pulse_score })
+    zones.forEach(z => { this._conflictPulsePrevScores[z.cell_key] = z.pulse_score })
 
     this._pulsingRings = []
 
     ds.entities.suspendEvents()
 
-    if (this._hexCellData?.length && this._hexTheaterVisible !== false) {
-      this._hexCellData.forEach((cell, idx) => {
+    const surfaceZones = zones
+      .map((zone, idx) => ({ zone, idx }))
+      .filter(({ zone, idx }) => shouldRenderAttentionSurface(zone, idx))
+      .slice(0, 12)
+    const surfaceZoneKeys = new Set(surfaceZones.map(({ zone }) => zone.cell_key))
+
+    if (hexCells.length && this._hexTheaterVisible !== false) {
+      hexCells.forEach((cell, idx) => {
         const t = cell.intensity
         if (t < 0.01) return
         if (!cell.vertices || cell.vertices.length !== 6) return
-        const r = 255
-        const g = Math.round(180 * (1 - t * 0.8))
-        const b = Math.round(50 * (1 - t))
-        const hexColor = Cesium.Color.fromBytes(r, g, b)
+        if (surfaceZoneKeys.size && cell.zone_key && !surfaceZoneKeys.has(cell.zone_key) && !this._highlightedTheater) return
+        const zone = zones.find(candidate => candidate.cell_key === cell.zone_key)
+        const palette = zone ? attentionPalette(zone) : { fill: "#854d0e", stroke: "#facc15" }
+        const hexColor = Cesium.Color.fromCssColorString(palette.fill)
         const positions = cell.vertices.map(v => Cesium.Cartesian3.fromDegrees(v[1], v[0]))
 
         const hex = ds.entities.add({
           id: `cpulse-hex-${idx}`,
           polygon: {
             hierarchy: new Cesium.PolygonHierarchy(positions),
-            material: hexColor.withAlpha(0.18 + t * 0.35),
-            outline: true,
-            outlineColor: hexColor.withAlpha(0.5 + t * 0.4),
-            outlineWidth: 2,
+            material: hexColor.withAlpha(0.05 + t * 0.16),
+            outline: false,
+            height: 5000,
           },
           properties: {
             zone_key: cell.zone_key || "",
@@ -64,6 +79,31 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
         this._conflictPulseEntities.push(hex)
       })
     }
+
+    surfaceZones.forEach(({ zone, idx }) => {
+      const zoneKey = this._conflictPulseEntityKey(zone.cell_key || `zone-${idx}`)
+      const palette = attentionPalette(zone)
+      const color = Cesium.Color.fromCssColorString(palette.fill)
+      const axes = this._attentionSurfaceAxes(zone, idx)
+      const surface = ds.entities.add({
+        id: `cpulse-surface-${zoneKey}`,
+        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
+        ellipse: {
+          semiMajorAxis: axes.major,
+          semiMinorAxis: axes.minor,
+          rotation: axes.rotation,
+          material: color.withAlpha(attentionSurfaceAlpha(zone)),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString(palette.stroke).withAlpha(0.6),
+          outlineWidth: 2,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
+          zIndex: 1000 + idx,
+        },
+      })
+      this._conflictPulseEntities.push(surface)
+    })
 
     if (this._strikeArcData?.length && this._strikeArcsVisible !== false) {
       this._strikeArcData.forEach((arc, idx) => {
@@ -118,23 +158,16 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       })
     }
 
-    this._conflictPulseData.forEach((zone, idx) => {
+    zones.forEach((zone, idx) => {
       const zoneKey = this._conflictPulseEntityKey(zone.cell_key || `zone-${idx}`)
-      const score = zone.pulse_score
+      const score = Number(zone.pulse_score || 0)
       const t = Math.min((score - 20) / 60, 1)
-
-      let r, g, b
-      if (score >= 70) {
-        r = 244; g = 67; b = 54
-      } else if (score >= 50) {
-        r = 255; g = 152; b = 0
-      } else {
-        r = 255; g = 193; b = 7
-      }
-      const color = Cesium.Color.fromBytes(r, g, b)
-      const radius = score >= 50 ? (100000 + score * 2000) : (60000 + score * 1000)
-      const baseAlpha = score >= 70 ? 0.15 : (score >= 50 ? 0.10 : 0.04)
-      const outlineAlpha = score >= 70 ? 0.6 : (score >= 50 ? 0.4 : 0.15)
+      const palette = attentionPalette(zone)
+      const severity = attentionSeverity(zone)
+      const color = Cesium.Color.fromCssColorString(palette.stroke)
+      const radius = score >= 50 ? (46000 + score * 900) : (32000 + score * 700)
+      const baseAlpha = severity === "critical" ? 0.08 : (severity === "high" ? 0.06 : 0.035)
+      const outlineAlpha = severity === "critical" ? 0.75 : (severity === "high" ? 0.55 : 0.28)
 
       const timelineChanged = this._timelineActive && increased.has(zone.cell_key)
       const ring = ds.entities.add({
@@ -147,13 +180,16 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
           outline: true,
           outlineColor: color.withAlpha(this._timelineActive ? outlineAlpha * (timelineChanged ? 1.15 : 0.75) : outlineAlpha),
           outlineWidth: this._timelineActive ? (timelineChanged ? 3 : 1.5) : (score >= 50 ? 2 : 1),
-          height: 5100,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
+          zIndex: 1100 + idx,
         },
       })
       this._conflictPulseEntities.push(ring)
 
       const shouldPulse = !this._timelineActive
-        && (zone.escalation_trend === "surging" || zone.escalation_trend === "active" || increased.has(zone.cell_key))
+        && (severity === "critical" || zone.escalation_trend === "surging" || increased.has(zone.cell_key))
 
       if (shouldPulse) {
         const pulseRing = ds.entities.add({
@@ -166,14 +202,17 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
             outline: true,
             outlineColor: color.withAlpha(0.8),
             outlineWidth: 3,
-            height: 5200,
+            height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
+            zIndex: 1200 + idx,
           },
         })
         this._conflictPulseEntities.push(pulseRing)
         this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
       }
 
-      if (score >= 50) {
+      if (score >= 55) {
         const core = ds.entities.add({
           id: `cpulse-core-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
@@ -182,36 +221,42 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
             semiMinorAxis: radius * 0.25,
             material: color.withAlpha(0.2 + t * 0.15),
             outline: false,
-            height: 5100,
+            height: 0,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.BOTH,
+            zIndex: 1300 + idx,
           },
         })
         this._conflictPulseEntities.push(core)
       }
 
-      const trendArrow = { surging: "▲", escalating: "↗", elevated: "→", active: "●", baseline: "↓" }[zone.escalation_trend] || ""
-      const iconSize = score >= 70 ? 48 : (score >= 50 ? 44 : 36)
+      const anchorLabel = attentionAnchorLabel(zone)
+      const iconSize = severity === "critical" ? 48 : (severity === "high" ? 42 : 34)
+      const iconWidth = Math.max(iconSize * 1.5, Math.min(118, 24 + anchorLabel.length * 11))
+      const iconHeight = Math.round(iconSize * 0.62)
+      const showLabel = severity === "critical" || severity === "high" || idx < 8
       const point = ds.entities.add({
         id: `cpulse-${zoneKey}`,
-        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 5500),
+        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat, 85000),
         billboard: {
-          image: this._makePulseIcon(trendArrow, color.toCssColorString(), score),
-          width: iconSize,
-          height: iconSize,
+          image: this._makeAttentionAnchorIcon(anchorLabel, color.toCssColorString(), severity),
+          width: iconWidth,
+          height: iconHeight,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(3e5, 1.2, 8e6, 0.5),
         },
         label: {
-          text: zone.situation_name || (zone.escalation_trend || "").toUpperCase(),
-          font: "bold 13px 'JetBrains Mono', monospace",
-          fillColor: Cesium.Color.WHITE,
+          text: showLabel ? (zone.situation_name || (zone.escalation_trend || "").toUpperCase()) : "",
+          font: "bold 12px 'JetBrains Mono', monospace",
+          fillColor: Cesium.Color.fromCssColorString(palette.label).withAlpha(0.95),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 5,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(0, iconSize / 2 + 8),
+          pixelOffset: new Cesium.Cartesian2(0, iconHeight / 2 + 8),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(3e5, 1.0, 8e6, 0.4),
           translucencyByDistance: new Cesium.NearFarScalar(3e5, 1.0, 1e7, 0.0),
@@ -220,7 +265,7 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       this._conflictPulseEntities.push(point)
     })
 
-    ;(this._strategicSituationData || []).forEach((item, idx) => {
+    strategicSituations.forEach((item, idx) => {
       const strategicKey = this._conflictPulseEntityKey(item.id || item.node_id || item.name || `strategic-${idx}`)
       const statusColors = {
         critical: "#ff7043",
@@ -337,6 +382,67 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, arcHeight))
     }
     return positions
+  }
+
+  GlobeController.prototype._attentionSurfaceAxes = function(zone, idx = 0) {
+    const score = Number(zone?.pulse_score || 0)
+    const sources = Number(zone?.source_count || 0)
+    const key = `${zone?.cell_key || zone?.situation_name || idx}`
+    let hash = 0
+    for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash) + key.charCodeAt(i)
+    const jitter = Math.abs(hash % 1000) / 1000
+    const severity = attentionSeverity(zone)
+    const base = {
+      critical: 360000,
+      high: 300000,
+      elevated: 230000,
+      watch: 155000,
+    }[severity] || 155000
+    const major = Math.min(base + score * 3600 + Math.min(sources, 20) * 5500, 900000)
+    const minor = Math.min(major * (0.52 + jitter * 0.18), 620000)
+    return {
+      major,
+      minor,
+      rotation: jitter * Math.PI,
+    }
+  }
+
+  GlobeController.prototype._makeAttentionAnchorIcon = function(label, color, severity) {
+    const key = `attention-${label}-${color}-${severity}`
+    if (this._iconCache?.[key]) return this._iconCache[key]
+    if (!this._iconCache) this._iconCache = {}
+
+    const width = Math.max(72, Math.min(118, 24 + `${label}`.length * 11))
+    const height = 42
+    const canvas = document.createElement("canvas")
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext("2d")
+
+    ctx.beginPath()
+    ctx.roundRect(4, 7, width - 8, height - 14, 12)
+    ctx.fillStyle = "rgba(5,8,14,0.88)"
+    ctx.fill()
+    ctx.strokeStyle = color
+    ctx.lineWidth = severity === "critical" ? 3 : 2.25
+    ctx.stroke()
+
+    ctx.font = "bold 17px 'JetBrains Mono', monospace"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillStyle = "#f8fafc"
+    ctx.fillText(label, width / 2, height / 2 + 1)
+
+    if (severity === "critical") {
+      ctx.beginPath()
+      ctx.arc(width - 12, 11, 4, 0, Math.PI * 2)
+      ctx.fillStyle = color
+      ctx.fill()
+    }
+
+    const url = canvas.toDataURL()
+    this._iconCache[key] = url
+    return url
   }
 
   GlobeController.prototype._makePulseIcon = function(trendArrow, color, score) {

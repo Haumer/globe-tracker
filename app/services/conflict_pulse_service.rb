@@ -280,6 +280,7 @@ class ConflictPulseService
     # Tag each hex cell with its nearest zone
     link_hexes_to_zones(hex_cells, zones)
     strategic_situations = build_strategic_situations(zones)
+    annotate_strategic_pressure!(zones, strategic_situations)
 
     # Broadcast surging/escalating zones via ActionCable
     begin
@@ -320,6 +321,7 @@ class ConflictPulseService
     hex_cells = build_hex_cells
     link_hexes_to_zones(hex_cells, zones)
     strategic_situations = build_strategic_situations(zones)
+    annotate_strategic_pressure!(zones, strategic_situations)
 
     { zones: zones, strategic_situations: strategic_situations, strike_arcs: strike_arcs, hex_cells: hex_cells }
   rescue => e
@@ -766,6 +768,45 @@ class ConflictPulseService
     end
       .sort_by { |item| [-item[:strategic_score].to_i, -item[:source_count].to_i, item[:name].to_s] }
       .first(MAX_STRATEGIC_SITUATIONS)
+  end
+
+  def annotate_strategic_pressure!(zones, strategic_situations)
+    active_strategic = strategic_situations.select { |item| %w[critical elevated].include?(item[:status].to_s) }
+    return if active_strategic.empty?
+
+    zones.each do |zone|
+      strategic = active_strategic.find { |item| strategic_pressure_match?(zone, item) }
+      next unless strategic
+
+      zone[:attention_state] = "strategic_pressure"
+      zone[:strategic_context] = {
+        id: strategic[:id] || strategic[:node_id] || strategic[:name],
+        name: strategic[:name],
+        status: strategic[:status],
+        score: strategic[:strategic_score],
+      }
+    end
+  end
+
+  def strategic_pressure_match?(zone, strategic)
+    zone_name = zone[:situation_name].to_s.strip.downcase
+    strategic_name = strategic[:name].to_s.strip.downcase
+    return true if zone_name.present? && strategic_name == zone_name
+
+    strategic_pressure_distance_km(zone, strategic) <= STRATEGIC_CROSS_LAYER_RADIUS_KM
+  end
+
+  def strategic_pressure_distance_km(zone, strategic)
+    return Float::INFINITY unless zone[:lat].present? && zone[:lng].present? && strategic[:lat].present? && strategic[:lng].present?
+
+    lat1 = zone[:lat].to_f
+    lng1 = zone[:lng].to_f
+    lat2 = strategic[:lat].to_f
+    lng2 = strategic[:lng].to_f
+    dlat = (lat1 - lat2) * 111.0
+    mean_lat = ((lat1 + lat2) / 2.0) * Math::PI / 180.0
+    dlng = (lng1 - lng2) * 111.0 * [Math.cos(mean_lat).abs, 0.1].max
+    Math.sqrt(dlat**2 + dlng**2)
   end
 
   def recent_corroborated_story_clusters

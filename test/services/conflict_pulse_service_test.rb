@@ -303,6 +303,43 @@ class ConflictPulseServiceTest < ActiveSupport::TestCase
     refute result
   end
 
+  test "marks pulse zones that overlap active strategic nodes as strategic pressure" do
+    service = ConflictPulseService.new
+    zones = [
+      {
+        situation_name: "Strait of Hormuz",
+        lat: 27.0,
+        lng: 57.0,
+        analysis_context: "kinetic_conflict",
+      },
+      {
+        situation_name: "Iran Theater",
+        lat: 35.0,
+        lng: 51.0,
+        analysis_context: "kinetic_conflict",
+      },
+    ]
+    strategic_situations = [
+      {
+        id: "strategic:hormuz",
+        name: "Strait of Hormuz",
+        status: "critical",
+        strategic_score: 93,
+        lat: 26.56,
+        lng: 56.27,
+      },
+    ]
+
+    service.send(:annotate_strategic_pressure!, zones, strategic_situations)
+
+    hormuz = zones.find { |zone| zone[:situation_name] == "Strait of Hormuz" }
+    iran = zones.find { |zone| zone[:situation_name] == "Iran Theater" }
+
+    assert_equal "strategic_pressure", hormuz[:attention_state]
+    assert_equal "Strait of Hormuz", hormuz.dig(:strategic_context, :name)
+    assert_nil iran[:attention_state]
+  end
+
   test "caches results when cache store supports it" do
     cache = ActiveSupport::Cache::MemoryStore.new
     5.times do |i|

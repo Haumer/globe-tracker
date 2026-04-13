@@ -8,17 +8,53 @@ import {
   validPoint,
 } from "globe/controller/detail_overlay/shared"
 
+const GEO_FIRST_ANCHOR_KINDS = new Set([
+  "conflict_pulse",
+  "strategic_situation",
+  "hex_cell",
+  "insight",
+  "news",
+  "news_arc",
+  "strike",
+  "conflict_event",
+  "earthquake",
+  "natural_event",
+  "weather_alert",
+  "outage",
+  "chokepoint",
+  "commodity",
+  "commodity_site",
+  "gps_jamming",
+  "port",
+  "situation_surface",
+  "city",
+  "fire_hotspot",
+  "fire_cluster",
+  "geoconfirmed",
+])
+
+const CLICK_FIRST_ANCHOR_KINDS = new Set([
+  ...GEO_FIRST_ANCHOR_KINDS,
+  "cable",
+  "pipeline",
+  "regional_admin_economy",
+  "regional_area_metric",
+  "regional_economy",
+  "regional_municipality",
+  "shipping_lane",
+])
+
 export function applyDetailOverlayGeometryMethods(GlobeController) {
   GlobeController.prototype._anchoredDetailScaleBounds = function(state) {
     switch (state?.kind) {
       case "strike":
       case "geoconfirmed":
-        return { nearHeight: 120000, farHeight: 6500000, minScale: 0.76 }
+        return { nearHeight: 120000, farHeight: 6500000, minScale: 0.84 }
       case "conflict_pulse":
       case "strategic_situation":
-        return { nearHeight: 180000, farHeight: 6500000, minScale: 0.76 }
+        return { nearHeight: 180000, farHeight: 6500000, minScale: 0.84 }
       default:
-        return { nearHeight: 140000, farHeight: 5000000, minScale: 0.68 }
+        return { nearHeight: 140000, farHeight: 5000000, minScale: 0.82 }
     }
   }
 
@@ -89,8 +125,8 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     if (point.x < sideSafe || point.x > window.innerWidth - sideSafe) return false
     if (point.y < topSafe || point.y > window.innerHeight - bottomSafe) return false
 
-    const lat = toNumber(anchor?.lat ?? anchor?.latitude)
-    const lng = toNumber(anchor?.lng ?? anchor?.longitude)
+    const lat = toNumber(anchor?.click?.lat ?? anchor?.click?.latitude ?? anchor?.lat ?? anchor?.latitude)
+    const lng = toNumber(anchor?.click?.lng ?? anchor?.click?.longitude ?? anchor?.lng ?? anchor?.longitude)
     if (lat != null && lng != null && this._isPointVisibleOnGlobe?.(lat, lng) === false) return false
 
     return true
@@ -461,6 +497,26 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const Cesium = window.Cesium
     const currentTime = this.viewer.clock?.currentTime
 
+    const projectClick = () => {
+      const click = anchor.click || anchor.clickAnchor
+      if (!click) return null
+
+      const lng = toNumber(click.lng ?? click.longitude)
+      const lat = toNumber(click.lat ?? click.latitude)
+      if (lat != null && lng != null) {
+        const alt = toNumber(click.alt ?? click.height ?? anchor.alt ?? anchor.height) || 0
+        const cartesian = Cesium.Cartesian3.fromDegrees(lng, lat, alt)
+        const projected = this._anchoredDetailProjectCartesian(cartesian, Cesium)
+        if (projected) return projected
+      }
+
+      const screenPoint = {
+        x: toNumber(click.x ?? click.screen?.x),
+        y: toNumber(click.y ?? click.screen?.y),
+      }
+      return validPoint(screenPoint) ? screenPoint : null
+    }
+
     const projectEntity = () => {
       if (anchor.entity?.position?.getValue) {
         const cartesian = anchor.entity.position.getValue(currentTime)
@@ -470,6 +526,14 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
       if (anchor.entity?.polyline?.positions?.getValue) {
         const positions = anchor.entity.polyline.positions.getValue(currentTime) || []
+        const cartesian = positions[Math.floor(positions.length / 2)] || null
+        const projected = this._anchoredDetailProjectCartesian(cartesian, Cesium)
+        if (projected) return projected
+      }
+
+      if (anchor.entity?.polygon?.hierarchy?.getValue) {
+        const hierarchy = anchor.entity.polygon.hierarchy.getValue(currentTime)
+        const positions = hierarchy?.positions || []
         const cartesian = positions[Math.floor(positions.length / 2)] || null
         const projected = this._anchoredDetailProjectCartesian(cartesian, Cesium)
         if (projected) return projected
@@ -487,13 +551,43 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       return this._anchoredDetailProjectCartesian(cartesian, Cesium)
     }
 
-    const strategies = anchor.geoFirst ? [projectGeo, projectEntity] : [projectEntity, projectGeo]
+    const strategies = anchor.clickFirst
+      ? [projectClick, projectEntity, projectGeo]
+      : anchor.geoFirst
+        ? [projectGeo, projectEntity, projectClick]
+        : [projectEntity, projectGeo, projectClick]
     for (const project of strategies) {
       const point = project()
       if (point) return point
     }
 
     return null
+  }
+
+  GlobeController.prototype._anchoredDetailClickAnchor = function(screenPosition) {
+    const screenPoint = {
+      x: toNumber(screenPosition?.x),
+      y: toNumber(screenPosition?.y),
+    }
+
+    let geo = null
+    if (validPoint(screenPoint) && typeof this.screenToLatLng === "function") {
+      try {
+        geo = this.screenToLatLng(screenPosition)
+      } catch {}
+    }
+
+    const lat = toNumber(geo?.lat ?? geo?.latitude)
+    const lng = toNumber(geo?.lng ?? geo?.longitude)
+    if (!validPoint(screenPoint) && (lat == null || lng == null)) return null
+
+    return {
+      x: screenPoint.x,
+      y: screenPoint.y,
+      lat,
+      lng,
+      alt: lat != null && lng != null ? 0 : null,
+    }
   }
 
   GlobeController.prototype._anchoredDetailTimeLabel = function(value) {
@@ -512,6 +606,11 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
   GlobeController.prototype._anchoredDetailAnchor = function(kind, data, options = {}) {
     const picked = options.picked
+    const click = picked?.clickAnchor || options.clickAnchor || null
+    const clickLat = toNumber(click?.lat ?? click?.latitude)
+    const clickLng = toNumber(click?.lng ?? click?.longitude)
+    const clickAlt = toNumber(click?.alt ?? click?.height)
+    const clickFirst = !!click && CLICK_FIRST_ANCHOR_KINDS.has(kind)
     const lat = toNumber(firstPresent(
       data?.lat,
       data?.latitude,
@@ -528,34 +627,23 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
       data?.center_lng,
       data?.position?.lng,
     ))
+    const anchorLat = clickFirst && clickLat != null && clickLng != null ? clickLat : lat
+    const anchorLng = clickFirst && clickLat != null && clickLng != null ? clickLng : lng
+    const anchorAlt = anchorLat != null && anchorLng != null
+      ? (clickFirst && clickAlt != null ? clickAlt : this._anchoredDetailDefaultAltitude(kind, data))
+      : null
 
     const anchor = {
       entity: null,
-      lat,
-      lng,
-      alt: lat != null && lng != null ? this._anchoredDetailDefaultAltitude(kind, data) : null,
-      geoFirst: [
-        "conflict_pulse",
-        "strategic_situation",
-        "hex_cell",
-        "insight",
-        "news",
-        "news_arc",
-        "strike",
-        "conflict_event",
-        "earthquake",
-        "natural_event",
-        "weather_alert",
-        "outage",
-        "chokepoint",
-        "commodity",
-        "fire_hotspot",
-        "fire_cluster",
-        "geoconfirmed",
-      ].includes(kind),
+      click,
+      clickFirst,
+      lat: anchorLat,
+      lng: anchorLng,
+      alt: anchorAlt,
+      geoFirst: GEO_FIRST_ANCHOR_KINDS.has(kind),
     }
 
-    if (picked?.id && (picked.id.position?.getValue || picked.id.polyline?.positions?.getValue)) {
+    if (picked?.id && (picked.id.position?.getValue || picked.id.polyline?.positions?.getValue || picked.id.polygon?.hierarchy?.getValue)) {
       anchor.entity = picked.id
     }
 

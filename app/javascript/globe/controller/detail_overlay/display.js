@@ -299,6 +299,8 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       }, {
         openRightPanel: true,
       })
+    } else if (state.contextAvailable && this._setAnchoredDetailContext) {
+      this._setAnchoredDetailContext(state, { openRightPanel: true })
     }
 
     this._showRightPanel?.("context")
@@ -326,9 +328,49 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       }, {
         openRightPanel: true,
       })
+    } else if (state.contextAvailable && this._setAnchoredDetailContext) {
+      this._setAnchoredDetailContext(state, { openRightPanel: true })
     }
 
     this._showRightPanel?.("context")
+  }
+
+  GlobeController.prototype._setAnchoredDetailContext = function(state, options = {}) {
+    if (!state || !this._setSelectedContext) return
+
+    const facts = Array.isArray(state.facts) ? state.facts.filter(Boolean) : []
+    const chips = Array.isArray(state.chips) ? state.chips.filter(chip => chip?.label) : []
+    const lat = Number.parseFloat(state.anchor?.lat)
+    const lng = Number.parseFloat(state.anchor?.lng)
+    const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng)
+
+    this._setSelectedContext({
+      kind: state.kind || "map_item",
+      severity: chips[0]?.tone === "critical" ? "high" : "medium",
+      statusLabel: chips[0]?.label,
+      icon: "fa-location-crosshairs",
+      accentColor: state.accent || state.stroke || "#4fc3f7",
+      eyebrow: `${kindLabel(state.kind || "map_item").toUpperCase()} CONTEXT`,
+      title: state.title || "Selected map item",
+      subtitle: state.subtitle || "",
+      summary: state.brief || facts.join(" · "),
+      meta: facts.slice(0, 3).map((fact, index) => ({
+        label: index === 0 ? "Signal" : "Detail",
+        value: fact,
+      })),
+      actions: hasCoordinates
+        ? [{ type: "focus", label: "Focus map", icon: "fa-location-crosshairs", lat, lng, height: state.focusHeight || 800000 }]
+        : [],
+      coordinates: hasCoordinates ? { lat, lng, height: state.focusHeight || 800000 } : null,
+      sections: [{
+        title: "Map read",
+        variant: "summary",
+        rows: facts.slice(0, 4).map((fact, index) => ({
+          label: index === 0 ? "Primary" : "Context",
+          value: fact,
+        })),
+      }],
+    }, options)
   }
 
   GlobeController.prototype.closeAnchoredDetail = function(options = {}) {

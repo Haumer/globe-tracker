@@ -428,7 +428,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
       const entityId = `${entity.id || ""}`
       if (!entityId.startsWith("cpulse-")) return
       if (entityId.startsWith("cpulse-strat-") || entityId.startsWith("cpulse-arc-") || entityId.startsWith("cpulse-hex-")) return
-      const zoneKey = decodeURIComponent(entityId.replace(/^cpulse-(?:lbl-|ring-|core-|pulse-)?/, ""))
+      const zoneKey = decodeURIComponent(entityId.replace(/^cpulse-(?:lbl-|ring-|core-|pulse-|surface-)?/, ""))
       const zone = this._conflictPulseData?.find(item => `${item.cell_key}` === zoneKey)
       if (!zone) return
       const isMatch = zone.theater === theater
@@ -459,7 +459,7 @@ export function applyConflictPulseInteractionMethods(GlobeController) {
     if (!this._sitExpanded) this._sitExpanded = {}
     const rendered = renderSituationPanelHtml(this, zones, strategic, snapshotStatus, this._sitExpanded)
     if (countEl) {
-      const base = `${rendered.countSummary.zones} theater${rendered.countSummary.zones !== 1 ? "s" : ""}`
+      const base = `${rendered.countSummary.zones} attention region${rendered.countSummary.zones !== 1 ? "s" : ""}`
       const strategicSuffix = rendered.countSummary.strategic ? ` · ${rendered.countSummary.strategic} strategic` : ""
       const suffix = rendered.countSummary.snapshotStatus === "ready" ? "" : ` · ${this._statusLabel(rendered.countSummary.snapshotStatus, "snapshot")}`
       countEl.textContent = `${base}${strategicSuffix}${suffix}`

@@ -1,4 +1,5 @@
 import { ADVANCED_LIBRARY_KEYS, LAYER_REGISTRY_BY_KEY, QUICK_TOGGLE_MAP, isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
+import { OBSERVER_SATELLITE_CATEGORIES } from "globe/controller/satellites/observer_categories"
 
 const ADVANCED_LIBRARY_SET = new Set(ADVANCED_LIBRARY_KEYS)
 
@@ -133,9 +134,8 @@ function activateDefaultSatelliteCategories() {
   const anySat = Object.values(this.satCategoryVisible).some(Boolean)
   if (anySat) return
 
-  const defaults = ["stations", "gps-ops", "weather", "military"]
-  defaults.forEach((category) => {
-    this.toggleSatCategory({ target: { dataset: { category }, checked: true } })
+  OBSERVER_SATELLITE_CATEGORIES.forEach((category) => {
+    this.toggleSatCategory({ target: { dataset: { category, observing: "true" }, checked: true } })
   })
 
   this.element.querySelectorAll(".sb-chip[data-category]").forEach((chip) => {

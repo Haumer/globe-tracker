@@ -1,4 +1,5 @@
 import { createSatelliteIcon, getDataSource } from "globe/utils"
+import { satelliteCategoryLoadKey } from "globe/controller/satellites/observer_categories"
 
 const TIMELINE_SATELLITE_BUCKET_MS = 15 * 60 * 1000
 
@@ -6,25 +7,28 @@ export function applySatDataMethods(GlobeController) {
   GlobeController.prototype.getSatellitesDataSource = function() { return getDataSource(this.viewer, this._ds, "satellites") }
   GlobeController.prototype.getSatOrbitsDataSource = function() { return getDataSource(this.viewer, this._ds, "sat-orbits") }
 
-  GlobeController.prototype.fetchSatCategory = async function(cat) {
+  GlobeController.prototype.fetchSatCategory = async function(cat, options = {}) {
     if (this._timelineActive) {
       return this.fetchPlaybackSatellites()
     }
 
     this._toast("Loading satellites...")
     try {
-      const response = await fetch(`/api/satellites?category=${cat}`)
+      const params = new URLSearchParams({ category: cat })
+      if (options.observing) params.set("observing", "1")
+
+      const response = await fetch(`/api/satellites?${params.toString()}`)
       if (!response.ok) return
       const sats = await response.json()
       this._handleBackgroundRefresh(response, `satellites-${cat}`, sats.length > 0, () => {
-        if (this.satCategoryVisible[cat]) this.fetchSatCategory(cat)
+        if (this.satCategoryVisible[cat]) this.fetchSatCategory(cat, options)
       })
 
       // Remove old data for this category, add fresh
       const removed = this.satelliteData.filter(s => s.category === cat)
       this.satelliteData = this.satelliteData.filter(s => s.category !== cat)
       this.satelliteData.push(...sats)
-      this._loadedSatCategories.add(cat)
+      this._loadedSatCategories.add(satelliteCategoryLoadKey(cat, !!options.observing))
       // Invalidate cached satrec objects for refreshed TLEs
       if (this._satrecCache) removed.forEach(s => this._satrecCache.delete(s.norad_id))
 
@@ -77,7 +81,7 @@ export function applySatDataMethods(GlobeController) {
   GlobeController.prototype._refreshLiveSatelliteCategories = function() {
     Object.entries(this.satCategoryVisible || {}).forEach(([category, visible]) => {
       if (!visible) return
-      this.fetchSatCategory(category)
+      this.fetchSatCategory(category, { observing: !!this.satCategoryObservingFilter?.[category] })
     })
   }
 
@@ -361,14 +365,21 @@ export function applySatDataMethods(GlobeController) {
 
   GlobeController.prototype.toggleSatCategory = function(event) {
     const cat = event.target.dataset.category
+    const observing = event.target.dataset.observing === "true"
+    this.satCategoryObservingFilter ||= {}
     this.satCategoryVisible[cat] = event.target.checked
+    if (event.target.checked) {
+      this.satCategoryObservingFilter[cat] = observing
+    } else {
+      delete this.satCategoryObservingFilter[cat]
+    }
 
     // Fetch this category if not loaded yet
     if (event.target.checked) {
       if (this._timelineActive) {
         this.fetchPlaybackSatellites()
-      } else if (!this._loadedSatCategories.has(cat)) {
-        this.fetchSatCategory(cat)
+      } else if (!this._loadedSatCategories.has(satelliteCategoryLoadKey(cat, observing))) {
+        this.fetchSatCategory(cat, { observing })
       }
     }
 

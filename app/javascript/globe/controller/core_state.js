@@ -212,6 +212,7 @@ export function initializeCoreState(controller) {
   controller._milFlightInterval = null
   controller.satelliteData = []
   controller._loadedSatCategories = new Set()
+  controller.satCategoryObservingFilter = {}
   controller.satelliteEntities = new Map()
   controller.satCategoryVisible = satCategoryVisibility()
   controller.satOrbitsVisible = false

@@ -1,5 +1,12 @@
 export function applyCoreEntityClickMethods(GlobeController) {
-  GlobeController.prototype._handleEntityClick = function(entityId, picked) {
+  GlobeController.prototype._handleEntityClick = function(entityId, picked, screenPosition = null) {
+    const clickAnchor = this._anchoredDetailClickAnchor?.(screenPosition)
+    if (clickAnchor) {
+      picked = picked
+        ? { ...picked, id: picked.id, primitive: picked.primitive, clickAnchor }
+        : { clickAnchor }
+    }
+
     const flightData = this.flightData.get(entityId)
     if (flightData) {
       this.toggleFlightSelection(entityId)
@@ -72,7 +79,7 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const data = this._gcDetections?.find(gc => gc.id === id)
         if (!data) return false
         if (this._showCompactEntityDetail) {
-          this._showCompactEntityDetail("geoconfirmed", data, { id })
+          this._showCompactEntityDetail("geoconfirmed", data, { id, picked })
         } else {
           this.showGeoconfirmedDetail(data)
         }
@@ -305,19 +312,19 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "choke-zone-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "choke-ships-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "choke-", skip: [], handler: (id) => {
         const data = this._chokepointData?.find(point => `${point.id}` === `${id}`)
         if (!data) return false
-        this.showChokepointDetail(data)
+        this.showChokepointDetail(data, { picked })
         return true
       }},
       { prefix: "rw-", skip: [], handler: (id) => {

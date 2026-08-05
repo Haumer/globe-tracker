@@ -41,3 +41,4 @@
 .DS_Store
 news-pipeline-todo.md
 bin/dist
+.gstack/

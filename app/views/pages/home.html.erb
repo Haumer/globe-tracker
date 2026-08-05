@@ -5,6 +5,13 @@
      data-globe-saved-prefs-value="<%= (current_user&.preferences || {}).to_json %>">
   <div id="cesium-viewer"></div>
 
+  <div id="attention-hud" class="attention-hud" style="display:none;" aria-label="Live attention overview">
+    <div class="attention-hud__frame">
+      <div class="attention-hud__kicker">Live Attention</div>
+      <div class="attention-hud__body" id="attention-hud-body"></div>
+    </div>
+  </div>
+
   <%# ── Sidebar toggle ── ─────────────────────────────────────── %>
   <button id="sidebar-toggle" data-action="click->globe#toggleSidebar" data-tip="Toggle panel" data-tip-pos="right" aria-label="Toggle sidebar">
     <i class="fa-solid fa-bars" aria-hidden="true"></i>

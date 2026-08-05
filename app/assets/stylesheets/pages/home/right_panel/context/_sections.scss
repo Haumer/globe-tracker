@@ -332,6 +332,134 @@
   margin-top: 9px;
 }
 
+.context-section--impact-chain {
+  padding: 0;
+
+  .context-section-title {
+    padding: 11px 14px 0;
+  }
+}
+
+.impact-chain-list {
+  display: grid;
+  gap: 0;
+}
+
+.impact-chain-card {
+  display: grid;
+  gap: 9px;
+  padding: 12px 14px 13px;
+  border-bottom: 1px solid #1f2633;
+  border-left: 2px solid #5c6472;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.impact-chain-card--critical { border-left-color: #d87872; }
+.impact-chain-card--high     { border-left-color: #d4a765; }
+.impact-chain-card--medium   { border-left-color: #a8c2db; }
+.impact-chain-card--low      { border-left-color: #7fae86; }
+
+.impact-chain-card-head {
+  display: grid;
+  gap: 4px;
+}
+
+.impact-chain-title {
+  font: 600 12px/1.35 'Inter', -apple-system, sans-serif;
+  color: #e6ecf3;
+  letter-spacing: -0.1px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.impact-chain-meta {
+  font: 600 8.5px/1.45 'JetBrains Mono', monospace;
+  letter-spacing: 0.75px;
+  text-transform: uppercase;
+  color: #5c6472;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.impact-chain-summary {
+  font: 400 11.5px/1.55 'Inter', -apple-system, sans-serif;
+  color: rgba(229, 236, 244, 0.82);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.impact-chain-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.impact-chain-step {
+  display: inline-grid;
+  gap: 2px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #1f2633;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+button.impact-chain-step {
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+
+  &:hover {
+    background: #161b24;
+    border-color: #2f3642;
+  }
+}
+
+.impact-chain-step-role {
+  font: 600 7.5px/1 'JetBrains Mono', monospace;
+  letter-spacing: 0.75px;
+  text-transform: uppercase;
+  color: #5c6472;
+}
+
+.impact-chain-step-label {
+  font: 600 9.5px/1.2 'JetBrains Mono', monospace;
+  color: #cfd7e3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.impact-chain-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.impact-chain-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid #1f2633;
+  border-radius: 999px;
+  color: #8a94a6;
+  font: 600 8px 'JetBrains Mono', monospace;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+
+  strong {
+    color: #e6ecf3;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 .pipeline-lens-benchmark-grid {
   display: grid;
   gap: 0;

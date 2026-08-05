@@ -50,13 +50,16 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       .slice(0, 12)
     const surfaceZoneKeys = new Set(surfaceZones.map(({ zone }) => zone.cell_key))
 
-    if (hexCells.length && this._hexTheaterVisible !== false) {
+    if (hexCells.length && this._hexTheaterVisible === true) {
       hexCells.forEach((cell, idx) => {
         const t = cell.intensity
         if (t < 0.01) return
         if (!cell.vertices || cell.vertices.length !== 6) return
-        if (surfaceZoneKeys.size && cell.zone_key && !surfaceZoneKeys.has(cell.zone_key) && !this._highlightedTheater) return
         const zone = zones.find(candidate => candidate.cell_key === cell.zone_key)
+        if (!shouldRenderHexCell(cell, zone, {
+          surfaceZoneKeys,
+          highlightedTheater: this._highlightedTheater,
+        })) return
         const palette = zone ? attentionPalette(zone) : { fill: "#854d0e", stroke: "#facc15" }
         const hexColor = Cesium.Color.fromCssColorString(palette.fill)
         const positions = cell.vertices.map(v => Cesium.Cartesian3.fromDegrees(v[1], v[0]))
@@ -516,4 +519,51 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
     this._iconCache[key] = url
     return url
   }
+}
+
+function shouldRenderHexCell(cell, zone, options = {}) {
+  if (!zone) return false
+  if (options.surfaceZoneKeys?.size && cell.zone_key && !options.surfaceZoneKeys.has(cell.zone_key) && !options.highlightedTheater) return false
+  if (options.highlightedTheater && cell.theater === options.highlightedTheater) return true
+
+  const center = cellCenter(cell)
+  if (!center) return false
+
+  const distanceKm = approxDistanceKm(center, zone)
+  return Number.isFinite(distanceKm) && distanceKm <= maxHexDistanceKm(zone)
+}
+
+function cellCenter(cell) {
+  if (Number.isFinite(Number(cell?.lat)) && Number.isFinite(Number(cell?.lng))) {
+    return { lat: Number(cell.lat), lng: Number(cell.lng) }
+  }
+
+  const vertices = Array.isArray(cell?.vertices) ? cell.vertices : []
+  const points = vertices.filter(vertex => Array.isArray(vertex) && vertex.length >= 2)
+  if (!points.length) return null
+
+  return {
+    lat: points.reduce((sum, vertex) => sum + Number(vertex[0] || 0), 0) / points.length,
+    lng: points.reduce((sum, vertex) => sum + Number(vertex[1] || 0), 0) / points.length,
+  }
+}
+
+function approxDistanceKm(a, b) {
+  const lat1 = Number(a?.lat)
+  const lng1 = Number(a?.lng)
+  const lat2 = Number(b?.lat)
+  const lng2 = Number(b?.lng)
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return Number.POSITIVE_INFINITY
+
+  const dlat = (lat1 - lat2) * 111
+  const meanLat = ((lat1 + lat2) / 2) * Math.PI / 180
+  const dlng = (lng1 - lng2) * 111 * Math.max(Math.cos(meanLat), 0.1)
+  return Math.sqrt(dlat ** 2 + dlng ** 2)
+}
+
+function maxHexDistanceKm(zone) {
+  const score = Number(zone?.pulse_score || 0)
+  if (zone?.analysis_context === "kinetic_conflict") return score >= 80 ? 420 : 340
+  if (zone?.attention_state === "strategic_pressure") return 300
+  return score >= 55 ? 280 : 220
 }

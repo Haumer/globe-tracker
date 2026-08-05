@@ -69,6 +69,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._highlightedTheater = null
       this._hexLayerAutoEnabled = false
       this._renderSituationPanel()
+      this._updateAttentionHud?.()
       if (this._syncRightPanels) this._syncRightPanels()
     }
   }
@@ -116,6 +117,7 @@ export function applyConflictPulseMethods(GlobeController) {
       this._hexCellData = data.hex_cells || []
       this._renderConflictPulse()
       this._renderSituationPanel()
+      this._updateAttentionHud?.()
       this._markFresh("situations")
       if (this._syncRightPanels) this._syncRightPanels()
     } catch (e) {

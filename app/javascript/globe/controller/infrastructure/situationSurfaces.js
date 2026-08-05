@@ -18,6 +18,13 @@ const SURFACE_STYLES = {
   watch: { color: "#fbc02d", alpha: 0.16, outline: 0.5 },
 }
 
+const CHOKEPOINT_STYLES = {
+  critical: { color: "#f59e0b", alpha: 0.3, outline: 0.78 },
+  high: { color: "#f59e0b", alpha: 0.24, outline: 0.7 },
+  moderate: { color: "#fbbf24", alpha: 0.18, outline: 0.58 },
+  watch: { color: "#fde68a", alpha: 0.12, outline: 0.48 },
+}
+
 export function applySituationSurfaceMethods(GlobeController) {
   GlobeController.prototype.toggleSituationSurfaces = function() {
     this.situationSurfacesVisible = this.hasSituationSurfacesToggleTarget && this.situationSurfacesToggleTarget.checked
@@ -61,6 +68,7 @@ export function applySituationSurfaceMethods(GlobeController) {
     if (clearData) {
       this._situationSurfaceData = []
       this._situationSurfaceSnapshotStatus = null
+      this._updateAttentionHud?.()
     }
   }
 
@@ -80,6 +88,7 @@ export function applySituationSurfaceMethods(GlobeController) {
       this._situationSurfaceSnapshotStatus = data.snapshot_status || "ready"
       await this._renderSituationSurfaces()
       this._markFresh("situationSurfaces")
+      this._updateAttentionHud?.()
     } catch (error) {
       console.warn("Situation surface fetch failed:", error)
     }
@@ -344,13 +353,34 @@ function shouldLabelSurface(surface) {
 }
 
 function surfaceLabel(surface) {
-  return `${situationClassLabel(surface.situation_class).toUpperCase()} · ${surface.label || "Surface"}`
+  return `${surfaceCode(surface)} · ${surfaceShortName(surface.label || "Surface")}`
 }
 
 function surfaceStyle(surface) {
-  if (surface?.situation_class === "strategic_chokepoint" && surface?.severity_tier === "high") {
-    return { color: "#f57c00", alpha: 0.26, outline: 0.72 }
+  if (surface?.situation_class === "strategic_chokepoint") {
+    return CHOKEPOINT_STYLES[surface?.severity_tier] || CHOKEPOINT_STYLES.watch
   }
 
   return SURFACE_STYLES[surface?.severity_tier] || SURFACE_STYLES.watch
+}
+
+function surfaceCode(surface) {
+  if (surface?.situation_class === "strategic_chokepoint") return "FLOW RISK"
+  if (surface?.situation_class === "kinetic_conflict") {
+    return surface?.severity_tier === "critical" ? "WAR ZONE" : "ARMED CONFLICT"
+  }
+
+  return situationClassLabel(surface?.situation_class).toUpperCase()
+}
+
+function surfaceShortName(value) {
+  const cleaned = `${value || "Surface"}`
+    .replace(/\s+national war surface$/i, "")
+    .replace(/\s+verified strike reports$/i, "")
+    .replace(/\s+strike belt$/i, " belt")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (cleaned.length <= 30) return cleaned
+  return `${cleaned.slice(0, 27).trim()}...`
 }

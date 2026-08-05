@@ -128,6 +128,7 @@ class NodeContextService
         memberships: [],
         evidence: serialize_entity_evidence(entity),
         relationships: serialize_relationships(entity),
+        impact_chains: NodeContextImpactChainService.for(entity),
       }
     end
 
@@ -145,6 +146,7 @@ class NodeContextService
           serialize_evidence_link(link)
         end,
         relationships: serialize_relationships(event),
+        impact_chains: [],
       }
     end
 

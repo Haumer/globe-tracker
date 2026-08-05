@@ -72,10 +72,12 @@
 // Wider kinds keep a larger max-width for content, but share the rest.
 #anchor-panel[data-kind="conflict_pulse"],
 #anchor-panel[data-kind="strategic_situation"],
+#anchor-panel[data-kind="situation_surface"],
 .anchor-panel[data-kind="conflict_pulse"],
-.anchor-panel[data-kind="strategic_situation"] {
+.anchor-panel[data-kind="strategic_situation"],
+.anchor-panel[data-kind="situation_surface"] {
   width: auto;
-  max-width: 440px;
+  max-width: 460px;
 }
 
 #anchor-panel[data-kind="strike"],
@@ -214,7 +216,7 @@
 }
 
 .anchor-subtitle {
-  font: 550 12.5px/1.45 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  font: 550 13px/1.45 'Inter', -apple-system, 'Segoe UI', sans-serif;
   color: rgba(214, 226, 240, 0.82);
   letter-spacing: 0.1px;
   overflow-wrap: anywhere;
@@ -222,7 +224,7 @@
 }
 
 .anchor-brief {
-  font: 430 12.5px/1.55 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  font: 430 13px/1.58 'Inter', -apple-system, 'Segoe UI', sans-serif;
   color: rgba(207, 218, 232, 0.78);
   overflow-wrap: anywhere;
   word-break: break-word;

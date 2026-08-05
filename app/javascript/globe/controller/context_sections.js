@@ -35,6 +35,14 @@ export function applyContextSectionMethods(GlobeController) {
       })
     }
 
+    if ((payload.impact_chains || []).length) {
+      sections.push({
+        title: "Impact chains",
+        variant: "impact-chain",
+        html: this._renderImpactChainsHtml(payload.impact_chains),
+      })
+    }
+
     if ((payload.relationships || []).length) {
       sections.push({
         title: "Linked nodes",
@@ -51,6 +59,54 @@ export function applyContextSectionMethods(GlobeController) {
     }
 
     return sections
+  }
+
+  GlobeController.prototype._renderImpactChainsHtml = function(chains = []) {
+    const rows = (chains || []).slice(0, 4).map(chain => {
+      const steps = (chain.steps || []).slice(0, 5).map(step => {
+        const nodeRequest = step.node?.request
+        const label = this._escapeHtml(step.label || step.role || "Node")
+        const role = this._escapeHtml((step.role || step.relation_type || "node").replace(/_/g, " "))
+        const buttonAttrs = nodeRequest?.kind && nodeRequest?.id
+          ? ` data-action="click->globe#selectContextNode" data-kind="${this._escapeHtml(nodeRequest.kind)}" data-id="${this._escapeHtml(nodeRequest.id)}" data-title="${label}"`
+          : ""
+        const tag = buttonAttrs ? "button" : "span"
+        const typeAttr = buttonAttrs ? ' type="button"' : ""
+
+        return `<${tag} class="impact-chain-step"${typeAttr}${buttonAttrs}>
+          <span class="impact-chain-step-role">${role}</span>
+          <span class="impact-chain-step-label">${label}</span>
+        </${tag}>`
+      }).join("")
+
+      const metrics = (chain.metrics || []).slice(0, 5).map(metric => `
+        <span class="impact-chain-metric">
+          <span>${this._escapeHtml(metric.label || "Metric")}</span>
+          <strong>${this._escapeHtml(metric.value || "")}</strong>
+        </span>
+      `).join("")
+
+      const confidence = chain.confidence != null ? `${Math.round(Number(chain.confidence) * 100)}%` : null
+      const meta = [
+        chain.severity ? `${chain.severity}` : null,
+        chain.score != null ? `score ${chain.score}` : null,
+        confidence ? `${confidence} confidence` : null,
+      ].filter(Boolean).join(" · ")
+
+      return `
+        <article class="impact-chain-card impact-chain-card--${this._escapeHtml(chain.severity || "medium")}">
+          <div class="impact-chain-card-head">
+            <div class="impact-chain-title">${this._escapeHtml(chain.title || "Impact chain")}</div>
+            ${meta ? `<div class="impact-chain-meta">${this._escapeHtml(meta)}</div>` : ""}
+          </div>
+          ${chain.summary ? `<div class="impact-chain-summary">${this._escapeHtml(chain.summary)}</div>` : ""}
+          ${steps ? `<div class="impact-chain-steps">${steps}</div>` : ""}
+          ${metrics ? `<div class="impact-chain-metrics">${metrics}</div>` : ""}
+        </article>
+      `
+    }).join("")
+
+    return rows ? `<div class="impact-chain-list">${rows}</div>` : ""
   }
 
   GlobeController.prototype._dynamicContextSections = function(context) {

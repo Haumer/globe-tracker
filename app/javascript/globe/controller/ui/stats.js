@@ -1,3 +1,10 @@
+import {
+  attentionAnchorLabel,
+  attentionContextLabel,
+  attentionPalette,
+  attentionSeverityLabel,
+} from "globe/controller/infrastructure/conflict_pulse_attention"
+
 export function applyUiStatMethods(GlobeController) {
   GlobeController.prototype._updateStats = function() {
     // Attention region count from conflict pulse zones
@@ -27,6 +34,79 @@ export function applyUiStatMethods(GlobeController) {
 
     this._syncQuickBar()
     this._updateSatBadge()
+    this._updateAttentionHud?.()
+  }
+
+  GlobeController.prototype._updateAttentionHud = function() {
+    const hud = document.getElementById("attention-hud")
+    const body = document.getElementById("attention-hud-body")
+    if (!hud || !body) return
+
+    const zones = [...(this._conflictPulseData || [])]
+      .sort((a, b) => Number(b?.pulse_score || 0) - Number(a?.pulse_score || 0))
+    const surfaces = [...(this._situationSurfaceData || [])]
+      .sort((a, b) => Number(b?.attention_score || 0) - Number(a?.attention_score || 0))
+
+    if (!zones.length && !surfaces.length) {
+      hud.style.display = "none"
+      body.innerHTML = ""
+      return
+    }
+
+    const topZone = zones[0]
+    const topSurface = surfaces[0]
+    const title = topZone?.situation_name || topZone?.theater || topSurface?.label || "Live attention"
+    const subtitle = topZone
+      ? `${attentionSeverityLabel(topZone)} / ${attentionContextLabel(topZone)}`
+      : `${topSurface?.severity_tier || "watch"} / ${topSurface?.scope || "surface"}`
+    const reports24h = zones.reduce((sum, zone) => sum + Number(zone?.count_24h || 0), 0)
+    const sources = zones.reduce((sum, zone) => sum + Number(zone?.source_count || 0), 0)
+    const severeSurfaces = surfaces.filter(surface => ["critical", "high"].includes(surface?.severity_tier)).length
+    const rows = zones.slice(0, 4).map(zone => {
+      const key = this._escapeHtml(`${zone.cell_key || ""}`)
+      const tone = attentionPalette(zone).stroke
+      return `
+        <button type="button" class="attention-hud__row" data-action="click->globe#focusAttentionHudZone" data-zone-key="${key}" style="--row-tone:${tone};">
+          <span class="attention-hud__row-code">${this._escapeHtml(attentionAnchorLabel(zone))}</span>
+          <span class="attention-hud__row-title">${this._escapeHtml(zone.situation_name || zone.theater || "Attention region")}</span>
+          <span class="attention-hud__row-value">${Math.round(Number(zone.pulse_score || 0))}</span>
+        </button>
+      `
+    }).join("")
+
+    body.innerHTML = `
+      <div class="attention-hud__primary">
+        <div class="attention-hud__title">${this._escapeHtml(title)}</div>
+        <div class="attention-hud__subtitle">${this._escapeHtml(subtitle)}</div>
+        <div class="attention-hud__metrics">
+          <div class="attention-hud__metric">
+            <div class="attention-hud__metric-label">Reports 24h</div>
+            <div class="attention-hud__metric-value">${formatCompact(reports24h)}</div>
+          </div>
+          <div class="attention-hud__metric">
+            <div class="attention-hud__metric-label">Sources</div>
+            <div class="attention-hud__metric-value">${formatCompact(sources)}</div>
+          </div>
+          <div class="attention-hud__metric">
+            <div class="attention-hud__metric-label">Surfaces</div>
+            <div class="attention-hud__metric-value">${formatCompact(severeSurfaces)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="attention-hud__list">${rows}</div>
+    `
+    hud.style.display = ""
+  }
+
+  GlobeController.prototype.focusAttentionHudZone = function(event) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+
+    const key = event?.currentTarget?.dataset?.zoneKey
+    const zone = (this._conflictPulseData || []).find(item => `${item.cell_key || ""}` === `${key || ""}`)
+    if (!zone) return
+
+    this._flyToConflictPulse?.(zone)
   }
 
   GlobeController.prototype._updateClock = function() {
@@ -97,6 +177,13 @@ export function applyUiStatMethods(GlobeController) {
     document.addEventListener("mouseover", show)
     document.addEventListener("mouseout", hide)
   }
+}
+
+function formatCompact(value) {
+  const number = Number(value || 0)
+  if (!Number.isFinite(number)) return "0"
+  if (number >= 1000) return `${(number / 1000).toFixed(number >= 10000 ? 0 : 1)}K`
+  return `${Math.round(number)}`
 }
 
 function updateStat(id, count, callback) {

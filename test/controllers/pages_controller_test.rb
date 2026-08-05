@@ -53,4 +53,13 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     refute_includes response.body, "Media Cloud"
     refute_includes response.body, "Legacy Reuters RSS"
   end
+
+  test "relationship lens page renders ontology graph surface" do
+    get "/relationship_lens"
+
+    assert_response :success
+    assert_includes response.body, "Ontology Relationship Lens"
+    assert_includes response.body, "Relationship Graph"
+    assert_includes response.body, "Promoted Chains"
+  end
 end

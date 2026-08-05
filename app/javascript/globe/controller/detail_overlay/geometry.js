@@ -302,7 +302,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
 
     const mobile = window.innerWidth <= 960
     const state = this._anchoredDetailState
-    const point = this._anchoredDetailScreenPoint(state.anchor)
+    const point = this._anchoredDetailScreenPoint(state.anchor, { preferClickScreen: force })
     const anchorVisible = !!point && this._anchoredDetailAnchorVisible(state.anchor, point)
 
     if (anchorVisible && validPoint(point)) {
@@ -491,7 +491,7 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     return validPoint(coords) ? { x: coords.x, y: coords.y } : null
   }
 
-  GlobeController.prototype._anchoredDetailScreenPoint = function(anchor) {
+  GlobeController.prototype._anchoredDetailScreenPoint = function(anchor, options = {}) {
     if (!anchor || !this.viewer?.scene || !window.Cesium) return null
 
     const Cesium = window.Cesium
@@ -500,6 +500,12 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
     const projectClick = () => {
       const click = anchor.click || anchor.clickAnchor
       if (!click) return null
+
+      const screenPoint = {
+        x: toNumber(click.x ?? click.screen?.x),
+        y: toNumber(click.y ?? click.screen?.y),
+      }
+      if (options.preferClickScreen && validPoint(screenPoint)) return screenPoint
 
       const lng = toNumber(click.lng ?? click.longitude)
       const lat = toNumber(click.lat ?? click.latitude)
@@ -510,10 +516,6 @@ export function applyDetailOverlayGeometryMethods(GlobeController) {
         if (projected) return projected
       }
 
-      const screenPoint = {
-        x: toNumber(click.x ?? click.screen?.x),
-        y: toNumber(click.y ?? click.screen?.y),
-      }
       return validPoint(screenPoint) ? screenPoint : null
     }
 

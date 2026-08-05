@@ -1,0 +1,234 @@
+<% graph = @relationship_graph %>
+<% stats = graph.fetch(:stats) %>
+<% corridors = graph.fetch(:chains).filter_map { |chain| chain.fetch(:corridor_label).presence }.uniq.sort %>
+
+<main class="relationship-lens" data-controller="relationship-lens">
+  <section class="relationship-hero">
+    <div class="relationship-hero__copy">
+      <div class="relationship-kicker">Ontology Relationship Lens</div>
+      <h1>Promoted chains, not map clutter.</h1>
+      <p>
+        This page renders the current impact chains as graph nodes: drivers, corridors, commodity flows,
+        market signals, exposed countries, and economic sectors. It is a working surface for deciding what
+        deserves to graduate into the map UI.
+      </p>
+    </div>
+
+    <div class="relationship-hero__metrics" aria-label="Relationship graph summary">
+      <div class="relationship-stat">
+        <span>Chains</span>
+        <strong><%= stats.fetch(:chains) %></strong>
+      </div>
+      <div class="relationship-stat">
+        <span>Live</span>
+        <strong><%= stats.fetch(:live_driver_chains) %></strong>
+      </div>
+      <div class="relationship-stat">
+        <span>Nodes</span>
+        <strong><%= stats.fetch(:nodes) %></strong>
+      </div>
+      <div class="relationship-stat">
+        <span>Edges</span>
+        <strong><%= stats.fetch(:edges) %></strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="relationship-filterbar" aria-label="Relationship graph filters">
+    <div class="relationship-filterbar__status">
+      <div class="relationship-panel__label">Selection</div>
+      <strong data-relationship-lens-target="selectionTitle">All relationship chains</strong>
+      <span><span data-relationship-lens-target="visibleCount"><%= graph.fetch(:chains).size %></span> visible · <span data-relationship-lens-target="selectionMeta">Click a node or chain to isolate it</span></span>
+    </div>
+    <div class="relationship-filters">
+      <button type="button" class="relationship-filter relationship-filter--active" data-relationship-lens-target="filterButton" data-action="click->relationship-lens#filter" data-filter-type="all" data-filter-value="all">All</button>
+      <button type="button" class="relationship-filter" data-relationship-lens-target="filterButton" data-action="click->relationship-lens#filter" data-filter-type="kind" data-filter-value="live">Live</button>
+      <button type="button" class="relationship-filter" data-relationship-lens-target="filterButton" data-action="click->relationship-lens#filter" data-filter-type="kind" data-filter-value="structural">Structural</button>
+      <button type="button" class="relationship-filter" data-relationship-lens-target="filterButton" data-action="click->relationship-lens#filter" data-filter-type="severity" data-filter-value="high">High</button>
+      <% corridors.each do |corridor| %>
+        <button type="button" class="relationship-filter" data-relationship-lens-target="filterButton" data-action="click->relationship-lens#filter" data-filter-type="corridor" data-filter-value="<%= corridor %>"><%= corridor %></button>
+      <% end %>
+      <button type="button" class="relationship-filter relationship-filter--clear" data-relationship-lens-target="clearButton" data-action="click->relationship-lens#clear" hidden>Clear</button>
+    </div>
+  </section>
+
+  <section class="relationship-shell">
+    <aside class="relationship-side">
+      <section class="relationship-panel">
+        <div class="relationship-panel__label">Coverage</div>
+        <div class="relationship-coverage-grid">
+          <div>
+            <span>High / critical</span>
+            <strong><%= stats.fetch(:high_or_critical_chains) %></strong>
+          </div>
+          <div>
+            <span>Structural only</span>
+            <strong><%= stats.fetch(:structural_chains) %></strong>
+          </div>
+          <div>
+            <span>Corridors</span>
+            <strong><%= stats.fetch(:corridors) %></strong>
+          </div>
+          <div>
+            <span>Countries</span>
+            <strong><%= stats.fetch(:countries) %></strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="relationship-panel">
+        <div class="relationship-panel__label">Node Types</div>
+        <div class="relationship-legend">
+          <% graph.fetch(:lanes).each do |lane| %>
+            <div class="relationship-legend__row relationship-legend__row--<%= lane.fetch(:role) %>">
+              <span></span>
+              <strong><%= lane.fetch(:label) %></strong>
+            </div>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="relationship-panel">
+        <div class="relationship-panel__label">Adjacent Asset Paths</div>
+        <div class="relationship-panel__note">
+          <%= graph.fetch(:asset_paths).size %> live driver-to-local-asset exposure paths exist outside the route-to-market graph.
+        </div>
+        <div class="relationship-asset-list">
+          <% graph.fetch(:asset_paths).first(8).each do |path| %>
+            <article class="relationship-asset">
+              <div><%= path.fetch(:asset) %></div>
+              <span><%= path.fetch(:driver) %> -> <%= path.fetch(:corridor) %> · <%= path.fetch(:asset_type).to_s.tr("_", " ") %> · <%= number_to_percentage(path.fetch(:confidence).to_f * 100, precision: 0) %></span>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    </aside>
+
+    <section class="relationship-main">
+      <div class="relationship-graph-panel">
+        <div class="relationship-panel-head">
+          <div>
+            <div class="relationship-panel__label">Relationship Graph</div>
+            <h2>Driver -> Corridor -> Flow -> Market -> Exposure</h2>
+          </div>
+          <%= link_to "Open Globe", root_path, class: "relationship-action" %>
+        </div>
+
+        <div class="relationship-graph-scroll">
+          <svg
+            class="relationship-graph"
+            viewBox="0 0 <%= graph.fetch(:svg).fetch(:width) %> <%= graph.fetch(:svg).fetch(:height) %>"
+            width="<%= graph.fetch(:svg).fetch(:width) %>"
+            height="<%= graph.fetch(:svg).fetch(:height) %>"
+            role="img"
+            aria-label="Ontology impact chain graph">
+            <defs>
+              <filter id="relationship-node-glow" x="-20%" y="-40%" width="140%" height="180%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <% graph.fetch(:lanes).each do |lane| %>
+              <g class="relationship-lane relationship-lane--<%= lane.fetch(:role) %>">
+                <line x1="<%= lane.fetch(:x) %>" y1="54" x2="<%= lane.fetch(:x) %>" y2="<%= graph.fetch(:svg).fetch(:height) - 34 %>"></line>
+                <text x="<%= lane.fetch(:x) %>" y="34"><%= lane.fetch(:label) %></text>
+              </g>
+            <% end %>
+
+            <g class="relationship-edges">
+              <% graph.fetch(:edges).each do |edge| %>
+                <% source = graph.fetch(:nodes_by_key)[edge.fetch(:source_key)] %>
+                <% target = graph.fetch(:nodes_by_key)[edge.fetch(:target_key)] %>
+                <% if source && target %>
+                  <% sx = source.fetch(:x) + graph.fetch(:svg).fetch(:node_width) / 2 %>
+                  <% sy = source.fetch(:y) %>
+                  <% tx = target.fetch(:x) - graph.fetch(:svg).fetch(:node_width) / 2 %>
+                  <% ty = target.fetch(:y) %>
+                  <% mid = [(tx - sx).abs / 2, 76].max %>
+                  <% path = "M #{sx} #{sy} C #{sx + mid} #{sy}, #{tx - mid} #{ty}, #{tx} #{ty}" %>
+                  <path class="relationship-edge relationship-edge--<%= edge.fetch(:severity) %>" d="<%= path %>" data-relationship-lens-target="edge" data-chain-ids="<%= edge.fetch(:chain_ids).to_a.join(" ") %>"></path>
+                <% end %>
+              <% end %>
+            </g>
+
+            <g class="relationship-nodes">
+              <% graph.fetch(:nodes).each do |node| %>
+                <% x = node.fetch(:x) - graph.fetch(:svg).fetch(:node_width) / 2 %>
+                <% y = node.fetch(:y) - graph.fetch(:svg).fetch(:node_height) / 2 %>
+                <g class="relationship-node relationship-node--<%= node.fetch(:role) %> relationship-node--<%= node.fetch(:severity) %>"
+                   role="button"
+                   tabindex="0"
+                   data-relationship-lens-target="node"
+                   data-action="click->relationship-lens#selectNode keydown.enter->relationship-lens#selectNode"
+                   data-node-key="<%= node.fetch(:key) %>"
+                   data-node-label="<%= node.fetch(:label) %>"
+                   data-node-role-label="<%= node.fetch(:role_label) %>"
+                   data-chain-count="<%= node.fetch(:chain_count) %>">
+                  <title><%= node.fetch(:label) %> · <%= node.fetch(:chain_count) %> chain(s)</title>
+                  <rect x="<%= x %>" y="<%= y %>" width="<%= graph.fetch(:svg).fetch(:node_width) %>" height="<%= graph.fetch(:svg).fetch(:node_height) %>" rx="12"></rect>
+                  <text class="relationship-node__label" x="<%= node.fetch(:x) %>" y="<%= node.fetch(:y) - 3 %>"><%= node.fetch(:display_label) %></text>
+                  <text class="relationship-node__meta" x="<%= node.fetch(:x) %>" y="<%= node.fetch(:y) + 14 %>"><%= node.fetch(:chain_count) %> chains · <%= node.fetch(:display_subtitle) %></text>
+                </g>
+              <% end %>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <section class="relationship-chain-list">
+        <div class="relationship-panel-head relationship-panel-head--compact">
+          <div>
+            <div class="relationship-panel__label">Promoted Chains</div>
+            <h2><%= graph.fetch(:chains).size %> surfacing candidates</h2>
+          </div>
+        </div>
+
+        <div class="relationship-chains">
+          <% graph.fetch(:chains).each do |chain| %>
+            <article class="relationship-chain relationship-chain--<%= chain.fetch(:severity) %>"
+                     role="button"
+                     tabindex="0"
+                     data-relationship-lens-target="chain"
+                     data-action="click->relationship-lens#selectChain keydown.enter->relationship-lens#selectChain"
+                     data-chain-id="<%= chain.fetch(:id) %>"
+                     data-chain-kind="<%= chain.fetch(:kind_label) %>"
+                     data-chain-title="<%= chain.fetch(:title) %>"
+                     data-chain-score="<%= chain.fetch(:score) %>"
+                     data-chain-severity="<%= chain.fetch(:severity) %>"
+                     data-chain-corridor="<%= chain.fetch(:corridor_label) %>"
+                     data-node-keys="<%= chain.fetch(:node_keys).join(" ") %>">
+              <header>
+                <div>
+                  <div class="relationship-chain__title"><%= chain.fetch(:title) %></div>
+                  <div class="relationship-chain__summary"><%= chain.fetch(:summary) %></div>
+                </div>
+                <div class="relationship-chain__score">
+                  <span><%= chain.fetch(:severity).to_s.upcase %></span>
+                  <strong><%= chain.fetch(:score) %></strong>
+                </div>
+              </header>
+
+              <div class="relationship-chain__path">
+                <% chain.fetch(:path).each do |node| %>
+                  <span><small><%= node.fetch(:role) %></small><%= node.fetch(:label) %></span>
+                <% end %>
+              </div>
+
+              <div class="relationship-chain__metrics">
+                <% chain.fetch(:metrics).first(6).each do |metric| %>
+                  <span><%= metric.fetch(:label) %> <strong><%= metric.fetch(:value) %></strong></span>
+                <% end %>
+                <span>Evidence <strong><%= chain.fetch(:evidence_count) %></strong></span>
+                <span>Confidence <strong><%= number_to_percentage(chain.fetch(:confidence).to_f * 100, precision: 0) %></strong></span>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    </section>
+  </section>
+</main>

@@ -151,4 +151,100 @@ class NodeContextServiceTest < ActiveSupport::TestCase
 
     assert_equal "impacted_infrastructure", context.fetch(:relationships).first.fetch(:relation_type)
   end
+
+  test "resolve includes route to market impact chains for chokepoints" do
+    theater = OntologyEntity.create!(
+      canonical_key: "theater:impact-chain-test",
+      entity_type: "theater",
+      canonical_name: "Impact Chain Test Theater"
+    )
+    hormuz = OntologyEntity.create!(
+      canonical_key: "corridor:chokepoint:hormuz",
+      entity_type: "corridor",
+      canonical_name: "Strait of Hormuz"
+    )
+    crude = OntologyEntity.create!(
+      canonical_key: "commodity:oil_crude",
+      entity_type: "commodity",
+      canonical_name: "Crude Oil"
+    )
+    brent = OntologyEntity.create!(
+      canonical_key: "commodity:oil_brent",
+      entity_type: "commodity",
+      canonical_name: "Brent Crude"
+    )
+    korea = OntologyEntity.create!(
+      canonical_key: "country:kor",
+      entity_type: "country",
+      canonical_name: "Korea, Rep."
+    )
+    industry = OntologyEntity.create!(
+      canonical_key: "sector:kor:industry",
+      entity_type: "sector",
+      canonical_name: "Korea, Rep. Industry",
+      metadata: { "share_pct" => 33.9 }
+    )
+
+    OntologyRelationship.create!(
+      source_node: theater,
+      target_node: hormuz,
+      relation_type: "theater_pressure",
+      confidence: 0.95,
+      derived_by: "test",
+      explanation: "Theater pressure is active around Hormuz."
+    )
+    OntologyRelationship.create!(
+      source_node: hormuz,
+      target_node: crude,
+      relation_type: "flow_dependency",
+      confidence: 0.82,
+      derived_by: "test",
+      explanation: "Hormuz is a route dependency for crude."
+    )
+    OntologyRelationship.create!(
+      source_node: hormuz,
+      target_node: brent,
+      relation_type: "flow_dependency",
+      confidence: 0.8,
+      derived_by: "test",
+      explanation: "Brent is a market benchmark for Hormuz.",
+      metadata: { "latest_change_pct" => 6.5, "commodity_symbol" => "OIL_BRENT", "flow_pct" => 21 }
+    )
+    OntologyRelationship.create!(
+      source_node: hormuz,
+      target_node: korea,
+      relation_type: "chokepoint_exposure",
+      confidence: 0.76,
+      derived_by: "test",
+      explanation: "Korea has structural exposure to Hormuz through crude oil.",
+      metadata: { "commodities" => ["oil_crude"], "max_exposure_score" => 0.42 }
+    )
+    OntologyRelationship.create!(
+      source_node: crude,
+      target_node: korea,
+      relation_type: "import_dependency",
+      confidence: 0.78,
+      derived_by: "test",
+      explanation: "Korea depends on imported crude oil.",
+      metadata: { "dependency_score" => 0.65 }
+    )
+    OntologyRelationship.create!(
+      source_node: crude,
+      target_node: industry,
+      relation_type: "production_dependency",
+      confidence: 0.52,
+      derived_by: "test",
+      explanation: "Crude Oil is an input dependency for Korea, Rep. Industry."
+    )
+
+    context = NodeContextService.resolve(kind: "chokepoint", id: "Strait of Hormuz")
+    chain = context.fetch(:impact_chains).first
+
+    assert_equal "route_market_country_exposure", chain.fetch(:kind)
+    assert_includes %w[high critical], chain.fetch(:severity)
+    assert_includes chain.fetch(:title), "Strait of Hormuz"
+    assert_includes chain.fetch(:title), "Korea, Rep."
+    assert_includes chain.fetch(:summary), "Current benchmark signal"
+    assert_equal ["driver", "corridor", "flow", "exposure", "economic_channel"], chain.fetch(:steps).map { |step| step.fetch(:role) }
+  end
 end

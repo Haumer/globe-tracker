@@ -72,6 +72,7 @@ export function applyUiPreferenceMethods(GlobeController) {
   GlobeController.prototype._applyDefaultPrimaryLayers = function() {
     const defaults = [
       ["situationSurfacesToggle", "toggleSituationSurfaces"],
+      ["situationsToggle", "toggleSituations"],
       ["newsToggle", "toggleNews"],
     ]
 

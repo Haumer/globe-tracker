@@ -45,7 +45,10 @@ class Api::SituationAssessmentsControllerTest < ActionDispatch::IntegrationTest
     body = JSON.parse(response.body)
     assert_equal "country:test", body.dig("node", "canonical_key")
     assert_equal "supply_chain_exposure", body.fetch("situation_type")
-    assert_includes body.fetch("inferred").join(" "), "Testland depends on imported Test Oil"
+    # An import dependency is a country's standing baseline, not something
+    # inferred from live signal, so it stays out of `inferred` and is surfaced
+    # as static context on the node instead.
+    assert_not_includes body.fetch("inferred").join(" "), "Testland depends on imported Test Oil"
     assert_equal "import_dependency", body.dig("affected_entities", 0, "relation_type")
   end
 

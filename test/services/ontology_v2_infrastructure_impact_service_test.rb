@@ -87,7 +87,7 @@ class OntologyV2InfrastructureImpactServiceTest < ActiveSupport::TestCase
     OntologyEventEntity.create!(ontology_event: event, ontology_entity: asset, role: "target", confidence: 0.87)
     OntologyEvidenceLink.create!(ontology_event: event, evidence: evidence, evidence_role: "primary_cluster", confidence: 0.9)
 
-    OntologyV2InfrastructureImpactService.sync
+    OntologyV2InfrastructureImpactService.sync(now: Time.utc(2026, 4, 11, 12, 0, 0))
 
     relationship = OntologyRelationship.find_by!(
       source_node: event,

@@ -43,4 +43,64 @@ class Api::SatellitesControllerTest < ActionDispatch::IntegrationTest
     categories = data.map { |s| s["category"] }.uniq
     assert_equal ["stations"], categories
   end
+
+  test "observing filter only returns collection capable satellites" do
+    Satellite.create!(
+      name: "PLANET OBSERVER",
+      norad_id: 90011,
+      tle_line1: "1 90011U 24001A   24001.00000000  .00000000  00000-0  00000-0 0  0000",
+      tle_line2: "2 90011  97.0000   0.0000 0001234   0.0000   0.0000 15.00000000000000",
+      category: "planet",
+    )
+    Satellite.create!(
+      name: "MIL ISR",
+      norad_id: 90012,
+      tle_line1: "1 90012U 24001A   24001.00000000  .00000000  00000-0  00000-0 0  0000",
+      tle_line2: "2 90012  97.0000   0.0000 0001234   0.0000   0.0000 15.00000000000000",
+      category: "military",
+      mission_type: "imaging",
+    )
+    Satellite.create!(
+      name: "MIL COMMS",
+      norad_id: 90013,
+      tle_line1: "1 90013U 24001A   24001.00000000  .00000000  00000-0  00000-0 0  0000",
+      tle_line2: "2 90013  55.0000   0.0000 0001234   0.0000   0.0000 02.00000000000000",
+      category: "military",
+      mission_type: "milcomms",
+    )
+
+    get "/api/satellites", params: { observing: true }
+
+    data = JSON.parse(response.body)
+    names = data.map { |s| s["name"] }
+
+    assert_includes names, "PLANET OBSERVER"
+    assert_includes names, "MIL ISR"
+    assert_not_includes names, "MIL COMMS"
+    assert_not_includes names, "ISS (ZARYA)"
+  end
+
+  test "observing filter combines with category filter" do
+    Satellite.create!(
+      name: "MIL ISR",
+      norad_id: 90014,
+      tle_line1: "1 90014U 24001A   24001.00000000  .00000000  00000-0  00000-0 0  0000",
+      tle_line2: "2 90014  97.0000   0.0000 0001234   0.0000   0.0000 15.00000000000000",
+      category: "military",
+      mission_type: "radar_imaging",
+    )
+    Satellite.create!(
+      name: "MIL COMMS",
+      norad_id: 90015,
+      tle_line1: "1 90015U 24001A   24001.00000000  .00000000  00000-0  00000-0 0  0000",
+      tle_line2: "2 90015  55.0000   0.0000 0001234   0.0000   0.0000 02.00000000000000",
+      category: "military",
+      mission_type: "milcomms",
+    )
+
+    get "/api/satellites", params: { category: "military", observing: true }
+
+    data = JSON.parse(response.body)
+    assert_equal ["MIL ISR"], data.map { |s| s["name"] }
+  end
 end

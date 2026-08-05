@@ -1,4 +1,5 @@
 import { LAYER_REGISTRY, QUICK_TOGGLE_MAP, isLayerTemporarilyDisabled } from "globe/controller/ui/registry"
+import { OBSERVER_SATELLITE_CATEGORIES } from "globe/controller/satellites/observer_categories"
 
 export function applyUiQuickBarMethods(GlobeController) {
   GlobeController.prototype.quickToggle = function(event) {
@@ -29,7 +30,7 @@ export function applyUiQuickBarMethods(GlobeController) {
   GlobeController.prototype.toggleSatChip = function(event) {
     const button = event.currentTarget
     const category = button.dataset.category
-    const syntheticEvent = { target: { dataset: { category }, checked: !this.satCategoryVisible[category] } }
+    const syntheticEvent = { target: { dataset: { category, observing: button.dataset.observing }, checked: !this.satCategoryVisible[category] } }
     this.toggleSatCategory(syntheticEvent)
     button.classList.toggle("active", this.satCategoryVisible[category])
     button.setAttribute("aria-pressed", String(this.satCategoryVisible[category]))
@@ -149,15 +150,14 @@ function capitalize(value) {
 
 function toggleSatelliteQuickMode() {
   const anySat = Object.values(this.satCategoryVisible).some(Boolean)
-  const defaults = ["stations", "gps-ops", "weather", "military"]
   if (anySat) {
     for (const category of Object.keys(this.satCategoryVisible)) {
       if (!this.satCategoryVisible[category]) continue
       this.toggleSatCategory({ target: { dataset: { category }, checked: false } })
     }
   } else {
-    for (const category of defaults) {
-      this.toggleSatCategory({ target: { dataset: { category }, checked: true } })
+    for (const category of OBSERVER_SATELLITE_CATEGORIES) {
+      this.toggleSatCategory({ target: { dataset: { category, observing: "true" }, checked: true } })
     }
   }
 

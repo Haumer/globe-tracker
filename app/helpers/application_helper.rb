@@ -9,7 +9,7 @@ module ApplicationHelper
   ADVANCED_SIDEBAR_LIBRARY_DEFS = [
     { key: "flights", label: "Flights", icon: "fa-solid fa-plane", color: "#4fc3f7", target: "qlFlights", meta: "Civilian commercial air traffic." },
     { key: "ships", label: "Ships", icon: "fa-solid fa-ship", color: "#26c6da", target: "qlShips", meta: "Civilian AIS traffic." },
-    { key: "satellites", label: "Satellite Categories", icon: "fa-solid fa-satellite", color: "#ab47bc", target: "qlSatellites" },
+    { key: "satellites", label: "Observer Satellites", icon: "fa-solid fa-satellite", color: "#ab47bc", target: "qlSatellites", meta: "Observation-capable weather, imagery, SAR, and ISR satellites." },
     { key: "earthquakes", label: "Earthquakes", icon: "fa-solid fa-house-crack", color: "#ff7043", target: "qlEarthquakes" },
     { key: "naturalEvents", label: "Natural Events", icon: "fa-solid fa-bolt", color: "#66bb6a", target: "qlEvents" },
     { key: "fireHotspots", label: "Fire Hotspots", icon: "fa-solid fa-fire", color: "#ff5722", target: "qlFireHotspots", meta: "Raw global FIRMS detections." },

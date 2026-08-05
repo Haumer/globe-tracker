@@ -624,13 +624,17 @@ export function applyFiresMethods(GlobeController) {
   }
 
   GlobeController.prototype._findSatelliteByNorad = function(noradId) {
-    // Search through all satellite datasources
+    const expectedId = `sat-${noradId}`
+    const direct = this.satelliteEntities?.get?.(expectedId)
+    if (direct) return direct
+
+    // Fallback for older satellite datasource shapes.
     for (const [key, ds] of Object.entries(this._ds)) {
-      if (!key.startsWith("sat-")) continue
+      if (key !== "satellites" && key !== "sat-orbits" && !key.startsWith("sat-")) continue
       const entities = ds.entities.values
       for (let i = 0; i < entities.length; i++) {
         const e = entities[i]
-        if (e.id && String(e.id) === String(noradId)) return e
+        if (e.id && (String(e.id) === expectedId || String(e.id) === String(noradId))) return e
       }
     }
     return null

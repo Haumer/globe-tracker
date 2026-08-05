@@ -173,32 +173,38 @@
             </div>
           <% when "satellites" %>
             <div class="sb-sub-options">
+              <div class="sb-filter-label">OBSERVERS</div>
+              <div class="sb-layer-meta">Analysis-first set: weather, imaging, SAR, early warning, SIGINT, and reconnaissance. Full reference/comms catalog stays below.</div>
               <div class="sb-chip-grid" role="group" aria-label="Satellite categories">
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet">Planet</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar">Radar/SAR</button>
+                <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather">Weather</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource">Earth Res</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="dmc">DMC</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo" data-observing="true">GEO ISR</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst" data-observing="true">Classified ISR</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military" data-observing="true">Military ISR</button>
+              </div>
+              <div class="sb-filter-label">REFERENCE / COMMS</div>
+              <div class="sb-chip-grid" role="group" aria-label="Reference satellite categories">
                 <button class="sb-chip" data-globe-target="satStationsToggle" data-action="click->globe#toggleSatChip" data-category="stations" data-tip="ISS & space stations">ISS</button>
                 <button class="sb-chip" data-globe-target="satStarlinkToggle" data-action="click->globe#toggleSatChip" data-category="starlink" data-tip="SpaceX Starlink">Starlink</button>
                 <button class="sb-chip" data-globe-target="satGpsToggle" data-action="click->globe#toggleSatChip" data-category="gps-ops" data-tip="GPS navigation">GPS</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="glonass">GLONASS</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="galileo">Galileo</button>
-                <button class="sb-chip" data-globe-target="satWeatherToggle" data-action="click->globe#toggleSatChip" data-category="weather">Weather</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="resource">Earth Res</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science">Science</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="military">Military</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="analyst">Classified</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="geo">GEO</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="iridium">Iridium</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="oneweb">OneWeb</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="planet">Planet</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="spire">Spire</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="gnss">GNSS</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="tdrss">TDRS</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="radar">Radar</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sbas">SBAS</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="cubesat">CubeSat</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="amateur">Ham Radio</button>
-                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat">SAR</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="sarsat">SARSAT</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="last-30-days">New Launch</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="beidou">BeiDou</button>
                 <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="molniya">Molniya</button>
+                <button class="sb-chip" data-action="click->globe#toggleSatChip" data-category="science">Science</button>
               </div>
               <div class="sb-mini-divider"></div>
               <%= globe_toggle target: "satOrbitsToggle", action: "toggleSatOrbits", label: "Orbit Trails" %>

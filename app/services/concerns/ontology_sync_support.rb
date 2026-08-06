@@ -2,20 +2,19 @@ module OntologySyncSupport
   module_function
 
   def upsert_entity(canonical_key:, entity_type:, canonical_name:, country_code: nil, metadata: {})
-    OntologyEntity.find_or_initialize_by(canonical_key: canonical_key).tap do |entity|
+    persist_upsert(OntologyEntity, canonical_key: canonical_key) do |entity|
       entity.entity_type = entity_type
       entity.canonical_name = canonical_name
       entity.country_code = country_code
       entity.metadata = (entity.metadata || {}).merge(metadata.compact)
-      entity.save!
     end
   end
 
   def upsert_alias(entity, name, alias_type:)
     return if name.blank?
 
-    OntologyEntityAlias.find_or_create_by!(ontology_entity: entity, name: name) do |record|
-      record.alias_type = alias_type
+    persist_upsert(OntologyEntityAlias, ontology_entity: entity, name: name) do |record|
+      record.alias_type = alias_type if record.new_record?
     end
   end
 

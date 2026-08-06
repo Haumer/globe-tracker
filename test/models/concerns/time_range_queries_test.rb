@@ -9,7 +9,9 @@ class TimeRangeQueriesTest < ActiveSupport::TestCase
       title: "Recent quake",
       magnitude: 3.0,
       latitude: 40.0, longitude: -100.0, depth: 5.0,
-      event_time: 2.hours.ago,
+      # Must be both "recent" and on Date.current. A bare 2.hours.ago falls on
+      # yesterday when the suite runs just after midnight, which broke on_date.
+      event_time: [2.hours.ago, Time.current.beginning_of_day].max,
       fetched_at: Time.current,
     )
     @old = Earthquake.create!(

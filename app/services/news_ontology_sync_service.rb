@@ -81,26 +81,27 @@ class NewsOntologySyncService
     end
 
     def sync_story_cluster(cluster)
-      event = OntologyEvent.find_or_initialize_by(canonical_key: "news-story-cluster:#{cluster.cluster_key}")
-      event.place_entity = sync_place_entity(cluster)
-      event.primary_story_cluster = cluster
-      event.event_family = cluster.event_family
-      event.event_type = cluster.event_type
-      event.status = "active"
-      event.verification_status = cluster.verification_status
-      event.geo_precision = cluster.geo_precision
-      event.confidence = cluster.cluster_confidence
-      event.source_reliability = cluster.source_reliability
-      event.geo_confidence = cluster.geo_confidence
-      event.started_at ||= cluster.first_seen_at
-      event.first_seen_at = cluster.first_seen_at
-      event.last_seen_at = cluster.last_seen_at
-      event.metadata = {
-        "canonical_title" => cluster.canonical_title,
-        "content_scope" => cluster.content_scope,
-        "location_name" => cluster.location_name,
-      }.compact
-      event.save!
+      place_entity = sync_place_entity(cluster)
+      event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: "news-story-cluster:#{cluster.cluster_key}") do |record|
+        record.place_entity = place_entity
+        record.primary_story_cluster = cluster
+        record.event_family = cluster.event_family
+        record.event_type = cluster.event_type
+        record.status = "active"
+        record.verification_status = cluster.verification_status
+        record.geo_precision = cluster.geo_precision
+        record.confidence = cluster.cluster_confidence
+        record.source_reliability = cluster.source_reliability
+        record.geo_confidence = cluster.geo_confidence
+        record.started_at ||= cluster.first_seen_at
+        record.first_seen_at = cluster.first_seen_at
+        record.last_seen_at = cluster.last_seen_at
+        record.metadata = {
+          "canonical_title" => cluster.canonical_title,
+          "content_scope" => cluster.content_scope,
+          "location_name" => cluster.location_name,
+        }.compact
+      end
 
       sync_event_entities(event, cluster)
       sync_evidence_links(event, cluster)

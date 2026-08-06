@@ -13,21 +13,22 @@ class OntologyRelationshipSyncService
       return payload.fetch(:ontology_event) if payload[:ontology_event].present?
 
       record = payload.fetch(:record)
-      event = OntologyEvent.find_or_initialize_by(canonical_key: infrastructure_disruption_event_key(payload))
-      event.place_entity = sync_hazard_place_entity(payload)
-      event.event_family = payload.fetch(:event_family, "infrastructure")
-      event.event_type = payload.fetch(:event_type, payload.fetch(:kind).to_s)
-      event.status = "active"
-      event.verification_status = "single_source"
-      event.geo_precision = "point"
-      event.confidence = payload.fetch(:confidence)
-      event.source_reliability = 0.72
-      event.geo_confidence = 0.86
-      event.started_at ||= payload.fetch(:observed_at)
-      event.first_seen_at ||= payload.fetch(:observed_at)
-      event.last_seen_at = payload.fetch(:observed_at)
-      event.metadata = infrastructure_event_metadata(payload)
-      event.save!
+      place_entity = sync_hazard_place_entity(payload)
+      event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: infrastructure_disruption_event_key(payload)) do |event_record|
+        event_record.place_entity = place_entity
+        event_record.event_family = payload.fetch(:event_family, "infrastructure")
+        event_record.event_type = payload.fetch(:event_type, payload.fetch(:kind).to_s)
+        event_record.status = "active"
+        event_record.verification_status = "single_source"
+        event_record.geo_precision = "point"
+        event_record.confidence = payload.fetch(:confidence)
+        event_record.source_reliability = 0.72
+        event_record.geo_confidence = 0.86
+        event_record.started_at ||= payload.fetch(:observed_at)
+        event_record.first_seen_at ||= payload.fetch(:observed_at)
+        event_record.last_seen_at = payload.fetch(:observed_at)
+        event_record.metadata = infrastructure_event_metadata(payload)
+      end
 
       OntologySyncSupport.upsert_evidence_link(
         event,

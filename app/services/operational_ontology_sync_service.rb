@@ -110,29 +110,29 @@ class OperationalOntologySyncService
 
     def sync_outage(outage)
       affected_entity = sync_outage_entity(outage)
-      event = OntologyEvent.find_or_initialize_by(canonical_key: outage_event_key(outage))
-      event.place_entity = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? affected_entity : nil
-      event.event_family = "infrastructure"
-      event.event_type = "outage"
-      event.status = outage.ended_at.present? ? "resolved" : "active"
-      event.verification_status = "single_source"
-      event.geo_precision = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? "country" : "unknown"
-      event.confidence = OntologySyncSupport.normalized_confidence(outage.score)
-      event.source_reliability = 0.7
-      event.geo_confidence = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? 0.7 : 0.0
-      event.started_at = outage.started_at
-      event.ended_at = outage.ended_at
-      event.first_seen_at ||= outage.started_at || outage.created_at
-      event.last_seen_at = outage.ended_at || outage.updated_at
-      event.metadata = {
-        "datasource" => outage.datasource,
-        "entity_type" => outage.entity_type,
-        "entity_code" => outage.entity_code,
-        "entity_name" => outage.entity_name,
-        "level" => outage.level,
-        "condition" => outage.condition,
-      }.compact
-      event.save!
+      event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: outage_event_key(outage)) do |record|
+        record.place_entity = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? affected_entity : nil
+        record.event_family = "infrastructure"
+        record.event_type = "outage"
+        record.status = outage.ended_at.present? ? "resolved" : "active"
+        record.verification_status = "single_source"
+        record.geo_precision = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? "country" : "unknown"
+        record.confidence = OntologySyncSupport.normalized_confidence(outage.score)
+        record.source_reliability = 0.7
+        record.geo_confidence = affected_entity&.entity_type == PLACE_ENTITY_TYPE ? 0.7 : 0.0
+        record.started_at = outage.started_at
+        record.ended_at = outage.ended_at
+        record.first_seen_at ||= outage.started_at || outage.created_at
+        record.last_seen_at = outage.ended_at || outage.updated_at
+        record.metadata = {
+          "datasource" => outage.datasource,
+          "entity_type" => outage.entity_type,
+          "entity_code" => outage.entity_code,
+          "entity_name" => outage.entity_name,
+          "level" => outage.level,
+          "condition" => outage.condition,
+        }.compact
+      end
 
       sync_affected_entity_membership(event, affected_entity, outage)
 
@@ -187,14 +187,15 @@ class OperationalOntologySyncService
       membership_id = nil
 
       if affected_entity.present?
-        membership = OntologyEventEntity.find_or_initialize_by(
+        membership = OntologySyncSupport.persist_upsert(
+          OntologyEventEntity,
           ontology_event: event,
           ontology_entity: affected_entity,
           role: "affected_party"
-        )
-        membership.confidence = OntologySyncSupport.normalized_confidence(outage.score)
-        membership.metadata = { "datasource" => outage.datasource }.compact
-        membership.save!
+        ) do |record|
+          record.confidence = OntologySyncSupport.normalized_confidence(outage.score)
+          record.metadata = { "datasource" => outage.datasource }.compact
+        end
         membership_id = membership.id
       end
 

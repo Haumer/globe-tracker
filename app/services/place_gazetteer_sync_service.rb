@@ -140,10 +140,9 @@ class PlaceGazetteerSyncService
       next if normalized.blank? || normalized_seen.include?(normalized)
 
       normalized_seen << normalized
-      place.place_aliases.find_or_initialize_by(normalized_name: normalized).tap do |record|
+      OntologySyncSupport.persist_upsert(PlaceAlias, place: place, normalized_name: normalized) do |record|
         record.name = name.to_s
         record.alias_type = normalized == place.normalized_name ? "official" : "common"
-        record.save!
       end
     end
   end

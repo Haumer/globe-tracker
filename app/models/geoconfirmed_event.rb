@@ -5,7 +5,9 @@ class GeoconfirmedEvent < ApplicationRecord
 
   validates :external_id, :map_region, :latitude, :longitude, :fetched_at, presence: true
 
-  scope :recent, -> { where("event_time > ?", 30.days.ago) }
+  # Tracks the retention window rather than a fixed 30 days — asking for more
+  # history than PurgeStaleDataJob keeps just returns a silently short answer.
+  scope :recent, -> { where(event_time: DataRetention.cutoff..) }
   scope :for_region, ->(region) { where(map_region: region) }
 
   def timeline_recorded_at

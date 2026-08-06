@@ -54,12 +54,9 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     refute_includes response.body, "Legacy Reuters RSS"
   end
 
-  test "relationship lens page renders ontology graph surface" do
+  test "relationship lens page is not routable while it is unbounded" do
     get "/relationship_lens"
 
-    assert_response :success
-    assert_includes response.body, "Ontology Relationship Lens"
-    assert_includes response.body, "Relationship Graph"
-    assert_includes response.body, "Promoted Chains"
+    assert_response :not_found
   end
 end

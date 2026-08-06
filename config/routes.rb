@@ -4,7 +4,11 @@ Rails.application.routes.draw do
   get "home", to: "pages#landing", as: :landing
   get "sources", to: "pages#sources"
   get "about", to: "pages#about"
-  get "relationship_lens", to: "pages#relationship_lens"
+  # Unrouted until RelationshipLensGraphService is snapshot-backed. Building the
+  # graph inline walks every theater/corridor/country/commodity entity and issues
+  # a query per theater_pressure relationship, which never completes against
+  # production-sized data and pins a Puma thread per request.
+  # get "relationship_lens", to: "pages#relationship_lens"
   get "objects/:kind/:id", to: "objects#show", as: :object_view
   resources :areas, controller: "area_workspaces", only: [:index, :show, :create]
   resources :cases, controller: "investigation_cases", only: [:index, :show, :new, :create, :update] do

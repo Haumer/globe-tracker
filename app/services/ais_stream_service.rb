@@ -77,27 +77,43 @@ class AisStreamService
 
           parser = WebSocket::Frame::Incoming::Client.new(version: handshake.version)
           last_flush = Time.now.to_f
+          frames = 0
 
           # Read loop with timeout so thread can exit cleanly on shutdown
           while @running
             ready = IO.select([ssl], nil, nil, 2)
-            next unless ready
-            chunk = ssl.readpartial(65536)
-            parser << chunk
 
-            while (msg = parser.next)
-              next unless msg.type == :text || msg.type == :binary
+            if ready
+              chunk = ssl.readpartial(65536)
+              parser << chunk
 
-              begin
-                parsed = JSON.parse(msg.data)
-                record = parse_message(parsed)
-                @buffer_mutex.synchronize { @buffer << record } if record
-              rescue JSON::ParserError
-                # skip
+              while (msg = parser.next)
+                frames += 1
+                # The stream was silent for months with no way to tell an idle
+                # connection from a misparsed one. Log the opening frames so
+                # that distinction is always one log line away.
+                Rails.logger.info("AIS Stream: frame #{frames} type=#{msg.type} #{msg.data.to_s[0, 200]}") if frames <= 3
+
+                case msg.type
+                when :ping
+                  # aisstream pings periodically and drops clients that never
+                  # answer. Three missed pings is ~90s, which is exactly the
+                  # interval at which this connection kept dying.
+                  ssl.write(
+                    WebSocket::Frame::Outgoing::Client.new(
+                      data: msg.data, type: :pong, version: handshake.version
+                    ).to_s
+                  )
+                when :close
+                  Rails.logger.warn("AIS Stream: server sent close frame #{msg.data.to_s[0, 200]}")
+                when :text, :binary
+                  ingest_payload(msg.data)
+                end
               end
             end
 
-            # Flush periodically
+            # Outside the `ready` check on purpose: when nothing is arriving
+            # this is the only thing that can still drain a partial buffer.
             now = Time.now.to_f
             if (now - last_flush) > 120 || @buffer.size >= 2000
               to_flush = @buffer_mutex.synchronize { @buffer.dup.tap { @buffer.clear } }
@@ -121,9 +137,34 @@ class AisStreamService
       end
     end
 
+    # Anything that arrives but does not become a record. Previously these were
+    # dropped in silence, which is why a dead stream looked identical to an
+    # idle one for four months.
+    def ingest_payload(raw)
+      parsed = JSON.parse(raw)
+      record = parse_message(parsed)
+
+      if record
+        @buffer_mutex.synchronize { @buffer << record }
+      else
+        note_unrecognised(parsed.is_a?(Hash) ? "keys=#{parsed.keys.inspect}" : parsed.to_s[0, 200])
+      end
+    rescue JSON::ParserError
+      note_unrecognised("non-json #{raw.to_s[0, 200]}")
+    end
+
+    def note_unrecognised(detail)
+      @unrecognised = @unrecognised.to_i + 1
+      return unless @unrecognised <= 5 || (@unrecognised % 10_000).zero?
+
+      Rails.logger.warn("AIS Stream: unrecognised payload ##{@unrecognised} #{detail}")
+    end
+
     def parse_message(data)
       msg_type = data.dig("MessageType")
-      meta = data.dig("MetaData")
+      # aisstream's own docs disagree with its wire format on this key's
+      # casing, so accept either rather than silently discarding everything.
+      meta = data["MetaData"] || data["Metadata"]
       return nil unless meta
 
       mmsi = meta["MMSI"]&.to_s

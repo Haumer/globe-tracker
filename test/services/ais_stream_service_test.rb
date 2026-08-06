@@ -74,6 +74,39 @@ class AisStreamServiceTest < ActiveSupport::TestCase
     assert_equal 90.0, result[:heading]
   end
 
+  test "parse_message accepts the lowercase Metadata spelling too" do
+    data = {
+      "MessageType" => "PositionReport",
+      "Metadata" => { "MMSI" => 222, "ShipName" => "DOC SPELLING", "latitude" => 1.0, "longitude" => 2.0 },
+      "Message" => { "PositionReport" => { "Sog" => 3.0, "Cog" => 90.0, "TrueHeading" => 90 } }
+    }
+
+    result = AisStreamService.send(:parse_message, data)
+    assert_equal "222", result[:mmsi]
+    assert_equal "DOC SPELLING", result[:name]
+  end
+
+  # The stream looked identical whether it was idle or silently discarding
+  # every message. Anything that does not become a record now gets counted.
+  test "ingest_payload buffers records and reports what it could not parse" do
+    AisStreamService.instance_variable_set(:@buffer, [])
+    AisStreamService.instance_variable_set(:@unrecognised, 0)
+
+    AisStreamService.send(:ingest_payload, {
+      "MessageType" => "PositionReport",
+      "MetaData" => { "MMSI" => 987, "latitude" => 1.0, "longitude" => 2.0 },
+      "Message" => { "PositionReport" => { "Sog" => 1.0, "Cog" => 2.0, "TrueHeading" => 3 } }
+    }.to_json)
+    assert_equal 1, AisStreamService.instance_variable_get(:@buffer).size
+    assert_equal 0, AisStreamService.instance_variable_get(:@unrecognised).to_i
+
+    AisStreamService.send(:ingest_payload, { "error" => "invalid api key" }.to_json)
+    AisStreamService.send(:ingest_payload, "this is not json")
+
+    assert_equal 1, AisStreamService.instance_variable_get(:@buffer).size, "neither payload is a ship"
+    assert_equal 2, AisStreamService.instance_variable_get(:@unrecognised).to_i
+  end
+
   test "flush_buffer enqueues operational ontology sync" do
     records = [
       { mmsi: "123456789", name: "TEST VESSEL", latitude: 51.5, longitude: -0.1 }

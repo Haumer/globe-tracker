@@ -79,4 +79,53 @@ class PollerRuntimeTest < ActiveSupport::TestCase
   ensure
     ENV["DYNO"] = original
   end
+
+  test "embedded? tracks EMBED_POLLER_IN_WORKER" do
+    original = ENV["EMBED_POLLER_IN_WORKER"]
+
+    ENV["EMBED_POLLER_IN_WORKER"] = "1"
+    assert PollerRuntime.send(:embedded?)
+
+    ENV["EMBED_POLLER_IN_WORKER"] = nil
+    refute PollerRuntime.send(:embedded?)
+  ensure
+    ENV["EMBED_POLLER_IN_WORKER"] = original
+  end
+
+  # Regression: the handler used to call PollerRuntimeState.request_stop!, which
+  # writes to the DB. Trap context forbids taking a mutex, so that raised
+  # "ThreadError: can't be called from trap context" and silently killed ingest
+  # (production, 2026-08-06). The handler must only set a flag.
+  test "signal handler sets the stop flag without touching the database" do
+    previous_int = Signal.trap("INT", "DEFAULT")
+    previous_term = Signal.trap("TERM", "DEFAULT")
+
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+    PollerRuntime.send(:trap_signals)
+
+    handler = Signal.trap("TERM", "DEFAULT")
+    assert_kind_of Proc, handler
+
+    PollerRuntimeState.stub(:request_stop!, ->(*) { flunk "handler must not hit the DB in trap context" }) do
+      handler.call
+    end
+
+    assert PollerRuntime.instance_variable_get(:@stop_requested)
+  ensure
+    Signal.trap("INT", previous_int || "DEFAULT")
+    Signal.trap("TERM", previous_term || "DEFAULT")
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
+
+  test "interruptible_sleep returns early once the stop flag is set" do
+    PollerRuntime.instance_variable_set(:@stop_requested, true)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    PollerRuntime.send(:interruptible_sleep, 30)
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+    assert_operator elapsed, :<, 1.0
+  ensure
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
 end

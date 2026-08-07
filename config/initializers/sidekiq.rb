@@ -17,7 +17,7 @@ Sidekiq.configure_server do |config|
     config.on(:startup) do
       embedded_poller_thread = Thread.new do
         Thread.current.name = "embedded-poller" if Thread.current.respond_to?(:name=)
-        PollerRuntime.run
+        PollerRuntime.run_supervised
       end
     end
 

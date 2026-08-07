@@ -155,7 +155,7 @@ class AdminController < ApplicationController
       flash[:notice] = "Stopped the dedicated poller process."
     else
       PollerRuntimeState.ensure_running!
-      flash[:notice] = "Enabled the dedicated poller process. Ensure the Heroku poller dyno is scaled."
+      flash[:notice] = "Enabled the dedicated poller process. Ensure a process is running it: the worker runs it in-process when EMBED_POLLER_IN_WORKER=1, otherwise scale the poller process."
     end
     redirect_to admin_path
   end

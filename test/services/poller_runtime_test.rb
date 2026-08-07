@@ -117,6 +117,25 @@ class PollerRuntimeTest < ActiveSupport::TestCase
     PollerRuntime.instance_variable_set(:@stop_requested, false)
   end
 
+  # Regression: Sidekiq's quiet/shutdown hooks used to call
+  # PollerRuntimeState.request_stop!, persisting desired_state="stopped" globally.
+  # dokku keeps the outgoing container up for 60s past the new one's boot, so the
+  # old worker's shutdown switched the fresh worker's poller back off on every
+  # deploy (production, 2026-08-07 23:40Z). Stopping must stay process-local.
+  test "request_local_stop! sets the flag without persisting operator intent" do
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+
+    PollerRuntimeState.stub(:request_stop!, ->(*) { flunk "must not persist desired_state on process shutdown" }) do
+      PollerRuntimeState.stub(:request_pause!, ->(*) { flunk "must not persist desired_state on process quiet" }) do
+        PollerRuntime.request_local_stop!
+      end
+    end
+
+    assert PollerRuntime.instance_variable_get(:@stop_requested)
+  ensure
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
+
   test "interruptible_sleep returns early once the stop flag is set" do
     PollerRuntime.instance_variable_set(:@stop_requested, true)
 

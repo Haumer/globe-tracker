@@ -27,6 +27,13 @@ class PollerRuntime
       end
     end
 
+    # Ask *this* process's loop to wind down. Deliberately not the same thing as
+    # PollerRuntimeState.request_stop!, which records operator intent for every
+    # process. Shutting one container down must not tell the next one to stay off.
+    def request_local_stop!
+      @stop_requested = true
+    end
+
     def run
       @stop_requested = false
       # Only trap when we own the process. Embedded in Sidekiq, these traps would

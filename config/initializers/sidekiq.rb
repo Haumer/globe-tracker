@@ -21,12 +21,18 @@ Sidekiq.configure_server do |config|
       end
     end
 
+    # Both hooks stop only this process's loop. They used to call
+    # PollerRuntimeState.request_pause!/request_stop!, which persist desired_state
+    # for every process -- and dokku keeps the outgoing container alive for 60s
+    # after the new one boots, so the old worker's shutdown wrote "stopped" over
+    # the fresh worker's "running" and silently switched ingest back off on every
+    # deploy. Operator intent belongs to the admin UI, not to container lifecycle.
     config.on(:quiet) do
-      PollerRuntimeState.request_pause!
+      PollerRuntime.request_local_stop!
     end
 
     config.on(:shutdown) do
-      PollerRuntimeState.request_stop!
+      PollerRuntime.request_local_stop!
       embedded_poller_thread&.join(5)
     end
   end

@@ -3,7 +3,7 @@ require "active_support/core_ext/integer/time"
 require Rails.root.join("lib/redis_ssl_config")
 
 Rails.application.configure do
-  config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"), protocol: "https" }
+  config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "globe.haumer.ai"), protocol: "https" }
   # Settings specified here will take precedence over those in config/application.rb.
 
   # Code is not reloaded between requests.
@@ -23,8 +23,9 @@ Rails.application.configure do
   # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true
 
-  # Heroku serves from the app process, so enable the public file server there and
-  # rely on precompiled assets instead of runtime asset compilation.
+  # The app process serves its own static files -- there is no separate asset host.
+  # RAILS_SERVE_STATIC_FILES is set explicitly on the host; DYNO is injected by the
+  # herokuish buildpack dokku builds with, and is kept as a fallback.
   config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present? || ENV["DYNO"].present?
 
   # Compress CSS using a preprocessor.
@@ -45,9 +46,13 @@ Rails.application.configure do
 
   # Mount Action Cable on the same Puma process
   config.action_cable.mount_path = "/cable"
+  # Action Cable already allows same-origin handshakes via allow_same_origin_as_host,
+  # so the page's own origin does not need to be listed. This list covers anything
+  # else -- reaching /cable from a different host than the one serving the page.
+  # Keep it in sync with APP_HOST.
   config.action_cable.allowed_request_origins = [
-    "https://globe-tracker-eece3877b792.herokuapp.com",
-    /https:\/\/.*\.herokuapp\.com/,
+    "https://#{ENV.fetch("APP_HOST", "globe.haumer.ai")}",
+    "http://#{ENV.fetch("APP_HOST", "globe.haumer.ai")}",
   ]
 
   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
@@ -112,8 +117,7 @@ Rails.application.configure do
 
   # Enable DNS rebinding protection and other `Host` header attacks.
   config.hosts = [
-    ENV.fetch("APP_HOST", "globe-tracker-eece3877b792.herokuapp.com"),
-    /.*\.herokuapp\.com/,
+    ENV.fetch("APP_HOST", "globe.haumer.ai"),
     IPAddr.new("0.0.0.0/0"),       # allow direct IP access (Hetzner)
     IPAddr.new("::/0"),             # allow IPv6
   ]

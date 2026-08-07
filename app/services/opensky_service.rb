@@ -16,7 +16,7 @@ class OpenskyService
   @token_expires_at = 0
 
   def self.fetch_flights(bounds: {})
-    # OpenSky blocks cloud provider IPs (Heroku/AWS) — skip when disabled
+    # OpenSky blocks cloud provider IPs — skip when disabled
     return [] if ENV["OPENSKY_DISABLED"].present?
 
     if @last_fetch_at.nil? || (Time.now.to_f - @last_fetch_at) > CACHE_TTL

@@ -26,10 +26,11 @@ module AppRevision
   end
 
   def explicit_revision
+    # Nothing sets these in production today, so the importmap digest below is what
+    # actually ships. Setting APP_REVISION to the deployed SHA (dokku exposes it as
+    # GIT_REV) would make every deploy force a client reload, not just asset changes.
     ENV["APP_REVISION"].presence ||
-      ENV["SOURCE_VERSION"].presence ||
-      ENV["HEROKU_SLUG_COMMIT"].presence ||
-      ENV["HEROKU_RELEASE_VERSION"].presence
+      ENV["SOURCE_VERSION"].presence
   end
 
   def computed_revision

@@ -177,7 +177,14 @@ class LocationResolver
       )
     end
 
+    # Every gazetteer alias used to originate from CITY_COORDS, so this lookup
+    # could not miss. Since the gazetteer is loaded from GeoNames that no
+    # longer holds: a matched name may have no CITY_COORDS entry, and a
+    # country hint can filter out the Place row that would otherwise have
+    # answered above. Fall through to the next candidate instead of raising.
     coords = CITY_COORDS[city_name]
+    return nil if coords.nil?
+
     result(
       lat: coords[0],
       lng: coords[1],
@@ -321,17 +328,64 @@ class LocationResolver
     CITY_PATTERNS.find { |city| CITY_REGEXES[city].match?(title) }
   end
 
+  # Longest place name we will look for, in words ("san jose del monte").
+  MAX_PLACE_NGRAM = 4
+
+  # Asks "are any of this title's word-sequences a known place?" rather than
+  # "does this title contain any known place?".
+  #
+  # The latter reads every alias into Ruby and regex-tests them one by one, so
+  # its cost grows with the size of the gazetteer: ~5ms per article at 630
+  # aliases, which extrapolates to seconds per article once a real gazetteer
+  # is loaded. This form issues a single indexed lookup whose cost depends on
+  # the length of the title instead, so the gazetteer can grow freely.
+  #
+  # Longest match still wins, so "new york" beats a bare "york".
   def gazetteer_name_from_title(title)
     return nil if title.blank? || !places_available?
 
-    normalized_title = Place.normalize_name(title)
+    # N-grams are built from the original casing, not the normalized string,
+    # because capitalisation is the only thing separating a place from an
+    # ordinary word: "military base in Germany" must not match the French
+    # commune La Bassée via "base", and "College sports bill" must not match
+    # College, Alaska. Uncased scripts (Arabic, Hebrew, CJK) are exempt.
+    tokens = title.to_s.split(/\s+/)
+    return nil if tokens.empty?
+
+    candidates = (1..MAX_PLACE_NGRAM).flat_map do |n|
+      tokens.each_cons(n).filter_map do |gram|
+        next unless proper_noun_gram?(gram)
+
+        normalized = Place.normalize_name(gram.join(" "))
+        normalized.presence
+      end
+    end
+    return nil if candidates.empty?
+
+    # Length breaks most ties; name breaks the rest so a title naming several
+    # equal-length cities resolves the same way every run. Picking the *right*
+    # one of several needs population weighting, which only becomes meaningful
+    # once a real gazetteer is loaded.
     PlaceAlias
-      .select(:normalized_name)
-      .order(Arel.sql("length(normalized_name) DESC"))
-      .find { |place_alias| normalized_title.match?(/(?:\A|\s)#{Regexp.escape(place_alias.normalized_name)}(?:\s|\z)/) }
-      &.normalized_name
+      .where(normalized_name: candidates.uniq)
+      .order(Arel.sql("length(normalized_name) DESC, normalized_name ASC"))
+      .limit(1)
+      .pick(:normalized_name)
   rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
     nil
+  end
+
+  # True when every token could be part of a proper noun. A character whose
+  # upcase and downcase are identical belongs to an uncased script, where
+  # capitalisation carries no signal, so those pass through untouched.
+  def proper_noun_gram?(gram)
+    gram.all? do |token|
+      word = token.gsub(/\A[^[[:alnum:]]]+|[^[[:alnum:]]]+\z/, "")
+      next false if word.blank?
+
+      first = word[0]
+      first.downcase == first.upcase || first == first.upcase
+    end
   end
 
   def normalize_country_code(value)

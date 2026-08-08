@@ -342,10 +342,15 @@ class NewsSitemapService
       # Sitemaps carry no summary, so the resolver sees title + URL only. That
       # is measurably less signal than an RSS description gives it; expect a
       # lower pass rate here than for the RSS transport.
+      #
+      # The registry knows each publisher's country, and passing it narrows
+      # place lookup to that country. Without it a 69k-city gazetteer resolves
+      # "Australia edges Japan" to a village called Australia in Cuba.
       location = LocationResolver.resolve_event(
         title: adapted[:title],
         summary: adapted[:summary],
-        url: adapted[:url]
+        url: adapted[:url],
+        country_hint: source["country"]
       )
       next unless location&.coordinates
 

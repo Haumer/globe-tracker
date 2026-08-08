@@ -23,7 +23,31 @@ class Place < ApplicationRecord
     scope.ranked
   end
 
+  # Keeps Unicode letters instead of transliterating them away.
+  #
+  # I18n.transliterate maps anything it has no Latin rule for to "?", so every
+  # non-Latin script collapsed to an empty string: "Κόρινθος", "Харків" and
+  # "القاهرة" all normalized to "". Titles from Greek, Cyrillic, Arabic, Hebrew
+  # and CJK publishers -- 29% of the publisher registry -- could therefore
+  # never match a place, and silently fell through to publisher-country
+  # geocoding. Preserving the script lets a Greek headline match a Greek alias.
+  #
+  # Latin text is unaffected: it was already alphanumeric, so it normalizes
+  # exactly as before and stored values stay valid.
   def self.normalize_name(value)
+    value.to_s
+      .unicode_normalize(:nfkc)
+      .downcase
+      .gsub(/[^[[:alnum:]]]+/, " ")
+      .squish
+  rescue ArgumentError, Encoding::CompatibilityError
+    # Invalid encoding: fall back to a scrubbed ASCII pass rather than raise.
+    value.to_s.scrub("").downcase.gsub(/[^a-z0-9]+/, " ").squish
+  end
+
+  # Latin-alphabet form, so "Köln" is also reachable as "koln" and "Zürich" as
+  # "zurich". Stored alongside the native form as a separate alias.
+  def self.ascii_name(value)
     I18n.transliterate(value.to_s)
       .downcase
       .gsub(/[^a-z0-9]+/, " ")

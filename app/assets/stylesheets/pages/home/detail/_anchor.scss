@@ -433,3 +433,62 @@
   border: 0;
   background: #05070d;
 }
+
+// ─── Fire complex card body ────────────────────────────────────
+.anchor-fire-body {
+  padding: 2px 0 4px;
+}
+
+.anchor-fire-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.anchor-fire-mw {
+  font: 650 18px 'Inter', -apple-system, sans-serif;
+  letter-spacing: -0.3px;
+}
+
+.anchor-fire-mw-label {
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.4);
+}
+
+.anchor-fire-trend {
+  margin-left: auto;
+  font: 600 10px 'JetBrains Mono', monospace;
+  text-transform: capitalize;
+}
+
+.anchor-fire-sub {
+  margin-top: 2px;
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.55);
+}
+
+.anchor-fire-spark {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: 6px;
+}
+
+.anchor-fire-delta {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font: 500 10px 'JetBrains Mono', monospace;
+  color: #ffab91;
+}
+
+.anchor-fire-delta--quiet {
+  color: rgba(200, 210, 225, 0.35);
+  font-weight: 400;
+}
+
+.anchor-fire-gone {
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.5);
+  line-height: 1.5;
+}

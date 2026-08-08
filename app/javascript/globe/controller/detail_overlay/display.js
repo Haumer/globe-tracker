@@ -136,12 +136,52 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this._syncRightPanels?.()
   }
 
+  // Re-read every pinned record that declared a live source. Layers call this
+  // on their own refresh cadence, so a pinned card ages with its data instead
+  // of freezing at whatever was true when it was pinned.
+  GlobeController.prototype._refreshPinnedLiveStates = async function(kind = null) {
+    const states = (this._pinnedAnchoredDetails || []).filter(state => {
+      if (!state?.liveSource || typeof this[state.liveSource] !== "function") return false
+      return !kind || state.kind === kind
+    })
+    if (!states.length) return
+
+    const results = await Promise.all(states.map(state => {
+      return Promise.resolve()
+        .then(() => this[state.liveSource](state))
+        .catch(() => false)
+    }))
+
+    if (results.some(Boolean)) this._refreshAnchoredDetailContent()
+  }
+
+  // Tier changes recolour the card and its leader line, so the accent has to be
+  // pushed onto the already-rendered elements.
+  GlobeController.prototype._applyPinnedAnchoredDetailAccent = function(state) {
+    const elements = state?._elements
+    if (!elements) return
+
+    const stroke = state.stroke || state.accent || "#8bd8ff"
+    ;[elements.wrapper, elements.panel].forEach(node => {
+      if (!node) return
+      node.style.setProperty("--anchor-accent", state.accent || "#8bd8ff")
+      node.style.setProperty("--anchor-stroke", stroke)
+    })
+  }
+
   GlobeController.prototype._nextPinnedAnchoredDetailId = function() {
     this._pinnedAnchoredDetailSeq = (this._pinnedAnchoredDetailSeq || 0) + 1
     return `pin-${this._pinnedAnchoredDetailSeq}`
   }
 
   GlobeController.prototype._findPinnedAnchoredDetailMatch = function(source) {
+    // A record that knows its own identity dedupes on that. Falling back to
+    // title+coordinates is unreliable for kinds that share a title -- every
+    // fire complex is titled "Fire complex".
+    if (source?.pinKey) {
+      return (this._pinnedAnchoredDetails || []).find(state => state?.pinKey === source.pinKey) || null
+    }
+
     const sourceKey = source?.nodeRequest ? `${source.nodeRequest.kind}:${source.nodeRequest.id}` : null
 
     return (this._pinnedAnchoredDetails || []).find(state => {
@@ -224,6 +264,10 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       ...source,
       anchorId: this._nextPinnedAnchoredDetailId(),
       pinned: true,
+      pinnedAt: Date.now(),
+      // What the record looked like when pinned, so a live card can report what
+      // has moved since rather than only what is true now.
+      pinBaseline: source.record ? { ...source.record } : null,
     }
 
     delete pinnedState._elements
@@ -432,7 +476,9 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       ? `<div class="anchor-subtitle">${this._escapeHtml(payload.subtitle)}</div>`
       : ""
 
-    const briefHtml = payload.brief
+    // A kind-specific body says everything the generic brief would, so showing
+    // both just repeats the same facts in two registers.
+    const briefHtml = payload.brief && !payload.bodyRenderer
       ? `<div class="anchor-brief">${this._escapeHtml(payload.brief)}</div>`
       : ""
 
@@ -466,6 +512,10 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       : ""
 
     let mediaExtraHtml = ""
+    if (payload.bodyRenderer && typeof this[payload.bodyRenderer] === "function") {
+      mediaExtraHtml = this[payload.bodyRenderer](payload) || ""
+    }
+
     if (payload.kind === "geoconfirmed" && payload._gcData) {
       const gc = payload._gcData
       const srcUrls = gc.sourceUrls || []

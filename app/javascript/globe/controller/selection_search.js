@@ -375,7 +375,7 @@ export function applySelectionSearchMethods(GlobeController) {
     } else if (r.type === "conflict" && r.data) {
       this.showConflictDetail(r.data)
     } else if (r.type === "fire_hotspot" && r.data) {
-      if (r.data.complex) this.showFireComplexDetail(r.data)
+      if (r.data.complex) this.openFireDossier(r.data)
       else this.showFireHotspotDetail(r.data)
     } else if (r.type === "satellite" && r.data) {
       this.showSatelliteDetail(r.data)

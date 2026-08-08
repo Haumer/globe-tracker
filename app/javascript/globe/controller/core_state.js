@@ -270,6 +270,8 @@ export function initializeCoreState(controller) {
   controller._fireComplexById = new Map()
   controller._fireComplexQueryKey = null
   controller._fireComplexDetailToken = 0
+  controller._fireDossier = null
+  controller._fireSatArcEntities = []
   controller.verifiedStrikesVisible = false
   controller.heatSignaturesVisible = false
   controller.strikesVisible = false

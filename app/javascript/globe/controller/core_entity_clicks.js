@@ -128,13 +128,15 @@ export function applyCoreEntityClickMethods(GlobeController) {
       { prefix: "fire-complex-ring-", skip: [], handler: (id) => {
         const data = this._fireComplexById?.get(id)
         if (!data) return false
-        if (!showAnchored("fire_complex", data, { id })) this.showFireComplexDetail(data)
+        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
+        else this.openFireDossier(data)
         return true
       }},
       { prefix: "fire-complex-", skip: [], handler: (id) => {
         const data = this._fireComplexById?.get(id)
         if (!data) return false
-        if (!showAnchored("fire_complex", data, { id })) this.showFireComplexDetail(data)
+        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
+        else this.openFireDossier(data)
         return true
       }},
       { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {

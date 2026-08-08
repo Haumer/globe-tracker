@@ -47,6 +47,11 @@ const FIRE_COMPLEX_LIMIT = 4_000
 const FIRE_NOTABLE_TIERS = ["major", "extreme"]
 
 const INSTRUMENT_COLORS = { VIIRS: "#ff8a65", MODIS: "#8bd8ff" }
+const FIRE_TREND_COLORS = { growing: "#f44336", easing: "#ff9800", dying: "#66bb6a" }
+
+// Above this the platform is over the fire's horizon, so an arc to it means a
+// live line of sight. Matches the threshold the overhead-pass readout uses.
+const FIRE_SAT_MIN_ELEVATION = 5
 
 export function applyFiresMethods(GlobeController) {
 
@@ -259,6 +264,10 @@ export function applyFiresMethods(GlobeController) {
       this._markFresh("fireHotspots")
       this._updateStats()
       this._toastHide()
+
+      // Pinned fires ride the layer's cadence rather than a timer of their own.
+      this._refreshPinnedLiveStates?.("fire_complex")
+      if (this._fireDossier) this._refreshFireDossier()
     } catch (e) {
       console.error("Failed to fetch fire complexes:", e)
       this._toastHide()
@@ -812,127 +821,509 @@ export function applyFiresMethods(GlobeController) {
     this.detailPanelTarget.style.display = ""
     this._flyToCoordinates(cluster.lng, cluster.lat, Math.max(700000, cluster.cellSize * 260000), { duration: 1.2 })
   }
+  // ── Fire complexes: the pinned card ───────────────────────────
+  // A pinned fire is a subscription, not a snapshot. The card re-reads the
+  // complex on every layer refresh and reports what moved since you pinned it,
+  // because a fire that is still burning is remeasured every satellite pass.
+  GlobeController.prototype._renderFireComplexCardBody = function(payload) {
+    const fire = payload.record || {}
+    const tier = this._fireComplexTier(fire)
+    const detail = payload.detail
+    const trend = detail?.trend
+    const trendMark = { growing: "▲", easing: "▶", dying: "▼" }[trend] || ""
+    const trendColor = FIRE_TREND_COLORS[trend] || "rgba(200,210,225,0.5)"
 
-  // ── Fire complexes: detail ────────────────────────────────────
-  // Two-phase: the index row is already on hand, so the panel opens immediately
-  // and fills in the pass history when it arrives. The history is the point --
-  // it is what turns a dot into an event with a shape over time.
-  GlobeController.prototype.showFireComplexDetail = async function(fire) {
-    this._clearSatFireArc()
-    this.detailContentTarget.innerHTML = this._fireComplexDetailHtml(fire, null)
-    this.detailPanelTarget.style.display = ""
+    if (payload.extinct) {
+      return `
+        <div class="anchor-fire-body">
+          <div class="anchor-fire-gone">No longer detected. Last seen ${this._escapeHtml(fire.time ? this._timeAgo(new Date(fire.time)) : "unknown")} at ${this._fireMwLabel(fire.latestMw)}.</div>
+        </div>`
+    }
+
+    const spark = detail?.observations?.length
+      ? this._fireEvolutionSvg(detail.observations, { width: 268, height: 34, compact: true })
+      : ""
+
+    return `
+      <div class="anchor-fire-body">
+        <div class="anchor-fire-headline">
+          <span class="anchor-fire-mw" style="color:${tier.color};">${this._fireMwLabel(fire.mw)}</span>
+          <span class="anchor-fire-mw-label">peak</span>
+          <span class="anchor-fire-trend" style="color:${trendColor};">${trendMark} ${this._escapeHtml(trend || "")}</span>
+        </div>
+        <div class="anchor-fire-sub">${this._fireMwLabel(fire.latestMw)} now · ${(fire.pixels || 0).toLocaleString()} px · ${fire.passes || 0} passes</div>
+        ${spark}
+        ${this._firePinDeltaHtml(payload)}
+      </div>
+    `
+  }
+
+  // The reason to pin a fire rather than just look at it.
+  GlobeController.prototype._firePinDeltaHtml = function(payload) {
+    const baseline = payload.pinBaseline
+    const fire = payload.record
+    if (!baseline || !fire || !payload.pinned) return ""
+
+    const newPasses = (fire.passes || 0) - (baseline.passes || 0)
+    const tierChanged = baseline.tier !== fire.tier
+    const mwFrom = baseline.latestMw
+    const mwTo = fire.latestMw
+
+    if (newPasses <= 0 && !tierChanged) {
+      return `<div class="anchor-fire-delta anchor-fire-delta--quiet">Watching — no new pass yet</div>`
+    }
+
+    const parts = []
+    if (newPasses > 0) parts.push(`+${newPasses} pass${newPasses === 1 ? "" : "es"}`)
+    if (mwFrom != null && mwTo != null) parts.push(`${this._fireMwLabel(mwFrom)} → ${this._fireMwLabel(mwTo)}`)
+    if (tierChanged) parts.push(`${baseline.tier} → ${fire.tier}`)
+
+    return `<div class="anchor-fire-delta"${tierChanged ? ` style="color:${this._fireComplexTier(fire).color};"` : ""}>Since pinned: ${this._escapeHtml(parts.join(" · "))}</div>`
+  }
+
+  // Called for every pinned fire whenever the fire layer refreshes.
+  GlobeController.prototype._refreshPinnedFireComplex = async function(state) {
+    const id = state?.record?.id
+    if (!id) return false
+
+    try {
+      const resp = await fetch(`/api/fire_clusters/${encodeURIComponent(id)}`)
+
+      // A complex drops out of the feed when it stops being detected -- the
+      // fire went out. That is a result, not an error, so the card says so
+      // rather than silently freezing on its last known numbers.
+      if (resp.status === 404) {
+        if (state.extinct) return false
+        state.extinct = true
+        return true
+      }
+      if (!resp.ok) return false
+
+      const detail = await resp.json()
+      const previousTier = state.record?.tier
+      state.extinct = false
+      state.detail = detail
+      state.record = {
+        ...state.record,
+        mw: detail.intensity_mw,
+        latestMw: detail.latest_mw,
+        tier: detail.tier,
+        pixels: detail.pixel_count,
+        passes: detail.pass_count,
+        time: detail.last_detected_at ? new Date(detail.last_detected_at).getTime() : state.record?.time,
+      }
+
+      // A fire crossing a tier boundary changes what the card means, so the
+      // accent and leader line follow it.
+      if (detail.tier !== previousTier) {
+        const tier = this._fireComplexTier(state.record)
+        state.accent = tier.color
+        state.stroke = tier.color
+        state.chips = [{ label: tier.label, tone: detail.tier === "extreme" ? "critical" : "warning" }]
+        this._applyPinnedAnchoredDetailAccent?.(state)
+      }
+
+      return true
+    } catch (e) {
+      console.error("Failed to refresh pinned fire:", e)
+      return false
+    }
+  }
+
+  // The active card opens from an index row, which carries no pass history.
+  // Hydrating it gives the card its sparkline without a second click.
+  GlobeController.prototype._hydrateActiveFireCard = async function() {
+    const state = this._anchoredDetailState
+    if (state?.kind !== "fire_complex" || state.detail) return
+
+    if (await this._refreshPinnedFireComplex(state)) this._refreshAnchoredDetailContent()
+  }
+
+  // ── Fire complexes: the dossier ───────────────────────────────
+  GlobeController.prototype.openFireDossier = async function(fire) {
+    if (!fire?.id) return
+
+    this._fireDossier = { fire, detail: null, loading: true }
+    this._renderFireDossier()
+    this._showRightPanel?.("fire")
     this._flyToCoordinates(fire.lng, fire.lat, 400000, { duration: 1.2 })
-    this._fetchConnections("fire_hotspot", fire.lat, fire.lng)
 
     const token = ++this._fireComplexDetailToken
     try {
       const resp = await fetch(`/api/fire_clusters/${encodeURIComponent(fire.id)}`)
-      if (!resp.ok || token !== this._fireComplexDetailToken) return
+      if (token !== this._fireComplexDetailToken) return
+
+      if (!resp.ok) {
+        this._fireDossier = { fire, detail: null, loading: false, missing: true }
+        this._renderFireDossier()
+        return
+      }
 
       const detail = await resp.json()
       if (token !== this._fireComplexDetailToken) return
 
-      this.detailContentTarget.innerHTML = this._fireComplexDetailHtml(fire, detail)
+      this._fireDossier = { fire, detail, loading: false }
+      this._renderFireDossier()
+      this._drawFireSatelliteArcs(fire, detail.satellites || [])
     } catch (e) {
-      console.error("Failed to load fire complex detail:", e)
+      console.error("Failed to load fire dossier:", e)
     }
   }
 
-  GlobeController.prototype._fireComplexDetailHtml = function(fire, detail) {
+  GlobeController.prototype._renderFireDossier = function() {
+    if (!this.hasFireDossierContentTarget) return
+
+    const state = this._fireDossier
+    if (!state) {
+      this.fireDossierContentTarget.innerHTML = `<div class="fd-empty">SELECT A FIRE</div>`
+      return
+    }
+
+    const { fire, detail } = state
     const tier = this._fireComplexTier(fire)
-    const observations = detail?.observations || []
     const trend = detail?.trend
-    const trendColor = { growing: "#f44336", easing: "#ff9800", dying: "#66bb6a" }[trend] || "#9aa4b2"
-    const lastSeen = fire.time ? this._timeAgo(new Date(fire.time)) : "Unknown"
-    const firstSeen = fire.firstTime ? this._timeAgo(new Date(fire.firstTime)) : "Unknown"
+    const trendColor = FIRE_TREND_COLORS[trend] || "rgba(200,210,225,0.5)"
+    const trendMark = { growing: "▲", easing: "▶", dying: "▼" }[trend] || ""
 
-    const satellites = detail?.satellites || []
-    const trackButtons = satellites
-      .filter(name => SAT_NORAD[name])
-      .map(name => `
-        <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;"
-          data-action="click->globe#flyToSatellite" data-norad="${SAT_NORAD[name]}">
-          <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>${this._escapeHtml(name)}
-        </button>`)
-      .join("")
+    if (state.missing) {
+      this.fireDossierContentTarget.innerHTML = `
+        <div class="fd-head"><span class="fd-tier" style="color:${tier.color};border-color:${tier.color};">${tier.label.toUpperCase()}</span></div>
+        <div class="fd-empty">This complex is no longer in the feed — it stopped being detected.</div>
+        ${this._firePinnedListHtml()}
+      `
+      return
+    }
 
-    return `
-      <div class="detail-callsign" style="color:${tier.color};">
-        <i class="fa-solid fa-fire" style="margin-right:6px;"></i>Fire Complex
-        <span style="margin-left:6px;font:600 9px var(--gt-mono);letter-spacing:0.6px;padding:2px 6px;border:1px solid ${tier.color};border-radius:3px;">${tier.label.toUpperCase()}</span>
+    this.fireDossierContentTarget.innerHTML = `
+      <div class="fd-head">
+        <span class="fd-tier" style="color:${tier.color};border-color:${tier.color};">${tier.label.toUpperCase()}</span>
+        <span class="fd-coords">${fire.lat.toFixed(3)}°, ${fire.lng.toFixed(3)}°</span>
       </div>
-      <div class="detail-country">${fire.lat.toFixed(3)}°, ${fire.lng.toFixed(3)}°</div>
-      <div class="detail-grid">
-        <div class="detail-field">
-          <span class="detail-label">Peak intensity</span>
-          <span class="detail-value" style="color:${tier.color};">${this._fireMwLabel(fire.mw)}</span>
+
+      <div class="fd-hero">
+        <div class="fd-hero-main">
+          <div class="fd-hero-value" style="color:${tier.color};">${this._fireMwLabel(fire.mw)}</div>
+          <div class="fd-hero-label">peak single pass</div>
         </div>
-        <div class="detail-field">
-          <span class="detail-label">Latest pass</span>
-          <span class="detail-value">${this._fireMwLabel(fire.latestMw)}${trend ? ` <span style="color:${trendColor};">· ${trend}</span>` : ""}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Footprint</span>
-          <span class="detail-value">${(fire.pixels || 0).toLocaleString()} px</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Satellite passes</span>
-          <span class="detail-value">${fire.passes || 0}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">First seen</span>
-          <span class="detail-value">${firstSeen}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">Last seen</span>
-          <span class="detail-value">${lastSeen}</span>
+        <div class="fd-hero-side">
+          <div class="fd-hero-trend" style="color:${trendColor};">${trendMark} ${this._escapeHtml(trend || "unknown")}</div>
+          <div class="fd-hero-now">${this._fireMwLabel(fire.latestMw)} now</div>
         </div>
       </div>
-      ${this._fireEvolutionHtml(observations, detail)}
-      ${trackButtons}
-      ${this._connectionsPlaceholder()}
-      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">
-        Peak intensity is the strongest single satellite pass, never the sum across passes · Source: NASA FIRMS (VIIRS/MODIS)
+
+      ${detail ? this._fireDossierEvolutionHtml(detail) : `<div class="fd-loading">Loading pass history…</div>`}
+
+      <div class="fd-stats">
+        <div class="fd-stat"><span class="fd-stat-label">Footprint</span><span class="fd-stat-value">${(fire.pixels || 0).toLocaleString()} px</span></div>
+        <div class="fd-stat"><span class="fd-stat-label">Passes</span><span class="fd-stat-value">${fire.passes || 0}</span></div>
+        <div class="fd-stat"><span class="fd-stat-label">Detections</span><span class="fd-stat-value">${(detail?.detection_count || 0).toLocaleString()}</span></div>
+        <div class="fd-stat"><span class="fd-stat-label">Burning for</span><span class="fd-stat-value">${this._fireBurnDuration(fire)}</span></div>
       </div>
+
+      ${detail ? this._fireDossierSatellitesHtml(fire, detail) : ""}
+      ${this._firePinnedListHtml()}
+
+      <div class="fd-source">Peak intensity is the strongest single satellite pass, never the sum across passes · NASA FIRMS (VIIRS/MODIS)</div>
     `
   }
 
-  GlobeController.prototype._fireEvolutionHtml = function(observations, detail) {
-    if (!detail) {
-      return `<div style="margin-top:10px;font:400 10px var(--gt-mono);color:rgba(200,210,225,0.4);">Loading pass history…</div>`
-    }
-    if (observations.length === 0) {
-      return `<div style="margin-top:10px;font:400 10px var(--gt-mono);color:rgba(200,210,225,0.4);">No pass history recorded.</div>`
-    }
+  GlobeController.prototype._fireBurnDuration = function(fire) {
+    if (!fire.firstTime || !fire.time) return "—"
+    const hours = (fire.time - fire.firstTime) / 3_600_000
+    if (hours < 1) return `${Math.round(hours * 60)}m`
+    return `${hours.toFixed(1)}h`
+  }
 
-    const rows = [...observations].reverse().map(observation => {
-      const when = new Date(observation.at)
-      const color = INSTRUMENT_COLORS[observation.instrument] || "#9aa4b2"
+  GlobeController.prototype._fireDossierEvolutionHtml = function(detail) {
+    const observations = detail.observations || []
+    if (!observations.length) return `<div class="fd-empty">No pass history recorded.</div>`
+
+    return `
+      <div class="fd-section-title">EVOLUTION</div>
+      ${this._fireEvolutionSvg(observations, { width: 320, height: 110, axes: true })}
+    `
+  }
+
+  // The satellites that saw this fire, and whether any of them can see it right
+  // now. Elevation is computed from the fire's own position, so a link means a
+  // live line of sight rather than "contributed a pass at some point".
+  GlobeController.prototype._fireDossierSatellitesHtml = function(fire, detail) {
+    const names = detail.satellites || []
+    if (!names.length) return ""
+
+    const status = this._fireSatelliteStatus(fire, names)
+    const lastPassBy = new Map()
+    ;(detail.observations || []).forEach(observation => {
+      lastPassBy.set(observation.satellite, observation)
+    })
+
+    const rows = names.map(name => {
+      const observation = lastPassBy.get(name)
+      const info = status.get(name)
+      const color = INSTRUMENT_COLORS[observation?.instrument] || "#9aa4b2"
+      const norad = SAT_NORAD[name]
+
+      let stateHtml = `<span class="fd-sat-state fd-sat-state--unknown">not loaded</span>`
+      let actions = ""
+      if (info?.overhead) {
+        stateHtml = `<span class="fd-sat-state fd-sat-state--overhead">↗ ${Math.round(info.elevation)}° overhead</span>`
+        actions = `<button type="button" class="fd-sat-btn" data-action="click->globe#linkFireSatellite" data-norad="${norad}" data-sat="${this._escapeHtml(name)}">Link</button>`
+      } else if (info) {
+        stateHtml = `<span class="fd-sat-state fd-sat-state--below">below horizon</span>`
+      }
+      if (norad) {
+        actions += `<button type="button" class="fd-sat-btn" data-action="click->globe#flyToSatellite" data-norad="${norad}">Track</button>`
+      }
+
       return `
-        <div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);font:400 10px var(--gt-mono);">
-          <span style="color:rgba(200,210,225,0.55);width:88px;flex:none;">${when.toISOString().slice(5, 16).replace("T", " ")}</span>
-          <span style="color:${color};width:96px;flex:none;">${this._escapeHtml(observation.satellite || "?")}</span>
-          <span style="color:rgba(200,210,225,0.75);flex:1;text-align:right;">${this._fireMwLabel(observation.mw)}</span>
-          <span style="color:rgba(200,210,225,0.45);width:62px;flex:none;text-align:right;">${(observation.pixels || 0).toLocaleString()} px</span>
+        <div class="fd-sat-row">
+          <div class="fd-sat-main">
+            <span class="fd-sat-dot" style="background:${color};"></span>
+            <span class="fd-sat-name">${this._escapeHtml(name)}</span>
+            ${stateHtml}
+          </div>
+          <div class="fd-sat-meta">
+            <span>${observation ? new Date(observation.at).toISOString().slice(11, 16) : "—"}</span>
+            <span>${observation ? this._fireMwLabel(observation.mw) : "—"}</span>
+            <span class="fd-sat-actions">${actions}</span>
+          </div>
         </div>`
     }).join("")
 
+    // Platforms sit across three catalogue categories, so rather than telling
+    // the reader which layers to hunt for, offer to load exactly the ones this
+    // fire's detectors live in.
+    const missing = names.filter(name => SAT_NORAD[name] && !status.has(name))
+    const hint = missing.length
+      ? `<div class="fd-sat-hint">
+           ${missing.length} of ${names.length} platforms not loaded, so their position is unknown.
+           <button type="button" class="fd-sat-btn" data-action="click->globe#loadFirePlatforms">Load platforms</button>
+         </div>`
+      : ""
+
     return `
-      <div style="margin-top:12px;font:600 9px var(--gt-mono);letter-spacing:0.8px;color:rgba(200,210,225,0.5);">EVOLUTION</div>
-      ${this._fireEvolutionSvg(observations)}
-      <div style="margin-top:10px;font:600 9px var(--gt-mono);letter-spacing:0.8px;color:rgba(200,210,225,0.5);">DETECTED BY</div>
-      <div style="margin-top:4px;">${rows}</div>
+      <div class="fd-section-title">DETECTED BY <span class="fd-section-count">${names.length} platforms</span></div>
+      <div class="fd-sat-list">${rows}</div>
+      ${hint}
     `
   }
 
+  // Pinned fires live here too, so the dossier doubles as the switcher.
+  GlobeController.prototype._firePinnedListHtml = function() {
+    const pins = (this._pinnedAnchoredDetails || []).filter(state => state.kind === "fire_complex")
+    if (!pins.length) return ""
+
+    const activeId = this._fireDossier?.fire?.id
+    const rows = pins.map(state => {
+      const fire = state.record || {}
+      const tier = this._fireComplexTier(fire)
+      const active = fire.id === activeId ? " fd-pin-row--active" : ""
+      return `
+        <button type="button" class="fd-pin-row${active}" data-action="click->globe#focusPinnedFire" data-fire-id="${this._escapeHtml(fire.id || "")}">
+          <span class="fd-pin-dot" style="background:${tier.color};"></span>
+          <span class="fd-pin-tier">${tier.label}</span>
+          <span class="fd-pin-mw">${this._fireMwLabel(fire.mw)}</span>
+          <span class="fd-pin-loc">${Number(fire.lat).toFixed(1)}°, ${Number(fire.lng).toFixed(1)}°</span>
+          ${state.extinct ? `<span class="fd-pin-gone">out</span>` : ""}
+        </button>`
+    }).join("")
+
+    return `
+      <div class="fd-section-title">PINNED FIRES <span class="fd-section-count">${pins.length}</span></div>
+      <div class="fd-pin-list">${rows}</div>
+    `
+  }
+
+  // Keep an open dossier current with the layer without stealing the camera.
+  GlobeController.prototype._refreshFireDossier = async function() {
+    const fire = this._fireDossier?.fire
+    if (!fire?.id) return
+
+    try {
+      const resp = await fetch(`/api/fire_clusters/${encodeURIComponent(fire.id)}`)
+      if (this._fireDossier?.fire?.id !== fire.id) return
+
+      if (resp.status === 404) {
+        this._fireDossier = { fire, detail: null, loading: false, missing: true }
+        this._renderFireDossier()
+        return
+      }
+      if (!resp.ok) return
+
+      const detail = await resp.json()
+      if (this._fireDossier?.fire?.id !== fire.id) return
+
+      this._fireDossier = {
+        fire: {
+          ...fire,
+          mw: detail.intensity_mw,
+          latestMw: detail.latest_mw,
+          tier: detail.tier,
+          pixels: detail.pixel_count,
+          passes: detail.pass_count,
+          time: detail.last_detected_at ? new Date(detail.last_detected_at).getTime() : fire.time,
+        },
+        detail,
+        loading: false,
+      }
+      this._renderFireDossier()
+    } catch (e) {
+      console.error("Failed to refresh fire dossier:", e)
+    }
+  }
+
+  GlobeController.prototype.focusPinnedFire = function(event) {
+    const id = event?.currentTarget?.dataset?.fireId
+    const pin = (this._pinnedAnchoredDetails || []).find(state => state.record?.id === id)
+    if (!pin?.record) return
+
+    this.openFireDossier(pin.record)
+  }
+
+  // ── Fire complexes: satellite link ────────────────────────────
+  // Propagate each detecting platform's TLE and take its elevation from the
+  // fire. Above the horizon means it could be measuring this fire right now.
+  GlobeController.prototype._fireSatelliteStatus = function(fire, names = []) {
+    const status = new Map()
+    const sat = window.satellite
+    if (!sat || !this.satelliteData?.length) return status
+
+    const now = new Date()
+    const gmst = sat.gstime(now)
+    const observerGd = {
+      latitude: fire.lat * Math.PI / 180,
+      longitude: fire.lng * Math.PI / 180,
+      height: 0,
+    }
+
+    names.forEach(name => {
+      const norad = SAT_NORAD[name]
+      if (!norad) return
+
+      const record = this.satelliteData.find(entry => Number(entry.norad_id) === norad)
+      if (!record) return
+
+      try {
+        let satrec = this._satrecCache?.get(record.norad_id)
+        if (!satrec) satrec = sat.twoline2satrec(record.tle_line1, record.tle_line2)
+        const posVel = sat.propagate(satrec, now)
+        if (!posVel.position) return
+
+        const posGd = sat.eciToGeodetic(posVel.position, gmst)
+        const lookAngles = sat.ecfToLookAngles(observerGd, sat.eciToEcf(posVel.position, gmst))
+        const elevation = lookAngles.elevation * 180 / Math.PI
+
+        status.set(name, {
+          elevation,
+          overhead: elevation > FIRE_SAT_MIN_ELEVATION,
+          lat: sat.degreesLat(posGd.latitude),
+          lng: sat.degreesLong(posGd.longitude),
+          alt: posGd.height * 1000,
+        })
+      } catch {
+        // Skip platforms with an unusable TLE rather than dropping the row.
+      }
+    })
+
+    return status
+  }
+
+  GlobeController.prototype._drawFireSatelliteArcs = function(fire, names = []) {
+    this._clearFireSatelliteArcs()
+    const status = this._fireSatelliteStatus(fire, names)
+    status.forEach((info, name) => {
+      if (info.overhead) this._drawFireSatelliteArc(fire, name, info)
+    })
+  }
+
+  GlobeController.prototype._drawFireSatelliteArc = function(fire, name, info) {
+    const Cesium = window.Cesium
+    if (!Cesium || !info) return
+
+    const dataSource = this.getFiresDataSource()
+    const entity = dataSource.entities.add({
+      id: `fire-sat-arc-${fire.id}-${name}`,
+      polyline: {
+        positions: [
+          Cesium.Cartesian3.fromDegrees(info.lng, info.lat, info.alt),
+          Cesium.Cartesian3.fromDegrees(fire.lng, fire.lat, 0),
+        ],
+        width: 1.5,
+        material: new Cesium.PolylineDashMaterialProperty({
+          color: Cesium.Color.fromCssColorString("#ce93d8").withAlpha(0.65),
+          dashLength: 12,
+        }),
+        arcType: Cesium.ArcType.NONE,
+      },
+    })
+
+    this._fireSatArcEntities ||= []
+    this._fireSatArcEntities.push(entity)
+    this._requestRender()
+  }
+
+  GlobeController.prototype._clearFireSatelliteArcs = function() {
+    if (!this._fireSatArcEntities?.length) return
+
+    const ds = this._ds["fires"]
+    if (ds) this._fireSatArcEntities.forEach(entity => ds.entities.remove(entity))
+    this._fireSatArcEntities = []
+    this._requestRender()
+  }
+
+  // Load the satellite categories this fire's detectors live in, so the
+  // overhead readout can answer rather than shrug.
+  GlobeController.prototype.loadFirePlatforms = async function(event) {
+    event?.preventDefault?.()
+    const fire = this._fireDossier?.fire
+    const names = this._fireDossier?.detail?.satellites || []
+    if (!fire || !names.length) return
+
+    const categories = [...new Set(names.map(name => NORAD_CATEGORY[SAT_NORAD[name]]).filter(Boolean))]
+    if (!categories.length) return
+
+    this._toast?.("Loading detecting platforms…")
+    for (const category of categories) {
+      this.satCategoryVisible[category] = true
+      const chip = this.element?.querySelector(`.sb-chip[data-category="${category}"]`)
+      if (chip) { chip.classList.add("active"); chip.setAttribute("aria-pressed", "true") }
+      await this.fetchSatCategory(category)
+    }
+
+    this._toastHide()
+    this._renderFireDossier()
+    this._drawFireSatelliteArcs(fire, names)
+  }
+
+  GlobeController.prototype.linkFireSatellite = function(event) {
+    event?.preventDefault?.()
+    const name = event?.currentTarget?.dataset?.sat
+    const fire = this._fireDossier?.fire
+    if (!name || !fire) return
+
+    const info = this._fireSatelliteStatus(fire, [name]).get(name)
+    if (!info?.overhead) {
+      this._toast?.(`${name} is below the horizon from this fire`)
+      setTimeout(() => this._toastHide(), 2500)
+      return
+    }
+
+    this._clearFireSatelliteArcs()
+    this._drawFireSatelliteArc(fire, name, info)
+    this._toast?.(`${name} — ${Math.round(info.elevation)}° above the fire`)
+    setTimeout(() => this._toastHide(), 2500)
+  }
+
+  // ── Fire complexes: evolution chart ───────────────────────────
   // One line per instrument, never one line across both. MODIS resolves 1km
   // pixels and VIIRS 375m, so joining them draws a sawtooth that reads as a fire
   // flaring and collapsing when nothing on the ground has changed.
-  GlobeController.prototype._fireEvolutionSvg = function(observations) {
-    const width = 300
-    const height = 72
-    const padX = 4
-    const padY = 8
+  GlobeController.prototype._fireEvolutionSvg = function(observations, options = {}) {
+    const width = options.width || 320
+    const height = options.height || 110
+    const compact = !!options.compact
+    const padX = compact ? 3 : 30
+    const padY = compact ? 4 : 12
 
     const times = observations.map(observation => new Date(observation.at).getTime())
     const minTime = Math.min(...times)
@@ -940,7 +1331,7 @@ export function applyFiresMethods(GlobeController) {
     const maxMw = Math.max(...observations.map(observation => Number(observation.mw) || 0), 1)
     const spanTime = maxTime - minTime || 1
 
-    const x = (time) => padX + ((time - minTime) / spanTime) * (width - padX * 2)
+    const x = (time) => padX + ((time - minTime) / spanTime) * (width - padX - (compact ? padX : 6))
     const y = (mw) => height - padY - ((Number(mw) || 0) / maxMw) * (height - padY * 2)
 
     const byInstrument = new Map()
@@ -959,26 +1350,36 @@ export function applyFiresMethods(GlobeController) {
         series += `<polyline points="${path}" style="fill:none;stroke:${color};stroke-width:1.5;opacity:0.85;"></polyline>`
       }
       points.forEach(point => {
-        dots += `<circle cx="${x(point.at).toFixed(1)}" cy="${y(point.mw).toFixed(1)}" r="2.4" style="fill:${color};"></circle>`
+        dots += `<circle cx="${x(point.at).toFixed(1)}" cy="${y(point.mw).toFixed(1)}" r="${compact ? 1.8 : 2.6}" style="fill:${color};"></circle>`
       })
     })
 
+    if (compact) {
+      return `<svg class="anchor-fire-spark" viewBox="0 0 ${width} ${height}">${series}${dots}</svg>`
+    }
+
+    const axes = `
+      <line x1="${padX}" y1="${height - padY}" x2="${width - 6}" y2="${height - padY}" style="stroke:rgba(255,255,255,0.14);stroke-width:1;"></line>
+      <text x="2" y="${padY + 8}" style="fill:rgba(200,210,225,0.45);font:9px var(--gt-mono, monospace);">${this._fireMwLabel(maxMw)}</text>
+      <text x="2" y="${height - padY}" style="fill:rgba(200,210,225,0.45);font:9px var(--gt-mono, monospace);">0</text>
+    `
+
     const legend = [...byInstrument.keys()].map(instrument => {
       const color = INSTRUMENT_COLORS[instrument] || "#9aa4b2"
-      return `<span style="color:${color};margin-right:10px;">● ${this._escapeHtml(instrument)}</span>`
+      return `<span style="color:${color};">● ${this._escapeHtml(instrument)}</span>`
     }).join("")
 
+    const from = new Date(minTime).toISOString().slice(5, 16).replace("T", " ")
+    const to = new Date(maxTime).toISOString().slice(5, 16).replace("T", " ")
+
     return `
-      <div style="margin-top:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:4px;">
-        <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:72px;display:block;">
-          <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" style="stroke:rgba(255,255,255,0.12);stroke-width:1;"></line>
-          ${series}
-          ${dots}
-        </svg>
+      <div class="fd-chart">
+        <svg viewBox="0 0 ${width} ${height}">${axes}${series}${dots}</svg>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-top:3px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.4);">
-        <span>${legend}</span>
-        <span>peak ${this._fireMwLabel(maxMw)}</span>
+      <div class="fd-chart-foot">
+        <span>${this._escapeHtml(from)}</span>
+        <span class="fd-chart-legend">${legend}</span>
+        <span>${this._escapeHtml(to)}</span>
       </div>
     `
   }
@@ -1044,7 +1445,7 @@ export function applyFiresMethods(GlobeController) {
     37849: "weather",  // Suomi NPP
     43013: "weather",  // NOAA-20
     54234: "weather",  // NOAA-21
-    25994: "resource", // Terra
+    25994: "science",  // Terra -- catalogued under science, not resource
     27424: "resource", // Aqua
   }
 

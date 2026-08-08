@@ -218,11 +218,22 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       // panel, and the card grows a button for it.
       detailAction = null,
       detailActionLabel = "Details",
+      // A stable identity for the record, so pinning can dedupe on what the
+      // thing IS rather than on its title and coordinates, and can re-read it.
+      pinKey = null,
+      // Controller method that re-reads this record; a pin with one is a live
+      // subscription rather than a snapshot frozen at pin time.
+      liveSource = null,
+      // Controller method rendering a kind-specific card body.
+      bodyRenderer = null,
     }) => ({
       kind,
       record: data,
       detailAction,
       detailActionLabel,
+      pinKey,
+      liveSource,
+      bodyRenderer,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
       brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
@@ -1025,19 +1036,22 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         const tierLabel = data?.tier ? `${data.tier[0].toUpperCase()}${data.tier.slice(1)}` : "Fire"
         return makePayload({
           title: "Fire complex",
-          subtitle: compactFacts([
-            tierLabel,
-            data?.pixels != null ? `${data.pixels.toLocaleString()} px` : null,
-            data?.passes != null ? `${data.passes} passes` : null,
-          ]).join(" · "),
+          // The body carries the numbers, so the subtitle carries the one thing
+          // it does not: where on Earth this is.
+          subtitle: data?.lat != null && data?.lng != null
+            ? `${Number(data.lat).toFixed(3)}°, ${Number(data.lng).toFixed(3)}°`
+            : tierLabel,
           facts: [
             data?.mw != null ? `Peak ${Math.round(data.mw).toLocaleString()} MW` : null,
             data?.latestMw != null ? `Latest ${Math.round(data.latestMw).toLocaleString()} MW` : null,
           ],
           chips: [chip(tierLabel, data?.tier === "extreme" ? "critical" : "warning")],
           accent: { extreme: "#d50000", major: "#ff5722", moderate: "#ff9800" }[data?.tier] || "#ffd54f",
-          detailAction: "showFireComplexDetail",
-          detailActionLabel: "History",
+          detailAction: "openFireDossier",
+          detailActionLabel: "Dossier",
+          pinKey: data?.id ? `fire_complex:${data.id}` : null,
+          liveSource: "_refreshPinnedFireComplex",
+          bodyRenderer: "_renderFireComplexCardBody",
         })
       }
       default:

@@ -1,6 +1,7 @@
 .attention-hud {
   position: fixed;
-  top: 18px;
+  // Sits below the REGIONS / NEWS / INSIGHTS / UTC stats bar rather than over it.
+  top: 52px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 31;
@@ -23,21 +24,56 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 28px;
   padding: 0 13px;
+  border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
   color: rgba(218, 228, 242, 0.64);
-  font: 800 10px/1 var(--gt-mono);
+  font: 700 10px/1 'Inter', sans-serif;
   letter-spacing: 2.2px;
   text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(232, 240, 250, 0.85);
+  }
 
   &::before {
     content: "";
+    flex: none;
     width: 7px;
     height: 7px;
     border-radius: 999px;
     background: #ef4444;
     box-shadow: 0 0 18px rgba(239, 68, 68, 0.9);
+  }
+}
+
+.attention-hud__kicker-label {
+  flex: 1;
+}
+
+.attention-hud__chevron {
+  flex: none;
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.attention-hud.is-collapsed {
+  .attention-hud__body {
+    display: none;
+  }
+
+  .attention-hud__kicker {
+    border-bottom: 0;
+  }
+
+  .attention-hud__chevron {
+    transform: rotate(180deg);
   }
 }
 
@@ -54,7 +90,7 @@
 
 .attention-hud__title {
   color: #f8fafc;
-  font: 750 18px/1.12 var(--gt-sans);
+  font: 700 18px/1.12 'Inter', sans-serif;
   letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -64,7 +100,7 @@
 .attention-hud__subtitle {
   margin-top: 6px;
   color: rgba(216, 226, 240, 0.68);
-  font: 600 11px/1.35 var(--gt-mono);
+  font: 600 11px/1.35 'Inter', sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -85,7 +121,7 @@
 
 .attention-hud__metric-label {
   color: rgba(199, 211, 228, 0.5);
-  font: 800 8.5px/1 var(--gt-mono);
+  font: 700 8.5px/1 'Inter', sans-serif;
   letter-spacing: 1.4px;
   text-transform: uppercase;
 }
@@ -93,7 +129,7 @@
 .attention-hud__metric-value {
   margin-top: 6px;
   color: #f8fafc;
-  font: 850 18px/1 var(--gt-mono);
+  font: 700 18px/1 'Inter', sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
@@ -128,7 +164,7 @@
 .attention-hud__row-code {
   min-width: 45px;
   color: var(--row-tone, #f87171);
-  font: 900 9px/1 var(--gt-mono);
+  font: 700 9px/1 'Inter', sans-serif;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -137,14 +173,14 @@
   min-width: 0;
   overflow: hidden;
   color: rgba(245, 248, 252, 0.9);
-  font: 700 11px/1.2 var(--gt-sans);
+  font: 700 11px/1.2 'Inter', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .attention-hud__row-value {
   color: rgba(219, 229, 242, 0.62);
-  font: 800 10px/1 var(--gt-mono);
+  font: 700 10px/1 'Inter', sans-serif;
   font-variant-numeric: tabular-nums;
 }
 

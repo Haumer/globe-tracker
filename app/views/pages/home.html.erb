@@ -7,7 +7,12 @@
 
   <div id="attention-hud" class="attention-hud" style="display:none;" aria-label="Live attention overview">
     <div class="attention-hud__frame">
-      <div class="attention-hud__kicker">Live Attention</div>
+      <button type="button" class="attention-hud__kicker" id="attention-hud-toggle"
+              data-action="click->globe#toggleAttentionHud"
+              aria-expanded="true" aria-controls="attention-hud-body">
+        <span class="attention-hud__kicker-label">Live Attention</span>
+        <i class="fa-solid fa-chevron-up attention-hud__chevron" aria-hidden="true"></i>
+      </button>
       <div class="attention-hud__body" id="attention-hud-body"></div>
     </div>
   </div>

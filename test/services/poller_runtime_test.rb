@@ -136,6 +136,66 @@ class PollerRuntimeTest < ActiveSupport::TestCase
     PollerRuntime.instance_variable_set(:@stop_requested, false)
   end
 
+  # Regression: desired_state="stopped" breaks out of #run, and run_supervised
+  # only retried on exceptions -- so a clean operator stop ended the thread and
+  # left nothing watching the flag. Start then did nothing until the container
+  # was restarted (production, 2026-08-07 23:47Z: ingest sat off for 88 minutes).
+  test "await_resume returns to polling once desired_state flips back to running" do
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+    desired = "stopped"
+    heartbeats = []
+
+    PollerRuntimeState.stub(:desired_state, -> { desired }) do
+      PollerRuntimeState.stub(:heartbeat!, ->(reported_state:, metadata: {}) {
+        heartbeats << reported_state
+        desired = "running" if heartbeats.size >= 2
+      }) do
+        PollerRuntime.stub(:interruptible_sleep, ->(*) { nil }) do
+          assert PollerRuntime.send(:await_resume), "must resume instead of ending the thread"
+        end
+      end
+    end
+
+    assert_operator heartbeats.size, :>=, 2, "must keep heartbeating while parked"
+    assert_equal ["stopped"], heartbeats.uniq
+  ensure
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
+
+  test "await_resume ends the thread when the container is shutting down" do
+    PollerRuntime.instance_variable_set(:@stop_requested, true)
+
+    PollerRuntimeState.stub(:desired_state, -> { "stopped" }) do
+      refute PollerRuntime.send(:await_resume), "local shutdown must end the thread, not park"
+    end
+  ensure
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
+
+  # #run used to call ensure_running! on entry, so every deploy overrode a
+  # deliberate stop -- and it would defeat await_resume by switching ingest back
+  # on the instant the loop parked.
+  test "run does not force desired_state back to running on boot" do
+    original_embed = ENV["EMBED_POLLER_IN_WORKER"]
+    ENV["EMBED_POLLER_IN_WORKER"] = "1"
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+
+    PollerRuntimeState.stub(:desired_state, -> { "stopped" }) do
+      PollerRuntimeState.stub(:ensure_running!, ->(*) { flunk "must not override an operator stop on boot" }) do
+        PollerRuntimeState.stub(:heartbeat!, ->(**) { nil }) do
+          AisStreamService.stub(:running?, false) do
+            GlobalPollerService.stub(:tick!, ->(**) { flunk "must not poll while stopped" }) do
+              PollerRuntime.run
+            end
+          end
+        end
+      end
+    end
+  ensure
+    ENV["EMBED_POLLER_IN_WORKER"] = original_embed
+    PollerRuntime.instance_variable_set(:@stop_requested, false)
+  end
+
   test "interruptible_sleep returns early once the stop flag is set" do
     PollerRuntime.instance_variable_set(:@stop_requested, true)
 

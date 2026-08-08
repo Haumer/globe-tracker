@@ -10,6 +10,11 @@ class RssNewsService
   BATCH_COUNT = 4        # 4 batches × 5 min = each feed polled every 20 min
   BATCH_INTERVAL = 5     # minutes between batches
 
+  # Ceiling for feeds that declare no `when:Nd` window of their own.
+  DEFAULT_MAX_ITEM_AGE = 7.days
+  # Publishers do post slightly ahead; beyond this a date is simply wrong.
+  FUTURE_PUB_DATE_SLACK = 1.day
+
   refreshes model: NewsEvent, interval: BATCH_INTERVAL.minutes
 
   # ── Source Credibility System ────────────────────────────────
@@ -540,6 +545,9 @@ class RssNewsService
       raw_link = item.link.is_a?(String) ? item.link : item.link&.href
       next if title.blank? || raw_link.blank?
 
+      published_at = parse_pub_date(item)
+      next if item_outside_feed_window?(published_at, url, now: now)
+
       link = raw_link.include?("news.google.com") ? clean_google_url(raw_link) : raw_link
       summary = rss_item_summary(item)
       adapted = NewsSourceAdapter.normalize!(
@@ -549,7 +557,7 @@ class RssNewsService
           title: title,
           summary: summary,
           name: source_name,
-          published_at: parse_pub_date(item),
+          published_at: published_at,
           source: "rss",
         }
       )
@@ -561,7 +569,7 @@ class RssNewsService
         raw_url: raw_link,
         raw_title: adapted[:title],
         raw_summary: adapted[:summary],
-        raw_published_at: parse_pub_date(item),
+        raw_published_at: published_at,
         fetched_at: now,
         payload_format: "rss",
         raw_payload: rss_item_payload(item, raw_link),
@@ -640,6 +648,32 @@ class RssNewsService
     end
   rescue
     nil
+  end
+
+  # Google News `when:Nd` bounds when Google last *indexed* a page, not the
+  # pubDate it reports back. So a `site:` search happily returns homepages,
+  # section landing pages, paginated indexes and author profiles -- static pages
+  # it re-crawled recently -- each carrying its original publication date.
+  # Production ingested a Brookings landing page dated 2006 and a White House
+  # index page dated 2017 this way, and nothing downstream rejected them, so
+  # they reached the timeline as real events. Hold every item to its own feed's
+  # declared window.
+  def item_outside_feed_window?(published_at, feed_url, now:)
+    # A feed that omits a date is not evidence of staleness; other filters catch those.
+    return false if published_at.blank?
+    return true if published_at > now + FUTURE_PUB_DATE_SLACK
+
+    published_at < now - max_item_age_for(feed_url)
+  end
+
+  def max_item_age_for(feed_url)
+    match = feed_url.to_s.match(/when:(\d+)([dh])/i)
+    return DEFAULT_MAX_ITEM_AGE unless match
+
+    unit = match[2].casecmp?("h") ? 1.hour : 1.day
+    # Google's window is inclusive and pubDates drift across timezones, so leave
+    # a day of slack rather than trimming genuine articles at the boundary.
+    (match[1].to_i * unit) + 1.day
   end
 
   def clean_google_url(url)

@@ -35,6 +35,30 @@ class Api::FireClustersControllerTest < ActionDispatch::IntegrationTest
     assert_equal ["extreme", "major", "minor"], tiers
   end
 
+  test "limit caps the response at the strongest fires rather than an arbitrary slice" do
+    get "/api/fire_clusters", params: { limit: 2 }
+
+    data = JSON.parse(response.body)
+    assert_equal ["fc_extreme", "fc_major"], data.map { |row| row[0] }
+  end
+
+  test "a limit above the runaway guard cannot raise it" do
+    get "/api/fire_clusters", params: { limit: Api::FireClustersController::MAX_CLUSTERS + 5_000 }
+    assert_response :success
+
+    assert_equal 3, JSON.parse(response.body).size
+  end
+
+  test "a junk limit falls back to the runaway guard instead of returning nothing" do
+    get "/api/fire_clusters", params: { limit: "0" }
+    assert_response :success
+    assert_equal 3, JSON.parse(response.body).size
+
+    get "/api/fire_clusters", params: { limit: "-5" }
+    assert_response :success
+    assert_equal 3, JSON.parse(response.body).size
+  end
+
   test "notable filter returns only the discretely-renderable fires" do
     get "/api/fire_clusters", params: { notable: 1 }
 

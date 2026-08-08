@@ -1,4 +1,5 @@
 import { getDataSource, cachedColor } from "globe/utils"
+import { getPlaybackBounds } from "globe/camera"
 
 const FIRE_CLUSTER_HEIGHT_TIERS = [
   { minHeight: 16_000_000, cellSize: 7.0 },
@@ -22,6 +23,31 @@ const FIRE_RAW_RENDER_TIERS = [
   { minHeight: 0, maxPoints: 220, cellSize: 0.1 },
 ]
 
+// ── Fire complexes ────────────────────────────────────────────
+// A complex is one fire, assembled server-side from every satellite pixel that
+// falls inside it. Tiers are Fire Radiative Power in megawatts, so the bands are
+// a physical measure rather than an invented score.
+const FIRE_COMPLEX_TIERS = {
+  extreme: { color: "#d50000", pixelSize: 11, label: "Extreme" },
+  major: { color: "#ff5722", pixelSize: 8, label: "Major" },
+  moderate: { color: "#ff9800", pixelSize: 5, label: "Moderate" },
+  minor: { color: "#ffd54f", pixelSize: 3, label: "Minor" },
+}
+const FIRE_COMPLEX_FALLBACK_TIER = FIRE_COMPLEX_TIERS.minor
+
+// Below this the camera is looking at a region, so the viewport is a meaningful
+// filter and the long tail is worth asking for. Above it, bounds cover most of
+// the planet and only notable fires stay legible.
+const FIRE_REGIONAL_HEIGHT = 6_000_000
+const FIRE_COMPLEX_LIMIT = 4_000
+
+// Of 25,027 complexes in a day, 13,715 are single-pixel minors -- mostly
+// agricultural burning and gas flares. They are real, but drawing them at world
+// zoom buries the 112 extreme fires that matter.
+const FIRE_NOTABLE_TIERS = ["major", "extreme"]
+
+const INSTRUMENT_COLORS = { VIIRS: "#ff8a65", MODIS: "#8bd8ff" }
+
 export function applyFiresMethods(GlobeController) {
 
   GlobeController.prototype.getFiresDataSource = function() { return getDataSource(this.viewer, this._ds, "fires") }
@@ -40,6 +66,9 @@ export function applyFiresMethods(GlobeController) {
       this._clearFireHotspotEntities()
       this._fireHotspotData = []
       this._fireHotspotClusterData = []
+      this._fireComplexData = []
+      this._fireComplexById = new Map()
+      this._fireComplexQueryKey = null
     }
     this._startFiresRefresh()
     this._updateStats()
@@ -47,10 +76,17 @@ export function applyFiresMethods(GlobeController) {
     this._savePrefs()
   }
 
-  GlobeController.prototype.toggleFireClusters = function() {
-    this.fireClustersVisible = !this.hasFireClustersToggleTarget || this.fireClustersToggleTarget.checked
-    if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots()
+  GlobeController.prototype.toggleMinorFires = function() {
+    this.minorFiresVisible = this.hasMinorFiresToggleTarget && this.minorFiresToggleTarget.checked
     this._savePrefs()
+    if (this.fireHotspotsVisible && !this._timelineActive) this.fetchFireHotspots()
+  }
+
+  // Whichever fire shape is currently on the globe. Live mode renders complexes;
+  // timeline replay still walks per-pixel detections, because playback is a
+  // point-in-time question and a complex is a 24-hour rollup.
+  GlobeController.prototype._currentFireData = function() {
+    return (this._timelineActive ? this._fireHotspotData : this._fireComplexData) || []
   }
 
   GlobeController.prototype._startFiresRefresh = function() {
@@ -63,6 +99,8 @@ export function applyFiresMethods(GlobeController) {
   }
 
   GlobeController.prototype.fetchFireHotspots = async function() {
+    if (!this._timelineActive) return this._fetchFireComplexes()
+
     const fetchToken = ++this._fireHotspotFetchToken
     this._toast("Loading fire hotspots...")
     try {
@@ -133,12 +171,203 @@ export function applyFiresMethods(GlobeController) {
     }
   }
 
+  // ── Fire complexes: fetch ─────────────────────────────────────
+  // The query follows the camera. At world zoom the globe asks for notable
+  // fires only; zoomed into a region it asks for everything in view, because
+  // there the long tail is a handful of fires rather than 13,000.
+  GlobeController.prototype._fireComplexQuery = function() {
+    const height = this.viewer?.camera?.positionCartographic?.height || 0
+    const filtered = !!(this.hasActiveFilter && this.hasActiveFilter())
+    const regional = height < FIRE_REGIONAL_HEIGHT || filtered
+    const params = new URLSearchParams()
+
+    // getViewportBounds returns null whenever the globe cannot be picked -- an
+    // unloaded tile, a camera angled off the limb. getPlaybackBounds falls back
+    // to the view rectangle and then to a camera approximation, which is what
+    // playback already relies on.
+    const bounds = regional
+      ? (filtered ? this.getFilterBounds?.() : getPlaybackBounds(this.viewer))
+      : null
+    if (bounds) {
+      Object.entries(bounds).forEach(([key, value]) => params.set(key, Number(value).toFixed(2)))
+    }
+
+    // Without bounds the long tail is a global query for 13,000 single-pixel
+    // burns, so an unresolvable viewport keeps the tier gate rather than
+    // quietly dropping it.
+    if (!this.minorFiresVisible && !(regional && bounds)) params.set("notable", "1")
+    params.set("limit", `${FIRE_COMPLEX_LIMIT}`)
+
+    return params
+  }
+
+  // Camera moves constantly; the query only changes when the viewport has moved
+  // enough to matter, so the key is the deciding factor for whether to refetch.
+  GlobeController.prototype.maybeRefetchFireComplexes = function() {
+    if (!this.fireHotspotsVisible || this._timelineActive) return
+    if (this._fireComplexQuery().toString() === this._fireComplexQueryKey) return
+
+    this._fetchFireComplexes()
+  }
+
+  GlobeController.prototype._fetchFireComplexes = async function() {
+    const fetchToken = ++this._fireHotspotFetchToken
+    const params = this._fireComplexQuery()
+    this._toast("Loading fires...")
+
+    try {
+      const resp = await fetch(`/api/fire_clusters?${params.toString()}`)
+      if (fetchToken !== this._fireHotspotFetchToken || !this.fireHotspotsVisible) {
+        this._toastHide()
+        return
+      }
+      if (!resp.ok) {
+        this._toastHide()
+        return
+      }
+
+      const raw = await resp.json()
+      if (fetchToken !== this._fireHotspotFetchToken || !this.fireHotspotsVisible) {
+        this._toastHide()
+        return
+      }
+
+      // [external_id, lat, lng, intensity_mw, tier, pixels, passes, last_ms, first_ms, latest_mw]
+      this._fireComplexData = raw.map(r => ({
+        id: r[0],
+        lat: r[1],
+        lng: r[2],
+        mw: r[3],
+        tier: r[4],
+        pixels: r[5],
+        passes: r[6],
+        time: r[7],
+        firstTime: r[8],
+        latestMw: r[9],
+        complex: true,
+        // Search and the satellite-visibility readout both key off `frp`.
+        frp: r[3],
+      }))
+      this._fireComplexById = new Map(this._fireComplexData.map(fire => [fire.id, fire]))
+      this._fireComplexQueryKey = params.toString()
+
+      this._handleBackgroundRefresh(resp, "fire-clusters", this._fireComplexData.length > 0, () => {
+        if (this.fireHotspotsVisible && !this._timelineActive) this._fetchFireComplexes()
+      })
+
+      this.renderFireHotspots()
+      this._markFresh("fireHotspots")
+      this._updateStats()
+      this._toastHide()
+    } catch (e) {
+      console.error("Failed to fetch fire complexes:", e)
+      this._toastHide()
+    }
+  }
+
+  // ── Fire complexes: render ────────────────────────────────────
+  GlobeController.prototype._fireComplexTier = function(complex = {}) {
+    return FIRE_COMPLEX_TIERS[complex.tier] || FIRE_COMPLEX_FALLBACK_TIER
+  }
+
+  GlobeController.prototype._renderFireComplexes = function() {
+    this._clearFireHotspotEntities()
+    this._fireHotspotClusterData = []
+
+    // The server already bounded the query, but the camera keeps moving between
+    // fetches, so cull against where it is now rather than where it was.
+    const bounds = this.getViewportBounds()
+    const visible = this._fireComplexData.filter(fire => {
+      if (bounds && (fire.lat < bounds.lamin || fire.lat > bounds.lamax ||
+                     fire.lng < bounds.lomin || fire.lng > bounds.lomax)) return false
+      if (this.hasActiveFilter && this.hasActiveFilter() && !this.pointPassesFilter(fire.lat, fire.lng)) return false
+      return true
+    })
+
+    if (visible.length === 0) {
+      this._requestRender()
+      return
+    }
+
+    const dataSource = this.getFiresDataSource()
+    dataSource.entities.suspendEvents()
+    visible.forEach(fire => this._renderFireComplex(dataSource, fire))
+    dataSource.entities.resumeEvents()
+
+    this._requestRender()
+  }
+
+  GlobeController.prototype._renderFireComplex = function(dataSource, fire) {
+    const Cesium = window.Cesium
+    const tier = this._fireComplexTier(fire)
+    const color = cachedColor(tier.color)
+
+    // Extreme fires get a footprint ring. The radius tracks pixel count, which
+    // is the area actually burning, not the radiative power.
+    if (fire.tier === "extreme") {
+      const radius = Math.min(4_000 + Math.sqrt(fire.pixels || 1) * 900, 60_000)
+      const ring = dataSource.entities.add({
+        id: `fire-complex-ring-${fire.id}`,
+        position: Cesium.Cartesian3.fromDegrees(fire.lng, fire.lat, 0),
+        ellipse: {
+          semiMinorAxis: radius,
+          semiMajorAxis: radius,
+          material: color.withAlpha(0.06),
+          outline: true,
+          outlineColor: color.withAlpha(0.22),
+          outlineWidth: 0.8,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      })
+      this._fireHotspotEntities.push(ring)
+    }
+
+    const entity = dataSource.entities.add({
+      id: `fire-complex-${fire.id}`,
+      position: Cesium.Cartesian3.fromDegrees(fire.lng, fire.lat, 10),
+      point: {
+        pixelSize: tier.pixelSize,
+        color: color.withAlpha(0.85),
+        outlineColor: color.withAlpha(0.25),
+        outlineWidth: 1,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 1.05, 1.4e7, 0.4),
+        heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: fire.tier === "extreme" ? {
+        text: this._fireMwLabel(fire.mw),
+        font: "11px JetBrains Mono, monospace",
+        fillColor: Cesium.Color.WHITE.withAlpha(0.85),
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -(tier.pixelSize + 8)),
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        scaleByDistance: new Cesium.NearFarScalar(1e5, 0.95, 1.2e7, 0.3),
+        translucencyByDistance: new Cesium.NearFarScalar(1e5, 0.95, 1.2e7, 0.0),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      } : undefined,
+    })
+    this._fireHotspotEntities.push(entity)
+  }
+
+  GlobeController.prototype._fireMwLabel = function(mw) {
+    const value = Number(mw) || 0
+    if (value >= 10_000) return `${(value / 1000).toFixed(1)} GW`
+    if (value >= 1000) return `${Math.round(value).toLocaleString()} MW`
+    if (value >= 10) return `${Math.round(value)} MW`
+    return `${value.toFixed(1)} MW`
+  }
+
   GlobeController.prototype.renderFireHotspots = function() {
     if (!this.fireHotspotsVisible) {
       this._clearFireHotspotEntities()
       this._fireHotspotClusterData = []
       return
     }
+    if (!this._timelineActive) return this._renderFireComplexes()
     this._clearFireHotspotEntities()
     this._fireHotspotClusterData = []
     const bounds = this._timelineActive && !(this.hasActiveFilter && this.hasActiveFilter())
@@ -582,6 +811,176 @@ export function applyFiresMethods(GlobeController) {
     `
     this.detailPanelTarget.style.display = ""
     this._flyToCoordinates(cluster.lng, cluster.lat, Math.max(700000, cluster.cellSize * 260000), { duration: 1.2 })
+  }
+
+  // ── Fire complexes: detail ────────────────────────────────────
+  // Two-phase: the index row is already on hand, so the panel opens immediately
+  // and fills in the pass history when it arrives. The history is the point --
+  // it is what turns a dot into an event with a shape over time.
+  GlobeController.prototype.showFireComplexDetail = async function(fire) {
+    this._clearSatFireArc()
+    this.detailContentTarget.innerHTML = this._fireComplexDetailHtml(fire, null)
+    this.detailPanelTarget.style.display = ""
+    this._flyToCoordinates(fire.lng, fire.lat, 400000, { duration: 1.2 })
+    this._fetchConnections("fire_hotspot", fire.lat, fire.lng)
+
+    const token = ++this._fireComplexDetailToken
+    try {
+      const resp = await fetch(`/api/fire_clusters/${encodeURIComponent(fire.id)}`)
+      if (!resp.ok || token !== this._fireComplexDetailToken) return
+
+      const detail = await resp.json()
+      if (token !== this._fireComplexDetailToken) return
+
+      this.detailContentTarget.innerHTML = this._fireComplexDetailHtml(fire, detail)
+    } catch (e) {
+      console.error("Failed to load fire complex detail:", e)
+    }
+  }
+
+  GlobeController.prototype._fireComplexDetailHtml = function(fire, detail) {
+    const tier = this._fireComplexTier(fire)
+    const observations = detail?.observations || []
+    const trend = detail?.trend
+    const trendColor = { growing: "#f44336", easing: "#ff9800", dying: "#66bb6a" }[trend] || "#9aa4b2"
+    const lastSeen = fire.time ? this._timeAgo(new Date(fire.time)) : "Unknown"
+    const firstSeen = fire.firstTime ? this._timeAgo(new Date(fire.firstTime)) : "Unknown"
+
+    const satellites = detail?.satellites || []
+    const trackButtons = satellites
+      .filter(name => SAT_NORAD[name])
+      .map(name => `
+        <button class="detail-track-btn" style="background:rgba(171,71,188,0.15);border-color:rgba(171,71,188,0.3);color:#ce93d8;"
+          data-action="click->globe#flyToSatellite" data-norad="${SAT_NORAD[name]}">
+          <i class="fa-solid fa-satellite" style="margin-right:4px;"></i>${this._escapeHtml(name)}
+        </button>`)
+      .join("")
+
+    return `
+      <div class="detail-callsign" style="color:${tier.color};">
+        <i class="fa-solid fa-fire" style="margin-right:6px;"></i>Fire Complex
+        <span style="margin-left:6px;font:600 9px var(--gt-mono);letter-spacing:0.6px;padding:2px 6px;border:1px solid ${tier.color};border-radius:3px;">${tier.label.toUpperCase()}</span>
+      </div>
+      <div class="detail-country">${fire.lat.toFixed(3)}°, ${fire.lng.toFixed(3)}°</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <span class="detail-label">Peak intensity</span>
+          <span class="detail-value" style="color:${tier.color};">${this._fireMwLabel(fire.mw)}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Latest pass</span>
+          <span class="detail-value">${this._fireMwLabel(fire.latestMw)}${trend ? ` <span style="color:${trendColor};">· ${trend}</span>` : ""}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Footprint</span>
+          <span class="detail-value">${(fire.pixels || 0).toLocaleString()} px</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Satellite passes</span>
+          <span class="detail-value">${fire.passes || 0}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">First seen</span>
+          <span class="detail-value">${firstSeen}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-label">Last seen</span>
+          <span class="detail-value">${lastSeen}</span>
+        </div>
+      </div>
+      ${this._fireEvolutionHtml(observations, detail)}
+      ${trackButtons}
+      ${this._connectionsPlaceholder()}
+      <div style="margin-top:8px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.3);">
+        Peak intensity is the strongest single satellite pass, never the sum across passes · Source: NASA FIRMS (VIIRS/MODIS)
+      </div>
+    `
+  }
+
+  GlobeController.prototype._fireEvolutionHtml = function(observations, detail) {
+    if (!detail) {
+      return `<div style="margin-top:10px;font:400 10px var(--gt-mono);color:rgba(200,210,225,0.4);">Loading pass history…</div>`
+    }
+    if (observations.length === 0) {
+      return `<div style="margin-top:10px;font:400 10px var(--gt-mono);color:rgba(200,210,225,0.4);">No pass history recorded.</div>`
+    }
+
+    const rows = [...observations].reverse().map(observation => {
+      const when = new Date(observation.at)
+      const color = INSTRUMENT_COLORS[observation.instrument] || "#9aa4b2"
+      return `
+        <div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);font:400 10px var(--gt-mono);">
+          <span style="color:rgba(200,210,225,0.55);width:88px;flex:none;">${when.toISOString().slice(5, 16).replace("T", " ")}</span>
+          <span style="color:${color};width:96px;flex:none;">${this._escapeHtml(observation.satellite || "?")}</span>
+          <span style="color:rgba(200,210,225,0.75);flex:1;text-align:right;">${this._fireMwLabel(observation.mw)}</span>
+          <span style="color:rgba(200,210,225,0.45);width:62px;flex:none;text-align:right;">${(observation.pixels || 0).toLocaleString()} px</span>
+        </div>`
+    }).join("")
+
+    return `
+      <div style="margin-top:12px;font:600 9px var(--gt-mono);letter-spacing:0.8px;color:rgba(200,210,225,0.5);">EVOLUTION</div>
+      ${this._fireEvolutionSvg(observations)}
+      <div style="margin-top:10px;font:600 9px var(--gt-mono);letter-spacing:0.8px;color:rgba(200,210,225,0.5);">DETECTED BY</div>
+      <div style="margin-top:4px;">${rows}</div>
+    `
+  }
+
+  // One line per instrument, never one line across both. MODIS resolves 1km
+  // pixels and VIIRS 375m, so joining them draws a sawtooth that reads as a fire
+  // flaring and collapsing when nothing on the ground has changed.
+  GlobeController.prototype._fireEvolutionSvg = function(observations) {
+    const width = 300
+    const height = 72
+    const padX = 4
+    const padY = 8
+
+    const times = observations.map(observation => new Date(observation.at).getTime())
+    const minTime = Math.min(...times)
+    const maxTime = Math.max(...times)
+    const maxMw = Math.max(...observations.map(observation => Number(observation.mw) || 0), 1)
+    const spanTime = maxTime - minTime || 1
+
+    const x = (time) => padX + ((time - minTime) / spanTime) * (width - padX * 2)
+    const y = (mw) => height - padY - ((Number(mw) || 0) / maxMw) * (height - padY * 2)
+
+    const byInstrument = new Map()
+    observations.forEach((observation, index) => {
+      const key = observation.instrument || "Unknown"
+      if (!byInstrument.has(key)) byInstrument.set(key, [])
+      byInstrument.get(key).push({ ...observation, at: times[index] })
+    })
+
+    let series = ""
+    let dots = ""
+    byInstrument.forEach((points, instrument) => {
+      const color = INSTRUMENT_COLORS[instrument] || "#9aa4b2"
+      if (points.length > 1) {
+        const path = points.map(point => `${x(point.at).toFixed(1)},${y(point.mw).toFixed(1)}`).join(" ")
+        series += `<polyline points="${path}" style="fill:none;stroke:${color};stroke-width:1.5;opacity:0.85;"></polyline>`
+      }
+      points.forEach(point => {
+        dots += `<circle cx="${x(point.at).toFixed(1)}" cy="${y(point.mw).toFixed(1)}" r="2.4" style="fill:${color};"></circle>`
+      })
+    })
+
+    const legend = [...byInstrument.keys()].map(instrument => {
+      const color = INSTRUMENT_COLORS[instrument] || "#9aa4b2"
+      return `<span style="color:${color};margin-right:10px;">● ${this._escapeHtml(instrument)}</span>`
+    }).join("")
+
+    return `
+      <div style="margin-top:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:4px;">
+        <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:72px;display:block;">
+          <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" style="stroke:rgba(255,255,255,0.12);stroke-width:1;"></line>
+          ${series}
+          ${dots}
+        </svg>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px;font:400 9px var(--gt-mono);color:rgba(200,210,225,0.4);">
+        <span>${legend}</span>
+        <span>peak ${this._fireMwLabel(maxMw)}</span>
+      </div>
+    `
   }
 
   // Draw an arc from the detecting satellite's current position to the fire

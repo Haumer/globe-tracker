@@ -165,7 +165,7 @@ export const GLOBE_TARGETS = [
   "qlSituationSurfaces",
   "fireHotspotsToggle",
   "fireHotspotOptions",
-  "fireClustersToggle",
+  "minorFiresToggle",
   "qlFireHotspots",
   "verifiedStrikesToggle",
   "qlVerifiedStrikes",

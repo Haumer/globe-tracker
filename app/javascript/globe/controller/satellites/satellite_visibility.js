@@ -311,9 +311,9 @@ function collectGroundEvents(relevantTypes, satLat, satLng, footprintM) {
     dist,
   }))
 
-  pushIfWithin("fire", this._fireHotspotData, (fire, dist) => ({
+  pushIfWithin("fire", this._currentFireData?.() || [], (fire, dist) => ({
     type: "fire",
-    label: `Fire ${fire.lat.toFixed(2)}°, ${fire.lng.toFixed(2)}° (${fire.satellite || "?"})`,
+    label: `Fire ${fire.lat.toFixed(2)}°, ${fire.lng.toFixed(2)}° (${fire.complex ? fire.tier : (fire.satellite || "?")})`,
     lat: fire.lat,
     lng: fire.lng,
     dist,

@@ -150,11 +150,11 @@ export function applySelectionSearchMethods(GlobeController) {
       key: "fire_hotspot",
       icon: "fa-fire",
       color: "#ff5722",
-      getData: (ctrl) => ctrl._fireHotspotData || [],
-      fields: (item) => [item.satellite, "fire", "hotspot"],
+      getData: (ctrl) => ctrl._currentFireData?.() || [],
+      fields: (item) => [item.satellite, item.tier, "fire", "hotspot", "complex"],
       toResult: (item) => ({
         name: `Fire ${item.lat.toFixed(2)}°, ${item.lng.toFixed(2)}°`,
-        detail: `${item.satellite || "?"} · ${item.frp ? item.frp.toFixed(0) + " MW" : "?"}`,
+        detail: `${item.complex ? item.tier : (item.satellite || "?")} · ${item.frp ? item.frp.toFixed(0) + " MW" : "?"}`,
         lat: item.lat, lng: item.lng, alt: 300000,
         data: item,
       }),
@@ -375,7 +375,8 @@ export function applySelectionSearchMethods(GlobeController) {
     } else if (r.type === "conflict" && r.data) {
       this.showConflictDetail(r.data)
     } else if (r.type === "fire_hotspot" && r.data) {
-      this.showFireHotspotDetail(r.data)
+      if (r.data.complex) this.showFireComplexDetail(r.data)
+      else this.showFireHotspotDetail(r.data)
     } else if (r.type === "satellite" && r.data) {
       this.showSatelliteDetail(r.data)
     }

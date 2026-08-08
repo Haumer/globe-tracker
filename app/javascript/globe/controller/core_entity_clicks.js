@@ -125,6 +125,18 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showStrikeDetail(data, { id, picked })
         return true
       }},
+      { prefix: "fire-complex-ring-", skip: [], handler: (id) => {
+        const data = this._fireComplexById?.get(id)
+        if (!data) return false
+        if (!showAnchored("fire_complex", data, { id })) this.showFireComplexDetail(data)
+        return true
+      }},
+      { prefix: "fire-complex-", skip: [], handler: (id) => {
+        const data = this._fireComplexById?.get(id)
+        if (!data) return false
+        if (!showAnchored("fire_complex", data, { id })) this.showFireComplexDetail(data)
+        return true
+      }},
       { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const data = this._fireHotspotClusterData?.[idx]

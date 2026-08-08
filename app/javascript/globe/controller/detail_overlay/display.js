@@ -306,6 +306,17 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
     this._showRightPanel?.("context")
   }
 
+  GlobeController.prototype.openAnchoredDetailRecord = function(event) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+
+    const state = anchoredStateById(this, event?.currentTarget?.dataset?.anchorId)
+    if (!state?.detailAction || !state.record) return
+    if (typeof this[state.detailAction] !== "function") return
+
+    this[state.detailAction](state.record)
+  }
+
   GlobeController.prototype.showAnchoredContext = function(event) {
     event?.preventDefault?.()
     event?.stopPropagation?.()
@@ -432,6 +443,10 @@ export function applyDetailOverlayDisplayMethods(GlobeController) {
       actionParts.push(`<button class="anchor-action-btn" type="button" data-action="click->globe#unpinAnchoredDetail" data-anchor-id="${this._escapeHtml(anchorId)}">Unpin</button>`)
     } else {
       actionParts.push(`<button class="anchor-action-btn anchor-action-btn--primary" type="button" data-action="click->globe#pinAnchoredDetail" data-anchor-id="${this._escapeHtml(anchorId)}">Pin</button>`)
+    }
+
+    if (payload.detailAction && typeof this[payload.detailAction] === "function") {
+      actionParts.push(`<button class="anchor-action-btn" type="button" data-action="click->globe#openAnchoredDetailRecord" data-anchor-id="${this._escapeHtml(anchorId)}">${this._escapeHtml(payload.detailActionLabel || "Details")}</button>`)
     }
 
     if (payload.nodeRequest || payload.contextAvailable) {

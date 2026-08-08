@@ -18,7 +18,7 @@ module Api
       # fires that matter, rather than an arbitrary slice like the raw hotspot
       # endpoint's `limit(5000)` -- which only ever showed the most recent ~1.2
       # hours of a 24-hour feed.
-      clusters = clusters.strongest.limit(MAX_CLUSTERS)
+      clusters = clusters.strongest.limit(limit_param)
 
       render json: clusters.map { |cluster|
         [
@@ -60,6 +60,16 @@ module Api
     end
 
     private
+
+    # The globe caps how many pins it will draw, so let it say so rather than
+    # download 25,000 rows and throw most away. Ordering is by intensity, so a
+    # capped response is the strongest fires, not an arbitrary slice.
+    def limit_param
+      requested = params[:limit].to_i
+      return MAX_CLUSTERS unless requested.positive?
+
+      [requested, MAX_CLUSTERS].min
+    end
 
     def bounds_param
       return nil unless %i[lamin lamax lomin lomax].all? { |key| params[key].present? }

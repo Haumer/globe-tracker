@@ -77,6 +77,8 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         return data?.strike ? "#e040fb" : (this._isHighConfidenceFire?.(data) ? "#f44336" : "#ff9800")
       case "fire_cluster":
         return data?.strikeCount > 0 ? "#e040fb" : "#ff7043"
+      case "fire_complex":
+        return { extreme: "#d50000", major: "#ff5722", moderate: "#ff9800" }[data?.tier] || "#ffd54f"
       default:
         return firstPresent(data?.markerStroke, data?.markerColor, data?.accentColor, data?.color)
     }
@@ -211,8 +213,16 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       casePath = null,
       focusHeight = null,
       contextAvailable = false,
+      // Kinds whose substance does not fit a compact card -- a fire complex is
+      // its pass history -- name the controller method that opens the full
+      // panel, and the card grows a button for it.
+      detailAction = null,
+      detailActionLabel = "Details",
     }) => ({
       kind,
+      record: data,
+      detailAction,
+      detailActionLabel,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
       brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
@@ -1009,6 +1019,25 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
           ],
           chips: [chip("Fire Cluster", "warning")],
           accent: "#ff8a65",
+        })
+      }
+      case "fire_complex": {
+        const tierLabel = data?.tier ? `${data.tier[0].toUpperCase()}${data.tier.slice(1)}` : "Fire"
+        return makePayload({
+          title: "Fire complex",
+          subtitle: compactFacts([
+            tierLabel,
+            data?.pixels != null ? `${data.pixels.toLocaleString()} px` : null,
+            data?.passes != null ? `${data.passes} passes` : null,
+          ]).join(" · "),
+          facts: [
+            data?.mw != null ? `Peak ${Math.round(data.mw).toLocaleString()} MW` : null,
+            data?.latestMw != null ? `Latest ${Math.round(data.latestMw).toLocaleString()} MW` : null,
+          ],
+          chips: [chip(tierLabel, data?.tier === "extreme" ? "critical" : "warning")],
+          accent: { extreme: "#d50000", major: "#ff5722", moderate: "#ff9800" }[data?.tier] || "#ffd54f",
+          detailAction: "showFireComplexDetail",
+          detailActionLabel: "History",
         })
       }
       default:

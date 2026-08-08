@@ -45,6 +45,9 @@ class GlobalPollerService
     { job: RefreshWeatherAlertsJob, every: 10.minutes, offset: 0.seconds },
     { job: RefreshNotamsJob, every: 10.minutes, offset: 2.minutes },
     { job: RefreshFireHotspotsJob, every: 10.minutes, offset: 4.minutes },
+    # Runs a minute behind the FIRMS fetch so it clusters the detections that
+    # poll just brought in rather than the previous cycle's.
+    { job: RefreshFireClustersJob, every: 10.minutes, offset: 5.minutes },
     { job: RefreshChokepointsSnapshotJob, every: 10.minutes, offset: 6.minutes },
     { job: RefreshOntologyRelationshipsJob, every: 10.minutes, offset: 7.minutes },
     { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },

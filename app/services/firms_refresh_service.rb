@@ -51,8 +51,12 @@ class FirmsRefreshService
     stale_scope.delete_all
   end
 
+  # Deliberately no timeline events here. A FIRMS row is one satellite pixel,
+  # so recording per detection put 490,383 rows on the timeline for roughly
+  # 25,000 real fires -- 99% of everything on it. FireClusterService records one
+  # timeline event per fire complex instead.
   def timeline_config
-    { event_type: "fire", model_class: FireHotspot, time_column: :acq_datetime }
+    nil
   end
 
   def fetch_source(source, map_key, now)

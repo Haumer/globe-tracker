@@ -72,6 +72,7 @@ Rails.application.routes.draw do
     resources :airports, only: [:index]
     resources :trending, only: [:index]
     resources :fire_hotspots, only: [:index]
+    resources :fire_clusters, only: [:index, :show]
     resources :strikes, only: [:index]
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]

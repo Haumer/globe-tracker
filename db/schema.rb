@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_12_113000) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_08_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -333,6 +333,33 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_12_113000) do
     t.index ["fetched_at"], name: "index_energy_balance_snapshots_on_fetched_at"
   end
 
+  create_table "fire_clusters", force: :cascade do |t|
+    t.string "external_id", null: false
+    t.float "latitude", null: false
+    t.float "longitude", null: false
+    t.float "intensity_mw", default: 0.0, null: false
+    t.float "latest_mw", default: 0.0, null: false
+    t.string "tier", null: false
+    t.integer "pixel_count", default: 0, null: false
+    t.integer "pass_count", default: 0, null: false
+    t.integer "detection_count", default: 0, null: false
+    t.datetime "first_detected_at"
+    t.datetime "last_detected_at"
+    t.jsonb "satellites", default: [], null: false
+    t.float "min_latitude"
+    t.float "max_latitude"
+    t.float "min_longitude"
+    t.float "max_longitude"
+    t.datetime "computed_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["external_id"], name: "index_fire_clusters_on_external_id", unique: true
+    t.index ["intensity_mw"], name: "index_fire_clusters_on_intensity_mw"
+    t.index ["last_detected_at"], name: "index_fire_clusters_on_last_detected_at"
+    t.index ["latitude", "longitude"], name: "index_fire_clusters_on_latitude_and_longitude"
+    t.index ["tier"], name: "index_fire_clusters_on_tier"
+  end
+
   create_table "fire_hotspots", force: :cascade do |t|
     t.string "external_id", null: false
     t.float "latitude", null: false
@@ -351,6 +378,24 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_12_113000) do
     t.index ["acq_datetime"], name: "index_fire_hotspots_on_acq_datetime"
     t.index ["external_id"], name: "index_fire_hotspots_on_external_id", unique: true
     t.index ["latitude", "longitude"], name: "index_fire_hotspots_on_latitude_and_longitude"
+  end
+
+  create_table "fire_observations", force: :cascade do |t|
+    t.bigint "fire_cluster_id", null: false
+    t.string "external_id", null: false
+    t.string "satellite"
+    t.string "instrument"
+    t.datetime "acq_datetime", null: false
+    t.float "frp_mw", default: 0.0, null: false
+    t.integer "pixel_count", default: 0, null: false
+    t.float "latitude"
+    t.float "longitude"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["acq_datetime"], name: "index_fire_observations_on_acq_datetime"
+    t.index ["external_id"], name: "index_fire_observations_on_external_id", unique: true
+    t.index ["fire_cluster_id", "acq_datetime"], name: "index_fire_observations_on_fire_cluster_id_and_acq_datetime"
+    t.index ["fire_cluster_id"], name: "index_fire_observations_on_fire_cluster_id"
   end
 
   create_table "flight_routes", force: :cascade do |t|
@@ -1429,6 +1474,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_12_113000) do
   add_foreign_key "alerts", "users"
   add_foreign_key "alerts", "watches"
   add_foreign_key "area_workspaces", "users"
+  add_foreign_key "fire_observations", "fire_clusters", on_delete: :cascade
   add_foreign_key "investigation_case_notes", "investigation_cases"
   add_foreign_key "investigation_case_notes", "users"
   add_foreign_key "investigation_case_objects", "investigation_cases"

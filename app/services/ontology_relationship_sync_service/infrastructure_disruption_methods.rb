@@ -24,8 +24,8 @@ class OntologyRelationshipSyncService
         event_record.confidence = payload.fetch(:confidence)
         event_record.source_reliability = 0.72
         event_record.geo_confidence = 0.86
-        event_record.started_at ||= payload.fetch(:observed_at)
-        event_record.first_seen_at ||= payload.fetch(:observed_at)
+        event_record.started_at ||= payload[:started_at] || payload.fetch(:observed_at)
+        event_record.first_seen_at ||= payload[:started_at] || payload.fetch(:observed_at)
         event_record.last_seen_at = payload.fetch(:observed_at)
         event_record.metadata = infrastructure_event_metadata(payload)
       end
@@ -38,7 +38,31 @@ class OntologyRelationshipSyncService
         metadata: { "event_kind" => payload.fetch(:kind).to_s }
       )
 
+      sync_hazard_evidence(event, payload)
+
       event
+    end
+
+    # Layers that observe the same event repeatedly link each observation, so
+    # the event carries its own history rather than just a latest value. For a
+    # fire that means one link per satellite pass, which is what makes the
+    # intensity curve reconstructable from the graph alone.
+    def sync_hazard_evidence(event, payload)
+      Array(payload[:evidence]).each do |observation|
+        OntologySyncSupport.upsert_evidence_link(
+          event,
+          observation,
+          evidence_role: "satellite_detection",
+          confidence: payload.fetch(:confidence),
+          metadata: {
+            "satellite" => observation.satellite,
+            "instrument" => observation.instrument,
+            "acq_datetime" => observation.acq_datetime&.iso8601,
+            "frp_mw" => observation.frp_mw,
+            "pixel_count" => observation.pixel_count,
+          }.compact
+        )
+      end
     end
 
     def sync_hazard_place_entity(payload)

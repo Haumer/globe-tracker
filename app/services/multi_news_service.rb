@@ -9,6 +9,9 @@ class MultiNewsService
 
   REFRESH_INTERVAL = 30.minutes
 
+  # Hacker News keeps scoring old stories, so age has to be bounded at the query.
+  HN_MAX_STORY_AGE = 2.days
+
   # ── Source Configurations ──────────────────────────────────────
   # Each source defines:
   #   env_key:       ENV variable name for the API key (nil = no key needed)
@@ -169,9 +172,17 @@ class MultiNewsService
     {
       name: "hackernews",
       env_key: nil,
-      base_url: "https://hn.algolia.com/api/v1/search",
+      # /search ranks by relevance, which on HN's index is dominated by points --
+      # so "stories over 20 points" with no date bound returns the all-time
+      # greatest hits (production surfaced "UK votes to leave EU" from 2016 and
+      # the 2017 net neutrality repeal). Sort by date and floor the age instead.
+      base_url: "https://hn.algolia.com/api/v1/search_by_date",
       params: ->(_key) {
-        { tags: "story", hitsPerPage: 50, numericFilters: "points>20" }
+        {
+          tags: "story",
+          hitsPerPage: 50,
+          numericFilters: "points>20,created_at_i>#{HN_MAX_STORY_AGE.ago.to_i}",
+        }
       },
       articles_path: ->(data) { data["hits"] },
       mapping: ->(a) {

@@ -69,6 +69,29 @@ class MultiNewsServiceTest < ActiveSupport::TestCase
     assert MultiNewsService.stale?
   end
 
+  # Regression: /search ranks by relevance, which on HN is dominated by points,
+  # so "points>20" with no date bound returned all-time greatest hits --
+  # production ingested "UK votes to leave EU" (2016) and the 2017 net
+  # neutrality repeal as live events.
+  test "hackernews query is date-sorted and age-bounded" do
+    hn = MultiNewsService::API_SOURCES.find { |s| s[:name] == "hackernews" }
+    refute_nil hn
+
+    assert_includes hn[:base_url], "search_by_date",
+      "relevance-ranked /search resurfaces old high-point stories"
+
+    params = hn[:params].call(nil)
+    filters = params[:numericFilters].to_s
+
+    assert_includes filters, "points>20"
+    assert_match(/created_at_i>\d+/, filters, "query must floor story age")
+
+    floor = filters[/created_at_i>(\d+)/, 1].to_i
+    assert_operator floor, :>, (MultiNewsService::HN_MAX_STORY_AGE + 1.hour).ago.to_i,
+      "age floor must track the configured window"
+    assert_operator floor, :<=, Time.current.to_i
+  end
+
   test "API_SOURCES is a non-empty array" do
     assert_kind_of Array, MultiNewsService::API_SOURCES
     assert MultiNewsService::API_SOURCES.size > 0

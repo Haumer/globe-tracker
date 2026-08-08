@@ -1,0 +1,263 @@
+// ─── Fire complex dossier ──────────────────────────────────────
+.fd-shell {
+  padding: 12px 14px 18px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.fd-empty,
+.fd-loading {
+  padding: 18px 4px;
+  font: 400 10px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  color: rgba(200, 210, 225, 0.4);
+}
+
+.fd-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fd-tier {
+  font: 600 9px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  padding: 3px 7px;
+  border: 1px solid;
+  border-radius: 3px;
+}
+
+.fd-coords {
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.55);
+}
+
+// ── Hero ──────────────────────────────────────────────────────
+.fd-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+}
+
+.fd-hero-value {
+  font: 650 26px 'Inter', -apple-system, sans-serif;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.fd-hero-label,
+.fd-hero-now {
+  margin-top: 4px;
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.45);
+}
+
+.fd-hero-side {
+  text-align: right;
+}
+
+.fd-hero-trend {
+  font: 600 12px 'JetBrains Mono', monospace;
+  text-transform: capitalize;
+}
+
+// ── Section headings ──────────────────────────────────────────
+.fd-section-title {
+  margin: 16px 0 6px;
+  font: 600 9px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  color: rgba(200, 210, 225, 0.5);
+}
+
+.fd-section-count {
+  float: right;
+  color: rgba(200, 210, 225, 0.3);
+}
+
+// ── Evolution chart ───────────────────────────────────────────
+.fd-chart {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  padding: 4px;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 110px;
+  }
+}
+
+.fd-chart-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.4);
+}
+
+.fd-chart-legend span {
+  margin-right: 8px;
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+.fd-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.fd-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+  font: 400 10px 'JetBrains Mono', monospace;
+}
+
+.fd-stat-label {
+  color: rgba(200, 210, 225, 0.45);
+}
+
+.fd-stat-value {
+  color: rgba(230, 232, 235, 0.9);
+}
+
+// ── Detected by ───────────────────────────────────────────────
+.fd-sat-row {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.fd-sat-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fd-sat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.fd-sat-name {
+  font: 500 11px 'JetBrains Mono', monospace;
+  color: rgba(230, 232, 235, 0.9);
+  flex: 1;
+}
+
+.fd-sat-state {
+  font: 400 9px 'JetBrains Mono', monospace;
+}
+
+.fd-sat-state--overhead { color: #ce93d8; }
+.fd-sat-state--below { color: rgba(200, 210, 225, 0.35); }
+.fd-sat-state--unknown { color: rgba(200, 210, 225, 0.25); }
+
+.fd-sat-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+  padding-left: 13px;
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.5);
+}
+
+.fd-sat-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.fd-sat-btn {
+  background: rgba(171, 71, 188, 0.15);
+  border: 1px solid rgba(171, 71, 188, 0.3);
+  color: #ce93d8;
+  border-radius: 3px;
+  padding: 2px 7px;
+  font: 500 9px 'JetBrains Mono', monospace;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(171, 71, 188, 0.28);
+  }
+}
+
+.fd-sat-hint {
+  margin-top: 6px;
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.35);
+  line-height: 1.5;
+}
+
+// ── Pinned fires ──────────────────────────────────────────────
+.fd-pin-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  font: 400 10px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.7);
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.fd-pin-row--active {
+  border-color: rgba(255, 138, 101, 0.5);
+}
+
+.fd-pin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.fd-pin-tier {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 9px;
+}
+
+.fd-pin-mw {
+  color: rgba(230, 232, 235, 0.9);
+}
+
+.fd-pin-loc {
+  margin-left: auto;
+  color: rgba(200, 210, 225, 0.4);
+}
+
+.fd-pin-gone {
+  color: #66bb6a;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.fd-source {
+  margin-top: 14px;
+  font: 400 9px 'JetBrains Mono', monospace;
+  color: rgba(200, 210, 225, 0.3);
+  line-height: 1.5;
+}

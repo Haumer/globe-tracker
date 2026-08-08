@@ -4,6 +4,7 @@ class OntologyRelationshipSyncService
 
     def recent_infrastructure_disruption_events(now:)
       recent_earthquakes(now: now) +
+        recent_fire_clusters(now: now) +
         recent_fire_hotspots(now: now) +
         recent_natural_disruption_events(now: now) +
         recent_geoconfirmed_kinetic_events(now: now) +
@@ -34,6 +35,9 @@ class OntologyRelationshipSyncService
         end
     end
 
+    # Thermal-strike candidates stay per-detection: the signal there is a single
+    # anomalous pixel in a conflict zone, and collapsing it into a fire complex
+    # would erase exactly what makes it interesting.
     def recent_fire_hotspots(now:)
       FireHotspot.where("acq_datetime >= ?", now - INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW)
         .where.not(latitude: nil, longitude: nil)
@@ -41,15 +45,15 @@ class OntologyRelationshipSyncService
         .limit(INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT)
         .filter_map do |fire|
           next unless relevant_fire_hotspot?(fire)
+          next unless possible_thermal_strike?(fire)
 
-          kinetic = possible_thermal_strike?(fire)
           {
-            kind: kinetic ? :thermal_strike : :fire_hotspot,
+            kind: :thermal_strike,
             record: fire,
-            title: kinetic ? "Thermal strike signal #{fire.external_id}" : "Fire hotspot #{fire.external_id}",
+            title: "Thermal strike signal #{fire.external_id}",
             text: fire.external_id.to_s,
-            event_family: kinetic ? "conflict" : "disaster",
-            event_type: kinetic ? "thermal_strike" : "fire_hotspot",
+            event_family: "conflict",
+            event_type: "thermal_strike",
             latitude: fire.latitude.to_f,
             longitude: fire.longitude.to_f,
             observed_at: fire.acq_datetime || fire.fetched_at || fire.updated_at,
@@ -58,6 +62,49 @@ class OntologyRelationshipSyncService
             confidence: fire_event_confidence(fire),
           }
         end
+    end
+
+    # Wildfires enter the ontology as one event per fire complex, carrying every
+    # satellite pass as evidence. Previously each pixel became its own
+    # "disaster/fire_hotspot" event, which made it the largest event family in
+    # the system -- 155,579 events, none of them a distinct fire.
+    def recent_fire_clusters(now:)
+      FireCluster.notable
+        .where(last_detected_at: (now - INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW)..)
+        .strongest
+        .limit(INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT)
+        .map do |cluster|
+          {
+            kind: :fire,
+            record: cluster,
+            title: "#{cluster.tier.capitalize} fire #{cluster.external_id}",
+            text: cluster.external_id.to_s,
+            event_family: "disaster",
+            event_type: "fire",
+            latitude: cluster.latitude.to_f,
+            longitude: cluster.longitude.to_f,
+            observed_at: cluster.last_detected_at || cluster.computed_at,
+            started_at: cluster.first_detected_at,
+            radius_km: fire_cluster_disruption_radius_km(cluster),
+            severity: cluster.tier,
+            confidence: fire_cluster_confidence(cluster),
+            evidence: cluster.fire_observations.chronological.to_a,
+          }
+        end
+    end
+
+    # Bigger fires threaten a wider area, but the footprint is what matters, not
+    # raw radiance -- a 50,000 MW complex is not 500x the reach of a 100 MW one.
+    def fire_cluster_disruption_radius_km(cluster)
+      spread_km = ((cluster.max_latitude.to_f - cluster.min_latitude.to_f).abs * 111.0)
+      [[spread_km, Math.sqrt([cluster.pixel_count, 1].max) * 0.4].max, 50.0].min.round(1)
+    end
+
+    def fire_cluster_confidence(cluster)
+      # Independent platforms seeing the same fire is the strongest signal we have.
+      base = { "extreme" => 0.9, "major" => 0.8, "moderate" => 0.65 }.fetch(cluster.tier, 0.5)
+      corroboration = [(cluster.satellites || []).size - 1, 0].max * 0.03
+      [base + corroboration, 0.98].min.round(2)
     end
 
     def recent_natural_disruption_events(now:)

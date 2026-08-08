@@ -5,6 +5,12 @@ export function applySituationalRightPanelMethods(GlobeController) {
     return availability[tabKey]
   }
 
+  const PANE_TITLES = {
+    "local-profile": "LOCAL PROFILE",
+    fire: "FIRE COMPLEX",
+    context: "LIVE CONTEXT",
+  }
+
   GlobeController.prototype._rightPanelHasContext = function() {
     return !!this._selectedContext || ((this._pinnedAnchoredDetails?.length || 0) > 0)
   }
@@ -13,6 +19,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
     return {
       context: this._rightPanelHasContext(),
       localProfile: this._hasActiveLocalProfile?.() || false,
+      fire: !!this._fireDossier,
     }
   }
 
@@ -37,6 +44,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype._syncRightTabButton = function() {}
 
   GlobeController.prototype._preferredRightPanelTab = function() {
+    if (this._fireDossier) return "fire"
     if (this._rightPanelHasContext()) return "context"
     if (this._hasActiveLocalProfile?.()) return "local-profile"
     return "context"
@@ -62,7 +70,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
       return
     }
 
-    const hasPanelContent = !!availability.context || !!availability.localProfile
+    const hasPanelContent = !!availability.context || !!availability.localProfile || !!availability.fire
     if (!panelVisible && !hasPanelContent) {
       this._syncPanelToggle(false)
       this._repositionDetailStack(12)
@@ -93,8 +101,11 @@ export function applySituationalRightPanelMethods(GlobeController) {
     const availability = this._rightPanelTabAvailability()
     let nextTab = tabKey || this._preferredRightPanelTab()
     if (nextTab === "localProfile") nextTab = "local-profile"
+    if (nextTab === "fire" && !availability.fire) nextTab = availability.context ? "context" : null
     if (nextTab === "local-profile" && !availability.localProfile) nextTab = availability.context ? "context" : null
-    if (nextTab === "context" && !availability.context) nextTab = availability.localProfile ? "local-profile" : null
+    if (nextTab === "context" && !availability.context) {
+      nextTab = availability.fire ? "fire" : (availability.localProfile ? "local-profile" : null)
+    }
     if (!nextTab) return
 
     this._lastRightPanelTab = nextTab
@@ -102,7 +113,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
     const pane = this.rightPanelTarget.querySelector(`.rp-pane[data-rp-pane="${nextTab}"]`)
     if (pane) pane.classList.add("rp-pane--active")
     if (this.hasRightPanelTitleTarget) {
-      this.rightPanelTitleTarget.textContent = nextTab === "local-profile" ? "LOCAL PROFILE" : "LIVE CONTEXT"
+      this.rightPanelTitleTarget.textContent = PANE_TITLES[nextTab] || "LIVE CONTEXT"
     }
   }
 
@@ -110,7 +121,7 @@ export function applySituationalRightPanelMethods(GlobeController) {
     const availability = this._rightPanelTabAvailability()
     const wantsLocalProfile = tabKey === "localProfile" || tabKey === "local-profile"
 
-    if (!availability.context && !availability.localProfile) {
+    if (!availability.context && !availability.localProfile && !availability.fire) {
       this._syncRightPanels()
       return
     }
@@ -126,6 +137,10 @@ export function applySituationalRightPanelMethods(GlobeController) {
   GlobeController.prototype.closeRightPanel = function() {
     this._deferContextRail = false
     this._rightPanelUserClosed = true
+    // Closing the rail drops the fire dossier, so the satellite arcs it drew do
+    // not outlive the panel that explains them.
+    this._fireDossier = null
+    this._clearFireSatelliteArcs?.()
     if (this.hasRightPanelTarget) this.rightPanelTarget.style.display = "none"
     this._repositionDetailStack(12)
     this._syncPanelToggle(false)

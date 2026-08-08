@@ -263,6 +263,15 @@ export function initializeCoreState(controller) {
   controller._fireHotspotData = []
   controller._fireHotspotClusterData = []
   controller._fireHotspotEntities = []
+  // Minor complexes are the long tail -- single-pixel agricultural burns and gas
+  // flares. Off by default at world zoom; zooming into a region shows them.
+  controller.minorFiresVisible = false
+  controller._fireComplexData = []
+  controller._fireComplexById = new Map()
+  controller._fireComplexQueryKey = null
+  controller._fireComplexDetailToken = 0
+  controller._fireDossier = null
+  controller._fireSatArcEntities = []
   controller.verifiedStrikesVisible = false
   controller.heatSignaturesVisible = false
   controller.strikesVisible = false

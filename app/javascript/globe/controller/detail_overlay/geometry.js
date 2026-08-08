@@ -30,6 +30,7 @@ const GEO_FIRST_ANCHOR_KINDS = new Set([
   "city",
   "fire_hotspot",
   "fire_cluster",
+  "fire_complex",
   "geoconfirmed",
 ])
 

@@ -140,6 +140,87 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
     assert_equal first_cluster_key, article.news_events.first.reload.story_cluster_id
   end
 
+  test "syndication_groups collapses outlets running identical wire copy" do
+    payloads = [
+      { title: "Blast reported at Kyiv power substation", source_id: 1 },
+      { title: "Blast reported at Kyiv power substation", source_id: 2 },
+      { title: "Blast reported at Kyiv power substation", source_id: 3 },
+    ]
+    groups = NewsStoryClusterer.send(:syndication_groups, payloads)
+
+    assert_equal 1, groups.size
+    assert_equal [ 1, 2, 3 ], groups.first[:source_ids]
+  end
+
+  test "syndication_groups keeps independently written headlines apart" do
+    payloads = [
+      { title: "Blast reported at Kyiv power substation", source_id: 1 },
+      { title: "Ukraine says grid damaged in overnight drone wave", source_id: 2 },
+    ]
+    assert_equal 2, NewsStoryClusterer.send(:syndication_groups, payloads).size
+  end
+
+  test "a headline extension is not treated as syndication" do
+    # Containment would score 1.0 here. Competing newsrooms routinely publish
+    # one headline inside another, so only Jaccard may drive this decision.
+    payloads = [
+      { title: "Strike hits fuel depot", source_id: 1 },
+      { title: "Strike hits fuel depot, at least fifty reported dead", source_id: 2 },
+    ]
+    assert_equal 2, NewsStoryClusterer.send(:syndication_groups, payloads).size
+  end
+
+  test "saturating_factor keeps discriminating past the old hard caps" do
+    f = ->(n) { NewsStoryClusterer.send(:saturating_factor, n, NewsStoryClusterer::SOURCE_FACTOR_SATURATION) }
+
+    assert_equal 0.0, f.call(0)
+    assert_operator f.call(2), :>, f.call(1)
+    # The old implementation pinned everything at and above 3 to 1.0.
+    assert_operator f.call(8), :>, f.call(3)
+    assert_operator f.call(1.0), :<=, 1.0
+    assert_in_delta 1.0, f.call(NewsStoryClusterer::SOURCE_FACTOR_SATURATION), 0.001
+    assert_equal 1.0, f.call(500)
+  end
+
+  test "three outlets carrying one wire story do not count as corroboration" do
+    wire_headline = "Explosions heard in central Iran after suspected Israeli attack"
+    articles = %w[reuters.com abc.net.au straitstimes.com].each_with_index.map do |domain, idx|
+      create_article(
+        suffix: "syndicated-#{idx}",
+        publisher: domain,
+        domain: domain,
+        title: wire_headline,
+        source_kind: idx.zero? ? "wire" : "publisher",
+        published_at: Time.utc(2026, 3, 24, 13 + idx, 0, 0)
+      )
+    end
+
+    records = articles.map do |article|
+      create_claim(article, family: "conflict", event_type: "missile_attack", claim_text: article.title)
+      event = create_event(article, title: article.title, location_name: "Isfahan", lat: 32.64, lng: 51.70)
+      {
+        news_article_id: article.id,
+        title: event.title,
+        name: event.name,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        published_at: event.published_at,
+        content_scope: "core",
+        news_source_id: article.news_source_id,
+      }
+    end
+
+    NewsStoryClusterer.assign_records(records)
+    cluster = NewsStoryCluster.find_by!(cluster_key: articles.first.news_events.first.reload.story_cluster_id)
+
+    assert_equal 3, cluster.article_count
+    assert_equal 3, cluster.source_count, "raw outlet count should still be recorded"
+    assert_equal 1, cluster.metadata["independent_source_ids"].size
+    assert_equal 2, cluster.metadata["syndicated_article_count"]
+    assert_equal "single_source", cluster.verification_status,
+                 "one newsroom republished three times is not corroboration"
+  end
+
   private
 
   def create_article(suffix:, publisher:, domain:, title:, source_kind:, published_at:)

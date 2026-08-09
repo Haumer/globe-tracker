@@ -1,3 +1,5 @@
+import { newsCategoryColor } from "globe/controller/news_palette"
+
 export function applyContextNodeBuilderMethods(GlobeController) {
   GlobeController.prototype._buildCommodityContext = function(item = {}, nodeRequest = null) {
     const symbol = item.symbol || item.title || item.name || nodeRequest?.id || "Commodity"
@@ -411,18 +413,10 @@ export function applyContextNodeBuilderMethods(GlobeController) {
   }
 
   GlobeController.prototype._buildNewsContext = function(ev) {
-    const categoryColors = {
-      conflict: "#f44336",
-      unrest: "#ff9800",
-      disaster: "#ff5722",
-      health: "#e91e63",
-      economy: "#ffc107",
-      diplomacy: "#4caf50",
-      cyber: "#7c4dff",
-      other: "#90a4ae",
-    }
-
-    const color = categoryColors[ev.category] || "#90a4ae"
+    // Second stale copy of the news palette, identical to the one that was in
+    // detail_overlay/payloads.js: eight of the twelve categories, and cyber
+    // purple where the globe draws it cyan.
+    const color = newsCategoryColor(ev.category)
     const location = [...new Set((ev.name || "").split(",").map(part => part.trim()).filter(Boolean))].join(", ")
     const sourceName = (ev.publisher || ev.source || "").replace(/^GN:\s*/, "")
     const claimType = ev.claim_event_type ? ev.claim_event_type.replace(/_/g, " ") : null

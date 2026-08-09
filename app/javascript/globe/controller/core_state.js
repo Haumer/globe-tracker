@@ -298,6 +298,10 @@ export function initializeCoreState(controller) {
   controller.newsBlobsVisible = true
   controller._newsData = []
   controller._newsEntities = []
+  // Label candidates for the screen-space declutter, heaviest first, and the
+  // pin currently marked as selected.
+  controller._newsLabelPins = []
+  controller._newsPinHighlight = null
   controller._newsArcEntities = []
   controller._newsInterval = null
   controller._newsActiveTab = "articles"

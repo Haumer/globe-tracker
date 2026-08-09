@@ -105,16 +105,28 @@
   gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
+  // The chips are flex-shrink: 0 and the title is nowrap with min-width: 0, so
+  // on a card this narrow two chips took the entire row and the title rendered
+  // at zero width -- a news card has never shown its headline. Wrapping gives
+  // the headline its own line and drops the chips underneath it.
+  flex-wrap: wrap;
 }
 
 .anchor-title {
   font: 650 15px/1.22 'Inter', -apple-system, 'Segoe UI', sans-serif;
   color: #e6e8eb;
   letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-width: 0;
+  flex: 1 1 100%;
+  // A headline is the point of the card, and on one nowrap line it was landing
+  // at about three words. The date and close button sit beside it, so even with
+  // its own row it only gets part of the width -- two lines is what makes a
+  // real headline fit.
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .anchor-chip-row {

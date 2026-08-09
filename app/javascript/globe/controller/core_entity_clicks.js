@@ -14,8 +14,14 @@ export function applyCoreEntityClickMethods(GlobeController) {
     }
 
     const showNewsByIndex = (id) => {
-      const data = this._newsData?.[parseInt(id, 10)]
+      const index = parseInt(id, 10)
+      const data = this._newsData?.[index]
       if (!data) return false
+      // Mark the pin the panel is about. Without this the map gave no sign of
+      // which of two hundred dots you had just hit -- and since a halo or a
+      // threat ring can be what actually got picked, "the one under the cursor"
+      // was not something the user could work out either.
+      this._highlightNewsPin?.(this._newsEntityByEventIdx?.get(index))
       if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
       return true
     }

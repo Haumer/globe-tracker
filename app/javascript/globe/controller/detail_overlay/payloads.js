@@ -8,6 +8,7 @@ import {
   situationClassLabel,
   toNumber,
 } from "globe/controller/detail_overlay/shared"
+import { newsCategoryColor } from "globe/controller/news_palette"
 import {
   attentionAssessment,
   attentionContextLabel,
@@ -31,16 +32,11 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       case "natural_event":
         return this.eonetCategoryIcons?.[data?.categoryId]?.color || "#78909c"
       case "news":
-        return {
-          conflict: "#f44336",
-          unrest: "#ff9800",
-          disaster: "#ff5722",
-          health: "#e91e63",
-          economy: "#ffc107",
-          diplomacy: "#4caf50",
-          cyber: "#7c4dff",
-          other: "#90a4ae",
-        }[data?.category] || "#90a4ae"
+        // Was a private eight-key copy of the palette that had drifted: cyber
+        // came out purple here and cyan on the globe, and terror, politics,
+        // science and sports were missing entirely, so those four dots opened a
+        // grey card whatever colour they were on the map.
+        return newsCategoryColor(data?.category)
       case "conflict_pulse":
         return attentionPalette(data).stroke || conflictPulseStroke(toNumber(data?.pulse_score) || 0)
       case "strategic_situation": {
@@ -368,15 +364,24 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       }
       case "news": {
         const actors = Array.isArray(data?.actors) ? data.actors.map(actor => actor.name).filter(Boolean) : []
-        const location = firstPresent(data?.name, data?.location, data?.place, data?.publisher, data?.origin_source, "Reported event")
+        // `name` on a news record is the publisher, never the headline --
+        // multi_news_service.rb fills it from the feed's source or author. It
+        // used to head both of these chains, so a story with no title rendered
+        // the publisher as its headline, the publisher again as its subtitle,
+        // and the source slug in the brief. The real headline appeared nowhere.
+        const publisher = firstPresent(data?.publisher, data?.source, data?.origin_source)
+        const place = firstPresent(data?.location, data?.place)
         const claimType = data?.claim_event_type ? `${data.claim_event_type}`.replace(/_/g, " ") : null
         const verification = data?.claim_verification_status ? `${data.claim_verification_status}`.replace(/_/g, " ") : null
         return makePayload({
-          title: firstPresent(data?.title, data?.name, "News signal"),
-          subtitle: location,
+          title: firstPresent(data?.title, "Untitled report"),
+          subtitle: firstPresent(place, publisher, "Reported event"),
           brief: compactFacts([
             firstPresent(claimType, actors.slice(0, 2).join(", ")),
-            firstPresent(verification, data?.publisher, data?.source),
+            verification,
+            // Only worth a second mention when the subtitle is showing a place.
+            // Otherwise the publisher is already the line above.
+            place ? publisher : null,
           ]).join(" · "),
           chips: [
             chip(firstPresent(data?.category, "News"), data?.threat === "high" ? "critical" : "accent"),

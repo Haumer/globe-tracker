@@ -1,4 +1,4 @@
-export const LAYER_REGISTRY = [
+const BASE_LAYER_REGISTRY = [
   { key: "flights", toggleTarget: "flightsToggle", method: "toggleFlights", visibleProp: "flightsVisible", qlTarget: "qlFlights", section: "tracking", pill: { label: "FLT", color: "#4fc3f7" } },
   { key: "ships", toggleTarget: "shipsToggle", method: "toggleShips", visibleProp: "shipsVisible", qlTarget: "qlShips", section: "tracking", pill: { label: "AIS", color: "#26c6da" } },
   { key: "trains", toggleTarget: "trainsToggle", method: "toggleTrains", visibleProp: "trainsVisible", qlTarget: "qlTrains", section: "tracking", pill: { label: "TRAIN", color: "#e53935" }, disabled: true },
@@ -36,6 +36,40 @@ export const LAYER_REGISTRY = [
   { key: "borders", toggleTarget: "bordersToggle", method: "toggleBorders", visibleProp: "bordersVisible", qlTarget: "qlBorders", section: "map", pill: { label: "BDR", color: "#ffd54f" } },
   { key: "terrain", toggleTarget: "terrainToggle", method: "toggleTerrain", visibleProp: "terrainEnabled", qlTarget: "qlTerrain", section: "map", pill: null },
 ]
+
+// The globe is temporarily narrowed to news alone.
+//
+// Signals accumulated one at a time, each reasonable on its own, until roughly
+// thirty of them competed for the same pixels and none could be read properly.
+// Rather than tune that in place, they are held inert while the news layer is
+// rebuilt, then reintroduced deliberately -- each one earning its place against
+// a map that already works.
+//
+// Nothing is deleted. A held layer keeps its registry entry, toggle, quick-bar
+// slot and saved preference; it simply cannot be switched on. Remove a key from
+// this set and the layer returns exactly as it was.
+//
+// Cartography is not held: cities, airports, borders and terrain are context
+// for reading position, not signals competing for attention.
+export const SIGNALS_ON_HOLD = new Set([
+  // tracking
+  "flights", "ships", "trains", "notams",
+  // events (news is the exception -- it is what we are building)
+  "earthquakes", "naturalEvents", "fireHotspots", "weather", "conflicts",
+  "situationSurfaces", "situations", "insights",
+  // military
+  "militaryFlights", "airbases", "militaryBases", "navalVessels",
+  "verifiedStrikes", "heatSignatures",
+  // infrastructure
+  "cables", "ports", "shippingLanes", "pipelines", "railways", "powerPlants",
+  "commoditySites", "cameras", "financial", "chokepoints",
+  // cyber
+  "traffic", "outages", "gpsJamming",
+])
+
+export const LAYER_REGISTRY = BASE_LAYER_REGISTRY.map(layer => (
+  SIGNALS_ON_HOLD.has(layer.key) ? { ...layer, disabled: true } : layer
+))
 
 export const ADVANCED_LIBRARY_KEYS = [
   "flights",

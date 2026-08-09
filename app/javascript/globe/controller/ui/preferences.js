@@ -70,13 +70,18 @@ export function applyUiPreferenceMethods(GlobeController) {
   }
 
   GlobeController.prototype._applyDefaultPrimaryLayers = function() {
+    // Keyed by layer so a held layer is skipped here too. Without this the
+    // boot sequence would switch on the very layers SIGNALS_ON_HOLD suppresses
+    // everywhere else, and they would render with no way to turn them off.
     const defaults = [
-      ["situationSurfacesToggle", "toggleSituationSurfaces"],
-      ["situationsToggle", "toggleSituations"],
-      ["newsToggle", "toggleNews"],
+      ["situationSurfaces", "situationSurfacesToggle", "toggleSituationSurfaces"],
+      ["situations", "situationsToggle", "toggleSituations"],
+      ["news", "newsToggle", "toggleNews"],
     ]
 
-    defaults.forEach(([targetBase, methodName]) => {
+    defaults.forEach(([layerKey, targetBase, methodName]) => {
+      if (isLayerTemporarilyDisabled(layerKey)) return
+
       const hasTarget = `has${capitalize(targetBase)}Target`
       if (!this[hasTarget]) return
       const target = this[`${targetBase}Target`]

@@ -5,6 +5,7 @@ class PollerRuntime
   # and a dead thread stops no jobs and logs nothing. Supervise it instead.
   MAX_RESTARTS = 10
   RESTART_BACKOFF = 5.seconds
+  RESUME_POLL_INTERVAL = 5.seconds
 
   class << self
     # Entry point for the embedded (Sidekiq thread) runner. Restarts the loop on
@@ -12,18 +13,29 @@ class PollerRuntime
     def run_supervised
       restarts = 0
 
-      begin
-        run
-      rescue StandardError => e
-        restarts += 1
-        log_crash(e, restarts)
+      loop do
+        begin
+          run
+        rescue StandardError => e
+          restarts += 1
+          log_crash(e, restarts)
 
-        if restarts <= MAX_RESTARTS && !stop_requested_externally?
-          sleep(RESTART_BACKOFF * [restarts, 6].min)
-          retry
+          if restarts <= MAX_RESTARTS && !stop_requested_externally?
+            sleep(RESTART_BACKOFF * [restarts, 6].min)
+            next
+          end
+
+          Rails.logger.error("[poller] giving up after #{restarts} restart(s); ingest is stopped")
+          return
         end
 
-        Rails.logger.error("[poller] giving up after #{restarts} restart(s); ingest is stopped")
+        # #run returned without raising, so either this container is shutting
+        # down or an operator stopped ingest from the admin UI. Only the former
+        # should end the thread: exiting on an operator stop leaves nothing
+        # watching desired_state, which is why Start used to do nothing until
+        # the container was restarted.
+        return if @stop_requested
+        return unless await_resume
       end
     end
 
@@ -40,7 +52,10 @@ class PollerRuntime
       # replace Sidekiq's own INT/TERM handlers and break its graceful shutdown;
       # the initializer's on(:shutdown) hook already requests a stop there.
       trap_signals unless embedded?
-      PollerRuntimeState.ensure_running!
+      # Deliberately no ensure_running! here. Forcing desired_state back to
+      # "running" on every boot meant a deploy silently undid an operator stop,
+      # and it would defeat #await_resume by re-enabling ingest the moment the
+      # loop parked. A fresh state record already defaults to "running".
 
       loop do
         break if @stop_requested
@@ -83,6 +98,32 @@ class PollerRuntime
       PollerRuntimeState.desired_state == "stopped"
     rescue StandardError
       false
+    end
+
+    # Park while an operator has ingest switched off, watching for them to switch
+    # it back on. Returns true to re-enter the poll loop, false when this
+    # container is shutting down and the thread should end.
+    def await_resume
+      Rails.logger.info("[poller] ingest stopped by operator; waiting for resume")
+
+      loop do
+        return false if @stop_requested
+
+        unless stop_requested_externally?
+          Rails.logger.info("[poller] resume requested; restarting poll loop")
+          return true
+        end
+
+        # Keep reporting so the admin page shows a live process that is stopped
+        # on purpose, rather than a stale heartbeat that looks like a crash.
+        begin
+          PollerRuntimeState.heartbeat!(reported_state: "stopped", metadata: runtime_metadata)
+        rescue StandardError => e
+          Rails.logger.warn("[poller] heartbeat while parked failed: #{e.class}: #{e.message}")
+        end
+
+        interruptible_sleep(RESUME_POLL_INTERVAL)
+      end
     end
 
     def log_crash(error, restarts)

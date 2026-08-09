@@ -119,7 +119,7 @@ function buildLayerPrefs() {
     notams: this.notamsVisible,
     insights: this.insightsVisible,
     fireHotspots: this.fireHotspotsVisible,
-    fireClusters: this.fireClustersVisible,
+    minorFires: this.minorFiresVisible,
     strikeArcs: this._strikeArcsVisible,
     hexTheater: this._hexTheaterVisible,
     verifiedStrikes: this.verifiedStrikesVisible,
@@ -230,10 +230,10 @@ function applyLayerPrefs(layers) {
   toggleIf.call(this, l.insights, "insightsToggle", "toggleInsights")
   toggleIf.call(this, l.fireHotspots, "fireHotspotsToggle", "toggleFireHotspots")
 
-  if (this.hasFireClustersToggleTarget) {
-    const fireClustersEnabled = l.fireClusters !== false
-    this.fireClustersToggleTarget.checked = fireClustersEnabled
-    this.fireClustersVisible = fireClustersEnabled
+  if (this.hasMinorFiresToggleTarget) {
+    const minorFiresEnabled = l.minorFires === true
+    this.minorFiresToggleTarget.checked = minorFiresEnabled
+    this.minorFiresVisible = minorFiresEnabled
   }
 
   const legacyStrikesEnabled = l.strikes === true

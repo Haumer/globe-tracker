@@ -194,7 +194,10 @@ export function applyCoreMethods(GlobeController) {
       this.saveCamera()
       this._savePrefs()
       this._updateGlobeOcclusion()
-      if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots?.()
+      if (this.fireHotspotsVisible && this._currentFireData?.().length > 0) this.renderFireHotspots?.()
+      // Zooming into a region changes which fires the server should send, not
+      // just which of the loaded ones are on screen.
+      this.maybeRefetchFireComplexes?.()
     }
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd)
 

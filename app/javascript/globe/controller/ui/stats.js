@@ -29,7 +29,7 @@ export function applyUiStatMethods(GlobeController) {
       (this.camerasVisible ? this._webcamData.length : 0) +
       (this.powerPlantsVisible ? this._powerPlantData.length : 0) +
       (this.conflictsVisible ? this._conflictData.length : 0) +
-      (this.fireHotspotsVisible ? this._fireHotspotData.length : 0)
+      (this.fireHotspotsVisible ? this._currentFireData().length : 0)
     updateStat("stat-events", eventCount)
 
     this._syncQuickBar()

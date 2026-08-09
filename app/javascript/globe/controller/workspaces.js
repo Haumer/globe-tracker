@@ -160,7 +160,7 @@ export function applyWorkspaceMethods(GlobeController) {
         notams: this.notamsVisible,
         strikeArcs: this._strikeArcsVisible,
         hexTheater: this._hexTheaterVisible,
-        fireClusters: this.fireClustersVisible,
+        minorFires: this.minorFiresVisible,
         weatherLayers: this._weatherActiveLayers ? { ...this._weatherActiveLayers } : {},
         weatherOpacity: this._weatherOpacity || 0.6,
         terrainExaggeration: this.viewer?.scene?.verticalExaggeration || 1,

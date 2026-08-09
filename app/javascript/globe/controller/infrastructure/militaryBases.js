@@ -157,7 +157,6 @@ export function applyMilitaryBasesMethods(GlobeController) {
           pixelOffset: LABEL_DEFAULTS.pixelOffsetBelow(),
           scaleByDistance: new Cesium.NearFarScalar(5e4, 0.8, 2e6, 0),
           translucencyByDistance: new Cesium.NearFarScalar(5e4, 1.0, 1e6, 0),
-          translucencyByDistance: LABEL_DEFAULTS.translucencyByDistance(),
         },
       })
       this._militaryBaseEntities.push(entity)

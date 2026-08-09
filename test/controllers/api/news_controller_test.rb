@@ -58,6 +58,48 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     NewsClaimActor.create!(news_claim: claim, news_actor: iran, role: "target", position: 1, confidence: 0.89)
   end
 
+  test "news response exposes the geocode family" do
+    @news.update_columns(
+      geocode_precision: "city",
+      geocode_confidence: 0.912,
+      geocode_basis: "title_place",
+      geocode_country_code: "at",
+      geocode_place_name: "Vienna"
+    )
+
+    get "/api/news"
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_equal "city", event["geo_precision"]
+    assert_in_delta 0.91, event["geo_confidence"], 0.001
+    assert_equal "title_place", event["geo_basis"]
+    assert_equal "at", event["geo_country_code"]
+    assert_equal "Vienna", event["place_name"]
+  end
+
+  test "place_name is withheld for country-precision rows" do
+    # geocode_place_name on a country centroid is routinely the publisher
+    # ("Die Zeit", "NYT World"), so surfacing it would label a centroid with a
+    # masthead. The coordinates are a whole country; there is no place to name.
+    @news.update_columns(geocode_precision: "country", geocode_place_name: "Die Zeit")
+
+    get "/api/news"
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_nil event["place_name"]
+    assert_equal "country", event["geo_precision"]
+  end
+
+  test "clustered response also carries the geocode family" do
+    @news.update_columns(geocode_precision: "place", geocode_place_name: "Vienna")
+
+    get "/api/news", params: { clustered: "true" }
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_equal "place", event["geo_precision"]
+    assert_equal "Vienna", event["place_name"]
+  end
+
   test "GET /api/news returns JSON array" do
     get "/api/news"
     assert_response :success

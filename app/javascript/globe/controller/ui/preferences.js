@@ -159,16 +159,30 @@ function openSectionsFor(element) {
 
 function restoreCamera(prefs) {
   const Cesium = window.Cesium
-  if (prefs.camera_lat == null || prefs.camera_lng == null) return
+  // Finiteness, not just presence. A NaN here reaches Cartesian3.fromDegrees and
+  // poisons the camera, and Cesium then throws "Invalid array length" out of the
+  // frustum-culling pass on every frame -- with the render loop swallowing the
+  // exception, so nothing reaches the console. _doSavePrefs would write the bad
+  // camera straight back, making it survive reloads.
+  const lat = Number(prefs.camera_lat)
+  const lng = Number(prefs.camera_lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+  // The remaining three are already safe by accident: NaN is falsy, so `||`
+  // hands back the default. Kept explicit so it stays true if anyone edits them.
+  const height = Number(prefs.camera_height)
+  const heading = Number(prefs.camera_heading)
+  const pitch = Number(prefs.camera_pitch)
+
   this.viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(
-      prefs.camera_lng,
-      prefs.camera_lat,
-      prefs.camera_height || 20000000
+      lng,
+      lat,
+      Number.isFinite(height) && height > 0 ? height : 20000000
     ),
     orientation: {
-      heading: prefs.camera_heading || 0,
-      pitch: prefs.camera_pitch || -Cesium.Math.PI_OVER_TWO,
+      heading: Number.isFinite(heading) ? heading : 0,
+      pitch: Number.isFinite(pitch) ? pitch : -Cesium.Math.PI_OVER_TWO,
       roll: 0,
     },
   })

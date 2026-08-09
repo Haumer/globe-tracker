@@ -58,7 +58,28 @@ module Api
         time: ev.published_at&.iso8601,
         priority: ev[:priority]&.to_f&.round(3),
         cluster_id: ev.story_cluster_id,
+
+        # How much to trust the dot's position. Populated on every row, unlike
+        # claim_geo_precision above which only exists for the ~10% of events with
+        # a primary claim. Roughly half of live events are country centroids, and
+        # the globe had no way to tell those apart from a real street-level fix.
+        geo_precision: ev.geocode_precision,
+        geo_confidence: ev.geocode_confidence&.to_f&.round(2),
+        geo_basis: ev.geocode_basis,
+        geo_country_code: ev.geocode_country_code,
+        place_name: located_place_name(ev),
       }
+    end
+
+    # geocode_place_name is only a place for the precise tiers. On country-precision
+    # rows it is frequently the publisher ("Die Zeit", "NYT World") or a bare
+    # two-letter code, so surfacing it there would label a centroid with a masthead.
+    LOCATED_PRECISIONS = %w[city place region airport].freeze
+
+    def located_place_name(ev)
+      return nil unless LOCATED_PRECISIONS.include?(ev.geocode_precision)
+
+      ev.geocode_place_name.presence
     end
 
     def clustered_response(events, claim_summaries)

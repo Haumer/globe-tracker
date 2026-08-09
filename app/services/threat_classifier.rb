@@ -50,6 +50,48 @@ class ThreatClassifier
 
   THREAT_LEVELS = %w[info low medium high critical].freeze
 
+  # The one category vocabulary. Three lists used to disagree: this classifier
+  # emitted `economy`/`diplomacy`/`unrest`/`cyber`, the AI enricher emitted
+  # `economic`/`political`/`science`/`sports`, and the globe's palette knew a
+  # third set. Because enrichment overwrites `category` on ~87% of rows, most
+  # pins ended up carrying a value the map had no colour for and rendered grey.
+  #
+  # CATEGORIES above stays the keyword-scored subset; these are the additional
+  # values the AI is allowed to return for stories no threat keyword matches.
+  CATEGORY_NAMES = (CATEGORIES.map { |c| c[:name] } + %w[politics science sports other]).freeze
+
+  # Historical and near-miss spellings seen in the data.
+  CATEGORY_ALIASES = {
+    "economic" => "economy",
+    "political" => "politics",
+    "poiltics" => "politics",
+    "policy" => "politics",
+    "war" => "conflict",
+    "military" => "conflict",
+    "protest" => "unrest",
+    "outbreak" => "health",
+    "tech" => "science",
+    "technology" => "science",
+    "sport" => "sports",
+    # CMS section tags that reached the column through feed metadata.
+    "markets" => "economy",
+    "finance" => "economy",
+    "business" => "economy",
+    "environment" => "science",
+    "academia" => "science",
+    "security" => "politics",
+  }.freeze
+
+  # Returns a canonical category, or nil when the value is unrecognised so the
+  # caller can decide whether to keep what it already has.
+  def self.normalize_category(value)
+    key = value.to_s.strip.downcase
+    return nil if key.empty?
+
+    key = CATEGORY_ALIASES.fetch(key, key)
+    CATEGORY_NAMES.include?(key) ? key : nil
+  end
+
   class << self
     # Classify a headline -> { category:, threat:, tone:, level:, keywords: }
     def classify(title)

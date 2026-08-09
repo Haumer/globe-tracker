@@ -1,3 +1,22 @@
+import { newsCategoryColor } from "globe/controller/news_palette"
+
+// Kept beside the palette rather than in it: an icon is a feed-list affordance,
+// and nothing on the globe draws one.
+const CATEGORY_ICONS = {
+  conflict: "fa-crosshairs",
+  terror: "fa-triangle-exclamation",
+  disaster: "fa-hurricane",
+  unrest: "fa-bullhorn",
+  health: "fa-heart-pulse",
+  economy: "fa-chart-line",
+  diplomacy: "fa-handshake",
+  cyber: "fa-shield-halved",
+  politics: "fa-landmark",
+  science: "fa-flask",
+  sports: "fa-medal",
+  other: "fa-newspaper",
+}
+
 export function applyNewsFeedMethods(GlobeController) {
   GlobeController.prototype.closeNewsFeed = function() {
     this._setNewsDotOpacity(1.0)
@@ -66,11 +85,6 @@ export function applyNewsFeedMethods(GlobeController) {
     const hideRead = this.hasNewsHideReadToggleTarget ? this.newsHideReadToggleTarget.checked : false
     const readSet = this._getReadNewsSet()
 
-    const categoryColors = {
-      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#4caf50", economy: "#2196f3", diplomacy: "#9c27b0", cyber: "#00bcd4", other: "#90a4ae",
-    }
-
     const filtered = events
       .map((ev, i) => ({ ...ev, _idx: i }))
       .filter(ev => {
@@ -105,7 +119,7 @@ export function applyNewsFeedMethods(GlobeController) {
     }
 
     const html = filtered.map(ev => {
-      const color = categoryColors[ev.category] || "#90a4ae"
+      const color = newsCategoryColor(ev.category)
       let domain = ev.publisher || ev.source || ""
       if (!domain && ev.url) {
         try { domain = new URL(ev.url).hostname.replace(/^www\./, "") } catch {}
@@ -200,17 +214,25 @@ export function applyNewsFeedMethods(GlobeController) {
     if (this._buildNewsContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildNewsContext(ev))
     }
-    const entity = this._newsEntities?.[idx]
+    const entity = this._newsEntityByEventIdx?.get(idx)
     if (entity?.point) {
-      const origSize = entity.point.pixelSize?.getValue() || 10
-      entity.point.pixelSize = origSize * 2.5
+      // Hold the property objects themselves, not their current values. These are
+      // CallbackProperties on animated pins, and putting a plain number back would
+      // freeze that pin's pulse for the rest of the session.
+      const origSize = entity.point.pixelSize
+      const origOutline = entity.point.outlineWidth
+      const baseSize = origSize?.getValue?.(Cesium.JulianDate.now()) ?? 10
+
+      entity.point.pixelSize = baseSize * 2.5
       entity.point.outlineWidth = 6
-      setTimeout(() => {
-        if (entity.point) {
-          entity.point.pixelSize = origSize
-          entity.point.outlineWidth = 3
-        }
+      clearTimeout(entity._newsFocusTimer)
+      entity._newsFocusTimer = setTimeout(() => {
+        if (!entity.point) return
+        entity.point.pixelSize = origSize
+        entity.point.outlineWidth = origOutline
+        this._requestRender?.()
       }, 2000)
+      this._requestRender?.()
     }
   }
 
@@ -244,13 +266,8 @@ export function applyNewsFeedMethods(GlobeController) {
     const arc = this._newsArcData?.[arcIdx]
     if (!arc) return
 
-    const categoryColors = {
-      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
-    }
-
     const articleList = arc.articles.map(a => {
-      const color = categoryColors[a.category] || "#90a4ae"
+      const color = newsCategoryColor(a.category)
       const toneColor = a.tone < -2 ? "#f44336" : a.tone > 2 ? "#4caf50" : "#90a4ae"
       return `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
         <div style="font:500 10px var(--gt-mono);color:${color};">
@@ -292,17 +309,8 @@ export function applyNewsFeedMethods(GlobeController) {
     if (this._buildNewsContext && this._setSelectedContext) {
       this._setSelectedContext(this._buildNewsContext(ev))
     }
-
-    const categoryColors = {
-      conflict: "#f44336", unrest: "#ff9800", disaster: "#ff5722",
-      health: "#e91e63", economy: "#ffc107", diplomacy: "#4caf50", cyber: "#7c4dff", other: "#90a4ae",
-    }
-    const categoryIcons = {
-      conflict: "fa-crosshairs", unrest: "fa-bullhorn", disaster: "fa-hurricane",
-      health: "fa-heart-pulse", economy: "fa-chart-line", diplomacy: "fa-handshake", cyber: "fa-shield-halved", other: "fa-newspaper",
-    }
-    const color = categoryColors[ev.category] || "#90a4ae"
-    const icon = categoryIcons[ev.category] || "fa-newspaper"
+    const color = newsCategoryColor(ev.category)
+    const icon = CATEGORY_ICONS[ev.category] || "fa-newspaper"
 
     const nearby = (this._newsData || []).filter(n =>
       n.url !== ev.url &&
@@ -323,7 +331,11 @@ export function applyNewsFeedMethods(GlobeController) {
       return `${actor.name || ""}${role}`
     }).filter(Boolean)
     const claimType = ev.claim_event_type ? ev.claim_event_type.replace(/_/g, " ") : ""
-    const locationParts = (ev.name || "").split(",").map(s => s.trim())
+    // `name` is the publisher, not a place -- its top values are "Die Zeit",
+    // "Naftemporiki", "Rzeczpospolita" -- so showing it here labelled the story
+    // with a masthead. place_name comes from the geocoder and the API only sends
+    // it for the precise tiers, so a country centroid correctly shows nothing.
+    const locationParts = (ev.place_name || "").split(",").map(s => s.trim()).filter(Boolean)
     const dedupedLocation = [...new Set(locationParts)].join(", ")
     const sourceName = (ev.publisher || ev.source || "").replace(/^GN:\s*/, "")
 
@@ -337,7 +349,7 @@ export function applyNewsFeedMethods(GlobeController) {
           ${nearby.length} nearby stor${nearby.length === 1 ? "y" : "ies"}
         </div>
         ${nearby.slice(0, 10).map(n => {
-          const nColor = categoryColors[n.category] || "#90a4ae"
+          const nColor = newsCategoryColor(n.category)
           const nTitle = n.title || n.name || "Untitled"
           const nSource = (n.publisher || n.source || n.name || "").replace(/^GN:\s*/, "").split(",")[0]
           const nTime = n.time ? this._timeAgo(new Date(n.time)) : ""

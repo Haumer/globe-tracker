@@ -197,7 +197,12 @@ export function applyCoreMethods(GlobeController) {
       this._updateGlobeOcclusion()
       // A new viewport means a different set of events is worth animating.
       onAmbientCameraChange(this)
-      if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots?.()
+      // _fireHotspotData only fills during timeline playback, so testing it here
+      // meant live mode never re-clustered on zoom and never refetched.
+      if (this.fireHotspotsVisible && this._currentFireData?.().length > 0) {
+        this.renderFireHotspots?.()
+        this.maybeRefetchFireComplexes?.()
+      }
     }
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd)
 

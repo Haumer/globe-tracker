@@ -21,9 +21,52 @@ function state(controller) {
       staging: new Map(),
       bounds: null,
       boundsStale: true,
+      raf: null,
+      lastPump: 0,
     }
   }
   return controller._ambient
+}
+
+// The viewer runs with requestRenderMode: true, so Cesium only draws when
+// something asks it to. A CallbackProperty changing value is not an ask -- it is
+// merely read during a draw that happens for some other reason. Every layer that
+// used to keep the loop busy (flights, weather, fires) is currently held, which
+// left the only heartbeat the 500ms occlusion tick: a 2.6-4.5s sine sampled at
+// 2fps, which steps rather than breathes.
+//
+// So the pulse drives its own frames, and only while something is actually
+// pulsing. 30fps is indistinguishable from 60 for a sine this slow and costs
+// half as much.
+const PUMP_INTERVAL_MS = 1000 / 30
+
+function pumpFrame(controller) {
+  const store = controller._ambient
+  if (!store) return
+  if (store.entries.size === 0) {
+    store.raf = null
+    return
+  }
+
+  const now = performance.now()
+  if (now - store.lastPump >= PUMP_INTERVAL_MS) {
+    store.lastPump = now
+    controller.viewer?.scene?.requestRender()
+  }
+  store.raf = requestAnimationFrame(() => pumpFrame(controller))
+}
+
+function startPump(controller) {
+  const store = state(controller)
+  if (store.raf || store.entries.size === 0) return
+  store.raf = requestAnimationFrame(() => pumpFrame(controller))
+}
+
+function stopPump(controller) {
+  const store = controller._ambient
+  if (!store?.raf) return
+  cancelAnimationFrame(store.raf)
+  store.raf = null
 }
 
 // Deterministic 0..1 from any string. Used for phase and period so that two
@@ -114,6 +157,7 @@ export function commitAmbientLayer(controller, layer) {
   }
   store.layers.set(layer, staged)
   store.staging.delete(layer)
+  startPump(controller)
 }
 
 export function clearAmbientLayer(controller, layer) {
@@ -123,11 +167,13 @@ export function clearAmbientLayer(controller, layer) {
   forgetKeys(store, store.staging.get(layer))
   store.layers.delete(layer)
   store.staging.delete(layer)
+  if (store.entries.size === 0) stopPump(controller)
 }
 
 export function clearAllAmbient(controller) {
   const store = controller._ambient
   if (!store) return
+  stopPump(controller)
   store.entries.clear()
   store.layers.clear()
   store.staging.clear()
@@ -166,9 +212,15 @@ export function ambientPointSize(controller, key, base, amplitude) {
 }
 
 // amplitude is a fraction of baseAlpha; the colour itself is left alone.
-export function ambientColor(controller, key, color, baseAlpha, amplitude) {
+//
+// `opacity` is an optional function returning a 0..1 multiplier read on every
+// frame. It exists so a layer can be dimmed as a whole without replacing these
+// callbacks -- assigning a plain Color over one would freeze the pulse, which
+// is exactly why _setNewsDotOpacity skips CallbackProperty colours.
+export function ambientColor(controller, key, color, baseAlpha, amplitude, opacity) {
   return new (C().CallbackProperty)(() => {
-    const alpha = baseAlpha * (1 + (amplitude * signed(controller, key)))
+    const dim = typeof opacity === "function" ? opacity() : 1
+    const alpha = baseAlpha * (1 + (amplitude * signed(controller, key))) * (Number.isFinite(dim) ? dim : 1)
     return color.withAlpha(Math.min(1, Math.max(0, alpha)))
   }, false)
 }

@@ -10,6 +10,15 @@ import {
   commitAmbientLayer,
   registerAmbient,
 } from "globe/controller/ambient_pulse"
+import { newsCategoryColor } from "globe/controller/news_palette"
+
+// geo_precision values that mean we resolved an actual place. Everything else is
+// a country centroid or a give-up, and gets drawn as a wash rather than a point.
+const LOCATED_PRECISIONS = new Set(["city", "place", "airport", "region"])
+
+// How many headlines may be on the globe at once. Nothing declutters labels, so
+// this is the whole density control.
+const LABEL_BUDGET = 14
 
 export function applyNewsRenderingMethods(GlobeController) {
   GlobeController.prototype.getNewsDataSource = function() { return getDataSource(this.viewer, this._ds, "news") }
@@ -108,64 +117,88 @@ export function applyNewsRenderingMethods(GlobeController) {
 
     const ambient = !this._timelineActive
     if (ambient) beginAmbientLayer(this, "news")
+    // Article index -> the pin that represents it. A pin stands for a whole
+    // cluster, so several article indices map to the same entity. The feed can
+    // only address articles by their index in _newsData, and _newsEntities is
+    // ordered by cluster with halos and threat rings interleaved -- indexing one
+    // with the other picked an unrelated pin.
+    this._newsEntityByEventIdx = new Map()
     // Read live so _setNewsDotOpacity can dim the layer without replacing callbacks.
     const dotOpacity = () => (Number.isFinite(this._newsDotOpacity) ? this._newsDotOpacity : 1)
 
-    const categoryColors = {
-      conflict: "#f44336",
-      unrest: "#ff9800",
-      disaster: "#ff5722",
-      health: "#e91e63",
-      economy: "#ffc107",
-      diplomacy: "#4caf50",
-      other: "#90a4ae",
-    }
+    // Math.round yields -0 for anything in (-0.5, 0], and "-0" is a different
+    // string from "0" -- which quietly split every cell touching the equator or
+    // the prime meridian into as many as four.
+    const cell = value => (Math.round(value) === 0 ? 0 : Math.round(value))
 
     const clusters = new Map()
     events.forEach((ev, i) => {
-      const key = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+      const key = `${cell(ev.lat)},${cell(ev.lng)}`
       if (!clusters.has(key)) clusters.set(key, [])
       clusters.get(key).push({ ...ev, _idx: i })
     })
 
-    const clusterSizes = [...clusters.values()].map(c => c.length).sort((a, b) => b - a)
-    const top3Threshold = clusterSizes[2] || 0
-    const haloCutoff = ambient ? haloWeightCutoff(clusterSizes) : Infinity
+    // Weight decides size, halo and -- because there is no declutter -- which
+    // clusters are allowed a label at all. Significance leads: with tone finally
+    // populated, `priority` (|tone| decayed by age) separates stories, whereas
+    // cluster count mostly reports how many centroids share a degree cell.
+    const weigh = (lead, count) => {
+      const intensity = Math.min((lead.priority != null ? lead.priority : Math.abs(lead.tone || 0)) / 10, 1)
+      const coverage = Math.min(Math.log2(count + 1) / 3, 1)
+      return (intensity * 0.65) + (coverage * 0.35)
+    }
 
-    clusters.forEach((clusterEvents) => {
-      clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone)) - (a.priority || Math.abs(a.tone)))
+    const ranked = [...clusters.values()].map((clusterEvents) => {
+      clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone || 0)) - (a.priority || Math.abs(a.tone || 0)))
+      return { clusterEvents, weight: weigh(clusterEvents[0], clusterEvents.length) }
+    }).sort((a, b) => b.weight - a.weight)
+
+    // Sizes are relative to the loudest story on screen, not to an absolute
+    // scale. `priority` decays exponentially with age, so on a quiet night every
+    // event is old, every weight is near the floor, and an absolute ramp would
+    // render the entire globe at minimum size. Relative scaling keeps the map
+    // readable at 3am and still says "this is the big one".
+    const topWeight = ranked[0]?.weight || 1
+
+    const haloCutoff = ambient ? haloWeightCutoff(ranked.map(r => r.weight)) : Infinity
+    // Nothing in Cesium declutters labels for us and there is no EntityCluster in
+    // this codebase, so the only way 250-odd headlines do not overprint each other
+    // is to not draw most of them. Same idea as the ports label budget.
+    const labelCutoff = ranked.length > LABEL_BUDGET ? ranked[LABEL_BUDGET - 1].weight : -Infinity
+
+    ranked.forEach(({ clusterEvents, weight }) => {
       const lead = clusterEvents[0]
       const count = clusterEvents.length
-      const color = categoryColors[lead.category] || "#90a4ae"
+      const color = newsCategoryColor(lead.category)
       const cesiumColor = Cesium.Color.fromCssColorString(color)
 
       const avgLat = clusterEvents.reduce((s, e) => s + e.lat, 0) / count
       const avgLng = clusterEvents.reduce((s, e) => s + e.lng, 0) / count
 
-      const intensity = Math.min((lead.priority != null ? lead.priority : Math.abs(lead.tone)) / 10, 1)
       const coverageBoost = Math.min(Math.log2(count + 1) / 3, 1)
-      let pixelSize = 6 + intensity * 6 + coverageBoost * 8
 
-      if (clusterSizes.length >= 3 && count >= top3Threshold) {
-        const rank = count >= clusterSizes[0] ? 0 : count >= clusterSizes[1] ? 1 : 2
-        pixelSize = [48, 36, 28][rank]
-      }
+      // Whether we know where this actually happened. Roughly half of events are
+      // country centroids -- often the publisher's own country rather than the
+      // story's -- and drawing those as a crisp dot on a capital city asserts a
+      // precision we do not have.
+      const located = LOCATED_PRECISIONS.has(lead.geo_precision)
 
-      const headline = this._truncateNewsLabel(lead.title || lead.name, pixelSize >= 28 ? 50 : 30)
+      // One continuous ramp. The old code hardcoded [48, 36, 28] for the three
+      // biggest cells, which left nothing between 20 and 28px and broke entirely
+      // if the third-largest cell was a singleton. It existed because tone was
+      // always zero, so cluster count was the only thing left to separate on.
+      let pixelSize = 7 + (weight / topWeight) * 15
+      // A vague position gets a bigger, softer mark: it covers more ground because
+      // it means less.
+      if (!located) pixelSize *= 1.3
+
+      const fillAlpha = located ? 0.92 : 0.3
+      const outlineAlpha = located ? 0.45 + coverageBoost * 0.3 : 0.55
+      const outlineWidth = located ? 1 + Math.round(coverageBoost * 2) : 2
+
+      const showLabel = weight >= labelCutoff
+      const headline = showLabel ? this._truncateNewsLabel(lead.title || lead.name, weight >= 0.5 ? 50 : 30) : ""
       const labelText = count > 1 ? `${headline}  (+${count - 1})` : headline
-
-      const descHtml = clusterEvents.slice(0, 8).map(ev => {
-        const c = categoryColors[ev.category] || "#90a4ae"
-        const sourceName = ev.publisher || ev.source
-        return `<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${this._escapeHtml(ev.category)}${sourceName ? " · " + this._escapeHtml(sourceName) : ""}</div>
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${this._escapeHtml(ev.title || ev.name || "Unknown")}</div>
-          ${ev.name && ev.title ? "<div style=\"font-size: 11px; color: #8892a4; margin-bottom: 4px;\">" + this._escapeHtml(ev.name) + "</div>" : ""}
-          <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${this._escapeHtml(ev.level)}</div>
-          <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" style="color: ${c}; font-size: 11px;">Read →</a>
-        </div>`
-      }).join("")
-      const moreNote = count > 8 ? `<div style="font-size: 11px; color: #6b7a8d;">+ ${count - 8} more stories</div>` : ""
 
       // Keyed on the cluster's rounded centroid so a story cluster keeps the same
       // phase across the 15-minute refresh instead of restarting its breath.
@@ -173,11 +206,11 @@ export function applyNewsRenderingMethods(GlobeController) {
         ? registerAmbient(this, "news", `${avgLat.toFixed(2)},${avgLng.toFixed(2)}`, {
             lat: avgLat,
             lng: avgLng,
-            weight: count + intensity * 10,
+            weight,
           })
         : null
 
-      if (ambientKey && count >= haloCutoff) {
+      if (ambientKey && weight >= haloCutoff) {
         const halo = ambientHaloPoint(this, ambientKey, cesiumColor, {
           minSize: pixelSize,
           maxSize: pixelSize + 18 + coverageBoost * 34,
@@ -198,42 +231,46 @@ export function applyNewsRenderingMethods(GlobeController) {
         position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 10),
         point: {
           pixelSize: ambientKey ? ambientPointSize(this, ambientKey, pixelSize, 0.12) : pixelSize,
+          // A located dot is solid; a country centroid is a wash you can see the
+          // globe through. Same hue, so category still reads -- only the claim to
+          // knowing where it happened changes.
           color: ambientKey
-            ? ambientColor(this, ambientKey, cesiumColor, 0.85 + coverageBoost * 0.15, 0.16, dotOpacity)
-            : cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
+            ? ambientColor(this, ambientKey, cesiumColor, fillAlpha, 0.16, dotOpacity)
+            : cesiumColor.withAlpha(fillAlpha),
           outlineColor: ambientKey
-            ? ambientColor(this, ambientKey, cesiumColor, 0.3 + coverageBoost * 0.4, 0.3, dotOpacity)
-            : cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
+            ? ambientColor(this, ambientKey, cesiumColor, outlineAlpha, 0.3, dotOpacity)
+            : cesiumColor.withAlpha(outlineAlpha),
           outlineWidth: ambientKey
-            ? ambientOutlineWidth(this, ambientKey, 2 + Math.floor(coverageBoost * 4), 1.5)
-            : 2 + Math.floor(coverageBoost * 4),
+            ? ambientOutlineWidth(this, ambientKey, outlineWidth, 1.5)
+            : outlineWidth,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: {
+        label: showLabel ? {
           text: labelText,
-          font: `${pixelSize >= 28 ? 15 : pixelSize >= 20 ? 14 : 13}px DM Sans, sans-serif`,
-          fillColor: Cesium.Color.WHITE.withAlpha(pixelSize >= 28 ? 0.95 : 0.85),
+          font: `${weight >= 0.5 ? 14 : 13}px DM Sans, sans-serif`,
+          fillColor: Cesium.Color.WHITE.withAlpha(weight >= 0.5 ? 0.95 : 0.85),
           outlineColor: Cesium.Color.BLACK,
-          outlineWidth: pixelSize >= 28 ? 4 : 3,
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -(pixelSize + 12)),
-          scaleByDistance: pixelSize >= 28
-            ? new Cesium.NearFarScalar(1e5, 1.2, 1.5e7, 0.5)
-            : new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
-          translucencyByDistance: pixelSize >= 28
-            ? new Cesium.NearFarScalar(1e5, 1.0, 1.5e7, 0.6)
-            : new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
+          // One fade for every label. The old split let anything over 28px stay at
+          // 0.6 alpha at any zoom and draw through the Earth, so the biggest dots
+          // were permanently shouting from the far side of the globe.
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 1.2e7, 0.45),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1.2e7, 0),
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          disableDepthTestDistance: pixelSize >= 28 ? Number.POSITIVE_INFINITY : 0,
-        },
-        description: `<div style="font-family: 'DM Sans', sans-serif; max-width: 380px;">
-          <div style="font-size: 12px; color: #6b7a8d; margin-bottom: 8px;">${count} stories in this area</div>
-          ${descHtml}${moreNote}
-        </div>`,
+          // Match the dot. At 0 the label depth-tests against terrain and sinks
+          // into the ground while the dot it belongs to floats above it.
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        } : undefined,
+        // No `description`: infoBox is disabled (core.js:130) and the click path
+        // reads _newsData, not the entity. Building it cost eight escaped article
+        // cards per cluster on every render and was never shown to anyone.
       })
       this._newsEntities.push(entity)
+      clusterEvents.forEach(ev => this._newsEntityByEventIdx.set(ev._idx, entity))
 
       const worstThreat = clusterEvents.find(e => e.threat === "critical")?.threat
         || clusterEvents.find(e => e.threat === "high")?.threat
@@ -279,17 +316,6 @@ export function applyNewsRenderingMethods(GlobeController) {
     this._timelineNewsEntityMap = this._timelineNewsEntityMap || new Map()
     this._timelineNewsPulseMap = this._timelineNewsPulseMap || new Map()
 
-    const categoryColors = {
-      conflict: "#f44336",
-      unrest: "#ff9800",
-      disaster: "#ff5722",
-      health: "#e91e63",
-      economy: "#ffc107",
-      diplomacy: "#4caf50",
-      cyber: "#00bcd4",
-      other: "#90a4ae",
-    }
-
     const sortedEvents = [...events].sort((a, b) => {
       const aTime = a?.time ? new Date(a.time).getTime() : 0
       const bTime = b?.time ? new Date(b.time).getTime() : 0
@@ -300,7 +326,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     const nextPulseIds = new Set()
 
     sortedEvents.forEach((ev, idx) => {
-      const color = categoryColors[ev.category] || "#90a4ae"
+      const color = newsCategoryColor(ev.category)
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
       const appear = Number.isFinite(ev.timelineAppear) ? ev.timelineAppear : 1
@@ -786,6 +812,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     const ds = this.getNewsDataSource()
     this._newsEntities.forEach(e => ds.entities.remove(e))
     this._newsEntities = []
+    this._newsEntityByEventIdx?.clear?.()
     clearAmbientLayer(this, "news")
     this._timelineNewsEntityMap?.clear?.()
     this._timelineNewsPulseMap?.clear?.()

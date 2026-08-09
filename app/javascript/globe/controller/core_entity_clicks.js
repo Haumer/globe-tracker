@@ -13,6 +13,13 @@ export function applyCoreEntityClickMethods(GlobeController) {
       return false
     }
 
+    const showNewsByIndex = (id) => {
+      const data = this._newsData?.[parseInt(id, 10)]
+      if (!data) return false
+      if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
+      return true
+    }
+
     const flightData = this.flightData.get(entityId)
     if (flightData) {
       this.toggleFlightSelection(entityId)
@@ -171,12 +178,12 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showNewsArcDetail(idx)
         return true
       }},
-      { prefix: "news-", skip: ["news-arc-"], handler: (id) => {
-        const data = this._newsData?.[parseInt(id, 10)]
-        if (!data) return false
-        if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
-        return true
-      }},
+      // The halo and the threat ring are drawn under the pin and are larger than
+      // it, so they intercept a good share of the clicks aimed at it. Both carry
+      // the lead event's index, same as the pin, and resolve to the same story.
+      { prefix: "news-halo-", skip: [], handler: (id) => showNewsByIndex(id) },
+      { prefix: "news-threat-", skip: [], handler: (id) => showNewsByIndex(id) },
+      { prefix: "news-", skip: ["news-arc-", "news-halo-", "news-threat-"], handler: (id) => showNewsByIndex(id) },
       { prefix: "outage-ring-", skip: [], handler: (id) => {
         const data = this._outageData?.find(outage => outage.code === id)
         if (!data) return false

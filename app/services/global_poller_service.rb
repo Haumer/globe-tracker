@@ -62,8 +62,12 @@ class GlobalPollerService
     # every 12-24 hours, so re-deriving it more often than that is pure waste --
     # and doing it every ten minutes is what starved everything downstream.
     # Distinct key_suffix values keep the two chains' enqueue dedupe apart.
+    # Five minutes is affordable only because the live pass is windowed to
+    # events that have actually changed -- a few hundred rows rather than the
+    # whole 210,000-row table, which would take roughly 43 minutes and overlap
+    # itself several times over at this cadence.
     {
-      job: OntologyV2BackfillJob, every: 10.minutes, offset: 3.minutes,
+      job: OntologyV2BackfillJob, every: 5.minutes, offset: 30.seconds,
       args: [{ stage: "event_graph" }], key_suffix: "live",
     },
     {

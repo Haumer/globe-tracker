@@ -7,8 +7,14 @@ class OntologyV2BackfillService
     asset_ports
     asset_submarine_cables
     event_graph
+    event_graph_full
     infrastructure_impact
   ].freeze
+
+  # How far back a live event-graph pass looks. Only ~900 of 210,833 production
+  # events change in a day, so a window this wide is a few hundred rows while a
+  # full sweep is the entire table.
+  LIVE_EVENT_WINDOW = 2.days
   ASSET_STAGE_TARGETS = {
     "asset_airports" => "airports",
     "asset_military_bases" => "military_bases",
@@ -33,6 +39,7 @@ class OntologyV2BackfillService
       asset_power_plants
       asset_ports
       asset_submarine_cables
+      event_graph_full
     ].freeze,
     "live" => %w[
       event_graph
@@ -89,6 +96,16 @@ class OntologyV2BackfillService
 
     case stage
     when "event_graph"
+      # Windowed: the frequent pass only touches events that have moved.
+      OntologyV2EventGraphService.sync_batch(
+        cursor: cursor,
+        batch_size: batch_size,
+        updated_after: now - LIVE_EVENT_WINDOW,
+        now: now
+      )
+    when "event_graph_full"
+      # Unwindowed sweep on the slow chain, so a derivation change eventually
+      # reaches events that have long since stopped being updated.
       OntologyV2EventGraphService.sync_batch(cursor: cursor, batch_size: batch_size, now: now)
     when "infrastructure_impact"
       OntologyV2InfrastructureImpactService.sync_batch(cursor: cursor, batch_size: batch_size, now: now)

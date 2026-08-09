@@ -33,6 +33,43 @@ class OntologyV2BackfillServiceTest < ActiveSupport::TestCase
     assert_equal "infrastructure_impact", service.send(:next_stage_after, "event_graph")
   end
 
+  # The live pass must never fall back to sweeping the whole event table: at a
+  # five-minute cadence that pass takes ~43 minutes on production volumes and
+  # overlaps itself, with three writers already sharing the same rows.
+  test "the live event graph stage is windowed to recently changed events" do
+    captured = nil
+    stub = ->(**opts) {
+      captured = opts
+      { records_fetched: 0, records_stored: 0, complete: true }
+    }
+
+    OntologyV2EventGraphService.stub(:sync_batch, stub) do
+      OntologyV2BackfillService.run(stage: "event_graph", batch_size: 500)
+    end
+
+    assert captured[:updated_after].present?, "live pass must constrain by updated_at"
+    assert_in_delta OntologyV2BackfillService::LIVE_EVENT_WINDOW.ago.to_i, captured[:updated_after].to_i, 60
+  end
+
+  test "the full event graph stage sweeps without a window" do
+    captured = :unset
+    stub = ->(**opts) {
+      captured = opts[:updated_after]
+      { records_fetched: 0, records_stored: 0, complete: true }
+    }
+
+    OntologyV2EventGraphService.stub(:sync_batch, stub) do
+      OntologyV2BackfillService.run(stage: "event_graph_full", batch_size: 500)
+    end
+
+    assert_nil captured, "the periodic full sweep must not be windowed"
+  end
+
+  test "the windowed and full event graph passes sit on different chains" do
+    assert_equal "live", OntologyV2BackfillService.group_for("event_graph")
+    assert_equal "reference", OntologyV2BackfillService.group_for("event_graph_full")
+  end
+
   test "group_for resolves a stage to its group" do
     assert_equal "reference", OntologyV2BackfillService.group_for("asset_airports")
     assert_equal "live", OntologyV2BackfillService.group_for("event_graph")

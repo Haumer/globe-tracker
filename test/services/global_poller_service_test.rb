@@ -121,8 +121,8 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
 
   # The live half of the v2 graph keeps a ten-minute cadence; the reference half
   # runs twice a day, matching how often its source tables actually change.
-  test "tick enqueues the live ontology v2 chain every ten minutes" do
-    travel_to Time.zone.parse("2026-03-25 10:03:00 UTC") do
+  test "tick enqueues the live ontology v2 chain every five minutes" do
+    travel_to Time.zone.parse("2026-03-25 10:00:30 UTC") do
       assert_enqueued_with(job: OntologyV2BackfillJob, args: [{ stage: "event_graph" }]) do
         GlobalPollerService.tick!
       end
@@ -138,7 +138,7 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
   end
 
   test "tick does not start the reference chain on the live chain's slot" do
-    travel_to Time.zone.parse("2026-03-25 10:03:00 UTC") do
+    travel_to Time.zone.parse("2026-03-25 10:00:30 UTC") do
       GlobalPollerService.tick!
 
       started = enqueued_jobs.select { |job| job[:job] == OntologyV2BackfillJob }

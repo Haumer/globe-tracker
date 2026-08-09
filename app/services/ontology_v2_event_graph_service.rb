@@ -28,8 +28,8 @@ class OntologyV2EventGraphService
       new(now: now).sync
     end
 
-    def sync_batch(cursor: nil, batch_size: 500, now: Time.current)
-      new(now: now).sync_batch(cursor: cursor, batch_size: batch_size)
+    def sync_batch(cursor: nil, batch_size: 500, updated_after: nil, now: Time.current)
+      new(now: now).sync_batch(cursor: cursor, batch_size: batch_size, updated_after: updated_after)
     end
 
     def health_report(limit: 50)
@@ -64,10 +64,14 @@ class OntologyV2EventGraphService
     result
   end
 
-  def sync_batch(cursor: nil, batch_size: 500)
+  # `updated_after` narrows a pass to events that have actually changed. Without
+  # it every pass re-derives the whole table, which on production is 210,833
+  # events to pick up the ~900 that moved in a day.
+  def sync_batch(cursor: nil, batch_size: 500, updated_after: nil)
     limit = batch_size.to_i.clamp(1, 5_000)
     events = event_scope
       .where(cursor.present? ? ["ontology_events.id > ?", cursor.to_i] : nil)
+      .where(updated_after.present? ? ["ontology_events.updated_at >= ?", updated_after] : nil)
       .order(:id)
       .limit(limit)
       .includes(:place_entity, :ontology_evidence_links, ontology_event_entities: :ontology_entity)
@@ -75,6 +79,9 @@ class OntologyV2EventGraphService
     result = {
       cursor: cursor,
       next_cursor: events.size < limit ? nil : events.last&.id,
+      # Carried so the chain keeps the same window across its batches rather
+      # than widening to a full sweep partway through.
+      updated_after: updated_after,
       records_fetched: events.size,
       records_stored: 0,
       events: 0,

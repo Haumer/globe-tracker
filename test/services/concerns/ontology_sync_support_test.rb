@@ -1,6 +1,69 @@
 require "test_helper"
 
 class OntologySyncSupportTest < ActiveSupport::TestCase
+  # Re-deriving something that has not changed used to rewrite it anyway,
+  # because each sync stamped a synced_at nobody reads. That made every row
+  # dirty on every pass and moved updated_at, which is what incremental passes
+  # filter on.
+  test "re-upserting an unchanged record does not write" do
+    entity = OntologySyncSupport.upsert_entity(
+      canonical_key: "test:unchanged",
+      entity_type: "asset",
+      canonical_name: "Unchanged Asset",
+      metadata: { "synced_at" => 1.hour.ago.iso8601, "kind" => "port" }
+    )
+    stamp = entity.reload.updated_at
+
+    travel 5.minutes do
+      OntologySyncSupport.upsert_entity(
+        canonical_key: "test:unchanged",
+        entity_type: "asset",
+        canonical_name: "Unchanged Asset",
+        metadata: { "synced_at" => Time.current.iso8601, "kind" => "port" }
+      )
+    end
+
+    assert_equal stamp, entity.reload.updated_at, "a no-op re-sync must not touch the row"
+  end
+
+  test "a real change is still written" do
+    OntologySyncSupport.upsert_entity(
+      canonical_key: "test:changed",
+      entity_type: "asset",
+      canonical_name: "Original Name",
+      metadata: { "synced_at" => 1.hour.ago.iso8601 }
+    )
+
+    OntologySyncSupport.upsert_entity(
+      canonical_key: "test:changed",
+      entity_type: "asset",
+      canonical_name: "Renamed Asset",
+      metadata: { "synced_at" => Time.current.iso8601 }
+    )
+
+    entity = OntologyEntity.find_by!(canonical_key: "test:changed")
+    assert_equal "Renamed Asset", entity.canonical_name
+  end
+
+  test "a metadata change outside the touch keys is still written" do
+    OntologySyncSupport.upsert_entity(
+      canonical_key: "test:meta",
+      entity_type: "asset",
+      canonical_name: "Meta Asset",
+      metadata: { "synced_at" => 1.hour.ago.iso8601, "capacity" => "10" }
+    )
+
+    OntologySyncSupport.upsert_entity(
+      canonical_key: "test:meta",
+      entity_type: "asset",
+      canonical_name: "Meta Asset",
+      metadata: { "synced_at" => Time.current.iso8601, "capacity" => "20" }
+    )
+
+    entity = OntologyEntity.find_by!(canonical_key: "test:meta")
+    assert_equal "20", entity.metadata["capacity"]
+  end
+
   test "upsert_link retries after a duplicate insert race" do
     entity = OntologyEntity.create!(
       canonical_key: "test:ship",

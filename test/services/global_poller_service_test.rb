@@ -98,12 +98,53 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test "tick enqueues ontology relationship refresh on its offset" do
+  # Hazards and theaters run on separate offsets so neither waits on the other,
+  # and neither shares a slot with the graph sweeps that used to precede them.
+  test "tick enqueues hazard relationship sync on its offset" do
     travel_to Time.zone.parse("2026-03-25 10:07:00 UTC") do
       result = GlobalPollerService.tick!
 
-      assert_includes result[:job_names], "RefreshOntologyRelationshipsJob"
+      assert_includes result[:job_names], "SyncHazardRelationshipsJob"
+      refute_includes result[:job_names], "SyncTheaterRelationshipsJob"
       refute_includes result[:job_names], "RefreshInsightsSnapshotJob"
+    end
+  end
+
+  test "tick enqueues theater relationship sync on its own later offset" do
+    travel_to Time.zone.parse("2026-03-25 10:09:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_includes result[:job_names], "SyncTheaterRelationshipsJob"
+      refute_includes result[:job_names], "SyncHazardRelationshipsJob"
+    end
+  end
+
+  # The live half of the v2 graph keeps a ten-minute cadence; the reference half
+  # runs twice a day, matching how often its source tables actually change.
+  test "tick enqueues the live ontology v2 chain every five minutes" do
+    travel_to Time.zone.parse("2026-03-25 10:00:30 UTC") do
+      assert_enqueued_with(job: OntologyV2BackfillJob, args: [{ stage: "event_graph" }]) do
+        GlobalPollerService.tick!
+      end
+    end
+  end
+
+  test "tick enqueues the reference ontology v2 chain twice a day" do
+    travel_to Time.zone.parse("2026-03-25 05:00:00 UTC") do
+      assert_enqueued_with(job: OntologyV2BackfillJob, args: [{ stage: "identity" }]) do
+        GlobalPollerService.tick!
+      end
+    end
+  end
+
+  test "tick does not start the reference chain on the live chain's slot" do
+    travel_to Time.zone.parse("2026-03-25 10:00:30 UTC") do
+      GlobalPollerService.tick!
+
+      started = enqueued_jobs.select { |job| job[:job] == OntologyV2BackfillJob }
+        .map { |job| job[:args].first["stage"] }
+
+      assert_equal ["event_graph"], started
     end
   end
 

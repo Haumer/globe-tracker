@@ -29,8 +29,13 @@ const PRIORITY_PREFIXES = [
 // click target, so the cursor has to say so.
 const CLICKABLE_PREFIXES = [...PRIORITY_PREFIXES, "news-"]
 
-// How often a mouse move may trigger a pick, in milliseconds.
-const HOVER_PICK_INTERVAL_MS = 60
+// How often a mouse move may trigger a pick, in milliseconds. A pick is not
+// cheap even as a single pass, and the cursor is a hint rather than a readout.
+const HOVER_PICK_INTERVAL_MS = 120
+
+// How deep the click pick drills. Enough to see a dot through the halo and
+// threat ring stacked on it, without paying for twelve passes on every click.
+const PICK_DRILL_LIMIT = 5
 
 export function applyCoreMethods(GlobeController) {
   applyCoreUiHelpers(GlobeController)
@@ -456,7 +461,7 @@ export function applyCoreMethods(GlobeController) {
     // half the 24px pointer minimum, and about a ninth of the area of a
     // fingertip. Widening the rectangle is the whole fix -- no extra entities,
     // no extra state.
-    const picks = scene.drillPick(screenPos, 12, PICK_BOX_PX, PICK_BOX_PX) || []
+    const picks = scene.drillPick(screenPos, PICK_DRILL_LIMIT, PICK_BOX_PX, PICK_BOX_PX) || []
     if (picks.length === 0) return scene.pick(screenPos)
 
     const visible = picks.filter(pick => this._isPickOnVisibleHemisphere(pick))
@@ -516,7 +521,13 @@ export function applyCoreMethods(GlobeController) {
     if (now - (this._lastHoverPickAt || 0) < HOVER_PICK_INTERVAL_MS) return
     this._lastHoverPickAt = now
 
-    const id = this._pickClickableEntity(screenPos)?.id?.id
+    // Deliberately NOT _pickClickableEntity. That runs drillPick, which is up to
+    // twelve full pick passes, and over a 22px box it measured 149ms against 22ms
+    // for a single pick at the same size -- called every 60ms of mouse movement,
+    // it simply ate the frame budget. The cursor only needs to know whether the
+    // topmost thing here is clickable, and one pass answers that.
+    const picked = this.viewer.scene.pick(screenPos, PICK_BOX_PX, PICK_BOX_PX)
+    const id = picked?.id?.id
     const clickable = typeof id === "string"
       && CLICKABLE_PREFIXES.some(prefix => id.startsWith(prefix))
     const cursor = clickable ? "pointer" : ""

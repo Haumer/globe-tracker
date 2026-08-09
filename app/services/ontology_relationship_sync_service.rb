@@ -51,54 +51,23 @@ class OntologyRelationshipSyncService
     include InfrastructureDisruptionMethods
     include LocalCorroborationMethods
 
+    # Everything in one pass. Nothing schedules this -- the derivations below run
+    # as their own jobs, because a single pass is 343s against a 120s budget and
+    # the slowest stage silently starved the rest. Kept for callers that want a
+    # complete synchronous sweep, and for tests.
     def sync_recent(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
-      chokepoint_entities = sync_chokepoint_entities
-      commodity_entities = sync_relevant_commodity_entities
-      identity_result = OntologyV2IdentityService.sync(now: now)
-      asset_graph_result = OntologyV2AssetGraphService.sync(now: now)
-      event_graph_result = OntologyV2EventGraphService.sync(now: now)
-      infrastructure_impact_result = OntologyV2InfrastructureImpactService.sync(now: now)
-      theater_since = now - window
-      direct_story_since = now - DIRECT_STORY_WINDOW
-      theaters = build_active_theaters(since: theater_since)
-      corroborated_story_clusters = recent_corroborated_story_clusters(since: direct_story_since)
-      theater_entities = theaters.each_with_object({}) do |summary, memo|
-        memo[summary.fetch(:name)] = sync_theater_entity(summary)
-      end
+      sync_v2_graphs(now: now)
+        .merge(sync_theater_relationships(window: window, now: now))
+        .merge(sync_hazard_relationships(now: now))
+    end
 
+    alias sync_all sync_recent
+
+    # Hazards on the ground: fires, corroborations and the label repairs. These
+    # take nothing but the clock -- no theater, no chokepoint, no asset-graph
+    # input -- so they are the cheapest thing here and can run on their own.
+    def sync_hazard_relationships(now: Time.current)
       {
-        theaters: theater_entities.size,
-        chokepoints: chokepoint_entities.size,
-        commodities: commodity_entities.size,
-        identity_links: identity_result.slice(:actor_country_links, :place_country_links),
-        asset_graph: asset_graph_result.slice(:assets, :country_relationships),
-        event_graph: event_graph_result.slice(:events, :place_relationships, :entity_relationships, :relationship_evidences),
-        infrastructure_impact: infrastructure_impact_result.slice(:events, :impact_relationships, :relationship_evidences),
-        theater_pressure: sync_theater_pressure_relationships(
-          theaters: theaters,
-          theater_entities: theater_entities,
-          chokepoint_entities: chokepoint_entities,
-          corroborated_story_clusters: corroborated_story_clusters,
-          now: now
-        ),
-        flow_dependencies: sync_flow_dependencies(
-          chokepoint_entities: chokepoint_entities,
-          commodity_entities: commodity_entities
-        ),
-        downstream_exposures: sync_downstream_exposure_relationships(
-          theaters: theaters,
-          theater_entities: theater_entities,
-          chokepoint_entities: chokepoint_entities,
-          corroborated_story_clusters: corroborated_story_clusters,
-          now: now
-        ),
-        operational_activities: sync_operational_activity_relationships(
-          theaters: theaters,
-          theater_entities: theater_entities,
-          chokepoint_entities: chokepoint_entities,
-          corroborated_story_clusters: corroborated_story_clusters,
-          now: now
-        ),
         infrastructure_disruptions: sync_infrastructure_disruption_relationships(now: now),
         local_corroborations: sync_local_corroboration_relationships(now: now),
         geoconfirmed_label_repairs: repair_geoconfirmed_date_only_labels(now: now),
@@ -106,9 +75,62 @@ class OntologyRelationshipSyncService
       }
     end
 
-    alias sync_all sync_recent
+    # The four derivations that genuinely share a prelude. Recomputing that
+    # prelude costs well under a second, so it is cheaper to repeat it here than
+    # to keep these welded to everything else.
+    def sync_theater_relationships(window: DEFAULT_CLUSTER_WINDOW, now: Time.current)
+      chokepoint_entities = sync_chokepoint_entities
+      commodity_entities = sync_relevant_commodity_entities
+      theaters = build_active_theaters(since: now - window)
+      corroborated_story_clusters = recent_corroborated_story_clusters(since: now - DIRECT_STORY_WINDOW)
+      theater_entities = theaters.each_with_object({}) do |summary, memo|
+        memo[summary.fetch(:name)] = sync_theater_entity(summary)
+      end
+
+      shared = {
+        theaters: theaters,
+        theater_entities: theater_entities,
+        chokepoint_entities: chokepoint_entities,
+        corroborated_story_clusters: corroborated_story_clusters,
+        now: now,
+      }
+
+      {
+        theaters: theater_entities.size,
+        chokepoints: chokepoint_entities.size,
+        commodities: commodity_entities.size,
+        theater_pressure: sync_theater_pressure_relationships(**shared),
+        flow_dependencies: sync_flow_dependencies(
+          chokepoint_entities: chokepoint_entities,
+          commodity_entities: commodity_entities
+        ),
+        downstream_exposures: sync_downstream_exposure_relationships(**shared),
+        operational_activities: sync_operational_activity_relationships(**shared),
+      }
+    end
 
     private
+
+    private
+
+    # Full sweeps over largely static reference data -- ~56,000 airport, base,
+    # power plant and cable rows whose source tables refresh every 12-24 hours.
+    # OntologyV2BackfillJob walks the same work in cursor batches on its own
+    # schedule, which is what runs in production; this stays for callers that
+    # want one synchronous pass.
+    def sync_v2_graphs(now:)
+      identity_result = OntologyV2IdentityService.sync(now: now)
+      asset_graph_result = OntologyV2AssetGraphService.sync(now: now)
+      event_graph_result = OntologyV2EventGraphService.sync(now: now)
+      infrastructure_impact_result = OntologyV2InfrastructureImpactService.sync(now: now)
+
+      {
+        identity_links: identity_result.slice(:actor_country_links, :place_country_links),
+        asset_graph: asset_graph_result.slice(:assets, :country_relationships),
+        event_graph: event_graph_result.slice(:events, :place_relationships, :entity_relationships, :relationship_evidences),
+        infrastructure_impact: infrastructure_impact_result.slice(:events, :impact_relationships, :relationship_evidences),
+      }
+    end
 
     def sync_chokepoint_entities
       ChokepointMonitorService::CHOKEPOINTS.each_with_object({}) do |(key, config), memo|

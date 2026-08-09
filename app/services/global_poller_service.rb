@@ -52,7 +52,31 @@ class GlobalPollerService
     # poll just brought in rather than the previous cycle's.
     { job: RefreshFireClustersJob, every: 10.minutes, offset: 5.minutes },
     { job: RefreshChokepointsSnapshotJob, every: 10.minutes, offset: 6.minutes },
-    { job: RefreshOntologyRelationshipsJob, every: 10.minutes, offset: 7.minutes },
+    # Was one RefreshOntologyRelationshipsJob doing both plus four full graph
+    # sweeps, which took 343s against a 120s cap and never reached anything past
+    # its fourth stage. Split so a slow derivation cannot starve a fast one, and
+    # so each reports its own polling source instead of hiding behind a sibling.
+    { job: SyncHazardRelationshipsJob, every: 10.minutes, offset: 7.minutes },
+    { job: SyncTheaterRelationshipsJob, every: 10.minutes, offset: 9.minutes },
+    # The v2 graph, split by how fast its inputs move. The live chain derives
+    # from events arriving continuously, so it keeps the ten-minute cadence the
+    # old monolith nominally had. The reference chain walks ~56,000 rows of
+    # airports, bases, plants, ports and cables whose source tables refresh
+    # every 12-24 hours, so re-deriving it more often than that is pure waste --
+    # and doing it every ten minutes is what starved everything downstream.
+    # Distinct key_suffix values keep the two chains' enqueue dedupe apart.
+    # Five minutes is affordable only because the live pass is windowed to
+    # events that have actually changed -- a few hundred rows rather than the
+    # whole 210,000-row table, which would take roughly 43 minutes and overlap
+    # itself several times over at this cadence.
+    {
+      job: OntologyV2BackfillJob, every: 5.minutes, offset: 30.seconds,
+      args: [{ stage: "event_graph" }], key_suffix: "live",
+    },
+    {
+      job: OntologyV2BackfillJob, every: 12.hours, offset: 5.hours,
+      args: [{ stage: "identity" }], key_suffix: "reference",
+    },
     { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },
     { job: RefreshInternetTrafficJob, every: 15.minutes, offset: 10.minutes },
     { job: RefreshGpsJammingJob, every: 15.minutes, offset: 12.minutes },

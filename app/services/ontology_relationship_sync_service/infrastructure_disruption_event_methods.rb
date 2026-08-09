@@ -73,6 +73,9 @@ class OntologyRelationshipSyncService
         .where(last_detected_at: (now - INFRASTRUCTURE_DISRUPTION_EVENT_WINDOW)..)
         .strongest
         .limit(INFRASTRUCTURE_DISRUPTION_EVENT_LIMIT)
+        # Every cluster's passes become evidence, so load them in one query
+        # rather than one per cluster.
+        .preload(:fire_observations)
         .map do |cluster|
           {
             kind: :fire,
@@ -88,7 +91,9 @@ class OntologyRelationshipSyncService
             radius_km: fire_cluster_disruption_radius_km(cluster),
             severity: cluster.tier,
             confidence: fire_cluster_confidence(cluster),
-            evidence: cluster.fire_observations.chronological.to_a,
+            # Sorted in memory rather than with the chronological scope, which
+            # would issue a fresh query per cluster and undo the preload.
+            evidence: cluster.fire_observations.sort_by(&:acq_datetime),
           }
         end
     end

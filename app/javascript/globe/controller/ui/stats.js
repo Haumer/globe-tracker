@@ -5,6 +5,8 @@ import {
   attentionSeverityLabel,
 } from "globe/controller/infrastructure/conflict_pulse_attention"
 
+const ATTENTION_HUD_COLLAPSED_KEY = "gt_attention_hud_collapsed"
+
 export function applyUiStatMethods(GlobeController) {
   GlobeController.prototype._updateStats = function() {
     // Attention region count from conflict pulse zones
@@ -37,10 +39,40 @@ export function applyUiStatMethods(GlobeController) {
     this._updateAttentionHud?.()
   }
 
+  GlobeController.prototype.toggleAttentionHud = function() {
+    const hud = document.getElementById("attention-hud")
+    if (!hud) return
+    const collapsed = !hud.classList.contains("is-collapsed")
+    hud.classList.toggle("is-collapsed", collapsed)
+    try {
+      window.localStorage.setItem(ATTENTION_HUD_COLLAPSED_KEY, collapsed ? "1" : "0")
+    } catch { /* private mode — the collapse still works, it just won't persist */ }
+    this._syncAttentionHudCollapsed()
+  }
+
+  GlobeController.prototype._syncAttentionHudCollapsed = function() {
+    const hud = document.getElementById("attention-hud")
+    const toggle = document.getElementById("attention-hud-toggle")
+    if (!hud) return
+
+    let stored = null
+    try {
+      stored = window.localStorage.getItem(ATTENTION_HUD_COLLAPSED_KEY)
+    } catch { stored = null }
+
+    // Only the stored value seeds state; after that the class is the source of truth.
+    if (stored !== null && !hud.dataset.collapseApplied) {
+      hud.classList.toggle("is-collapsed", stored === "1")
+      hud.dataset.collapseApplied = "1"
+    }
+    toggle?.setAttribute("aria-expanded", hud.classList.contains("is-collapsed") ? "false" : "true")
+  }
+
   GlobeController.prototype._updateAttentionHud = function() {
     const hud = document.getElementById("attention-hud")
     const body = document.getElementById("attention-hud-body")
     if (!hud || !body) return
+    this._syncAttentionHudCollapsed()
 
     const zones = [...(this._conflictPulseData || [])]
       .sort((a, b) => Number(b?.pulse_score || 0) - Number(a?.pulse_score || 0))

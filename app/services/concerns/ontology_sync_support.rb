@@ -83,12 +83,21 @@ module OntologySyncSupport
     numeric
   end
 
+  # Metadata keys that record when a sync last looked at a row rather than
+  # anything about the row itself. Nothing reads them, and stamping them on
+  # every pass made every record dirty: a no-op re-sync of 80 events still
+  # issued 81 UPDATEs, because the only difference was the timestamp the sync
+  # had just written.
+  TOUCH_METADATA_KEYS = %w[synced_at asset_graph_synced_at].freeze
+
   def persist_upsert(model_class, find_by_attributes)
     attempts = 0
 
     begin
       model_class.find_or_initialize_by(find_by_attributes).tap do |record|
         yield record
+        next if record.persisted? && only_touch_changes?(record)
+
         record.save!
       end
     rescue ActiveRecord::RecordNotUnique
@@ -97,5 +106,17 @@ module OntologySyncSupport
 
       retry
     end
+  end
+
+  # True when re-deriving this record produced nothing new -- so the write can
+  # be skipped entirely and the row keeps its original updated_at, which is what
+  # incremental passes filter on.
+  def only_touch_changes?(record)
+    changes = record.changes.except("updated_at", "created_at")
+    return true if changes.empty?
+    return false unless changes.keys == ["metadata"]
+
+    before, after = changes.fetch("metadata")
+    before.to_h.except(*TOUCH_METADATA_KEYS) == after.to_h.except(*TOUCH_METADATA_KEYS)
   end
 end

@@ -75,4 +75,81 @@ class NewsEnrichmentServiceTest < ActiveSupport::TestCase
     assert_equal "gpt-4.1-nano", NewsEnrichmentService::GEOCODE_MODEL
     assert_includes NewsEnrichmentService::CLAUDE_MODEL, "claude"
   end
+
+  # ── eligibility window ──────────────────────────────────────
+
+  def article(published_at:, title: "Missile strike reported near Baghdad")
+    NewsEvent.create!(
+      url: "https://example.com/news/#{SecureRandom.hex(6)}",
+      title: title,
+      published_at: published_at,
+      fetched_at: Time.current,
+      ai_enriched: false
+    )
+  end
+
+  def with_stubbed_openai(payload = '[{"i":1,"city":"Baghdad","country":"Iraq","cat":"conflict"}]')
+    singleton = NewsEnrichmentService.singleton_class
+    original = singleton.instance_method(:openai_chat)
+    singleton.send(:define_method, :openai_chat) { |_api_key, _prompt| payload }
+    previous_key = ENV["OPENAI_API_KEY"]
+    ENV["OPENAI_API_KEY"] = "test-key"
+    yield
+  ensure
+    ENV["OPENAI_API_KEY"] = previous_key
+    singleton.send(:define_method, :openai_chat, original)
+  end
+
+  test "a backfilled article is eligible even though it was published years ago" do
+    # The regression: eligibility keyed off published_at, so an archive import
+    # was already outside the window at the moment it was inserted.
+    old = article(published_at: 5.years.ago)
+
+    with_stubbed_openai do
+      assert_equal 1, NewsEnrichmentService.enrich_recent(limit: 10)
+    end
+    assert old.reload.ai_enriched?
+  end
+
+  test "an article ingested before the window is left alone" do
+    stale = article(published_at: 1.hour.ago)
+    stale.update_column(:created_at, (NewsEnrichmentService::INGEST_WINDOW + 1.day).ago)
+
+    with_stubbed_openai do
+      assert_equal 0, NewsEnrichmentService.enrich_recent(limit: 10)
+    end
+    assert_not stale.reload.ai_enriched?
+  end
+
+  test "ingested_since drains articles that have aged out of the default window" do
+    stale = article(published_at: 3.years.ago)
+    stale.update_column(:created_at, 60.days.ago)
+
+    with_stubbed_openai do
+      assert_equal 1, NewsEnrichmentService.enrich_recent(limit: 10, ingested_since: 90.days.ago)
+    end
+    assert stale.reload.ai_enriched?
+  end
+
+  test "breaking news is enriched ahead of a backfill sharing the same window" do
+    backfilled = article(published_at: 4.years.ago, title: "Archive report from Mosul")
+    breaking = article(published_at: 1.minute.ago, title: "Missile strike reported near Baghdad")
+
+    seen = []
+    singleton = NewsEnrichmentService.singleton_class
+    original = singleton.instance_method(:combined_enrich)
+    singleton.send(:define_method, :combined_enrich) { |batch, _provider| seen.concat(batch.map(&:id)) }
+    previous_key = ENV["OPENAI_API_KEY"]
+    ENV["OPENAI_API_KEY"] = "test-key"
+
+    begin
+      NewsEnrichmentService.enrich_recent(limit: 1)
+    ensure
+      ENV["OPENAI_API_KEY"] = previous_key
+      singleton.send(:define_method, :combined_enrich, original)
+    end
+
+    assert_equal [ breaking.id ], seen
+    assert_not_equal [ backfilled.id ], seen
+  end
 end

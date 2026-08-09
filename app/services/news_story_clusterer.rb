@@ -10,6 +10,16 @@ class NewsStoryClusterer
   DEFAULT_WINDOW = 36.hours
   DEFAULT_MAX_DISTANCE_KM = 250.0
   MATCH_THRESHOLD = 0.67
+
+  # Two articles count as the same wire copy when their headlines are this
+  # close. Deliberately far above MATCH_THRESHOLD: clustering asks "same
+  # story?", this asks "same text?". Independent newsrooms covering one event
+  # write different headlines; syndicated copy carries the origin's verbatim.
+  SYNDICATION_TITLE_SIMILARITY = 0.85
+  # Corroboration keeps adding confidence up to this many independent sources
+  # (and articles) instead of saturating at the old hard caps of 3 and 4.
+  SOURCE_FACTOR_SATURATION = 12
+  COVERAGE_FACTOR_SATURATION = 25
   STRICT_LOCATION_EVENT_TYPES = %w[ground_operation accusation_statement arrest_detention protest].freeze
 
   FAMILY_WINDOWS = {
@@ -456,13 +466,18 @@ class NewsStoryClusterer
       avg_source_reliability = article_payloads.sum { |payload| payload[:source_reliability].to_f } / article_payloads.size.to_f
       avg_geo_confidence = article_payloads.sum { |payload| payload[:geo_confidence].to_f } / article_payloads.size.to_f
       avg_match_score = article_payloads.sum { |payload| payload[:match_score].to_f } / article_payloads.size.to_f
-      source_factor = [ source_ids.size, 3 ].min / 3.0
-      coverage_factor = [ article_payloads.size, 4 ].min / 4.0
+      syndication = syndication_groups(article_payloads)
+      independent_source_ids = syndication.filter_map { |group| group[:source_ids].first }.uniq
+      source_factor = saturating_factor(independent_source_ids.size, SOURCE_FACTOR_SATURATION)
+      coverage_factor = saturating_factor(article_payloads.size, COVERAGE_FACTOR_SATURATION)
       cluster_confidence = [
         (avg_claim_confidence * 0.45) + (avg_match_score * 0.25) + (avg_source_reliability * 0.15) + (avg_geo_confidence * 0.05) + (source_factor * 0.05) + (coverage_factor * 0.05),
         0.99,
       ].min.round(3)
-      verification_status = if source_ids.size >= 2
+      # Corroboration counts *independent* newsrooms, not outlets. Forty papers
+      # running the same wire copy is one newsroom, and treating it as forty
+      # would let syndication manufacture confidence.
+      verification_status = if independent_source_ids.size >= 2
         "multi_source"
       else
         lead_payload[:verification_status].presence || "single_source"
@@ -491,6 +506,8 @@ class NewsStoryClusterer
           "actor_roles" => actor_roles.map { |actor| { "key" => actor[:canonical_key], "role" => actor[:role], "name" => actor[:name] } }.uniq,
           "actor_names" => actor_roles.map { |actor| actor[:name] }.uniq,
           "source_ids" => source_ids,
+          "independent_source_ids" => independent_source_ids,
+          "syndicated_article_count" => article_payloads.size - syndication.size,
           "text_tokens" => article_payloads.flat_map { |payload| payload[:text_tokens].to_a }.uniq,
         },
         provenance: {
@@ -628,6 +645,49 @@ class NewsStoryClusterer
         Math.cos(lat1_rad) * Math.cos(lat2_rad) * Math.sin(dlng_rad / 2)**2
       c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
       r_km * c
+    end
+
+    # Partition a cluster's articles into headline groups. Each group is one
+    # piece of reporting as it spread: the origin plus every outlet that ran it
+    # near-verbatim. The count of groups -- not of outlets -- is how much
+    # independent corroboration a story actually has.
+    #
+    # Uses Jaccard alone rather than the max(jaccard, containment) used for
+    # clustering. Containment reaches 1.0 whenever one headline is a subset of
+    # another ("Strike hits depot" inside "Strike hits depot, 50 dead"), which
+    # is normal between competing newsrooms and must not read as syndication.
+    def syndication_groups(article_payloads)
+      groups = []
+      article_payloads.each do |payload|
+        tokens = normalized_tokens(payload[:title])
+        group = groups.find { |candidate| title_jaccard(candidate[:tokens], tokens) >= SYNDICATION_TITLE_SIMILARITY }
+        if group
+          group[:source_ids] << payload[:source_id] if payload[:source_id]
+        else
+          groups << { tokens: tokens, source_ids: [ payload[:source_id] ].compact }
+        end
+      end
+      groups
+    end
+
+    def title_jaccard(tokens_a, tokens_b)
+      set_a = Set.new(tokens_a)
+      set_b = Set.new(tokens_b)
+      return 0.0 if set_a.empty? || set_b.empty?
+
+      union = (set_a | set_b).size.to_f
+      return 0.0 if union.zero?
+
+      (set_a & set_b).size / union
+    end
+
+    # Logarithmic so corroboration keeps paying off past the first few sources
+    # while still flattening out. A hard cap at 3 made a 3-source story and a
+    # 300-source story score identically once the source list grew.
+    def saturating_factor(count, saturation)
+      return 0.0 if count <= 0
+
+      [ Math.log(1 + count) / Math.log(1 + saturation), 1.0 ].min
     end
 
     def normalized_tokens(text)

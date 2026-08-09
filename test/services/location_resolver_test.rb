@@ -86,4 +86,43 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert_operator attrs[:geocode_confidence], :>=, NewsEvent::TRUSTED_EVENT_GEOCODE_CONFIDENCE
     assert_in_delta 50.45, attrs[:latitude], 0.1
   end
+
+  test "normalize_name preserves non-Latin scripts instead of erasing them" do
+    # I18n.transliterate mapped these to "?" and they normalized to "", so
+    # Greek, Cyrillic, Arabic and CJK titles could never match a place.
+    assert_equal "κόρινθος", Place.normalize_name("Κόρινθος")
+    assert_equal "харків", Place.normalize_name("Харків")
+    assert_equal "القاهرة", Place.normalize_name("القاهرة")
+    assert_equal "北京", Place.normalize_name("北京")
+  end
+
+  test "normalize_name leaves Latin text exactly as before" do
+    assert_equal "zagreb", Place.normalize_name("Zagreb")
+    assert_equal "new york city", Place.normalize_name("New York City!")
+  end
+
+  test "ascii_name gives a Latin-alphabet form alongside the native one" do
+    assert_equal "koln", Place.ascii_name("Köln")
+    assert_equal "sant julia de loria", Place.ascii_name("Sant Julià de Lòria")
+  end
+
+  test "lowercase common words are not treated as place names" do
+    resolver = LocationResolver.new
+    # "base", "college" and "pala" are all real GeoNames settlements.
+    assert_nil resolver.send(:gazetteer_name_from_title, "drones seen over a military base today")
+  end
+
+  test "capitalised tokens are still eligible" do
+    resolver = LocationResolver.new
+    gram = %w[Kharkiv]
+    assert resolver.send(:proper_noun_gram?, gram)
+    refute resolver.send(:proper_noun_gram?, %w[military base])
+  end
+
+  test "uncased scripts bypass the capitalisation guard" do
+    resolver = LocationResolver.new
+    # Arabic and CJK have no capital forms, so requiring one would exclude them.
+    assert resolver.send(:proper_noun_gram?, [ "القاهرة" ])
+    assert resolver.send(:proper_noun_gram?, [ "北京" ])
+  end
 end

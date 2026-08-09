@@ -98,12 +98,32 @@ class GlobalPollerServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test "tick enqueues ontology relationship refresh on its offset" do
+  # Hazards and theaters run on separate offsets so neither waits on the other,
+  # and neither shares a slot with the graph sweeps that used to precede them.
+  test "tick enqueues hazard relationship sync on its offset" do
     travel_to Time.zone.parse("2026-03-25 10:07:00 UTC") do
       result = GlobalPollerService.tick!
 
-      assert_includes result[:job_names], "RefreshOntologyRelationshipsJob"
+      assert_includes result[:job_names], "SyncHazardRelationshipsJob"
+      refute_includes result[:job_names], "SyncTheaterRelationshipsJob"
       refute_includes result[:job_names], "RefreshInsightsSnapshotJob"
+    end
+  end
+
+  test "tick enqueues theater relationship sync on its own later offset" do
+    travel_to Time.zone.parse("2026-03-25 10:09:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_includes result[:job_names], "SyncTheaterRelationshipsJob"
+      refute_includes result[:job_names], "SyncHazardRelationshipsJob"
+    end
+  end
+
+  test "tick enqueues the ontology v2 backfill chain hourly" do
+    travel_to Time.zone.parse("2026-03-25 10:35:00 UTC") do
+      result = GlobalPollerService.tick!
+
+      assert_includes result[:job_names], "OntologyV2BackfillJob"
     end
   end
 

@@ -49,7 +49,12 @@ class GlobalPollerService
     # poll just brought in rather than the previous cycle's.
     { job: RefreshFireClustersJob, every: 10.minutes, offset: 5.minutes },
     { job: RefreshChokepointsSnapshotJob, every: 10.minutes, offset: 6.minutes },
-    { job: RefreshOntologyRelationshipsJob, every: 10.minutes, offset: 7.minutes },
+    # Was one RefreshOntologyRelationshipsJob doing both plus four full graph
+    # sweeps, which took 343s against a 120s cap and never reached anything past
+    # its fourth stage. Split so a slow derivation cannot starve a fast one, and
+    # so each reports its own polling source instead of hiding behind a sibling.
+    { job: SyncHazardRelationshipsJob, every: 10.minutes, offset: 7.minutes },
+    { job: SyncTheaterRelationshipsJob, every: 10.minutes, offset: 9.minutes },
     { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },
     { job: RefreshInternetTrafficJob, every: 15.minutes, offset: 10.minutes },
     { job: RefreshGpsJammingJob, every: 15.minutes, offset: 12.minutes },
@@ -58,6 +63,11 @@ class GlobalPollerService
     { job: PurgeStaleDataJob, every: 1.hour, offset: 10.minutes },
     { job: RecheckStaleCamerasJob, every: 1.hour, offset: 20.minutes },
     { job: RefreshNewsGeocodeBackfillJob, every: 1.hour, offset: 25.minutes },
+    # Walks identity, the five asset targets, the event graph and infrastructure
+    # impact in cursor batches, each job enqueueing the next. Hourly because the
+    # asset tables behind it refresh every 12-24 hours; the previous arrangement
+    # re-derived all ~56,000 rows every ten minutes and never finished.
+    { job: OntologyV2BackfillJob, every: 1.hour, offset: 35.minutes },
     { job: GenerateBriefJob, every: 1.hour, offset: 50.minutes, conditional: :brief_missing? },
     { job: RefreshAcledJob, every: 6.hours, offset: 0.minutes },
     { job: RefreshGeoconfirmedJob, every: 6.hours, offset: 15.minutes },

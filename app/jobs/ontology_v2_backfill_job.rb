@@ -4,7 +4,9 @@ class OntologyV2BackfillJob < ApplicationJob
     source: ->(_job, arguments) {
       options = arguments.first || {}
       stage = options.respond_to?(:[]) ? (options[:stage] || options["stage"]) : nil
-      "ontology-v2-backfill:#{stage.presence || "unknown"}"
+      # The scheduled kickoff carries no arguments and starts at the first
+      # stage, so label it that rather than "unknown".
+      "ontology-v2-backfill:#{stage.presence || OntologyV2BackfillService::STAGES.first}"
     },
     poll_type: "ontology"
   )

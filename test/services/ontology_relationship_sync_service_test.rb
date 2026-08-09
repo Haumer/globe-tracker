@@ -577,6 +577,56 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
     end
   end
 
+  # The split's load-bearing claim: hazards read the raw asset tables directly,
+  # so they owe nothing to the theater prelude or the asset graph that used to
+  # run ahead of them and starve them.
+  test "hazard relationships sync without the theater prelude or the v2 graph sweeps" do
+    travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
+      Earthquake.create!(
+        external_id: "eq-standalone-1",
+        title: "M6.6 earthquake near the Strait of Hormuz",
+        magnitude: 6.6,
+        magnitude_type: "mww",
+        latitude: 26.32,
+        longitude: 56.25,
+        depth: 12.0,
+        event_time: 20.minutes.ago,
+        tsunami: false,
+        alert: "yellow",
+        fetched_at: Time.current
+      )
+      PowerPlant.create!(
+        gppd_idnr: "OM-STANDALONE-1",
+        name: "Standalone Hormuz Gas Plant",
+        country_code: "OM",
+        country_name: "Oman",
+        latitude: 26.38,
+        longitude: 56.32,
+        capacity_mw: 640,
+        primary_fuel: "Gas"
+      )
+
+      # Blow up if the hazard path reaches for any of the stages it supposedly
+      # does not depend on.
+      exploding = -> (*) { raise "hazard sync must not depend on this stage" }
+      result = OntologyV2AssetGraphService.stub(:sync, exploding) do
+        OntologyV2EventGraphService.stub(:sync, exploding) do
+          OntologyRelationshipSyncService.sync_hazard_relationships
+        end
+      end
+
+      assert_operator result[:infrastructure_disruptions], :>=, 1
+
+      event = OntologyEvent.find_by!(canonical_key: "event:earthquake:eq-standalone-1")
+      plant_entity = OntologyEntity.find_by!(canonical_key: "power-plant:om-standalone-1")
+      assert OntologyRelationship.find_by!(
+        source_node: event,
+        target_node: plant_entity,
+        relation_type: "infrastructure_exposure"
+      ).active?
+    end
+  end
+
   test "builds infrastructure exposure relationships from hazards to nearby strategic assets" do
     travel_to Time.utc(2026, 4, 11, 12, 0, 0) do
       earthquake = Earthquake.create!(

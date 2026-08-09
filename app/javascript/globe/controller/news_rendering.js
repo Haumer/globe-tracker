@@ -48,6 +48,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     } else {
       this._clearNewsEntities()
       this._newsData = []
+      this._updateStats?.()
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = "none"
     }
     this._syncQuickBar()
@@ -101,6 +102,9 @@ export function applyNewsRenderingMethods(GlobeController) {
       })
       this._newsData = this.filterToRegion(events)
       this._renderNews(this._newsData)
+      // Every other layer refreshes the stats bar after loading; news never did,
+      // so the header read "NEWS 0" with a few hundred clusters on the globe.
+      this._updateStats?.()
       this._markFresh("news")
       if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
@@ -215,6 +219,7 @@ export function applyNewsRenderingMethods(GlobeController) {
           minSize: pixelSize,
           maxSize: pixelSize + 18 + coverageBoost * 34,
           peakAlpha: 0.14 + coverageBoost * 0.24,
+          opacity: dotOpacity,
         })
         if (halo) {
           const haloEntity = dataSource.entities.add({
@@ -784,25 +789,41 @@ export function applyNewsRenderingMethods(GlobeController) {
       r.dataset.flowFrom === from && r.dataset.flowTo === to))
   }
 
-  GlobeController.prototype._setNewsDotOpacity = function(alpha) {
+  // Scale one colour property by the layer opacity, against the colour the
+  // entity was BUILT with rather than whatever the previous dim left behind.
+  //
+  // The old version assigned `alpha` outright. That flattened every static dot
+  // to a single value on the first call -- and _renderNews calls this on every
+  // render -- so the located/vague alphas (0.92 vs 0.3) never reached the
+  // screen, and un-dimming restored them to a flat 1.0 rather than to their
+  // real strength. Caching the base makes the dim reversible.
+  const dimColor = (graphic, prop, alpha) => {
     const Cesium = window.Cesium
-    // Ambient points read this each frame; overwriting their colour would replace
-    // the CallbackProperty with a constant and freeze the pulse.
+    if (!graphic || graphic[prop] instanceof Cesium.CallbackProperty) return
+    const base = graphic._newsBaseColors || (graphic._newsBaseColors = {})
+    if (!base[prop]) {
+      const current = graphic[prop]?.getValue?.()
+      if (!current) return
+      base[prop] = Cesium.Color.clone(current)
+    }
+    const c = base[prop]
+    graphic[prop] = new Cesium.Color(c.red, c.green, c.blue, c.alpha * alpha)
+  }
+
+  GlobeController.prototype._setNewsDotOpacity = function(alpha) {
+    // Ambient points read this each frame inside their CallbackProperty;
+    // overwriting their colour would replace the callback with a constant and
+    // freeze the pulse. dimColor skips them for that reason.
     this._newsDotOpacity = alpha
     for (const entity of this._newsEntities) {
-      if (entity.point) {
-        if (!(entity.point.color instanceof Cesium.CallbackProperty)) {
-          const c = entity.point.color?.getValue()
-          if (c) entity.point.color = new Cesium.Color(c.red, c.green, c.blue, alpha)
-        }
-        if (!(entity.point.outlineColor instanceof Cesium.CallbackProperty)) {
-          const oc = entity.point.outlineColor?.getValue()
-          if (oc) entity.point.outlineColor = new Cesium.Color(oc.red, oc.green, oc.blue, alpha * 0.5)
-        }
-      }
-      if (entity.label) {
-        const fc = entity.label.fillColor?.getValue()
-        if (fc) entity.label.fillColor = new Cesium.Color(fc.red, fc.green, fc.blue, alpha)
+      dimColor(entity.point, "color", alpha)
+      dimColor(entity.point, "outlineColor", alpha)
+      dimColor(entity.label, "fillColor", alpha)
+      dimColor(entity.label, "outlineColor", alpha)
+      if (entity.ellipse) {
+        // The threat ring is part of the news layer and has to fade with it.
+        dimColor(entity.ellipse.material, "color", alpha)
+        dimColor(entity.ellipse, "outlineColor", alpha)
       }
     }
     this._requestRender()

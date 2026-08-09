@@ -233,7 +233,7 @@ export function ambientOutlineWidth(controller, key, base, amplitude) {
 
 // An expanding, fading ring behind a point. Returns a point graphics config to
 // hand straight to entities.add({ point: ... }), or null if the key is unknown.
-export function ambientHaloPoint(controller, key, color, { minSize = 8, maxSize = 36, peakAlpha = 0.3 } = {}) {
+export function ambientHaloPoint(controller, key, color, { minSize = 8, maxSize = 36, peakAlpha = 0.3, opacity } = {}) {
   if (!controller._ambient?.entries.has(key)) return null
 
   return {
@@ -243,8 +243,12 @@ export function ambientHaloPoint(controller, key, color, { minSize = 8, maxSize 
     }, false),
     color: new (C().CallbackProperty)(() => {
       // Fades as it grows, so the ring reads as a ping rather than a blob.
+      // `opacity` has to be honoured here too: without it a dimmed layer keeps
+      // full-strength halos around quarter-strength dots, and the bloom ends up
+      // brighter than the thing it is supposed to be blooming around.
       const progress = pulse01(controller, key)
-      return color.withAlpha(peakAlpha * (1 - progress))
+      const dim = typeof opacity === "function" ? opacity() : 1
+      return color.withAlpha(peakAlpha * (1 - progress) * (Number.isFinite(dim) ? dim : 1))
     }, false),
     outlineWidth: 0,
     disableDepthTestDistance: Number.POSITIVE_INFINITY,

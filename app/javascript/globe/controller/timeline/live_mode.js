@@ -1,4 +1,8 @@
+import { clearAllAmbient } from "globe/controller/ambient_pulse"
+
 export function pauseTimelineLive(controller) {
+  clearAllAmbient(controller)
+
   controller._timelinePausedIntervals = {
     flight: !!controller.flightInterval,
     militaryFlight: !!controller._milFlightInterval,

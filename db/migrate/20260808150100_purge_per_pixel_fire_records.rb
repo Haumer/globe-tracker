@@ -16,7 +16,10 @@ class PurgePerPixelFireRecords < ActiveRecord::Migration[7.1]
     end
 
     say_with_time "removing per-pixel fire ontology events and their links" do
-      # Batched: this is ~155k rows and the delete cascades through two tables.
+      # Batched: this is ~155k rows and the delete cascades through four tables.
+      # Relationships have to go via their ids rather than by node, because
+      # ontology_relationship_evidences carries a foreign key back to them and
+      # has to be cleared first.
       total = 0
       loop do
         ids = OntologyEvent.where(event_family: "disaster", event_type: "fire_hotspot")
@@ -25,8 +28,17 @@ class PurgePerPixelFireRecords < ActiveRecord::Migration[7.1]
 
         OntologyEvidenceLink.where(ontology_event_id: ids).delete_all
         OntologyEventEntity.where(ontology_event_id: ids).delete_all if defined?(OntologyEventEntity)
-        OntologyRelationship.where(source_node_type: "OntologyEvent", source_node_id: ids).delete_all
-        OntologyRelationship.where(target_node_type: "OntologyEvent", target_node_id: ids).delete_all
+
+        relationship_ids =
+          OntologyRelationship.where(source_node_type: "OntologyEvent", source_node_id: ids).pluck(:id) +
+          OntologyRelationship.where(target_node_type: "OntologyEvent", target_node_id: ids).pluck(:id)
+        relationship_ids.uniq!
+
+        if relationship_ids.any?
+          OntologyRelationshipEvidence.where(ontology_relationship_id: relationship_ids).delete_all
+          OntologyRelationship.where(id: relationship_ids).delete_all
+        end
+
         total += OntologyEvent.where(id: ids).delete_all
       end
       total

@@ -6,12 +6,25 @@ class NewsEnrichmentService
   GEOCODE_MODEL = "gpt-4.1-nano"
   CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
+  # How long after we ingest an article it stays eligible for enrichment.
+  #
+  # This deliberately keys off ingestion, not publication. The window used to
+  # be `published_at > 48.hours.ago`, which silently excluded every backfill:
+  # an archive import arrives with its original publication date, so it is
+  # already outside the window the moment it is inserted and never becomes
+  # eligible again. That stranded 3,574 rows -- published as far back as 2006,
+  # ingested in March/April -- with no retry path. Live intake was unaffected,
+  # which is why the gap went unnoticed.
+  INGEST_WINDOW = 7.days
+
   class << self
-    def enrich_recent(limit: 200)
-      # Find articles that haven't been AI-enriched yet
-      # Skip articles that failed enrichment in the last hour (avoid hammering a down API)
+    # `ingested_since` widens the window for draining a historical import:
+    #   NewsEnrichmentService.enrich_recent(limit: 5_000, ingested_since: 1.year.ago)
+    def enrich_recent(limit: 200, ingested_since: nil)
+      # Eligibility is by ingestion time; ordering is by publication time, so
+      # breaking news is always enriched ahead of an archive drain.
       articles = NewsEvent.where(ai_enriched: [nil, false])
-        .where("published_at > ?", 48.hours.ago)
+        .where(created_at: (ingested_since || INGEST_WINDOW.ago)..)
         .order(published_at: :desc)
         .limit(limit)
 

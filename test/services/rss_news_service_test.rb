@@ -97,4 +97,25 @@ class RssNewsServiceTest < ActiveSupport::TestCase
     assert svc.send(:item_outside_feed_window?, now + 30.days, feed, now: now),
       "a date a month in the future is simply wrong"
   end
+
+  test "no feed URL is listed twice" do
+    # SOURCES is keyed on {url, name}, so the same feed under two different
+    # names survives as two entries and gets fetched and parsed twice every
+    # cycle. Adding the Washington Post by hand hit exactly this -- it was
+    # already present under another name.
+    urls = RssNewsService::SOURCES.keys.map { |k| k[:url] }
+    duplicates = urls.tally.select { |_, count| count > 1 }.keys
+
+    assert_empty duplicates, "feed URLs listed more than once: #{duplicates.join(', ')}"
+  end
+
+  test "every source carries the metadata the batch rotation reads" do
+    RssNewsService::SOURCES.each do |info, meta|
+      assert info[:url].to_s.start_with?("http"), "#{info[:name]}: bad url"
+      assert info[:name].present?, "#{info[:url]}: missing name"
+      assert_includes 1..4, meta[:tier], "#{info[:name]}: tier out of range"
+      assert_includes %w[low medium high], meta[:risk], "#{info[:name]}: bad risk"
+      assert meta[:region].present?, "#{info[:name]}: missing region"
+    end
+  end
 end

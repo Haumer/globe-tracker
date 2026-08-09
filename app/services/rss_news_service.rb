@@ -293,6 +293,63 @@ class RssNewsService
       { tier: 3, risk: "medium", affiliation: "Saudi", region: "middle-east" },
     { url: "https://asharqbusiness.com/rss.xml", name: "Asharq Business" } =>
       { tier: 3, risk: "medium", affiliation: "Saudi", region: "middle-east" },
+
+    # ── Flagship titles the sitemap probe missed ───────────────
+    # These were dropped not for lacking news but because automated discovery
+    # could not find them: their feeds live on separate hostnames
+    # (rss.asahi.com, feeds.washingtonpost.com) at paths no guess list reaches,
+    # and they no longer advertise <link rel="alternate"> on the homepage. Each
+    # URL below was verified by hand -- fetched with the same honest user agent
+    # the poller sends, parsed, and confirmed to carry items dated within 24h.
+    #
+    # Japan is the reason this matters: it had exactly one source, Sankei, the
+    # most ideologically slanted of the majors. It now has five.
+    { url: "https://www.cbsnews.com/latest/rss/world", name: "CBS News World" } =>
+      { tier: 2, risk: "low", region: "us" },
+    { url: "https://feeds.nbcnews.com/nbcnews/public/world", name: "NBC News World" } =>
+      { tier: 2, risk: "low", region: "us" },
+    { url: "https://feeds.bloomberg.com/politics/news.rss", name: "Bloomberg Politics" } =>
+      { tier: 1, risk: "low", region: "us" },
+    { url: "https://rss.politico.com/politics-news.xml", name: "Politico" } =>
+      { tier: 2, risk: "low", affiliation: "Axel Springer", region: "us" },
+    { url: "https://feeds.skynews.com/feeds/rss/world.xml", name: "Sky News World" } =>
+      { tier: 2, risk: "low", region: "europe" },
+    { url: "https://www.lefigaro.fr/rss/figaro_actualites.xml", name: "Le Figaro" } =>
+      { tier: 2, risk: "low", region: "europe" },
+    { url: "https://rss.sueddeutsche.de/rss/Topthemen", name: "Sueddeutsche Zeitung" } =>
+      { tier: 2, risk: "low", region: "europe" },
+    { url: "https://rss.elconfidencial.com/mundo/", name: "El Confidencial" } =>
+      { tier: 2, risk: "medium", region: "europe" },
+    { url: "https://tvn24.pl/najnowsze.xml", name: "TVN24" } =>
+      { tier: 2, risk: "low", region: "europe" },
+    { url: "https://www.volkskrant.nl/voorpagina/rss.xml", name: "de Volkskrant" } =>
+      { tier: 2, risk: "low", region: "europe" },
+    { url: "https://rss.asahi.com/rss/asahi/newsheadlines.rdf", name: "Asahi Shimbun" } =>
+      { tier: 2, risk: "low", region: "asia" },
+    { url: "https://mainichi.jp/rss/etc/mainichi-flash.rss", name: "Mainichi Shimbun" } =>
+      { tier: 2, risk: "low", region: "asia" },
+    { url: "https://www.nhk.or.jp/rss/news/cat0.xml", name: "NHK News" } =>
+      { tier: 1, risk: "low", region: "asia" },
+    { url: "https://www.japantimes.co.jp/feed/", name: "Japan Times" } =>
+      { tier: 2, risk: "low", region: "asia" },
+    { url: "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", name: "Times of India" } =>
+      { tier: 2, risk: "medium", region: "asia" },
+    { url: "https://feeds.feedburner.com/ndtvnews-world-news", name: "NDTV World" } =>
+      { tier: 2, risk: "medium", affiliation: "Adani", region: "asia" },
+    { url: "https://www.straitstimes.com/news/world/rss.xml", name: "Straits Times" } =>
+      { tier: 2, risk: "medium", affiliation: "SPH Media", region: "asia" },
+    { url: "https://www.cbc.ca/webfeed/rss/rss-topstories", name: "CBC News" } =>
+      { tier: 1, risk: "low", region: "us" },
+    { url: "https://www.abc.net.au/news/feed/51120/rss.xml", name: "ABC Australia" } =>
+      { tier: 1, risk: "low", region: "oceania" },
+    { url: "https://g1.globo.com/rss/g1/mundo/", name: "G1 Mundo" } =>
+      { tier: 2, risk: "low", region: "latam" },
+    # Both operate under Russian state pressure -- carried for visibility into
+    # domestic framing, not as independent reporting.
+    { url: "https://www.kommersant.ru/RSS/news.xml", name: "Kommersant" } =>
+      { tier: 2, risk: "medium", affiliation: "Russian", region: "europe" },
+    { url: "https://rssexport.rbc.ru/rbcnews/news/30/full.rss", name: "RBC" } =>
+      { tier: 2, risk: "medium", affiliation: "Russian", region: "europe" },
   }.freeze
 
   # Google News RSS proxy — for sources that block direct access or don't have RSS

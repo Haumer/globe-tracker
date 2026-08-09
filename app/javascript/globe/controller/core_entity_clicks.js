@@ -125,20 +125,6 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showStrikeDetail(data, { id, picked })
         return true
       }},
-      { prefix: "fire-complex-ring-", skip: [], handler: (id) => {
-        const data = this._fireComplexById?.get(id)
-        if (!data) return false
-        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
-        else this.openFireDossier(data)
-        return true
-      }},
-      { prefix: "fire-complex-", skip: [], handler: (id) => {
-        const data = this._fireComplexById?.get(id)
-        if (!data) return false
-        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
-        else this.openFireDossier(data)
-        return true
-      }},
       { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const data = this._fireHotspotClusterData?.[idx]
@@ -430,13 +416,6 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const cell = this._hexCellData?.[idx]
         if (!cell) return false
         this._showHexDetail(cell)
-        return true
-      }},
-      { prefix: "cpulse-surface-", skip: [], handler: (id) => {
-        const key = decodeURIComponent(id)
-        const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
-        if (!data) return false
-        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-strat-ring-", skip: [], handler: (id) => {

@@ -4,6 +4,7 @@ import { decodeHash, decodeFocusParams, decodeLaunchParams, applyDeepLink, encod
 import { applyCoreEntityClickMethods } from "globe/controller/core_entity_clicks"
 import { initializeCoreState, teardownCore, wireCoreChrome } from "globe/controller/core_state"
 import { applyCoreUiHelpers } from "globe/controller/core_ui_helpers"
+import { destroyAmbient, onAmbientCameraChange } from "globe/controller/ambient_pulse"
 
 export function applyCoreMethods(GlobeController) {
   applyCoreUiHelpers(GlobeController)
@@ -194,10 +195,9 @@ export function applyCoreMethods(GlobeController) {
       this.saveCamera()
       this._savePrefs()
       this._updateGlobeOcclusion()
-      if (this.fireHotspotsVisible && this._currentFireData?.().length > 0) this.renderFireHotspots?.()
-      // Zooming into a region changes which fires the server should send, not
-      // just which of the loaded ones are on screen.
-      this.maybeRefetchFireComplexes?.()
+      // A new viewport means a different set of events is worth animating.
+      onAmbientCameraChange(this)
+      if (this.fireHotspotsVisible && this._fireHotspotData.length > 0) this.renderFireHotspots?.()
     }
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd)
 
@@ -1047,6 +1047,7 @@ export function applyCoreMethods(GlobeController) {
   // ── Cities Layer ─────────────────────────────────────────
 
   GlobeController.prototype.disconnect = function() {
+    destroyAmbient(this)
     teardownCore(this)
   }
 

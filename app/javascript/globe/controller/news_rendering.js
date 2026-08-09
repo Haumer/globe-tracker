@@ -1,4 +1,15 @@
 import { getDataSource } from "globe/utils"
+import {
+  ambientColor,
+  ambientHaloPoint,
+  ambientOutlineWidth,
+  ambientPointSize,
+  beginAmbientLayer,
+  haloWeightCutoff,
+  clearAmbientLayer,
+  commitAmbientLayer,
+  registerAmbient,
+} from "globe/controller/ambient_pulse"
 
 export function applyNewsRenderingMethods(GlobeController) {
   GlobeController.prototype.getNewsDataSource = function() { return getDataSource(this.viewer, this._ds, "news") }
@@ -95,6 +106,11 @@ export function applyNewsRenderingMethods(GlobeController) {
     const dataSource = this.getNewsDataSource()
     dataSource.show = true
 
+    const ambient = !this._timelineActive
+    if (ambient) beginAmbientLayer(this, "news")
+    // Read live so _setNewsDotOpacity can dim the layer without replacing callbacks.
+    const dotOpacity = () => (Number.isFinite(this._newsDotOpacity) ? this._newsDotOpacity : 1)
+
     const categoryColors = {
       conflict: "#f44336",
       unrest: "#ff9800",
@@ -114,6 +130,7 @@ export function applyNewsRenderingMethods(GlobeController) {
 
     const clusterSizes = [...clusters.values()].map(c => c.length).sort((a, b) => b - a)
     const top3Threshold = clusterSizes[2] || 0
+    const haloCutoff = ambient ? haloWeightCutoff(clusterSizes) : Infinity
 
     clusters.forEach((clusterEvents) => {
       clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone)) - (a.priority || Math.abs(a.tone)))
@@ -150,14 +167,46 @@ export function applyNewsRenderingMethods(GlobeController) {
       }).join("")
       const moreNote = count > 8 ? `<div style="font-size: 11px; color: #6b7a8d;">+ ${count - 8} more stories</div>` : ""
 
+      // Keyed on the cluster's rounded centroid so a story cluster keeps the same
+      // phase across the 15-minute refresh instead of restarting its breath.
+      const ambientKey = ambient
+        ? registerAmbient(this, "news", `${avgLat.toFixed(2)},${avgLng.toFixed(2)}`, {
+            lat: avgLat,
+            lng: avgLng,
+            weight: count + intensity * 10,
+          })
+        : null
+
+      if (ambientKey && count >= haloCutoff) {
+        const halo = ambientHaloPoint(this, ambientKey, cesiumColor, {
+          minSize: pixelSize,
+          maxSize: pixelSize + 18 + coverageBoost * 34,
+          peakAlpha: 0.14 + coverageBoost * 0.24,
+        })
+        if (halo) {
+          const haloEntity = dataSource.entities.add({
+            id: `news-halo-${lead._idx}`,
+            position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 5),
+            point: { ...halo, scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5) },
+          })
+          this._newsEntities.push(haloEntity)
+        }
+      }
+
       const entity = dataSource.entities.add({
         id: `news-${lead._idx}`,
         position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 10),
         point: {
-          pixelSize,
-          color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
-          outlineColor: cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
-          outlineWidth: 2 + Math.floor(coverageBoost * 4),
+          pixelSize: ambientKey ? ambientPointSize(this, ambientKey, pixelSize, 0.12) : pixelSize,
+          color: ambientKey
+            ? ambientColor(this, ambientKey, cesiumColor, 0.85 + coverageBoost * 0.15, 0.16, dotOpacity)
+            : cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
+          outlineColor: ambientKey
+            ? ambientColor(this, ambientKey, cesiumColor, 0.3 + coverageBoost * 0.4, 0.3, dotOpacity)
+            : cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
+          outlineWidth: ambientKey
+            ? ambientOutlineWidth(this, ambientKey, 2 + Math.floor(coverageBoost * 4), 1.5)
+            : 2 + Math.floor(coverageBoost * 4),
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -210,6 +259,8 @@ export function applyNewsRenderingMethods(GlobeController) {
         this._newsEntities.push(ring)
       }
     })
+
+    if (ambient) commitAmbientLayer(this, "news")
 
     this._precomputeArcs(events)
 
@@ -709,12 +760,19 @@ export function applyNewsRenderingMethods(GlobeController) {
 
   GlobeController.prototype._setNewsDotOpacity = function(alpha) {
     const Cesium = window.Cesium
+    // Ambient points read this each frame; overwriting their colour would replace
+    // the CallbackProperty with a constant and freeze the pulse.
+    this._newsDotOpacity = alpha
     for (const entity of this._newsEntities) {
       if (entity.point) {
-        const c = entity.point.color?.getValue()
-        if (c) entity.point.color = new Cesium.Color(c.red, c.green, c.blue, alpha)
-        const oc = entity.point.outlineColor?.getValue()
-        if (oc) entity.point.outlineColor = new Cesium.Color(oc.red, oc.green, oc.blue, alpha * 0.5)
+        if (!(entity.point.color instanceof Cesium.CallbackProperty)) {
+          const c = entity.point.color?.getValue()
+          if (c) entity.point.color = new Cesium.Color(c.red, c.green, c.blue, alpha)
+        }
+        if (!(entity.point.outlineColor instanceof Cesium.CallbackProperty)) {
+          const oc = entity.point.outlineColor?.getValue()
+          if (oc) entity.point.outlineColor = new Cesium.Color(oc.red, oc.green, oc.blue, alpha * 0.5)
+        }
       }
       if (entity.label) {
         const fc = entity.label.fillColor?.getValue()
@@ -728,6 +786,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     const ds = this.getNewsDataSource()
     this._newsEntities.forEach(e => ds.entities.remove(e))
     this._newsEntities = []
+    clearAmbientLayer(this, "news")
     this._timelineNewsEntityMap?.clear?.()
     this._timelineNewsPulseMap?.clear?.()
     this._clearNewsArcEntities()

@@ -36,6 +36,9 @@ class GlobalPollerService
     { job: PollAdsbRegionJob, every: 30.seconds, offset: 20.seconds, dynamic: :adsb_region },
     { job: RefreshNewsJob, every: 5.minutes, offset: 0.seconds },
     { job: RefreshRssNewsJob, every: 5.minutes, offset: 1.minute },
+    # Ahead of EnrichNewsJob so freshly ingested articles are AI-geocoded in
+    # the same cycle rather than waiting five minutes for the next one.
+    { job: RefreshNewsSitemapJob, every: 5.minutes, offset: 90.seconds },
     { job: RefreshMultiNewsJob, every: 5.minutes, offset: 2.minutes },
     { job: EnrichNewsJob, every: 5.minutes, offset: 3.minutes },
     { job: RefreshNaturalEventsJob, every: 5.minutes, offset: 150.seconds },

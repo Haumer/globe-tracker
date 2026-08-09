@@ -48,6 +48,7 @@ class NewsSitemapService
 
   OPEN_TIMEOUT = 8
   READ_TIMEOUT = 20
+  MAX_REDIRECTS = 3
   USER_AGENT = "GlobeTracker/1.0 (+news sitemap ingest)".freeze
 
   class << self
@@ -212,7 +213,15 @@ class NewsSitemapService
     { records: [], ingest_items: [] }
   end
 
-  def conditional_get(url)
+  # Net::HTTP does not follow redirects on its own. Five of nine failures in
+  # the first dev run were plain 301/302 -- arabnews.com, adaderana.lk,
+  # avvenire.it, 8am.media and adiac-congo.com all moved their sitemap and were
+  # recorded as errors. Publishers also redirect http->https and bare->www
+  # routinely, so this is normal operation rather than an edge case.
+  #
+  # Validators stay keyed to the URL in the registry, not the redirect target,
+  # so a publisher moving their sitemap does not orphan the cached ETag.
+  def conditional_get(url, validator_url: url, redirects_left: MAX_REDIRECTS)
     uri = URI(url)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = uri.scheme == "https"
@@ -222,10 +231,30 @@ class NewsSitemapService
     request = Net::HTTP::Get.new(uri)
     request["User-Agent"] = USER_AGENT
     request["Accept"] = "application/xml,text/xml"
-    validators = Rails.cache.read(validator_key(url)) || {}
+    validators = Rails.cache.read(validator_key(validator_url)) || {}
     request["If-None-Match"] = validators["etag"] if validators["etag"].present?
     request["If-Modified-Since"] = validators["last_modified"] if validators["last_modified"].present?
-    http.request(request)
+    response = http.request(request)
+
+    return response unless response.is_a?(Net::HTTPRedirection) && redirects_left.positive?
+
+    target = redirect_target(url, response["Location"])
+    return response if target.nil?
+
+    conditional_get(target, validator_url: validator_url, redirects_left: redirects_left - 1)
+  end
+
+  # Location may be relative ("/sitemap.xml"), so resolve against the URL we
+  # asked for. Anything that is not http(s) is refused rather than followed.
+  def redirect_target(url, location)
+    return nil if location.blank?
+
+    target = URI.join(url, location)
+    return nil unless target.scheme == "http" || target.scheme == "https"
+
+    target.to_s
+  rescue URI::Error
+    nil
   end
 
   def store_validators(url, response)

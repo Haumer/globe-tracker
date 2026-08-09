@@ -186,4 +186,118 @@ class NewsSitemapServiceTest < ActiveSupport::TestCase
 
     assert_equal sources.size, seen.uniq.size
   end
+
+  # ── redirects ───────────────────────────────────────────────
+
+  # Stands in for Net::HTTP, handing back a scripted response per request and
+  # recording which URLs were asked for.
+  class FakeHttp
+    attr_reader :requested
+
+    def initialize(script, requested)
+      @script = script
+      @requested = requested
+    end
+
+    attr_accessor :use_ssl, :open_timeout, :read_timeout
+
+    def request(req)
+      @requested << req.uri.to_s
+      @script.shift or raise "unexpected extra request for #{req.uri}"
+    end
+  end
+
+  def redirect_response(location, code: "301")
+    res = Net::HTTPMovedPermanently.new("1.1", code, "Moved")
+    res["Location"] = location if location
+    res
+  end
+
+  def ok_response(body)
+    res = Net::HTTPOK.new("1.1", "200", "OK")
+    res.instance_variable_set(:@read, true)
+    res.instance_variable_set(:@body, body)
+    res
+  end
+
+  def with_http(script)
+    requested = []
+    fake = ->(*_args) { FakeHttp.new(script, requested) }
+    Net::HTTP.stub(:new, fake) { yield requested }
+  end
+
+  test "conditional_get follows a redirect to the new sitemap location" do
+    body = sitemap_xml([ { loc: "https://example.com/a", title: "Strike", date: "2026-08-08T10:00:00Z" } ])
+    script = [ redirect_response("https://example.com/news-sitemap.xml"), ok_response(body) ]
+
+    with_http(script) do |requested|
+      response = @service.send(:conditional_get, "https://example.com/sitemap.xml")
+      assert_kind_of Net::HTTPSuccess, response
+      assert_equal [ "https://example.com/sitemap.xml", "https://example.com/news-sitemap.xml" ], requested
+    end
+  end
+
+  test "conditional_get resolves a relative Location header" do
+    script = [ redirect_response("/feeds/news.xml"), ok_response(sitemap_xml([])) ]
+
+    with_http(script) do |requested|
+      @service.send(:conditional_get, "https://example.com/sitemap.xml")
+      assert_equal "https://example.com/feeds/news.xml", requested.last
+    end
+  end
+
+  test "conditional_get stops after MAX_REDIRECTS and returns the redirect" do
+    hops = NewsSitemapService::MAX_REDIRECTS + 1
+    script = Array.new(hops) { |i| redirect_response("https://example.com/hop#{i}") }
+
+    with_http(script) do |requested|
+      response = @service.send(:conditional_get, "https://example.com/sitemap.xml")
+      assert_kind_of Net::HTTPRedirection, response
+      assert_equal hops, requested.size
+    end
+  end
+
+  test "conditional_get refuses to follow a non-http redirect" do
+    script = [ redirect_response("ftp://example.com/sitemap.xml") ]
+
+    with_http(script) do |requested|
+      response = @service.send(:conditional_get, "https://example.com/sitemap.xml")
+      assert_kind_of Net::HTTPRedirection, response
+      assert_equal 1, requested.size
+    end
+  end
+
+  test "conditional_get returns the redirect when Location is missing" do
+    script = [ redirect_response(nil) ]
+
+    with_http(script) do |requested|
+      response = @service.send(:conditional_get, "https://example.com/sitemap.xml")
+      assert_kind_of Net::HTTPRedirection, response
+      assert_equal 1, requested.size
+    end
+  end
+
+  test "validators stay keyed to the registry URL across a redirect" do
+    Rails.cache.write(@service.send(:validator_key, "https://example.com/sitemap.xml"),
+                      { "etag" => 'W/"abc"' })
+    script = [ redirect_response("https://example.com/moved.xml"), ok_response(sitemap_xml([])) ]
+
+    sent = []
+    fake = ->(*_args) {
+      Class.new(FakeHttp) do
+        define_method(:request) do |req|
+          sent << req["If-None-Match"]
+          super(req)
+        end
+      end.new(script, [])
+    }
+
+    Net::HTTP.stub(:new, fake) do
+      @service.send(:conditional_get, "https://example.com/sitemap.xml")
+    end
+
+    # Both hops carry the original URL's ETag, so a moved sitemap keeps its
+    # conditional-request benefit instead of refetching in full every cycle.
+    assert_equal [ 'W/"abc"', 'W/"abc"' ], sent
+  end
 end

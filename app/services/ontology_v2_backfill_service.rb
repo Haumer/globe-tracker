@@ -16,8 +16,36 @@ class OntologyV2BackfillService
     "asset_ports" => "ports",
     "asset_submarine_cables" => "submarine_cables",
   }.freeze
+  # Two chains, split by how fast the underlying data actually moves.
+  #
+  # The reference stages walk ~56,000 airport, base, power plant, port and cable
+  # rows whose source tables refresh every 12-24 hours. The live stages derive
+  # from events that arrive continuously and want to be minutes old, not hours.
+  #
+  # Chaining runs within a group, never across it, so a live pass cannot end up
+  # queued behind 56,000 rows of static reference data -- which is exactly how
+  # the old arrangement buried everything after its fourth stage.
+  STAGE_GROUPS = {
+    "reference" => %w[
+      identity
+      asset_airports
+      asset_military_bases
+      asset_power_plants
+      asset_ports
+      asset_submarine_cables
+    ].freeze,
+    "live" => %w[
+      event_graph
+      infrastructure_impact
+    ].freeze,
+  }.freeze
+
   PROVIDER = "ontology-v2".freeze
   FEED_KIND = "ontology".freeze
+
+  def self.group_for(stage)
+    STAGE_GROUPS.find { |_name, stages| stages.include?(stage.to_s) }&.first
+  end
 
   class << self
     def run(stage: STAGES.first, cursor: nil, batch_size: 500, now: Time.current)
@@ -96,8 +124,14 @@ class OntologyV2BackfillService
     }.merge(payload.except(:cursor, :next_cursor, :complete, :records_fetched, :records_stored))
   end
 
+  # Advance only within the stage's own group, so a chain ends at its group
+  # boundary rather than running on into work on a different cadence.
   def next_stage_after(stage)
-    STAGES[STAGES.index(stage).to_i + 1]
+    group = self.class.group_for(stage)
+    return nil if group.nil?
+
+    stages = STAGE_GROUPS.fetch(group)
+    stages[stages.index(stage.to_s).to_i + 1]
   end
 
   def record_feed_status(stage:, status:, result: {}, error: nil)

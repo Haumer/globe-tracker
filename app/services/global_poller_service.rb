@@ -55,6 +55,21 @@ class GlobalPollerService
     # so each reports its own polling source instead of hiding behind a sibling.
     { job: SyncHazardRelationshipsJob, every: 10.minutes, offset: 7.minutes },
     { job: SyncTheaterRelationshipsJob, every: 10.minutes, offset: 9.minutes },
+    # The v2 graph, split by how fast its inputs move. The live chain derives
+    # from events arriving continuously, so it keeps the ten-minute cadence the
+    # old monolith nominally had. The reference chain walks ~56,000 rows of
+    # airports, bases, plants, ports and cables whose source tables refresh
+    # every 12-24 hours, so re-deriving it more often than that is pure waste --
+    # and doing it every ten minutes is what starved everything downstream.
+    # Distinct key_suffix values keep the two chains' enqueue dedupe apart.
+    {
+      job: OntologyV2BackfillJob, every: 10.minutes, offset: 3.minutes,
+      args: [{ stage: "event_graph" }], key_suffix: "live",
+    },
+    {
+      job: OntologyV2BackfillJob, every: 12.hours, offset: 5.hours,
+      args: [{ stage: "identity" }], key_suffix: "reference",
+    },
     { job: RefreshInsightsSnapshotJob, every: 10.minutes, offset: 8.minutes },
     { job: RefreshInternetTrafficJob, every: 15.minutes, offset: 10.minutes },
     { job: RefreshGpsJammingJob, every: 15.minutes, offset: 12.minutes },
@@ -63,11 +78,6 @@ class GlobalPollerService
     { job: PurgeStaleDataJob, every: 1.hour, offset: 10.minutes },
     { job: RecheckStaleCamerasJob, every: 1.hour, offset: 20.minutes },
     { job: RefreshNewsGeocodeBackfillJob, every: 1.hour, offset: 25.minutes },
-    # Walks identity, the five asset targets, the event graph and infrastructure
-    # impact in cursor batches, each job enqueueing the next. Hourly because the
-    # asset tables behind it refresh every 12-24 hours; the previous arrangement
-    # re-derived all ~56,000 rows every ten minutes and never finished.
-    { job: OntologyV2BackfillJob, every: 1.hour, offset: 35.minutes },
     { job: GenerateBriefJob, every: 1.hour, offset: 50.minutes, conditional: :brief_missing? },
     { job: RefreshAcledJob, every: 6.hours, offset: 0.minutes },
     { job: RefreshGeoconfirmedJob, every: 6.hours, offset: 15.minutes },

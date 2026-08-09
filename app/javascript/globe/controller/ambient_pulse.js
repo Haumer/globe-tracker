@@ -13,11 +13,25 @@ const HALO_SHARE = 0.25
 const MIN_PERIOD = 2.6
 const PERIOD_SPREAD = 1.9
 
+// How long a newly arrived mark announces itself for, and the window its start
+// is spread across so a refresh does not light the whole map at one instant.
+const ARRIVAL_MS = 3000
+const ARRIVAL_STAGGER_MS = 1400
+
+// A refresh that brings in two hundred clusters should not ping two hundred
+// times. Ranked by weight, so the cap keeps the ones worth announcing.
+const MAX_ARRIVALS_PER_COMMIT = 40
+
 function state(controller) {
   if (!controller._ambient) {
     controller._ambient = {
       entries: new Map(),
       layers: new Map(),
+      // The key set as of the last commit, kept apart from `layers` because a
+      // re-render clears that before it rebuilds. Without somewhere the clear
+      // does not reach, every commit looks like the layer's first and nothing
+      // is ever new.
+      previous: new Map(),
       staging: new Map(),
       bounds: null,
       boundsStale: true,
@@ -43,7 +57,10 @@ const PUMP_INTERVAL_MS = 1000 / 30
 function pumpFrame(controller) {
   const store = controller._ambient
   if (!store) return
-  if (store.entries.size === 0) {
+  // Stops as soon as the last arrival finishes. This used to run for as long as
+  // any entry existed at all -- which, with the old endless sine, meant forever:
+  // requestRenderMode was on but the scene never once got to idle.
+  if (store.entries.size === 0 || !anyArrivalRunning(store)) {
     store.raf = null
     return
   }
@@ -59,6 +76,7 @@ function pumpFrame(controller) {
 function startPump(controller) {
   const store = state(controller)
   if (store.raf || store.entries.size === 0) return
+  if (!anyArrivalRunning(store)) return
   store.raf = requestAnimationFrame(() => pumpFrame(controller))
 }
 
@@ -100,17 +118,34 @@ function inView(bounds, lat, lng) {
   return lng >= bounds.lomin && lng <= bounds.lomax
 }
 
-function pulse01(controller, key) {
-  const entry = state(controller).entries.get(key)
-  if (!entry) return 0.5
-  const seconds = performance.now() / 1000
-  const wave = Math.sin(((seconds / entry.period) + entry.phase) * Math.PI * 2)
-  return (wave + 1) / 2
+// 0 at rest, rising to 1 and back to 0 across ARRIVAL_MS after a mark arrives.
+//
+// The attack is deliberately faster than the decay -- pow(u, 0.32) front-loads
+// the curve, so the mark snaps into notice and then lets go. It lands exactly on
+// zero at the end, so the pin hands over to its static self without a step.
+export function arrival01(controller, key) {
+  const u = arrivalPhase(controller, key)
+  if (u === null) return 0
+  return Math.sin(Math.PI * Math.pow(u, 0.32))
 }
 
-// -1..1 around the resting value, so callers can swing a property symmetrically.
-function signed(controller, key) {
-  return (pulse01(controller, key) - 0.5) * 2
+// Raw 0..1 progress through the arrival window, or null when the mark is at
+// rest. The halo wants this rather than the bump, because a ring has to expand
+// in one direction rather than swell and come back.
+function arrivalPhase(controller, key) {
+  const entry = controller._ambient?.entries.get(key)
+  if (!entry?.arriveAt) return null
+  const u = (performance.now() - entry.arriveAt) / ARRIVAL_MS
+  if (u <= 0 || u >= 1) return null
+  return u
+}
+
+function anyArrivalRunning(store) {
+  const now = performance.now()
+  for (const entry of store.entries.values()) {
+    if (entry.arriveAt && now < entry.arriveAt + ARRIVAL_MS) return true
+  }
+  return false
 }
 
 function forgetKeys(store, keys) {
@@ -149,15 +184,59 @@ export function commitAmbientLayer(controller, layer) {
   const staged = store.staging.get(layer)
   if (!staged) return
 
-  const previous = store.layers.get(layer)
-  if (previous) {
-    for (const key of previous) {
+  const current = store.layers.get(layer)
+  if (current) {
+    for (const key of current) {
       if (!staged.has(key)) store.entries.delete(key)
     }
   }
+  markArrivals(store, staged, store.previous.get(layer))
   store.layers.set(layer, staged)
+  store.previous.set(layer, new Set(staged))
   store.staging.delete(layer)
   startPump(controller)
+}
+
+// The other direction of the same set difference the loop above uses to expire
+// departed keys: staged minus previous is everything that just showed up.
+//
+// This is what a ping is supposed to mean. Every point used to breathe on an
+// endless sine, so the map pinged continuously whether or not anything had
+// happened -- which makes the ping worth nothing. Now a mark announces itself
+// once, when it arrives, and is then still.
+//
+// `previous` being undefined means this is the layer's first commit, and every
+// key is technically new. Treating that as arrivals would flash the entire map
+// on load, which is exactly what the jitter exists to avoid, so it counts as
+// nothing arriving.
+//
+// One thing to keep in mind if news ever re-renders on camera idle: keys are
+// only staged for points in view, so panning somewhere new would make every
+// key there an arrival and the pinging would be back in a different costume.
+// That case wants comparing against every key seen recently, not the last
+// commit.
+function markArrivals(store, staged, previous) {
+  if (!previous) return
+
+  const arrivals = []
+  for (const key of staged) {
+    if (previous.has(key)) continue
+    const entry = store.entries.get(key)
+    if (entry) arrivals.push({ key, entry })
+  }
+  if (arrivals.length === 0) return
+
+  // A refresh that replaces most of the map should not become a light show.
+  // Heaviest first, so if the cap bites it keeps the arrivals worth seeing.
+  arrivals.sort((a, b) => b.entry.weight - a.entry.weight)
+
+  const now = performance.now()
+  for (let i = 0; i < arrivals.length && i < MAX_ARRIVALS_PER_COMMIT; i++) {
+    const { key, entry } = arrivals[i]
+    // Deterministic per key, so the stagger is spread rather than random and a
+    // given cluster starts at the same offset every time.
+    entry.arriveAt = now + (ambientHash01(`${key}#arrive`) * ARRIVAL_STAGGER_MS)
+  }
 }
 
 export function clearAmbientLayer(controller, layer) {
@@ -176,6 +255,10 @@ export function clearAllAmbient(controller) {
   stopPump(controller)
   store.entries.clear()
   store.layers.clear()
+  // Unlike clearAmbientLayer, this is a hard reset -- switching into timeline
+  // playback and back should start over rather than treat everything that
+  // returns as newly arrived.
+  store.previous.clear()
   store.staging.clear()
 }
 
@@ -205,22 +288,29 @@ export function haloWeightCutoff(weights) {
 }
 
 // ── Animated properties ──────────────────────────────────
+//
+// Every one of these is at its resting value except during the three seconds
+// after its mark arrives. They used to run an endless sine, which is why the
+// map pinged continuously and the render pump never got to stop.
 
-// amplitude is a fraction of the base size, so 0.16 breathes by ±16%.
+// amplitude is a fraction of the base size: 0.16 swells by 16% on arrival.
 export function ambientPointSize(controller, key, base, amplitude) {
-  return new (C().CallbackProperty)(() => base * (1 + (amplitude * signed(controller, key))), false)
+  return new (C().CallbackProperty)(
+    () => base * (1 + (amplitude * 1.6 * arrival01(controller, key))),
+    false,
+  )
 }
 
 // amplitude is a fraction of baseAlpha; the colour itself is left alone.
 //
 // `opacity` is an optional function returning a 0..1 multiplier read on every
 // frame. It exists so a layer can be dimmed as a whole without replacing these
-// callbacks -- assigning a plain Color over one would freeze the pulse, which
+// callbacks -- assigning a plain Color over one would freeze the property, which
 // is exactly why _setNewsDotOpacity skips CallbackProperty colours.
 export function ambientColor(controller, key, color, baseAlpha, amplitude, opacity) {
   return new (C().CallbackProperty)(() => {
     const dim = typeof opacity === "function" ? opacity() : 1
-    const alpha = baseAlpha * (1 + (amplitude * signed(controller, key))) * (Number.isFinite(dim) ? dim : 1)
+    const alpha = baseAlpha * (1 + (amplitude * arrival01(controller, key))) * (Number.isFinite(dim) ? dim : 1)
     return color.withAlpha(Math.min(1, Math.max(0, alpha)))
   }, false)
 }
@@ -228,25 +318,34 @@ export function ambientColor(controller, key, color, baseAlpha, amplitude, opaci
 // amplitude is in pixels here rather than a fraction, because an outline that
 // scales proportionally disappears on the small points and screams on the big ones.
 export function ambientOutlineWidth(controller, key, base, amplitude) {
-  return new (C().CallbackProperty)(() => base + (amplitude * pulse01(controller, key)), false)
+  return new (C().CallbackProperty)(
+    () => base + (amplitude * arrival01(controller, key)),
+    false,
+  )
 }
 
-// An expanding, fading ring behind a point. Returns a point graphics config to
-// hand straight to entities.add({ point: ... }), or null if the key is unknown.
+// The ping: a ring that expands out of the mark and fades as it goes, once,
+// when the mark arrives.
+//
+// At rest its size is zero. That matters for more than looks -- a transparent
+// ring tens of pixels across is still pickable, and an invisible click target
+// sitting over the neighbouring pins is exactly the bug the pick preference
+// pass had to be written to survive. Nothing is drawn, so nothing is hit.
 export function ambientHaloPoint(controller, key, color, { minSize = 8, maxSize = 36, peakAlpha = 0.3, opacity } = {}) {
   if (!controller._ambient?.entries.has(key)) return null
 
   return {
     pixelSize: new (C().CallbackProperty)(() => {
-      const progress = pulse01(controller, key)
+      const progress = arrivalPhase(controller, key)
+      if (progress === null) return 0
       return minSize + ((maxSize - minSize) * progress)
     }, false),
     color: new (C().CallbackProperty)(() => {
-      // Fades as it grows, so the ring reads as a ping rather than a blob.
       // `opacity` has to be honoured here too: without it a dimmed layer keeps
-      // full-strength halos around quarter-strength dots, and the bloom ends up
+      // full-strength halos around quarter-strength marks, and the bloom ends up
       // brighter than the thing it is supposed to be blooming around.
-      const progress = pulse01(controller, key)
+      const progress = arrivalPhase(controller, key)
+      if (progress === null) return color.withAlpha(0)
       const dim = typeof opacity === "function" ? opacity() : 1
       return color.withAlpha(peakAlpha * (1 - progress) * (Number.isFinite(dim) ? dim : 1))
     }, false),

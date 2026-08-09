@@ -1,8 +1,6 @@
 import { getDataSource } from "globe/utils"
 import {
-  ambientColor,
   ambientHaloPoint,
-  ambientOutlineWidth,
   ambientPointSize,
   beginAmbientLayer,
   haloWeightCutoff,
@@ -11,6 +9,7 @@ import {
   registerAmbient,
 } from "globe/controller/ambient_pulse"
 import { newsCategoryColor } from "globe/controller/news_palette"
+import { newsPinIcon, newsPinScale } from "globe/controller/news_pin_icon"
 
 // geo_precision values that mean we resolved an actual place. Everything else is
 // a country centroid or a give-up, and gets drawn as a wash rather than a point.
@@ -197,7 +196,8 @@ export function applyNewsRenderingMethods(GlobeController) {
     const prepared = ranked.map(({ clusterEvents, weight }) => {
       const lead = clusterEvents[0]
       const count = clusterEvents.length
-      const cesiumColor = Cesium.Color.fromCssColorString(newsCategoryColor(lead.category))
+      const iconColor = newsCategoryColor(lead.category)
+      const cesiumColor = Cesium.Color.fromCssColorString(iconColor)
 
       const avgLat = clusterEvents.reduce((s, e) => s + e.lat, 0) / count
       const avgLng = clusterEvents.reduce((s, e) => s + e.lng, 0) / count
@@ -214,24 +214,17 @@ export function applyNewsRenderingMethods(GlobeController) {
       // biggest cells, which left nothing between 20 and 28px and broke entirely
       // if the third-largest cell was a singleton. It existed because tone was
       // always zero, so cluster count was the only thing left to separate on.
-      const pixelSize = 7 + (Math.min(weight / topWeight, 1) * 15)
+      // Wider range than the old filled dots used. A disc's ink grows with the
+      // square of its radius and a ring's only grows linearly, so the same 7-22
+      // spread that clearly separated big from small as discs reads as nearly
+      // uniform as rings.
+      const pixelSize = 8 + (Math.min(weight / topWeight, 1) * 18)
 
-      // Confidence is fill, not alpha. It used to be a 0.3-alpha wash, which
-      // reads as "faint" -- and with globe lighting on, faintness is already
-      // what the daylit hemisphere does to everything. A 0.3 dot over noon
-      // desert is invisible and the same dot at local midnight is crisp, so the
-      // encoding was really reporting solar position. Solid disc versus hollow
-      // ring says the same thing with luminance left out of it, and it is the
-      // ordinary cartographic idiom for an approximate position.
-      const fillAlpha = located ? 0.92 : 0.10
-      // Escalation rides the outline, achromatic so it can never be mistaken for
-      // a category hue. It replaces a 30km ground ellipse that was sub-pixel at
-      // every zoom anyone actually browses at -- the most urgent thing on the
-      // map was the least visible mark on it.
+      // Escalation is achromatic so it can never be mistaken for a category hue.
+      // It replaces a 30km ground ellipse that was sub-pixel at every zoom
+      // anyone actually browses at -- the most urgent thing on the map was the
+      // least visible mark on it.
       const escalated = clusterEvents.some(e => e.threat === "critical" || e.threat === "high")
-      const outlineColor = escalated ? Cesium.Color.WHITE : cesiumColor
-      const outlineAlpha = escalated ? 0.9 : (located ? 0.45 + coverageBoost * 0.3 : 0.85)
-      const outlineWidth = escalated ? 3 : (located ? 1 + Math.round(coverageBoost * 2) : 2)
 
       const showLabel = weight >= labelCutoff
       const fontSize = weight >= 0.5 ? 14 : 13
@@ -249,8 +242,8 @@ export function applyNewsRenderingMethods(GlobeController) {
         : null
 
       return {
-        clusterEvents, lead, weight, cesiumColor, avgLat, avgLng, coverageBoost,
-        pixelSize, fillAlpha, outlineColor, outlineAlpha, outlineWidth,
+        clusterEvents, lead, weight, cesiumColor, iconColor, avgLat, avgLng,
+        coverageBoost, pixelSize, located, escalated,
         showLabel, labelText, fontSize, ambientKey,
       }
     })
@@ -282,17 +275,24 @@ export function applyNewsRenderingMethods(GlobeController) {
       const entity = dataSource.entities.add({
         id: `news-${lead._idx}`,
         position: Cesium.Cartesian3.fromDegrees(pin.avgLng, pin.avgLat, 10),
-        point: {
-          pixelSize: ambientKey ? ambientPointSize(this, ambientKey, pixelSize, 0.12) : pixelSize,
-          color: ambientKey
-            ? ambientColor(this, ambientKey, pin.cesiumColor, pin.fillAlpha, 0.16, dotOpacity)
-            : pin.cesiumColor.withAlpha(pin.fillAlpha),
-          outlineColor: ambientKey
-            ? ambientColor(this, ambientKey, pin.outlineColor, pin.outlineAlpha, 0.3, dotOpacity)
-            : pin.outlineColor.withAlpha(pin.outlineAlpha),
-          outlineWidth: ambientKey
-            ? ambientOutlineWidth(this, ambientKey, pin.outlineWidth, 1.5)
-            : pin.outlineWidth,
+        billboard: {
+          // A drawn mark rather than a Cesium point, so category, precision and
+          // escalation are separate parts of the pin instead of three ways of
+          // adjusting one filled circle. See news_pin_icon.js.
+          image: newsPinIcon({
+            color: pin.iconColor,
+            located: pin.located,
+            escalated: pin.escalated,
+          }),
+          // Swells once as it arrives, then holds still.
+          scale: ambientKey
+            ? ambientPointSize(this, ambientKey, newsPinScale(pixelSize), 0.18)
+            : newsPinScale(pixelSize),
+          // The image carries the colour; this is a tint, and the only thing
+          // the layer dim needs to touch. It starts opaque and _setNewsDotOpacity
+          // takes it down at the end of this render -- baking the dim in here
+          // instead would have it cached as the base and applied twice.
+          color: Cesium.Color.WHITE,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -325,6 +325,9 @@ export function applyNewsRenderingMethods(GlobeController) {
         // reads _newsData, not the entity. Building it cost eight escaped article
         // cards per cluster on every render and was never shown to anyone.
       })
+      // What the mark was drawn from, so the selection variant can be built
+      // from the same description rather than reverse-engineered from a texture.
+      entity._newsIcon = { color: pin.iconColor, located: pin.located, escalated: pin.escalated }
       this._newsEntities.push(entity)
       pin.clusterEvents.forEach(ev => this._newsEntityByEventIdx.set(ev._idx, entity))
 
@@ -437,22 +440,16 @@ export function applyNewsRenderingMethods(GlobeController) {
   // Which dot is the panel talking about? Nothing answered that: the panel
   // opened and every pin on the globe looked exactly as it had a moment ago.
   //
-  // The pulse lives in the point's CallbackProperties, so this swaps the
-  // property objects out and puts the originals back rather than assigning
-  // colours over them -- overwriting one with a plain Color freezes the breath
-  // for good, which is the same trap _setNewsDotOpacity documents.
+  // Selection is drawn into the mark itself -- a ring outside everything else
+  // the pin is already saying -- so this just swaps the image for the selected
+  // variant of the same icon and puts the original back afterwards. The icons
+  // are cached, so both are the same two texture lookups every time.
   GlobeController.prototype._highlightNewsPin = function(entity) {
     this._clearNewsPinHighlight()
-    const Cesium = window.Cesium
-    if (!Cesium || !entity?.point) return
+    if (!entity?.billboard || !entity._newsIcon) return
 
-    this._newsPinHighlight = {
-      entity,
-      outlineColor: entity.point.outlineColor,
-      outlineWidth: entity.point.outlineWidth,
-    }
-    entity.point.outlineColor = new Cesium.ConstantProperty(Cesium.Color.WHITE)
-    entity.point.outlineWidth = new Cesium.ConstantProperty(5)
+    this._newsPinHighlight = { entity, image: entity.billboard.image }
+    entity.billboard.image = newsPinIcon({ ...entity._newsIcon, selected: true })
     this._requestRender()
   }
 
@@ -460,9 +457,8 @@ export function applyNewsRenderingMethods(GlobeController) {
     const previous = this._newsPinHighlight
     if (!previous) return
     this._newsPinHighlight = null
-    if (previous.entity?.point && !previous.entity.isDestroyed?.()) {
-      previous.entity.point.outlineColor = previous.outlineColor
-      previous.entity.point.outlineWidth = previous.outlineWidth
+    if (previous.entity?.billboard && !previous.entity.isDestroyed?.()) {
+      previous.entity.billboard.image = previous.image
     }
     this._requestRender()
   }
@@ -969,15 +965,14 @@ export function applyNewsRenderingMethods(GlobeController) {
     // freeze the pulse. dimColor skips them for that reason.
     this._newsDotOpacity = alpha
     for (const entity of this._newsEntities) {
+      // The pin is a billboard, and its colour is a white tint over a drawn
+      // icon -- so dimming the tint dims the whole mark, ring and centre alike.
+      dimColor(entity.billboard, "color", alpha)
+      // Halos and arc blobs are still points.
       dimColor(entity.point, "color", alpha)
       dimColor(entity.point, "outlineColor", alpha)
       dimColor(entity.label, "fillColor", alpha)
       dimColor(entity.label, "outlineColor", alpha)
-      if (entity.ellipse) {
-        // The threat ring is part of the news layer and has to fade with it.
-        dimColor(entity.ellipse.material, "color", alpha)
-        dimColor(entity.ellipse, "outlineColor", alpha)
-      }
     }
     this._requestRender()
   }

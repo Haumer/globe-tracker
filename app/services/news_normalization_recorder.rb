@@ -146,6 +146,30 @@ class NewsNormalizationRecorder
   ].to_set.freeze
 
   class << self
+    # Stamp records with their normalization ids, including the ones that had
+    # no match.
+    #
+    # The keys must exist on every record even when there is nothing to put in
+    # them. NewsEvent.upsert_all requires a uniform key set across the batch,
+    # and callers used to `next unless ids`, which left two shapes in the
+    # array. Postgres raised "All objects being inserted must have the same
+    # keys", the caller's bare rescue turned that into a return of 0, and the
+    # whole cycle's news was silently dropped -- so one unnormalizable URL cost
+    # every article fetched alongside it.
+    #
+    # Google News proxy links miss routinely, which is why RSS, GDELT and the
+    # API providers all stopped producing map events within two days of each
+    # other in April 2026, while sitemap ingest -- whose URLs are direct
+    # publisher links that always normalize -- carried on working.
+    def apply_ids!(records, normalized_ids)
+      records.each do |record|
+        ids = normalized_ids[record[:url]]
+        record[:news_source_id]  = ids&.dig(:news_source_id)
+        record[:news_article_id] = ids&.dig(:news_article_id)
+        record[:content_scope]   = ids ? ids[:content_scope] : record[:content_scope]
+      end
+    end
+
     def record_all(records)
       return {} if records.blank?
 

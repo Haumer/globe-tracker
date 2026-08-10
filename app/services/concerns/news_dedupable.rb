@@ -3,6 +3,19 @@ module NewsDedupable
 
   private
 
+  # Collapse records sharing a URL before they reach upsert_all.
+  #
+  # Postgres rejects a batch that names the same conflict target twice with
+  # "ON CONFLICT DO UPDATE command cannot affect row a second time", and the
+  # whole batch is lost. Feeds overlap constantly -- several Google News topic
+  # queries return the same article, and syndicated wire copy shows up under
+  # more than one publisher -- so this is routine rather than an edge case.
+  # Title dedup does not cover it: two feeds can carry one URL under headlines
+  # too different to match.
+  def dedup_by_url(records)
+    records.uniq { |record| record[:url] }
+  end
+
   # Dedup records by normalized title similarity.
   # Uses both Jaccard (word overlap) and containment (subset check) to catch
   # paraphrases AND headline extensions ("X happens" vs "X happens, 50 dead").

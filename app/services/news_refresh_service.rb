@@ -145,19 +145,13 @@ class NewsRefreshService
       record.each { |key, value| record[key] = value.scrub("") if value.is_a?(String) }
     end
 
+    records = dedup_by_url(records)
     return 0 if records.empty?
 
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)
     records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
     normalized_ids = NewsNormalizationRecorder.record_all(records)
-    records.each do |record|
-      ids = normalized_ids[record[:url]]
-      next unless ids
-
-      record[:news_source_id] = ids[:news_source_id]
-      record[:news_article_id] = ids[:news_article_id]
-      record[:content_scope] = ids[:content_scope]
-    end
+    NewsNormalizationRecorder.apply_ids!(records, normalized_ids)
     NewsClaimRecorder.record_all(records)
 
     assign_clusters(records)

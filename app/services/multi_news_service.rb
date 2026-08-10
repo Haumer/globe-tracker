@@ -233,7 +233,7 @@ class MultiNewsService
 
     # Dedup against existing DB records by URL
     existing_urls = NewsEvent.where(url: all_records.map { |r| r[:url] }).pluck(:url).to_set
-    new_records = all_records.reject { |r| existing_urls.include?(r[:url]) }
+    new_records = dedup_by_url(all_records.reject { |r| existing_urls.include?(r[:url]) })
 
     # Cross-source dedup by normalized title similarity (including DB titles from GDELT etc.)
     existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
@@ -251,14 +251,7 @@ class MultiNewsService
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)
     new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
     normalized_ids = NewsNormalizationRecorder.record_all(new_records)
-    new_records.each do |record|
-      ids = normalized_ids[record[:url]]
-      next unless ids
-
-      record[:news_source_id] = ids[:news_source_id]
-      record[:news_article_id] = ids[:news_article_id]
-      record[:content_scope] = ids[:content_scope]
-    end
+    NewsNormalizationRecorder.apply_ids!(new_records, normalized_ids)
     NewsClaimRecorder.record_all(new_records)
 
     assign_clusters(new_records)

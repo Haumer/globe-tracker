@@ -8,8 +8,11 @@ class RssNewsService
   include NewsDedupable
   include NewsGeocodable
 
-  BATCH_COUNT = 4        # 4 batches × 5 min = each feed polled every 20 min
-  BATCH_INTERVAL = 5     # minutes between batches
+  BATCH_COUNT = 4          # 4 batches × 5 min = each curated feed polled every 20 min
+  REGISTRY_BATCH_COUNT = 12 # 12 batches × 5 min = each registry feed polled hourly
+  BATCH_INTERVAL = 5       # minutes between batches
+
+  REGISTRY_PATH = Rails.root.join("config", "news_publishers.yml")
 
   # Ceiling for feeds that declare no `when:Nd` window of their own.
   DEFAULT_MAX_ITEM_AGE = 7.days
@@ -403,24 +406,74 @@ class RssNewsService
       last = Rails.cache.read("rss_news_last_fetch")
       last.nil? || last < 20.minutes.ago
     end
+
+    # RSS-transport publishers from the shared registry.
+    #
+    # NewsSitemapService takes the sitemap-transport rows and leaves these to
+    # this service -- but nothing ever read them, so 379 live-probed feeds sat
+    # unused while this service polled only its hardcoded list. The registry
+    # carries tier/risk/region already, which is exactly the meta shape
+    # fetch_feed wants.
+    def registry_feeds
+      @registry_feeds ||= begin
+        rows = YAML.load_file(REGISTRY_PATH)
+        covered = curated_hosts
+
+        rows.filter_map do |row|
+          next unless row["transport"] == "rss"
+          next if row["url"].blank?
+          # Skip anything the curated list already polls, so a publisher in
+          # both is fetched once and on the faster rotation.
+          next if covered.any? { |h| h == row["domain"] || h.end_with?(".#{row["domain"]}") }
+
+          [row["url"], row["domain"], { tier: row["tier"], risk: row["risk"], region: row["region"] }.compact]
+        end
+      rescue Errno::ENOENT
+        Rails.logger.warn("RssNewsService: #{REGISTRY_PATH} missing")
+        []
+      end
+    end
+
+    def reload_registry_feeds!
+      @registry_feeds = nil
+      registry_feeds
+    end
+
+    private
+
+    def curated_hosts
+      SOURCES.keys.filter_map do |info|
+        URI.parse(info[:url]).host&.downcase&.delete_prefix("www.")
+      rescue URI::InvalidURIError
+        nil
+      end
+    end
   end
 
   def refresh
     all_records = []
     ingest_items = []
 
-    # Build full feed list
-    all_feeds = []
-    SOURCES.each { |info, meta| all_feeds << [info[:url], info[:name], meta] }
+    # The curated feeds stay on their own fast rotation: they are the tier-1
+    # wires, and their RSS windows are shallow enough that folding them into a
+    # list four times longer would start losing items between polls.
+    curated = []
+    SOURCES.each { |info, meta| curated << [info[:url], info[:name], meta] }
     GOOGLE_NEWS_FEEDS.each do |name, url|
       meta = GOOGLE_NEWS_META[name] || { tier: 4, risk: "low", region: "global" }
-      all_feeds << [url, "GN: #{name}", meta]
+      curated << [url, "GN: #{name}", meta]
     end
 
     # Rotate through batches — each cycle processes ~1/4 of feeds
     # so new data arrives every 5 min but each source is only hit every 20 min
     batch_idx = rotation_index(BATCH_COUNT, period: BATCH_INTERVAL.minutes)
-    batch_feeds = rotation_slice(all_feeds, BATCH_COUNT, period: BATCH_INTERVAL.minutes)
+    batch_feeds = rotation_slice(curated, BATCH_COUNT, period: BATCH_INTERVAL.minutes)
+
+    # The registry is much longer and mostly lower-volume, so it rides a slower
+    # cursor: a comparable number of feeds per cycle, an hour to come round.
+    batch_feeds += rotation_slice(
+      self.class.registry_feeds, REGISTRY_BATCH_COUNT, period: BATCH_INTERVAL.minutes
+    )
 
     mutex = Mutex.new
     batch_feeds.shuffle.each_slice(THREAD_POOL_SIZE) do |batch|
@@ -447,7 +500,7 @@ class RssNewsService
     return 0 if all_records.empty?
 
     existing_urls = NewsEvent.where(url: all_records.map { |r| r[:url] }).pluck(:url).to_set
-    candidates = all_records.reject { |r| existing_urls.include?(r[:url]) }
+    candidates = dedup_by_url(all_records.reject { |r| existing_urls.include?(r[:url]) })
 
     # Cross-service dedup: check titles already in DB from GDELT/MultiNews
     existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
@@ -458,14 +511,7 @@ class RssNewsService
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)
     new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
     normalized_ids = NewsNormalizationRecorder.record_all(new_records)
-    new_records.each do |record|
-      ids = normalized_ids[record[:url]]
-      next unless ids
-
-      record[:news_source_id] = ids[:news_source_id]
-      record[:news_article_id] = ids[:news_article_id]
-      record[:content_scope] = ids[:content_scope]
-    end
+    NewsNormalizationRecorder.apply_ids!(new_records, normalized_ids)
     NewsClaimRecorder.record_all(new_records)
     RssArticleHydrationService.enqueue_candidates(new_records)
     assign_clusters(new_records)
@@ -485,7 +531,13 @@ class RssNewsService
     Rails.logger.info("RssNewsService: #{new_records.size} new from batch #{batch_idx + 1}/#{BATCH_COUNT} (#{batch_feeds.size} feeds, #{all_records.size} parsed)")
     new_records.size
   rescue => e
-    Rails.logger.error("RssNewsService: #{e.message}")
+    # Loud on purpose: this rescue quietly returned 0 for three months while
+    # upsert_all rejected every batch, and the poller kept reporting a clean
+    # cycle. Say how much was thrown away.
+    Rails.logger.error(
+      "RssNewsService: #{e.class}: #{e.message} -- discarded #{new_records&.size || all_records.size} records"
+    )
+    Rails.logger.error(e.backtrace&.first(5)&.join("\n"))
     0
   end
 

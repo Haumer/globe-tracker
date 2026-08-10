@@ -2,6 +2,7 @@ require "set"
 
 class NewsRefreshService
   extend Refreshable
+  include BatchRotation
   include TimelineRecorder
   include NewsDedupable
 
@@ -184,8 +185,7 @@ class NewsRefreshService
     ingest_items = []
 
     # Rotate through queries — one per cycle to avoid rate limits
-    idx = (Rails.cache.read("gdelt_conflict_query_idx") || 0) % CONFLICT_QUERIES.size
-    Rails.cache.write("gdelt_conflict_query_idx", idx + 1)
+    idx = rotation_index(CONFLICT_QUERIES.size, period: 5.minutes)
 
     # Fetch 2 queries per cycle (current + next) for better coverage
     [idx, (idx + 1) % CONFLICT_QUERIES.size].each do |qi|

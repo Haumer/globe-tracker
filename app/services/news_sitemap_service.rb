@@ -19,6 +19,7 @@ require "nokogiri"
 # that, every cycle would re-ingest a few hundred items per publisher.
 class NewsSitemapService
   extend Refreshable
+  include BatchRotation
   include TimelineRecorder
   include NewsDedupable
   include NewsGeocodable
@@ -124,10 +125,7 @@ class NewsSitemapService
   private
 
   def current_batch(sources)
-    idx = (Rails.cache.read("news_sitemap_batch_idx") || 0) % BATCH_COUNT
-    Rails.cache.write("news_sitemap_batch_idx", idx + 1)
-    size = (sources.size.to_f / BATCH_COUNT).ceil
-    sources.each_slice(size).to_a[idx] || []
+    rotation_slice(sources, BATCH_COUNT, period: BATCH_INTERVAL.minutes)
   end
 
   # Mirrors RssNewsService#refresh's tail. Deliberately duplicated rather than

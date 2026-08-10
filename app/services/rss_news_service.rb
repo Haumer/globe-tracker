@@ -3,6 +3,7 @@ require "net/http"
 
 class RssNewsService
   extend Refreshable
+  include BatchRotation
   include TimelineRecorder
   include NewsDedupable
   include NewsGeocodable
@@ -418,11 +419,8 @@ class RssNewsService
 
     # Rotate through batches — each cycle processes ~1/4 of feeds
     # so new data arrives every 5 min but each source is only hit every 20 min
-    batch_idx = (Rails.cache.read("rss_batch_idx") || 0) % BATCH_COUNT
-    Rails.cache.write("rss_batch_idx", batch_idx + 1)
-
-    batch_size = (all_feeds.size.to_f / BATCH_COUNT).ceil
-    batch_feeds = all_feeds.each_slice(batch_size).to_a[batch_idx] || []
+    batch_idx = rotation_index(BATCH_COUNT, period: BATCH_INTERVAL.minutes)
+    batch_feeds = rotation_slice(all_feeds, BATCH_COUNT, period: BATCH_INTERVAL.minutes)
 
     mutex = Mutex.new
     batch_feeds.shuffle.each_slice(THREAD_POOL_SIZE) do |batch|

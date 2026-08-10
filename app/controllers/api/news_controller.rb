@@ -7,7 +7,22 @@ module Api
         ABS(tone) * EXP(-0.1 * LEAST(EXTRACT(EPOCH FROM (NOW() - COALESCE(published_at, fetched_at))) / 3600.0, 200))
       SQL
 
+      # content_scope gated claim extraction and clustering but never the map, so
+      # every headline the scope classifier rejected still rendered as a pin --
+      # about two thirds of them. NewsScopeClassifier only matches English terms,
+      # so the rejected pile is mostly non-English local reporting plus the
+      # sports and entertainment it is actually meant to catch.
+      #
+      # Filtered here rather than at write time on purpose. The classifier is
+      # known to be crude, so this stays reversible: news_events keeps the rows
+      # and widening the filter is a one-line change, where declining to persist
+      # would throw away anything it misjudges.
+      #
+      # IS DISTINCT FROM, not `where.not`: a NULL scope is unclassified, not out
+      # of scope, but `NOT (content_scope = 'out_of_scope')` evaluates to NULL
+      # for those rows, so the plain negation drops all 1,885 of them too.
       events = time_scoped(NewsEvent)
+                 .where("news_events.content_scope IS DISTINCT FROM ?", "out_of_scope")
                  .includes(:news_source, :news_article)
                  .select("news_events.*, (#{priority_sql}) AS priority")
                  .order(Arel.sql("(#{priority_sql}) DESC NULLS LAST"))
@@ -35,6 +50,11 @@ module Api
         lng: ev.longitude,
         name: ev.name,
         title: ev.title,
+        # The article's own standfirst. Never used to be serialized at all, which
+        # is why a pin with no extracted claim had nothing to show but its
+        # publisher: every other line in the detail overlay is built from claim
+        # fields, and those exist for a minority of events.
+        summary: summary_for(ev),
         url: ev.url,
         tone: ev.tone,
         level: ev.level,
@@ -69,6 +89,62 @@ module Api
         geo_country_code: ev.geocode_country_code,
         place_name: located_place_name(ev),
       }
+    end
+
+    # Trim the standfirst to something a 320px card can hold. Publishers pad
+    # these with boilerplate, so cut on a sentence boundary when there is one
+    # close enough rather than always ending mid-clause.
+    SUMMARY_LIMIT = 280
+
+    # Feeds routinely put their tag list in the description element, so a tenth
+    # of stored summaries are things like "Rusija, Karas Ukrainoje" or a bare
+    # "us-iran" slug. Those read as a broken card, so require something with the
+    # shape of a sentence and show nothing rather than a keyword salad.
+    SUMMARY_MIN_LENGTH = 40
+    SUMMARY_MIN_WORDS = 5
+
+    def summary_for(ev)
+      # RSS descriptions routinely carry markup -- a whole "<a href=...>Read
+      # more</a>" block, image tags, tracking pixels. Measuring length before
+      # stripping let those clear the minimum, and the truncation then cut the
+      # tag apart and served a literal "<a…" as the standfirst.
+      text = strip_markup(ev.news_article&.summary)
+      return nil if text.blank?
+      return nil if text.length < SUMMARY_MIN_LENGTH
+      return nil if text.split(/\s+/).size < SUMMARY_MIN_WORDS
+      return nil if text.casecmp?(ev.title.to_s.squish)
+      return nil if keyword_list?(text)
+      return text if text.length <= SUMMARY_LIMIT
+
+      window = text[0, SUMMARY_LIMIT]
+      boundary = window.rindex(/[.!?](\s|\z)/)
+      return window[0..boundary] if boundary && boundary > SUMMARY_LIMIT / 2
+
+      "#{window.sub(/\s+\S*\z/, '')}…"
+    end
+
+    def strip_markup(value)
+      return "" if value.blank?
+
+      # Nokogiri drops the elements and resolves the entities in one pass.
+      # strip_tags leaves entities behind (that is how "Colombia&nbsp;&nbsp;CNN"
+      # reached the card) and CGI.unescapeHTML only knows the basic five, so
+      # &nbsp; survived both. Collapse the resulting NBSPs into real spaces.
+      Nokogiri::HTML::DocumentFragment.parse(value.to_s).text
+        .gsub(/[\u00a0\u2007\u202f]/, " ")
+        .gsub(/\s+/, " ")
+        .strip
+    end
+
+    # A comma-separated keyword list is not a standfirst. Feeds emit plenty of
+    # them ("North Korea, Russia, Ukraine, conflict, troops"), and they are long
+    # enough and wordy enough to clear the length and word-count gates. Prose has
+    # long stretches between its commas; a tag list does not.
+    def keyword_list?(text)
+      segments = text.split(",").map { |segment| segment.split(/\s+/).reject(&:empty?).size }
+      return false if segments.size < 3
+
+      (segments.sum.to_f / segments.size) < 3.0
     end
 
     # geocode_place_name is only a place for the precise tiers. On country-precision

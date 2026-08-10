@@ -370,19 +370,41 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         // the publisher as its headline, the publisher again as its subtitle,
         // and the source slug in the brief. The real headline appeared nowhere.
         const publisher = firstPresent(data?.publisher, data?.source, data?.origin_source)
-        const place = firstPresent(data?.location, data?.place)
+        // `place_name` is the key the API actually sends. This read `location`
+        // and `place`, neither of which exists on a news record, so `place` was
+        // undefined on every pin ever rendered: the subtitle always fell through
+        // to the publisher, and the `place ? publisher : null` term below was
+        // always null. Together with claim fields being absent on the ~80% of
+        // events with no extracted claim, that left the publisher as the only
+        // thing in the whole card.
+        // `place_name` only -- deliberately not `name`, which on a news record
+        // is frequently the publisher ("Die Zeit", "Free Malaysia Today") rather
+        // than a location, and the API already nulls place_name on the coarse
+        // geocode tiers where that confusion happens.
+        const place = data?.place_name
         const claimType = data?.claim_event_type ? `${data.claim_event_type}`.replace(/_/g, " ") : null
-        const verification = data?.claim_verification_status ? `${data.claim_verification_status}`.replace(/_/g, " ") : null
+        const verification = firstPresent(data?.verification_status, data?.claim_verification_status)
+        const verificationLabel = verification ? `${verification}`.replace(/_/g, " ") : null
+        const corroboration = data?.article_count > 1
+          ? `${data.article_count} reports · ${data.source_count || data.article_count} sources`
+          : null
+        // What the story says goes in the brief, which renders as a paragraph.
+        // The metadata that used to be crammed in there moves to `facts`, the
+        // short row above it -- so a pin now shows both, instead of showing a
+        // metadata line that was empty whenever no claim had been extracted.
+        const metadata = compactFacts([
+          firstPresent(claimType, actors.slice(0, 2).join(", ")),
+          corroboration,
+          verificationLabel,
+          // Only worth a second mention when the subtitle is showing a place.
+          // Otherwise the publisher is already the line above.
+          place ? publisher : null,
+        ])
         return makePayload({
           title: firstPresent(data?.title, "Untitled report"),
           subtitle: firstPresent(place, publisher, "Reported event"),
-          brief: compactFacts([
-            firstPresent(claimType, actors.slice(0, 2).join(", ")),
-            verification,
-            // Only worth a second mention when the subtitle is showing a place.
-            // Otherwise the publisher is already the line above.
-            place ? publisher : null,
-          ]).join(" · "),
+          brief: firstPresent(data?.summary, metadata.join(" · "), ""),
+          facts: data?.summary ? metadata : [],
           chips: [
             chip(firstPresent(data?.category, "News"), data?.threat === "high" ? "critical" : "accent"),
             chip(firstPresent(data?.claim_verification_status, data?.credibility), "neutral"),

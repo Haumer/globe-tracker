@@ -32,20 +32,58 @@ class NewsRefreshService
 
   refreshes model: NewsEvent, interval: 15.minutes
 
-  def refresh
-    uri = URI(FEED_URL)
-    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) do |http|
-      http.request(Net::HTTP::Get.new(uri))
-    end
-    return 0 unless response.is_a?(Net::HTTPSuccess)
+  # GDELT asks for no more than one request every five seconds and answers 429
+  # in plain text when you exceed it -- "Please limit requests to one every 5
+  # seconds". The conflict queries used to fire back to back, so the second was
+  # rejected on most cycles. Six seconds leaves a little slack.
+  MIN_REQUEST_INTERVAL = 15
 
-    body = response.body.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace, replace: "")
-    data = JSON.parse(body)
-    features = data["features"] || []
+  # api.gdeltproject.org takes about ten seconds to complete a TLS handshake.
+  # That is the server, not us: raw `openssl s_client` reproduces it, against
+  # roughly 0.07s for every other host this app polls. Net::HTTP's open_timeout
+  # covers the handshake as well as the TCP connect, so the old value of 10 sat
+  # exactly on the boundary and raised Net::OpenTimeout about half the time.
+  OPEN_TIMEOUT = 30
+  READ_TIMEOUT = 30
+
+  # Two attempts, well separated. More than that is counterproductive: hammering
+  # a limiter that is already refusing us is what earns a longer penalty, and
+  # the poller comes back in five minutes regardless.
+  MAX_ATTEMPTS = 2
+  RETRY_BACKOFF = 45
+
+  @request_mutex = Mutex.new
+  @last_request_at = nil
+
+  class << self
+    # Space GDELT requests out across the whole process, not just within one
+    # call site -- the main feed and the conflict queries share the budget.
+    def throttle!
+      @request_mutex.synchronize do
+        if @last_request_at
+          elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @last_request_at
+          sleep(MIN_REQUEST_INTERVAL - elapsed) if elapsed < MIN_REQUEST_INTERVAL
+        end
+        @last_request_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+    end
+  end
+
+  def refresh
     now = Time.current
     seen_urls = Set.new
     records = []
     ingest_items = []
+
+    # A failed main feed must not cost us the conflict queries. It used to
+    # `return 0` here, so a single 429 -- which GDELT hands out readily --
+    # skipped the targeted theatre queries as well.
+    response = gdelt_get(FEED_URL, label: "gkg_geojson")
+    features = if response
+      JSON.parse(response.body.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace, replace: ""))["features"] || []
+    else
+      []
+    end
 
     features.each_with_index do |feature, idx|
       coords = feature.dig("geometry", "coordinates")
@@ -168,11 +206,61 @@ class NewsRefreshService
     Rails.logger.info("NewsRefreshService: #{records.size} total (#{conflict_records.size} from conflict queries)")
     records.size
   rescue StandardError => e
-    Rails.logger.error("NewsRefreshService: #{e.message}")
+    Rails.logger.error("NewsRefreshService: #{e.class}: #{e.message}")
+    Rails.logger.error(e.backtrace&.first(6)&.join("\n"))
     0
   end
 
   private
+
+  # One throttled GET against GDELT, with its rate limit and its slow handshake
+  # both accounted for. Returns nil rather than raising, and says why -- the
+  # old code dropped non-2xx responses with a bare `next`, so a run of 429s
+  # looked identical to GDELT simply having no news.
+  #
+  # GDELT's 429 is not a clean per-IP window. Measured back to back, three
+  # requests 20s apart all failed while three 8s apart mostly succeeded, so
+  # pacing alone does not buy reliability -- it reads more like load shedding.
+  # One spaced retry is the compromise: enough to ride out a single refusal,
+  # not so much that we keep knocking while being told to stop. The v2 doc API
+  # refuses far more readily than the v1 GKG feed, so expect the conflict
+  # queries to be best-effort while the main feed carries the cycle.
+  def gdelt_get(url, label:, attempts: MAX_ATTEMPTS)
+    uri = URI(url)
+    last = nil
+
+    attempts.times do |attempt|
+      self.class.throttle!
+
+      begin
+        response = Net::HTTP.start(
+          uri.hostname, uri.port,
+          use_ssl: true, open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT
+        ) { |http| http.request(Net::HTTP::Get.new(uri)) }
+
+        if response.is_a?(Net::HTTPSuccess)
+          # GDELT reports query errors as plain text with a 200, so a status
+          # check alone is not enough -- "Queries containing OR'd terms must be
+          # surrounded by ()." arrived that way and died in a JSON parse inside
+          # a bare rescue, indistinguishable from a quiet day.
+          body = response.body.to_s
+          return response if body.lstrip.start_with?("{", "[")
+
+          last = "HTTP 200 but not JSON -- #{body[0, 120].strip}"
+        else
+          last = "HTTP #{response.code} -- #{response.body.to_s[0, 120].strip}"
+        end
+      rescue StandardError => e
+        last = "#{e.class}: #{e.message}"
+      end
+
+      Rails.logger.info("NewsRefreshService[#{label}]: #{last} (attempt #{attempt + 1}/#{attempts})")
+      sleep(RETRY_BACKOFF) if attempt < attempts - 1
+    end
+
+    Rails.logger.warn("NewsRefreshService[#{label}]: giving up after #{attempts} attempts -- #{last}")
+    nil
+  end
 
   def fetch_conflict_queries(seen_urls, now)
     records = []
@@ -181,19 +269,23 @@ class NewsRefreshService
     # Rotate through queries — one per cycle to avoid rate limits
     idx = rotation_index(CONFLICT_QUERIES.size, period: 5.minutes)
 
-    # Fetch 2 queries per cycle (current + next) for better coverage
-    [idx, (idx + 1) % CONFLICT_QUERIES.size].each do |qi|
+    # One query per cycle. Asking for two doubled the requests into a limiter
+    # that rejects roughly half of them, and the rotation already walks the
+    # whole list every 35 minutes.
+    [idx].each do |qi|
       query = CONFLICT_QUERIES[qi]
-      query_with_lang = "#{query} sourcelang:eng"
+      # GDELT rejects a query whose OR'd terms are not bracketed: "Queries
+      # containing OR'd terms must be surrounded by ()." Every one of these is
+      # a list of ORs with `sourcelang:eng` appended, so all of them were
+      # rejected -- which is why the conflict theatres have never contributed a
+      # single event.
+      query_with_lang = "(#{query}) sourcelang:eng"
       query_encoded = URI.encode_www_form_component(query_with_lang)
       url = "https://api.gdeltproject.org/api/v2/doc/doc?query=#{query_encoded}&mode=ArtList&maxrecords=50&format=json&timespan=3h"
 
       begin
-        uri = URI(url)
-        resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
-          http.request(Net::HTTP::Get.new(uri))
-        end
-        next unless resp.is_a?(Net::HTTPSuccess)
+        resp = gdelt_get(url, label: "conflict query #{qi}")
+        next unless resp
 
         body = resp.body.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace, replace: "")
         data = JSON.parse(body)

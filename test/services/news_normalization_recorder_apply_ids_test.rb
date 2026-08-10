@@ -53,6 +53,47 @@ class NewsNormalizationRecorderApplyIdsTest < ActiveSupport::TestCase
     assert_equal "regional", r[:content_scope]
   end
 
+  test "harmonizes key sets that diverged before normalization ran" do
+    # NewsRefreshService merges GKG features and conflict-query articles into
+    # one batch, and their shapes drift apart depending on what came back.
+    gkg = record("https://example.com/gkg").merge(tone: -3.2, themes: %w[conflict])
+    doc = record("https://example.com/doc").merge(credibility: "tier1/low")
+
+    NewsNormalizationRecorder.apply_ids!([gkg, doc], {})
+
+    assert_equal gkg.keys.sort, doc.keys.sort
+    assert_nil doc[:tone]
+    assert_nil gkg[:credibility]
+    assert_equal(-3.2, gkg[:tone])
+  end
+
+  test "upsert_all accepts a batch whose builders disagreed on shape" do
+    gkg = record("https://example.com/shape-a").merge(tone: -1.5)
+    doc = record("https://example.com/shape-b").merge(credibility: "tier2/medium")
+
+    NewsNormalizationRecorder.apply_ids!([gkg, doc], {})
+
+    assert_difference "NewsEvent.count", 2 do
+      NewsEvent.upsert_all([gkg, doc], unique_by: :url)
+    end
+  end
+
+  # A NOT NULL column with a default is the common case here -- filling nil
+  # would just swap a lost batch for a NotNullViolation.
+  test "fills a missing NOT NULL column from its database default" do
+    with_geo = record("https://example.com/precise").merge(geocode_precision: "point")
+    without = record("https://example.com/vague")
+
+    NewsNormalizationRecorder.apply_ids!([with_geo, without], {})
+
+    assert_equal "unknown", without[:geocode_precision]
+    assert_equal "point", with_geo[:geocode_precision]
+
+    assert_difference "NewsEvent.count", 2 do
+      NewsEvent.upsert_all([with_geo, without], unique_by: :url)
+    end
+  end
+
   test "an empty id map still yields one uniform shape" do
     rows = [record("https://example.com/1"), record("https://example.com/2")]
 

@@ -97,4 +97,58 @@ class RssNewsServiceTest < ActiveSupport::TestCase
     assert svc.send(:item_outside_feed_window?, now + 30.days, feed, now: now),
       "a date a month in the future is simply wrong"
   end
+
+  # 36 of 356 publishers answered with a 3xx in a single hour and were all
+  # recorded as errors and dropped, contributing nothing.
+  test "a redirected feed is followed to its final 200" do
+    stub_request(:get, "https://example.com/feed")
+      .to_return(status: 301, headers: { "Location" => "https://example.com/rss" })
+    stub_request(:get, "https://example.com/rss").to_return(status: 200, body: "<rss/>")
+
+    response = @service.send(:http_get_following_redirects, "https://example.com/feed")
+
+    assert_kind_of Net::HTTPSuccess, response
+    assert_equal "<rss/>", response.body
+  end
+
+  test "a relative Location is resolved against the requested URL" do
+    stub_request(:get, "https://example.com/news/feed")
+      .to_return(status: 302, headers: { "Location" => "/rss/latest" })
+    stub_request(:get, "https://example.com/rss/latest").to_return(status: 200, body: "ok")
+
+    response = @service.send(:http_get_following_redirects, "https://example.com/news/feed")
+
+    assert_kind_of Net::HTTPSuccess, response
+    assert_equal "ok", response.body
+  end
+
+  test "a redirect loop terminates instead of hanging" do
+    stub_request(:get, "https://example.com/a")
+      .to_return(status: 301, headers: { "Location" => "https://example.com/b" })
+    stub_request(:get, "https://example.com/b")
+      .to_return(status: 301, headers: { "Location" => "https://example.com/a" })
+
+    response = @service.send(:http_get_following_redirects, "https://example.com/a")
+
+    assert_kind_of Net::HTTPRedirection, response, "gives up rather than looping forever"
+  end
+
+  test "a redirect chain longer than the hop cap gives up" do
+    (0..RssNewsService::MAX_REDIRECTS + 1).each do |i|
+      stub_request(:get, "https://example.com/hop#{i}")
+        .to_return(status: 301, headers: { "Location" => "https://example.com/hop#{i + 1}" })
+    end
+
+    response = @service.send(:http_get_following_redirects, "https://example.com/hop0")
+
+    assert_kind_of Net::HTTPRedirection, response
+  end
+
+  test "a redirect with no Location is returned as-is" do
+    stub_request(:get, "https://example.com/feed").to_return(status: 301)
+
+    response = @service.send(:http_get_following_redirects, "https://example.com/feed")
+
+    assert_kind_of Net::HTTPRedirection, response
+  end
 end

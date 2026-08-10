@@ -16,22 +16,53 @@ module NewsDedupable
     records.uniq { |record| record[:url] }
   end
 
-  # Dedup records by normalized title similarity.
-  # Uses both Jaccard (word overlap) and containment (subset check) to catch
-  # paraphrases AND headline extensions ("X happens" vs "X happens, 50 dead").
-  def dedup_by_title(records, existing_titles: [])
-    seen = existing_titles.dup
+  # Collapse near-identical headlines *within a single publisher*.
+  #
+  # This used to suppress a matching headline no matter who published it,
+  # against every NewsEvent title from the previous 48 hours. That deleted the
+  # one signal this whole pipeline is built to measure. Forty outlets running
+  # one wire story, or two newsrooms covering the same bombing, is not noise --
+  # it is corroboration, and NewsStoryClusterer already knows what to do with
+  # it: syndication_groups partitions a cluster's articles into near-verbatim
+  # headline groups so that forty copies count as one independent newsroom
+  # while still contributing to article_count. None of that machinery could
+  # ever fire, because the copies were thrown away hours before clustering saw
+  # them. Hence 597 of 727 clusters sitting at "single_source".
+  #
+  # Within one publisher a repeated headline really is a duplicate -- a feed
+  # re-running a story, or the same piece surfacing under both an RSS entry and
+  # a sitemap URL -- so suppression still applies there.
+  #
+  # `existing` is [url, title] pairs from already-persisted events.
+  def dedup_by_title(records, existing: [])
+    seen = Hash.new { |hash, key| hash[key] = [] }
+    Array(existing).each do |url, title|
+      next if title.blank?
+
+      seen[publisher_key(url)] << normalize_title(title)
+    end
+
     records.select do |record|
       title = record[:title]
-      if title.blank?
-        true
-      else
-        words = normalize_title(title)
-        duplicate = seen.any? { |s| similar?(s, words) }
-        seen << words unless duplicate
-        !duplicate
-      end
+      next true if title.blank?
+
+      key = publisher_key(record[:url])
+      words = normalize_title(title)
+      duplicate = seen[key].any? { |candidate| similar?(candidate, words) }
+      seen[key] << words unless duplicate
+      !duplicate
     end
+  end
+
+  # Host, not registrable domain: two URLs on the same host are the same feed.
+  # A blank host groups everything unattributable together, which is the safe
+  # side -- those records get the old stricter behaviour among themselves.
+  def publisher_key(url)
+    return "" if url.blank?
+
+    URI(url.to_s).host.to_s.downcase.sub(/\Awww\./, "")
+  rescue StandardError
+    ""
   end
 
   def normalize_title(title)

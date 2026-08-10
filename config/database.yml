@@ -17,7 +17,15 @@ default: &default
   encoding: unicode
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
-  pool: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS") { 5 } } %>
+  # The pool has to cover every thread that can hold a connection at once: the
+  # Puma/Sidekiq worker threads, the embedded poller thread, and the fan-out
+  # threads services spawn (RssNewsService uses THREAD_POOL_SIZE=10, and each of
+  # those writes a SourceFeedStatus row). At the old default of 5 the worker was
+  # oversubscribed and RSS batches died on ConnectionTimeoutError, discarding
+  # every record they had already parsed.
+  pool: <%= ENV.fetch("DB_POOL") { [ENV.fetch("RAILS_MAX_THREADS", 5).to_i, ENV.fetch("SIDEKIQ_CONCURRENCY", 5).to_i].max + 10 } %>
+  # Prefer waiting a little longer over throwing away a parsed batch.
+  checkout_timeout: <%= ENV.fetch("DB_CHECKOUT_TIMEOUT", 10) %>
 
 development:
   <<: *default

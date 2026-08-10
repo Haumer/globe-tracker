@@ -3,9 +3,14 @@ require "set"
 
 class NewsStoryClusterer
   GENERAL_EVENT_TYPES = %w[actor_mention mentioned_relationship].freeze
+  # "information" belongs here: both FAMILY_WINDOWS and FAMILY_MAX_DISTANCE_KM
+  # define tuned values for it, so it was always meant to cluster. Omitting it
+  # here meant every accusation_statement claim -- about 120 a day, the fourth
+  # most common type we extract -- was parsed, scored, actor-linked, written to
+  # news_claims, and then dropped on the floor by build_payload.
   CLUSTERABLE_EVENT_FAMILIES = Set.new(%w[
-    conflict cyber diplomacy disaster economy humanitarian infrastructure
-    justice politics security transport
+    conflict cyber diplomacy disaster economy humanitarian information
+    infrastructure justice politics security transport
   ]).freeze
   DEFAULT_WINDOW = 36.hours
   DEFAULT_MAX_DISTANCE_KM = 250.0
@@ -441,11 +446,29 @@ class NewsStoryClusterer
       article_payloads = memberships.filter_map do |membership|
         article = membership.news_article
         claim = article.news_claims.find(&:primary?)
-        build_payload(article, claim, {}).merge(match_score: membership.match_score)
-      rescue NoMethodError
-        nil
+        payload = build_payload(article, claim, {})
+        next unless payload
+
+        payload.merge(match_score: membership.match_score)
       end
-      return if article_payloads.empty?
+
+      # A member whose payload will not rebuild must not take the whole cluster
+      # down with it. build_payload returns nil for any member it cannot fully
+      # reconstruct -- most often a strict-location event type whose location
+      # lives on a NewsEvent row -- and this used to `return` on that, leaving a
+      # cluster that still had memberships reporting article_count: 0 with a
+      # last_seen_at frozen at creation. Frozen last_seen_at is the damaging
+      # half: candidate_clusters only considers clusters seen inside the family
+      # window, so the cluster silently stopped being a candidate for anything
+      # and every later article on the same story opened a new singleton.
+      # Fall back to what the memberships alone can tell us.
+      if article_payloads.empty?
+        cluster.update!(
+          article_count: memberships.size,
+          last_seen_at: [ cluster.last_seen_at, *memberships.map(&:updated_at) ].compact.max
+        )
+        return
+      end
 
       lead_payload = article_payloads.max_by { |payload| lead_score(payload) }
       timestamps = article_payloads.map { |payload| payload[:published_at] || payload[:fetched_at] || Time.current }

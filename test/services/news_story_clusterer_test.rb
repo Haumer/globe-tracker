@@ -299,3 +299,95 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
     NewsClaimActor.create!(news_claim: claim, news_actor: iran, role: family == "diplomacy" ? "participant" : "target", position: 1, confidence: 0.91)
   end
 end
+
+class NewsStoryClustererRebuildTest < ActiveSupport::TestCase
+  # A strict-location claim whose article has no NewsEvent row cannot rebuild
+  # its payload. That is exactly the state every ingest service used to cluster
+  # in, because assign_clusters ran before NewsEvent.upsert_all. The cluster
+  # must still come out with an honest article_count and a last_seen_at that
+  # keeps it inside the candidate window -- otherwise it can never be joined.
+  test "cluster rebuild survives a member whose payload cannot be reconstructed" do
+    article = build_article("no-event")
+    build_claim(article, event_type: "ground_operation")
+
+    assert_nil NewsStoryClusterer.send(:build_payload, article, article.news_claims.first, {}),
+      "expected a strict-location claim with no NewsEvent to be unreconstructable"
+
+    NewsStoryClusterer.assign_records([
+      {
+        news_article_id: article.id,
+        title: article.title,
+        name: "Kharkiv",
+        latitude: 49.99,
+        longitude: 36.23,
+        published_at: article.published_at,
+        content_scope: "core",
+        news_source_id: article.news_source_id,
+      },
+    ])
+
+    cluster = NewsStoryCluster.joins(:news_story_memberships)
+      .where(news_story_memberships: { news_article_id: article.id }).first
+    assert_not_nil cluster, "expected the article to be clustered"
+    assert_equal 1, cluster.article_count, "cluster must report the members it actually has"
+    assert_operator cluster.last_seen_at, :>=, cluster.first_seen_at
+  end
+
+  test "information family is clusterable" do
+    assert_includes NewsStoryClusterer::CLUSTERABLE_EVENT_FAMILIES, "information"
+
+    article = build_article("accusation")
+    build_claim(article, event_type: "accusation_statement", family: "information")
+    NewsEvent.create!(
+      news_article: article, news_source: article.news_source, url: article.url,
+      title: article.title, name: "Kyiv", latitude: 50.45, longitude: 30.52,
+      tone: -2.0, level: "elevated", category: "conflict", source: "test",
+      content_scope: "core", published_at: article.published_at, fetched_at: article.fetched_at
+    )
+
+    NewsStoryClusterer.assign_records([
+      { news_article_id: article.id, title: article.title, name: "Kyiv",
+        latitude: 50.45, longitude: 30.52, published_at: article.published_at,
+        content_scope: "core", news_source_id: article.news_source_id },
+    ])
+
+    assert NewsStoryMembership.exists?(news_article_id: article.id),
+      "an information/accusation_statement claim must reach a cluster"
+  end
+
+  private
+
+  def build_article(suffix)
+    source = NewsSource.create!(
+      canonical_key: "publisher:example.com:#{suffix}",
+      name: "Example", source_kind: "publisher", publisher_domain: "example.com"
+    )
+    NewsArticle.create!(
+      news_source: source,
+      url: "https://example.com/#{suffix}",
+      canonical_url: "https://example.com/#{suffix}",
+      title: "Russia shells Ukraine positions near the front",
+      summary: "Russia shells Ukraine positions near the front",
+      content_scope: "core",
+      publisher_name: "Example", publisher_domain: "example.com",
+      published_at: Time.utc(2026, 3, 24, 12, 0, 0),
+      fetched_at: Time.utc(2026, 3, 24, 12, 5, 0)
+    )
+  end
+
+  def build_claim(article, event_type:, family: "conflict")
+    claim = NewsClaim.create!(
+      news_article: article, event_family: family, event_type: event_type,
+      claim_text: article.title, confidence: 0.9, extraction_confidence: 0.9,
+      actor_confidence: 0.9, event_confidence: 0.9, geo_confidence: 0.8,
+      source_reliability: 0.75, verification_status: "single_source",
+      geo_precision: "point", extraction_method: "heuristic",
+      extraction_version: "headline_rules_v2", published_at: article.published_at
+    )
+    russia = NewsActor.find_or_create_by!(canonical_key: "state:ru") do |actor|
+      actor.name = "Russia"; actor.actor_type = "state"; actor.country_code = "RU"
+    end
+    NewsClaimActor.create!(news_claim: claim, news_actor: russia, role: "initiator", position: 0, confidence: 0.9)
+    claim
+  end
+end

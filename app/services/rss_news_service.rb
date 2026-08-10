@@ -19,7 +19,9 @@ class RssNewsService
   # Publishers do post slightly ahead; beyond this a date is simply wrong.
   FUTURE_PUB_DATE_SLACK = 1.day
 
-  refreshes model: NewsEvent, interval: BATCH_INTERVAL.minutes
+  # NOTE: this service overrides .stale? (see below) and gates on a cache key
+  # instead, so this declaration only supplies latest_fetch_at.
+  refreshes model: NewsEvent, interval: BATCH_INTERVAL.minutes, scope: -> { NewsEvent.where(source: "rss") }
 
   # ── Source Credibility System ────────────────────────────────
   # Tier 1: Wire services, government, international organizations
@@ -395,6 +397,7 @@ class RssNewsService
   }.freeze
 
   THREAD_POOL_SIZE = 10
+  MAX_REDIRECTS = 3
 
   class << self
     def refresh_if_stale(force: false)
@@ -404,7 +407,14 @@ class RssNewsService
 
     def stale?
       last = Rails.cache.read("rss_news_last_fetch")
-      last.nil? || last < 20.minutes.ago
+      # Tied to BATCH_INTERVAL on purpose. The rotation cursor is clock-derived
+      # with a BATCH_INTERVAL period, and BatchRotation only advances one slice
+      # per poll if the poll cadence matches that period. At the old hardcoded
+      # 20 minutes each poll jumped 4 slices: with BATCH_COUNT=4 that is a whole
+      # lap back to the same curated batch every time, and of the 12 registry
+      # slices only 3 were ever reachable. Same starvation as the cache-counter
+      # cursor this rotation replaced, just arrived at from the other side.
+      last.nil? || last < BATCH_INTERVAL.minutes.ago
     end
 
     # RSS-transport publishers from the shared registry.
@@ -480,7 +490,16 @@ class RssNewsService
       threads = batch.map do |url, name, meta|
         Thread.new do
           sleep(rand * 3) # 0-3s jitter per feed within each thread group
-          fetch_feed(url, name, meta)
+          begin
+            fetch_feed(url, name, meta)
+          ensure
+            # fetch_feed writes a SourceFeedStatus row, so every one of these
+            # threads checks out a pooled connection and holds it until the
+            # thread dies. Ten fan-out threads against a pool of 5 starved the
+            # main thread, which then failed its own checkout and discarded the
+            # entire parsed batch. Hand the connection back immediately.
+            ActiveRecord::Base.connection_pool.release_connection
+          end
         end
       end
       threads.each do |t|
@@ -502,23 +521,26 @@ class RssNewsService
     existing_urls = NewsEvent.where(url: all_records.map { |r| r[:url] }).pluck(:url).to_set
     candidates = dedup_by_url(all_records.reject { |r| existing_urls.include?(r[:url]) })
 
-    # Cross-service dedup: check titles already in DB from GDELT/MultiNews
-    existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
-      .pluck(:title).compact
-      .map { |t| normalize_title(t) }
+    # Suppress a publisher re-running its own headline. Matching headlines from
+    # *other* publishers are kept on purpose -- see NewsDedupable#dedup_by_title.
+    existing = NewsEvent.where("published_at > ?", 48.hours.ago).pluck(:url, :title)
 
-    new_records = dedup_by_title(candidates, existing_titles: existing_titles)
+    new_records = dedup_by_title(candidates, existing: existing)
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)
     new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
     normalized_ids = NewsNormalizationRecorder.record_all(new_records)
     NewsNormalizationRecorder.apply_ids!(new_records, normalized_ids)
     NewsClaimRecorder.record_all(new_records)
     RssArticleHydrationService.enqueue_candidates(new_records)
-    assign_clusters(new_records)
-    NewsOntologySyncService.enqueue_for_records(new_records)
 
     if new_records.any?
+      # Events before clustering -- see the note in NewsSitemapService: the
+      # cluster rebuild reads each member's location off its news_events, so a
+      # cluster built before the event exists is stranded at article_count: 0.
       NewsEvent.upsert_all(new_records, unique_by: :url)
+      assign_clusters(new_records)
+      NewsOntologySyncService.enqueue_for_records(new_records)
+
       record_timeline_events(
         event_type: "news", model_class: NewsEvent,
         unique_key: :url, unique_values: new_records.map { |r| r[:url] },
@@ -543,17 +565,50 @@ class RssNewsService
 
   private
 
+  # Feeds move, and Net::HTTP does not follow the hop on its own. 36 of the 356
+  # publishers answered with a 3xx inside a single hour and every one was
+  # recorded as an error and dropped, so those publishers contributed nothing at
+  # all. Follow the redirect instead, with a hop cap and a loop guard.
+  def http_get_following_redirects(url, limit: MAX_REDIRECTS)
+    current = url
+    seen = Set.new
+    response = nil
+
+    (limit + 1).times do
+      uri = URI(current)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = uri.scheme == "https"
+      http.open_timeout = 8
+      http.read_timeout = 15
+
+      request = Net::HTTP::Get.new(uri)
+      request["User-Agent"] = "GlobeTracker/1.0 (news aggregator)"
+      response = http.request(request)
+
+      return response unless response.is_a?(Net::HTTPRedirection)
+
+      location = response["location"].to_s
+      return response if location.blank?
+
+      seen << current
+      # Location is allowed to be relative; URI.join resolves it against the
+      # URL we actually requested.
+      nxt = begin
+        URI.join(current, location).to_s
+      rescue URI::Error
+        return response
+      end
+      return response if seen.include?(nxt)
+
+      current = nxt
+    end
+
+    response
+  end
+
   def fetch_feed(url, source_name, meta)
     now = Time.current
-    uri = URI(url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = uri.scheme == "https"
-    http.open_timeout = 8
-    http.read_timeout = 15
-
-    request = Net::HTTP::Get.new(uri)
-    request["User-Agent"] = "GlobeTracker/1.0 (news aggregator)"
-    response = http.request(request)
+    response = http_get_following_redirects(url)
 
     unless response.is_a?(Net::HTTPSuccess)
       Rails.logger.warn("RssNewsService[#{source_name}]: HTTP #{response.code}")

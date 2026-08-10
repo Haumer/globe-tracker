@@ -25,24 +25,41 @@ class NewsDedupableTest < ActiveSupport::TestCase
     assert_includes result, "war"
   end
 
-  test "dedup_by_title removes duplicate titles" do
+  test "dedup_by_title removes a publisher's repeated headline" do
     records = [
-      { title: "Major earthquake hits Turkey" },
-      { title: "Major Earthquake Hits Turkey!" },
-      { title: "Flooding in Germany kills 5" },
+      { title: "Major earthquake hits Turkey", url: "https://bbc.com/a" },
+      { title: "Major Earthquake Hits Turkey!", url: "https://bbc.com/b" },
+      { title: "Flooding in Germany kills 5", url: "https://bbc.com/c" },
     ]
     result = @tester.dedup_by_title(records)
     assert_equal 2, result.size
   end
 
-  test "dedup_by_title respects existing_titles" do
-    existing = [@tester.normalize_title("Major earthquake hits Turkey")]
+  # The corroboration case: the same story carried by different newsrooms must
+  # survive ingest so NewsStoryClusterer can collapse it into one cluster and
+  # count the sources. Suppressing it here is what left clusters single_source.
+  test "dedup_by_title keeps the same headline from different publishers" do
     records = [
-      { title: "Major earthquake hits Turkey again" },
-      { title: "Completely different story about space" },
+      { title: "Major earthquake hits Turkey", url: "https://bbc.com/a" },
+      { title: "Major earthquake hits Turkey", url: "https://reuters.com/b" },
+      { title: "Major earthquake hits Turkey", url: "https://apnews.com/c" },
     ]
-    result = @tester.dedup_by_title(records, existing_titles: existing)
+    result = @tester.dedup_by_title(records)
+    assert_equal 3, result.size, "syndicated copies must reach the clusterer"
+  end
+
+  test "dedup_by_title suppresses against the same publisher's existing events" do
+    existing = [["https://bbc.com/old", "Major earthquake hits Turkey"]]
+    records = [
+      { title: "Major earthquake hits Turkey again", url: "https://bbc.com/new" },
+      { title: "Major earthquake hits Turkey again", url: "https://reuters.com/new" },
+      { title: "Completely different story about space", url: "https://bbc.com/space" },
+    ]
+    result = @tester.dedup_by_title(records, existing: existing)
+
     assert result.any? { |r| r[:title].include?("space") }
+    assert result.none? { |r| r[:url] == "https://bbc.com/new" }, "same publisher repeat is suppressed"
+    assert result.any? { |r| r[:url] == "https://reuters.com/new" }, "other publisher is kept"
   end
 
   test "similar? returns true for identical titles" do

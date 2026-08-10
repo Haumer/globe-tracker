@@ -30,7 +30,11 @@ class NewsRefreshService
     WB_695_POVERTY CRISIS
   ].freeze
 
-  refreshes model: NewsEvent, interval: 15.minutes
+  # Scoped to this service's own rows: NewsEvent is also written by sitemap and
+  # RSS, and their traffic kept the table's max fetched_at permanently fresh, so
+  # this service reported "not stale" on every cycle and GDELT ran exactly once
+  # at boot.
+  refreshes model: NewsEvent, interval: 15.minutes, scope: -> { NewsEvent.where(source: "gdelt") }
 
   # GDELT asks for no more than one request every five seconds and answers 429
   # in plain text when you exceed it -- "Please limit requests to one every 5
@@ -192,9 +196,12 @@ class NewsRefreshService
     NewsNormalizationRecorder.apply_ids!(records, normalized_ids)
     NewsClaimRecorder.record_all(records)
 
+    # Events before clustering -- see the note in NewsSitemapService: the
+    # cluster rebuild reads each member's location off its news_events, so a
+    # cluster built before the event exists is stranded at article_count: 0.
+    NewsEvent.upsert_all(records, unique_by: :url)
     assign_clusters(records)
     NewsOntologySyncService.enqueue_for_records(records)
-    NewsEvent.upsert_all(records, unique_by: :url)
     record_timeline_events(
       event_type: "news",
       model_class: NewsEvent,

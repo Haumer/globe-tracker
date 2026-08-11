@@ -140,12 +140,44 @@ so the scorecard always reports them together.
 
 | Step | Status |
 |---|---|
-| Scorecard harness | this branch |
-| `NewsPlaceResolver` + rewire | this branch |
-| `Situation` schema + resolver | this branch |
-| Backfill existing `place` entities | follow-up |
+| Scorecard harness (`ontology:score`, `ontology:corpus`) | **done** — `757ba6b` |
+| `NewsPlaceResolver` + rewire of all three call sites | **done** — `af1fc17` |
+| Backfill existing anchors (`ontology:repair_places`) | **done** — `af1fc17`, run on dev |
+| `Situation` schema + resolver | **next** |
 | Open taxonomy / `general` as mentions | phase 2 |
 | Scheduler catch-up (starves ≥12h jobs) | independent, unrelated fix |
+
+### Where the numbers stand
+
+| Metric | Before | After |
+|---|---|---|
+| Anchor precision | 66.5%¹ | **90.6%** |
+| Ingest yield | 7.2% | 7.2% (untouched) |
+| Cross-domain link rate | 12.0% | 12.0% (untouched) |
+| Situation coverage | 37.4% | 37.4% (untouched) |
+
+¹ The first baseline read 14.7%, measured with a publisher set that folded in
+`NewsEvent#name`. That column is mixed — real place names as often as mastheads —
+so it flagged legitimate anchors and overstated the defect. 66.5% is the same
+population measured with the corrected instrument, but over all events rather
+than the 30-day window, so it is indicative rather than exact. **The clean
+before/after on an identical window was not captured, because the instrument was
+fixed after the baseline was taken.** Re-running `ontology:score` on a machine
+that has not had `repair_places` applied would settle it.
+
+The three untouched metrics are the point of the next step: fixing the anchor was
+a prerequisite for the Situation layer, not a substitute for it. A Situation
+layer built on publisher-as-place would have grouped stories by which paper ran
+them.
+
+### Residual known issues
+
+- 9.4% of anchors are still publisher text that reached a city-precision
+  geocode. Needs its own look; the gate cannot catch it because the geocoder
+  asserted a city.
+- `ontology:repair_places` calls a private method via `send`. Acceptable for a
+  one-shot repair, but if it becomes a recurring job the resolution path should
+  be promoted to a public API on `NewsOntologySyncService`.
 
 ## Not addressed here
 

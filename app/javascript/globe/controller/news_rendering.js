@@ -1,4 +1,41 @@
 import { getDataSource } from "globe/utils"
+import {
+  ambientHaloPoint,
+  ambientPointSize,
+  beginAmbientLayer,
+  haloWeightCutoff,
+  clearAmbientLayer,
+  commitAmbientLayer,
+  registerAmbient,
+} from "globe/controller/ambient_pulse"
+import { newsCategoryColor } from "globe/controller/news_palette"
+import { newsPinIcon, newsPinScale } from "globe/controller/news_pin_icon"
+
+// geo_precision values that mean we resolved an actual place. Everything else is
+// a country centroid or a give-up, and gets drawn as a wash rather than a point.
+const LOCATED_PRECISIONS = new Set(["city", "place", "airport", "region"])
+
+// How many pins are allowed to carry a label graphic at all. This used to be
+// the whole density control at 14, applied globally by weight -- which meant
+// zooming into a region showed none of its headlines while fourteen rendered
+// somewhere off screen. _declutterNewsLabels now decides what is actually drawn
+// from screen geometry, so this only has to be a ceiling on how many labels
+// exist. Every one costs a glyph batch whether it is shown or not, which is why
+// it is not simply "all of them".
+const LABEL_BUDGET = 64
+
+// Screen-space declutter tuning. The gap is between label boxes; the inset
+// keeps them off the viewport edge, where they were being cut mid-word.
+const LABEL_MIN_GAP = 6
+const LABEL_EDGE_INSET = 12
+// DM Sans averages a bit over half an em per character. Close enough to reserve
+// space with -- being slightly generous only costs a label that would have just
+// squeezed in.
+const LABEL_CHAR_WIDTH_EM = 0.55
+
+// The weight the size ramp stops normalising below. Roughly the weight of one
+// mid-priority story, so a globe holding nothing bigger draws small.
+const QUIET_WEIGHT_FLOOR = 0.45
 
 export function applyNewsRenderingMethods(GlobeController) {
   GlobeController.prototype.getNewsDataSource = function() { return getDataSource(this.viewer, this._ds, "news") }
@@ -28,6 +65,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     } else {
       this._clearNewsEntities()
       this._newsData = []
+      this._updateStats?.()
       if (this.hasNewsArcControlsTarget) this.newsArcControlsTarget.style.display = "none"
     }
     this._syncQuickBar()
@@ -81,6 +119,9 @@ export function applyNewsRenderingMethods(GlobeController) {
       })
       this._newsData = this.filterToRegion(events)
       this._renderNews(this._newsData)
+      // Every other layer refreshes the stats bar after loading; news never did,
+      // so the header read "NEWS 0" with a few hundred clusters on the globe.
+      this._updateStats?.()
       this._markFresh("news")
       if (this._syncRightPanels) this._syncRightPanels()
       this._toastHide()
@@ -95,121 +136,215 @@ export function applyNewsRenderingMethods(GlobeController) {
     const dataSource = this.getNewsDataSource()
     dataSource.show = true
 
-    const categoryColors = {
-      conflict: "#f44336",
-      unrest: "#ff9800",
-      disaster: "#ff5722",
-      health: "#e91e63",
-      economy: "#ffc107",
-      diplomacy: "#4caf50",
-      other: "#90a4ae",
-    }
+    const ambient = !this._timelineActive
+    if (ambient) beginAmbientLayer(this, "news")
+    // Article index -> the pin that represents it. A pin stands for a whole
+    // cluster, so several article indices map to the same entity. The feed can
+    // only address articles by their index in _newsData, and _newsEntities is
+    // ordered by cluster with halos and threat rings interleaved -- indexing one
+    // with the other picked an unrelated pin.
+    this._newsEntityByEventIdx = new Map()
+    // Read live so _setNewsDotOpacity can dim the layer without replacing callbacks.
+    const dotOpacity = () => (Number.isFinite(this._newsDotOpacity) ? this._newsDotOpacity : 1)
+
+    // Math.round yields -0 for anything in (-0.5, 0], and "-0" is a different
+    // string from "0" -- which quietly split every cell touching the equator or
+    // the prime meridian into as many as four.
+    const cell = value => (Math.round(value) === 0 ? 0 : Math.round(value))
 
     const clusters = new Map()
     events.forEach((ev, i) => {
-      const key = `${ev.lat.toFixed(0)},${ev.lng.toFixed(0)}`
+      const key = `${cell(ev.lat)},${cell(ev.lng)}`
       if (!clusters.has(key)) clusters.set(key, [])
       clusters.get(key).push({ ...ev, _idx: i })
     })
 
-    const clusterSizes = [...clusters.values()].map(c => c.length).sort((a, b) => b - a)
-    const top3Threshold = clusterSizes[2] || 0
+    // Weight decides size, halo and -- because there is no declutter -- which
+    // clusters are allowed a label at all. Significance leads: with tone finally
+    // populated, `priority` (|tone| decayed by age) separates stories, whereas
+    // cluster count mostly reports how many centroids share a degree cell.
+    const weigh = (lead, count) => {
+      const intensity = Math.min((lead.priority != null ? lead.priority : Math.abs(lead.tone || 0)) / 10, 1)
+      const coverage = Math.min(Math.log2(count + 1) / 3, 1)
+      return (intensity * 0.65) + (coverage * 0.35)
+    }
 
-    clusters.forEach((clusterEvents) => {
-      clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone)) - (a.priority || Math.abs(a.tone)))
+    const ranked = [...clusters.values()].map((clusterEvents) => {
+      clusterEvents.sort((a, b) => (b.priority || Math.abs(b.tone || 0)) - (a.priority || Math.abs(a.tone || 0)))
+      return { clusterEvents, weight: weigh(clusterEvents[0], clusterEvents.length) }
+    }).sort((a, b) => b.weight - a.weight)
+
+    // Sizes are relative to the loudest story on screen, not to an absolute
+    // scale. `priority` decays exponentially with age, so on a quiet night every
+    // event is old, every weight is near the floor, and an absolute ramp would
+    // render the entire globe at minimum size. Relative scaling keeps the map
+    // readable at 3am and still says "this is the big one".
+    //
+    // The floor is what stops that becoming a lie. Dividing by the top weight
+    // alone means the loudest dot is always exactly 22px, so 3am and a war look
+    // identical -- the map can rank, but it can never say "quiet". Below the
+    // floor the ramp behaves absolutely and a slow night genuinely shrinks.
+    const topWeight = Math.max(ranked[0]?.weight || 0, QUIET_WEIGHT_FLOOR)
+
+    const haloCutoff = ambient ? haloWeightCutoff(ranked.map(r => r.weight)) : Infinity
+    const labelCutoff = ranked.length > LABEL_BUDGET ? ranked[LABEL_BUDGET - 1].weight : -Infinity
+
+    // Everything each cluster needs to draw, worked out once. Halos are added in
+    // this pass and dots in a second one, because with depth testing disabled
+    // Cesium blends later points over earlier ones: interleaved, a small
+    // neighbour's halo painted straight over the biggest dot on the map.
+    const prepared = ranked.map(({ clusterEvents, weight }) => {
       const lead = clusterEvents[0]
       const count = clusterEvents.length
-      const color = categoryColors[lead.category] || "#90a4ae"
-      const cesiumColor = Cesium.Color.fromCssColorString(color)
+      const iconColor = newsCategoryColor(lead.category)
+      const cesiumColor = Cesium.Color.fromCssColorString(iconColor)
 
       const avgLat = clusterEvents.reduce((s, e) => s + e.lat, 0) / count
       const avgLng = clusterEvents.reduce((s, e) => s + e.lng, 0) / count
 
-      const intensity = Math.min((lead.priority != null ? lead.priority : Math.abs(lead.tone)) / 10, 1)
       const coverageBoost = Math.min(Math.log2(count + 1) / 3, 1)
-      let pixelSize = 6 + intensity * 6 + coverageBoost * 8
 
-      if (clusterSizes.length >= 3 && count >= top3Threshold) {
-        const rank = count >= clusterSizes[0] ? 0 : count >= clusterSizes[1] ? 1 : 2
-        pixelSize = [48, 36, 28][rank]
-      }
+      // Whether we know where this actually happened. Roughly half of events are
+      // country centroids -- often the publisher's own country rather than the
+      // story's -- and drawing those as a crisp dot on a capital city asserts a
+      // precision we do not have.
+      const located = LOCATED_PRECISIONS.has(lead.geo_precision)
 
-      const headline = this._truncateNewsLabel(lead.title || lead.name, pixelSize >= 28 ? 50 : 30)
+      // One continuous ramp. The old code hardcoded [48, 36, 28] for the three
+      // biggest cells, which left nothing between 20 and 28px and broke entirely
+      // if the third-largest cell was a singleton. It existed because tone was
+      // always zero, so cluster count was the only thing left to separate on.
+      // Wider range than the old filled dots used. A disc's ink grows with the
+      // square of its radius and a ring's only grows linearly, so the same 7-22
+      // spread that clearly separated big from small as discs reads as nearly
+      // uniform as rings.
+      const pixelSize = 8 + (Math.min(weight / topWeight, 1) * 18)
+
+      // Escalation is achromatic so it can never be mistaken for a category hue.
+      // It replaces a 30km ground ellipse that was sub-pixel at every zoom
+      // anyone actually browses at -- the most urgent thing on the map was the
+      // least visible mark on it.
+      const escalated = clusterEvents.some(e => e.threat === "critical" || e.threat === "high")
+
+      const showLabel = weight >= labelCutoff
+      const fontSize = weight >= 0.5 ? 14 : 13
+      const headline = showLabel ? this._truncateNewsLabel(lead.title || lead.name, weight >= 0.5 ? 50 : 30) : ""
       const labelText = count > 1 ? `${headline}  (+${count - 1})` : headline
 
-      const descHtml = clusterEvents.slice(0, 8).map(ev => {
-        const c = categoryColors[ev.category] || "#90a4ae"
-        const sourceName = ev.publisher || ev.source
-        return `<div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <div style="font-size: 11px; color: ${c}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">${this._escapeHtml(ev.category)}${sourceName ? " · " + this._escapeHtml(sourceName) : ""}</div>
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.3;">${this._escapeHtml(ev.title || ev.name || "Unknown")}</div>
-          ${ev.name && ev.title ? "<div style=\"font-size: 11px; color: #8892a4; margin-bottom: 4px;\">" + this._escapeHtml(ev.name) + "</div>" : ""}
-          <div style="font-size: 11px; color: #aaa;">Tone: ${ev.tone} · ${this._escapeHtml(ev.level)}</div>
-          <a href="${this._safeUrl(ev.url)}" target="_blank" rel="noopener" style="color: ${c}; font-size: 11px;">Read →</a>
-        </div>`
-      }).join("")
-      const moreNote = count > 8 ? `<div style="font-size: 11px; color: #6b7a8d;">+ ${count - 8} more stories</div>` : ""
+      // Keyed on the cluster's rounded centroid so a story cluster keeps the same
+      // phase across the 15-minute refresh instead of restarting its breath.
+      const ambientKey = ambient
+        ? registerAmbient(this, "news", `${avgLat.toFixed(2)},${avgLng.toFixed(2)}`, {
+            lat: avgLat,
+            lng: avgLng,
+            weight,
+          })
+        : null
 
+      return {
+        clusterEvents, lead, weight, cesiumColor, iconColor, avgLat, avgLng,
+        coverageBoost, pixelSize, located, escalated,
+        showLabel, labelText, fontSize, ambientKey,
+      }
+    })
+
+    for (const pin of prepared) {
+      if (!pin.ambientKey || pin.weight < haloCutoff) continue
+      const halo = ambientHaloPoint(this, pin.ambientKey, pin.cesiumColor, {
+        minSize: pin.pixelSize,
+        // Capped. The old ceiling reached ~74px at whole-globe zoom, where the
+        // dot underneath it is 3-11px -- a bloom several times the size of the
+        // thing it was blooming around, smothering its neighbours.
+        maxSize: pin.pixelSize + 14 + pin.coverageBoost * 8,
+        peakAlpha: 0.14 + pin.coverageBoost * 0.24,
+        opacity: dotOpacity,
+      })
+      if (!halo) continue
+      this._newsEntities.push(dataSource.entities.add({
+        id: `news-halo-${pin.lead._idx}`,
+        position: Cesium.Cartesian3.fromDegrees(pin.avgLng, pin.avgLat, 5),
+        point: { ...halo, scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5) },
+      }))
+    }
+
+    // Ascending weight, so the heaviest pin is added last and blends on top.
+    this._newsLabelPins = []
+    for (let i = prepared.length - 1; i >= 0; i--) {
+      const pin = prepared[i]
+      const { lead, ambientKey, pixelSize } = pin
       const entity = dataSource.entities.add({
         id: `news-${lead._idx}`,
-        position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 10),
-        point: {
-          pixelSize,
-          color: cesiumColor.withAlpha(0.85 + coverageBoost * 0.15),
-          outlineColor: cesiumColor.withAlpha(0.3 + coverageBoost * 0.4),
-          outlineWidth: 2 + Math.floor(coverageBoost * 4),
+        position: Cesium.Cartesian3.fromDegrees(pin.avgLng, pin.avgLat, 10),
+        billboard: {
+          // A drawn mark rather than a Cesium point, so category, precision and
+          // escalation are separate parts of the pin instead of three ways of
+          // adjusting one filled circle. See news_pin_icon.js.
+          image: newsPinIcon({
+            color: pin.iconColor,
+            located: pin.located,
+            escalated: pin.escalated,
+          }),
+          // Swells once as it arrives, then holds still.
+          scale: ambientKey
+            ? ambientPointSize(this, ambientKey, newsPinScale(pixelSize), 0.18)
+            : newsPinScale(pixelSize),
+          // The image carries the colour; this is a tint, and the only thing
+          // the layer dim needs to touch. It starts opaque and _setNewsDotOpacity
+          // takes it down at the end of this render -- baking the dim in here
+          // instead would have it cached as the base and applied twice.
+          color: Cesium.Color.WHITE,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.5),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: {
-          text: labelText,
-          font: `${pixelSize >= 28 ? 15 : pixelSize >= 20 ? 14 : 13}px DM Sans, sans-serif`,
-          fillColor: Cesium.Color.WHITE.withAlpha(pixelSize >= 28 ? 0.95 : 0.85),
+        label: pin.showLabel ? {
+          text: pin.labelText,
+          font: `${pin.fontSize}px DM Sans, sans-serif`,
+          fillColor: Cesium.Color.WHITE.withAlpha(pin.weight >= 0.5 ? 0.95 : 0.85),
           outlineColor: Cesium.Color.BLACK,
-          outlineWidth: pixelSize >= 28 ? 4 : 3,
+          outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -(pixelSize + 12)),
-          scaleByDistance: pixelSize >= 28
-            ? new Cesium.NearFarScalar(1e5, 1.2, 1.5e7, 0.5)
-            : new Cesium.NearFarScalar(1e5, 1, 5e6, 0),
-          translucencyByDistance: pixelSize >= 28
-            ? new Cesium.NearFarScalar(1e5, 1.0, 1.5e7, 0.6)
-            : new Cesium.NearFarScalar(1e5, 1.0, 5e6, 0),
+          // One fade for every label. The old split let anything over 28px stay at
+          // 0.6 alpha at any zoom and draw through the Earth, so the biggest dots
+          // were permanently shouting from the far side of the globe.
+          //
+          // Both ramps have to clear the 20,000km opening camera, which sits
+          // 2.0-2.3e7 from the markers it is looking at. The old stops put every
+          // label at exactly zero alpha and 0.45 scale there, so the ranked
+          // budget above was choosing fourteen headlines that were never drawn.
+          // Full strength out to the default view, fading only beyond it.
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.1, 2.4e7, 0.8),
+          translucencyByDistance: new Cesium.NearFarScalar(2.4e7, 1.0, 3.6e7, 0),
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          disableDepthTestDistance: pixelSize >= 28 ? Number.POSITIVE_INFINITY : 0,
-        },
-        description: `<div style="font-family: 'DM Sans', sans-serif; max-width: 380px;">
-          <div style="font-size: 12px; color: #6b7a8d; margin-bottom: 8px;">${count} stories in this area</div>
-          ${descHtml}${moreNote}
-        </div>`,
+          // Match the dot. At 0 the label depth-tests against terrain and sinks
+          // into the ground while the dot it belongs to floats above it.
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        } : undefined,
+        // No `description`: infoBox is disabled (core.js:130) and the click path
+        // reads _newsData, not the entity. Building it cost eight escaped article
+        // cards per cluster on every render and was never shown to anyone.
       })
+      // What the mark was drawn from, so the selection variant can be built
+      // from the same description rather than reverse-engineered from a texture.
+      entity._newsIcon = { color: pin.iconColor, located: pin.located, escalated: pin.escalated }
       this._newsEntities.push(entity)
+      pin.clusterEvents.forEach(ev => this._newsEntityByEventIdx.set(ev._idx, entity))
 
-      const worstThreat = clusterEvents.find(e => e.threat === "critical")?.threat
-        || clusterEvents.find(e => e.threat === "high")?.threat
-      if (worstThreat) {
-        const threatColor = worstThreat === "critical"
-          ? Cesium.Color.fromCssColorString("#f44336")
-          : Cesium.Color.fromCssColorString("#ff5722")
-        const ring = dataSource.entities.add({
-          id: `news-threat-${lead._idx}`,
-          position: Cesium.Cartesian3.fromDegrees(avgLng, avgLat, 0),
-          ellipse: {
-            semiMinorAxis: 30000,
-            semiMajorAxis: 30000,
-            material: threatColor.withAlpha(0.06),
-            outline: true,
-            outlineColor: threatColor.withAlpha(0.25),
-            outlineWidth: 1,
-            height: 0,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            classificationType: Cesium.ClassificationType.BOTH,
-          },
+      if (pin.showLabel) {
+        this._newsLabelPins.push({
+          entity,
+          weight: pin.weight,
+          halfWidth: (pin.labelText.length * pin.fontSize * LABEL_CHAR_WIDTH_EM) / 2,
+          lineHeight: pin.fontSize + 4,
+          offset: pixelSize + 12,
         })
-        this._newsEntities.push(ring)
       }
-    })
+    }
+    // Heaviest first: the declutter keeps the earliest label that fits.
+    this._newsLabelPins.sort((a, b) => b.weight - a.weight)
+
+    if (ambient) commitAmbientLayer(this, "news")
 
     this._precomputeArcs(events)
 
@@ -219,6 +354,113 @@ export function applyNewsRenderingMethods(GlobeController) {
     } else {
       this._setNewsDotOpacity(1.0)
     }
+
+    this._declutterNewsLabels()
+  }
+
+  // Cesium declutters nothing for entity labels, so the renderer's only tool was
+  // to not build most of them: a budget of fourteen, ranked globally by weight.
+  // That put headlines in the wrong places at both ends -- fourteen chosen for
+  // the whole planet, so zooming into a region showed none of its stories while
+  // its budget was spent somewhere off screen, and no two of the fourteen knew
+  // about each other, so they overprinted and ran off the edge of the viewport.
+  //
+  // Deciding from screen geometry instead costs one projection per candidate on
+  // camera idle, and turns the budget into "as many as fit".
+  GlobeController.prototype._declutterNewsLabels = function() {
+    const Cesium = window.Cesium
+    const scene = this.viewer?.scene
+    const pins = this._newsLabelPins
+    if (!Cesium || !scene || !pins?.length) return
+
+    const toWindow = Cesium.SceneTransforms.worldToWindowCoordinates
+      || Cesium.SceneTransforms.wgs84ToWindowCoordinates
+    const time = this.viewer.clock.currentTime
+    const width = scene.canvas.clientWidth
+    const height = scene.canvas.clientHeight
+    const leftEdge = this._newsLabelLeftInset() + LABEL_EDGE_INSET
+    const kept = []
+
+    for (const pin of pins) {
+      const label = pin.entity?.label
+      if (!label) continue
+
+      // Already hidden by the hemisphere test -- projecting it would place it
+      // somewhere plausible on the wrong side of the planet.
+      if (pin.entity.show === false || pin.entity._globeOccluded) {
+        label.show = false
+        continue
+      }
+
+      const position = pin.entity.position?.getValue(time)
+      const win = position && toWindow(scene, position)
+      if (!win) {
+        label.show = false
+        continue
+      }
+
+      const bottom = win.y - pin.offset
+      const box = {
+        left: win.x - pin.halfWidth,
+        right: win.x + pin.halfWidth,
+        top: bottom - pin.lineHeight,
+        bottom,
+      }
+
+      const onScreen = box.left >= leftEdge
+        && box.right <= width - LABEL_EDGE_INSET
+        && box.top >= LABEL_EDGE_INSET
+        && box.bottom <= height - LABEL_EDGE_INSET
+      const clear = onScreen && !kept.some(other => (
+        box.left < other.right + LABEL_MIN_GAP
+        && box.right + LABEL_MIN_GAP > other.left
+        && box.top < other.bottom + LABEL_MIN_GAP
+        && box.bottom + LABEL_MIN_GAP > other.top
+      ))
+
+      label.show = clear
+      if (clear) kept.push(box)
+    }
+
+    this._requestRender()
+  }
+
+  // The sidebar is painted over the canvas rather than beside it, so a label can
+  // clear the viewport and still be unreadable underneath it.
+  GlobeController.prototype._newsLabelLeftInset = function() {
+    const sidebar = document.getElementById("sidebar")
+    if (!sidebar) return 0
+    const style = window.getComputedStyle(sidebar)
+    if (style.display === "none" || style.visibility === "hidden") return 0
+    const rect = sidebar.getBoundingClientRect()
+    // Slid out, its right edge is at or left of zero and it covers nothing.
+    return rect.left <= 0 && rect.right > 0 ? rect.right : 0
+  }
+
+  // Which dot is the panel talking about? Nothing answered that: the panel
+  // opened and every pin on the globe looked exactly as it had a moment ago.
+  //
+  // Selection is drawn into the mark itself -- a ring outside everything else
+  // the pin is already saying -- so this just swaps the image for the selected
+  // variant of the same icon and puts the original back afterwards. The icons
+  // are cached, so both are the same two texture lookups every time.
+  GlobeController.prototype._highlightNewsPin = function(entity) {
+    this._clearNewsPinHighlight()
+    if (!entity?.billboard || !entity._newsIcon) return
+
+    this._newsPinHighlight = { entity, image: entity.billboard.image }
+    entity.billboard.image = newsPinIcon({ ...entity._newsIcon, selected: true })
+    this._requestRender()
+  }
+
+  GlobeController.prototype._clearNewsPinHighlight = function() {
+    const previous = this._newsPinHighlight
+    if (!previous) return
+    this._newsPinHighlight = null
+    if (previous.entity?.billboard && !previous.entity.isDestroyed?.()) {
+      previous.entity.billboard.image = previous.image
+    }
+    this._requestRender()
   }
 
   GlobeController.prototype._renderTimelineNews = function(events) {
@@ -227,17 +469,6 @@ export function applyNewsRenderingMethods(GlobeController) {
     this._newsArcData = []
     this._timelineNewsEntityMap = this._timelineNewsEntityMap || new Map()
     this._timelineNewsPulseMap = this._timelineNewsPulseMap || new Map()
-
-    const categoryColors = {
-      conflict: "#f44336",
-      unrest: "#ff9800",
-      disaster: "#ff5722",
-      health: "#e91e63",
-      economy: "#ffc107",
-      diplomacy: "#4caf50",
-      cyber: "#00bcd4",
-      other: "#90a4ae",
-    }
 
     const sortedEvents = [...events].sort((a, b) => {
       const aTime = a?.time ? new Date(a.time).getTime() : 0
@@ -249,7 +480,7 @@ export function applyNewsRenderingMethods(GlobeController) {
     const nextPulseIds = new Set()
 
     sortedEvents.forEach((ev, idx) => {
-      const color = categoryColors[ev.category] || "#90a4ae"
+      const color = newsCategoryColor(ev.category)
       const cesiumColor = Cesium.Color.fromCssColorString(color)
       const alpha = Number.isFinite(ev.timelineAlpha) ? ev.timelineAlpha : 1
       const appear = Number.isFinite(ev.timelineAppear) ? ev.timelineAppear : 1
@@ -707,27 +938,55 @@ export function applyNewsRenderingMethods(GlobeController) {
       r.dataset.flowFrom === from && r.dataset.flowTo === to))
   }
 
-  GlobeController.prototype._setNewsDotOpacity = function(alpha) {
+  // Scale one colour property by the layer opacity, against the colour the
+  // entity was BUILT with rather than whatever the previous dim left behind.
+  //
+  // The old version assigned `alpha` outright. That flattened every static dot
+  // to a single value on the first call -- and _renderNews calls this on every
+  // render -- so the located/vague alphas (0.92 vs 0.3) never reached the
+  // screen, and un-dimming restored them to a flat 1.0 rather than to their
+  // real strength. Caching the base makes the dim reversible.
+  const dimColor = (graphic, prop, alpha) => {
     const Cesium = window.Cesium
+    if (!graphic || graphic[prop] instanceof Cesium.CallbackProperty) return
+    const base = graphic._newsBaseColors || (graphic._newsBaseColors = {})
+    if (!base[prop]) {
+      const current = graphic[prop]?.getValue?.()
+      if (!current) return
+      base[prop] = Cesium.Color.clone(current)
+    }
+    const c = base[prop]
+    graphic[prop] = new Cesium.Color(c.red, c.green, c.blue, c.alpha * alpha)
+  }
+
+  GlobeController.prototype._setNewsDotOpacity = function(alpha) {
+    // Ambient points read this each frame inside their CallbackProperty;
+    // overwriting their colour would replace the callback with a constant and
+    // freeze the pulse. dimColor skips them for that reason.
+    this._newsDotOpacity = alpha
     for (const entity of this._newsEntities) {
-      if (entity.point) {
-        const c = entity.point.color?.getValue()
-        if (c) entity.point.color = new Cesium.Color(c.red, c.green, c.blue, alpha)
-        const oc = entity.point.outlineColor?.getValue()
-        if (oc) entity.point.outlineColor = new Cesium.Color(oc.red, oc.green, oc.blue, alpha * 0.5)
-      }
-      if (entity.label) {
-        const fc = entity.label.fillColor?.getValue()
-        if (fc) entity.label.fillColor = new Cesium.Color(fc.red, fc.green, fc.blue, alpha)
-      }
+      // The pin is a billboard, and its colour is a white tint over a drawn
+      // icon -- so dimming the tint dims the whole mark, ring and centre alike.
+      dimColor(entity.billboard, "color", alpha)
+      // Halos and arc blobs are still points.
+      dimColor(entity.point, "color", alpha)
+      dimColor(entity.point, "outlineColor", alpha)
+      dimColor(entity.label, "fillColor", alpha)
+      dimColor(entity.label, "outlineColor", alpha)
     }
     this._requestRender()
   }
 
   GlobeController.prototype._clearNewsEntities = function() {
     const ds = this.getNewsDataSource()
+    // Drop the highlight before the entity it points at is removed, or the
+    // restore on the next click writes to a dead graphic.
+    this._newsPinHighlight = null
+    this._newsLabelPins = []
     this._newsEntities.forEach(e => ds.entities.remove(e))
     this._newsEntities = []
+    this._newsEntityByEventIdx?.clear?.()
+    clearAmbientLayer(this, "news")
     this._timelineNewsEntityMap?.clear?.()
     this._timelineNewsPulseMap?.clear?.()
     this._clearNewsArcEntities()

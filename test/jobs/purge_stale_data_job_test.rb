@@ -132,6 +132,25 @@ class PurgeStaleDataJobTest < ActiveSupport::TestCase
     assert TimelineEvent.exists?(survivor.id), "timeline event with a live parent must stay"
   end
 
+  # The backstop for the flight/ship churn: the pollers delete stale rows with
+  # delete_all, which skips the `dependent: :delete_all` on Flight, so the links
+  # they leave behind have no owner and no foreign key to catch them.
+  test "sweeps entity links orphaned by a purged flight" do
+    doomed = Flight.create!(icao24: "orph01", military: false, updated_at: 8.hours.ago)
+    survivor = Flight.create!(icao24: "orph02", military: false, updated_at: 2.hours.ago)
+    entity = OperationalOntologySyncService.sync_flight(doomed)
+    kept_entity = OperationalOntologySyncService.sync_flight(survivor)
+
+    deleted = PurgeStaleDataJob.perform_now
+
+    assert_not Flight.exists?(doomed.id)
+    assert_not OntologyEntityLink.exists?(ontology_entity: entity, linkable_type: "Flight", linkable_id: doomed.id),
+      "entity link outlived the flight it points at"
+    assert OntologyEntityLink.exists?(ontology_entity: kept_entity, linkable: survivor, role: "tracked_flight"),
+      "link with a live flight must stay"
+    assert_equal 1, deleted[:ontology_entity_links_orphaned]
+  end
+
   # Guards the catch-up path: production carries an 8.6M row backlog in
   # position_snapshots, and one run must not try to swallow it whole.
   test "caps how much a single table can delete in one run and records that it capped" do

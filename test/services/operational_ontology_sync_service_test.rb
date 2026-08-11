@@ -44,6 +44,47 @@ class OperationalOntologySyncServiceTest < ActiveSupport::TestCase
     assert OntologyEntityLink.exists?(ontology_entity: entity, linkable: flight, role: "tracked_flight")
   end
 
+  # The pollers delete flights untouched for five minutes and re-insert the same
+  # aircraft with a fresh row id on the next sweep. The entity is keyed on
+  # icao24 and survives, so without superseding, every cycle left another link
+  # behind pointing at a deleted row — 20.9M of them for 267k aircraft on prod.
+  test "re-sighting an aircraft under a new row leaves one link, not two" do
+    first = Flight.create!(icao24: "cyc001", callsign: "CYC1", military: false)
+    entity = OperationalOntologySyncService.sync_flight(first)
+    first.delete
+
+    second = Flight.create!(icao24: "cyc001", callsign: "CYC1", military: false)
+    OperationalOntologySyncService.sync_flight(second)
+
+    links = OntologyEntityLink.where(ontology_entity: entity, role: "tracked_flight")
+    assert_equal [second.id], links.pluck(:linkable_id), "one link, pointing at the live sighting"
+  end
+
+  test "re-sighting a ship under a new row leaves one link, not two" do
+    first = Ship.create!(mmsi: "999000111", name: "Cycler")
+    entity = OperationalOntologySyncService.sync_ship(first)
+    first.delete
+
+    second = Ship.create!(mmsi: "999000111", name: "Cycler")
+    OperationalOntologySyncService.sync_ship(second)
+
+    links = OntologyEntityLink.where(ontology_entity: entity, role: "tracked_ship")
+    assert_equal [second.id], links.pluck(:linkable_id), "one link, pointing at the live sighting"
+  end
+
+  # Two aircraft are two identities; superseding must not reach across entities.
+  test "superseding one aircraft's link leaves other aircraft untouched" do
+    kept = Flight.create!(icao24: "keep01", callsign: "KEEP", military: false)
+    kept_entity = OperationalOntologySyncService.sync_flight(kept)
+
+    churned = Flight.create!(icao24: "churn1", callsign: "CHURN", military: false)
+    OperationalOntologySyncService.sync_flight(churned)
+    churned.delete
+    OperationalOntologySyncService.sync_flight(Flight.create!(icao24: "churn1", callsign: "CHURN", military: false))
+
+    assert OntologyEntityLink.exists?(ontology_entity: kept_entity, linkable: kept, role: "tracked_flight")
+  end
+
   test "syncs ships into asset entities" do
     ship = Ship.create!(
       mmsi: "123456789",

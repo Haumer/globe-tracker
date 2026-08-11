@@ -19,6 +19,7 @@ require "nokogiri"
 # that, every cycle would re-ingest a few hundred items per publisher.
 class NewsSitemapService
   extend Refreshable
+  include BatchRotation
   include TimelineRecorder
   include NewsDedupable
   include NewsGeocodable
@@ -124,10 +125,7 @@ class NewsSitemapService
   private
 
   def current_batch(sources)
-    idx = (Rails.cache.read("news_sitemap_batch_idx") || 0) % BATCH_COUNT
-    Rails.cache.write("news_sitemap_batch_idx", idx + 1)
-    size = (sources.size.to_f / BATCH_COUNT).ceil
-    sources.each_slice(size).to_a[idx] || []
+    rotation_slice(sources, BATCH_COUNT, period: BATCH_INTERVAL.minutes)
   end
 
   # Mirrors RssNewsService#refresh's tail. Deliberately duplicated rather than
@@ -138,32 +136,33 @@ class NewsSitemapService
     return 0 if all_records.empty?
 
     existing_urls = NewsEvent.where(url: all_records.map { |r| r[:url] }).pluck(:url).to_set
-    candidates = all_records.reject { |r| existing_urls.include?(r[:url]) }
+    candidates = dedup_by_url(all_records.reject { |r| existing_urls.include?(r[:url]) })
 
-    existing_titles = NewsEvent.where("published_at > ?", 48.hours.ago)
-      .pluck(:title).compact
-      .map { |t| normalize_title(t) }
+    # Suppress a publisher re-running its own headline. Matching headlines from
+    # *other* publishers are kept on purpose -- see NewsDedupable#dedup_by_title.
+    existing = NewsEvent.where("published_at > ?", 48.hours.ago).pluck(:url, :title)
 
-    new_records = dedup_by_title(candidates, existing_titles: existing_titles)
+    new_records = dedup_by_title(candidates, existing: existing)
     return 0 if new_records.empty?
 
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)
     new_records.each { |record| record[:news_ingest_id] = ingest_ids[record[:url]] }
     normalized_ids = NewsNormalizationRecorder.record_all(new_records)
-    new_records.each do |record|
-      ids = normalized_ids[record[:url]]
-      next unless ids
-
-      record[:news_source_id] = ids[:news_source_id]
-      record[:news_article_id] = ids[:news_article_id]
-      record[:content_scope] = ids[:content_scope]
-    end
+    NewsNormalizationRecorder.apply_ids!(new_records, normalized_ids)
     NewsClaimRecorder.record_all(new_records)
     RssArticleHydrationService.enqueue_candidates(new_records)
+
+    # Events first, then clustering. NewsStoryClusterer#recalculate_cluster!
+    # re-derives each member's location from its NewsArticle's news_events, so
+    # clustering a URL whose event row does not exist yet leaves the cluster
+    # with no location at all -- and for the strict-location event types
+    # (ground_operation, protest, arrest_detention) that makes the rebuild bail
+    # out entirely, stranding the cluster at article_count: 0 with a
+    # last_seen_at that never advances, so nothing can ever join it.
+    NewsEvent.upsert_all(new_records, unique_by: :url)
     assign_clusters(new_records)
     NewsOntologySyncService.enqueue_for_records(new_records)
 
-    NewsEvent.upsert_all(new_records, unique_by: :url)
     record_timeline_events(
       event_type: "news", model_class: NewsEvent,
       unique_key: :url, unique_values: new_records.map { |r| r[:url] },

@@ -511,6 +511,9 @@ export function applyFlightDetailMethods(GlobeController) {
     }
 
     this.detailPanelTarget.style.display = "none"
+    // The panel is gone, so the pin it was about should stop claiming to be
+    // selected.
+    this._clearNewsPinHighlight?.()
     this._focusedSelection = null
     this._renderSelectionTray()
     this.stopTracking()

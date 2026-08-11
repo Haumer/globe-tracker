@@ -157,6 +157,7 @@ class PurgeStaleDataJob < ApplicationJob
     [
       [TimelineEvent, :eventable_type, :eventable_id],
       [OntologyEvidenceLink, :evidence_type, :evidence_id],
+      [OntologyEntityLink, :linkable_type, :linkable_id],
     ]
   end
 

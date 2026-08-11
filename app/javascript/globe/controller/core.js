@@ -4,6 +4,38 @@ import { decodeHash, decodeFocusParams, decodeLaunchParams, applyDeepLink, encod
 import { applyCoreEntityClickMethods } from "globe/controller/core_entity_clicks"
 import { initializeCoreState, teardownCore, wireCoreChrome } from "globe/controller/core_state"
 import { applyCoreUiHelpers } from "globe/controller/core_ui_helpers"
+import { destroyAmbient, onAmbientCameraChange } from "globe/controller/ambient_pulse"
+
+// Side of the square pick rectangle handed to drillPick, in CSS pixels. Sized
+// so the smallest marker on the map clears the 24px pointer-target minimum.
+const PICK_BOX_PX = 22
+
+// Entity ids that exist to be looked at rather than clicked. The dispatch table
+// still routes them to their parent's detail panel, so hitting one is never
+// wrong -- it is just never the best available answer.
+const DECORATION_PREFIXES = ["news-halo-", "news-threat-"]
+
+// Entity types that always win a click, ahead of hex cells and ground geometry.
+// Decoration entities count too: the dispatch table redirects them to their
+// parent's detail panel.
+const PRIORITY_PREFIXES = [
+  "milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-",
+  "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-",
+  "traf-", "econ-", "radmin-", "rmuni-",
+]
+
+// Everything that opens something when clicked. News is deliberately absent
+// from the priority list -- hex cells get a look in first -- but it is still a
+// click target, so the cursor has to say so.
+const CLICKABLE_PREFIXES = [...PRIORITY_PREFIXES, "news-"]
+
+// How often a mouse move may trigger a pick, in milliseconds. A pick is not
+// cheap even as a single pass, and the cursor is a hint rather than a readout.
+const HOVER_PICK_INTERVAL_MS = 120
+
+// How deep the click pick drills. Enough to see a dot through the halo and
+// threat ring stacked on it, without paying for twelve passes on every click.
+const PICK_DRILL_LIMIT = 5
 
 export function applyCoreMethods(GlobeController) {
   applyCoreUiHelpers(GlobeController)
@@ -194,10 +226,17 @@ export function applyCoreMethods(GlobeController) {
       this.saveCamera()
       this._savePrefs()
       this._updateGlobeOcclusion()
-      if (this.fireHotspotsVisible && this._currentFireData?.().length > 0) this.renderFireHotspots?.()
-      // Zooming into a region changes which fires the server should send, not
-      // just which of the loaded ones are on screen.
-      this.maybeRefetchFireComplexes?.()
+      // A new viewport means a different set of events is worth animating.
+      onAmbientCameraChange(this)
+      // Labels are placed from screen geometry, which the camera just changed.
+      // After _updateGlobeOcclusion, so far-side pins are already marked hidden.
+      this._declutterNewsLabels?.()
+      // _fireHotspotData only fills during timeline playback, so testing it here
+      // meant live mode never re-clustered on zoom and never refetched.
+      if (this.fireHotspotsVisible && this._currentFireData?.().length > 0) {
+        this.renderFireHotspots?.()
+        this.maybeRefetchFireComplexes?.()
+      }
     }
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd)
 
@@ -237,11 +276,7 @@ export function applyCoreMethods(GlobeController) {
       if (Cesium.defined(picked) && picked.id) {
         const entityId = picked.id.id || picked.id
         if (typeof entityId === "string") {
-          // These entity types should always handle clicks (they have detail panels).
-          // Decoration entities (rings, cores, labels) are also included — the dispatch
-          // table redirects them to their parent entity's detail panel.
-          const priorityPrefixes = ["milflt-", "strike-", "gc-", "cpulse-", "flt-", "ship-", "sat-", "choke-", "eq-", "cam-", "pp-", "port-", "fire-", "outage-", "conf-", "insight-", "traf-", "econ-", "radmin-", "rmuni-"]
-          const isPriority = priorityPrefixes.some(p => entityId.startsWith(p))
+          const isPriority = PRIORITY_PREFIXES.some(p => entityId.startsWith(p))
           if (isPriority) {
             if (this._handleEntityClick(entityId, picked, click.position)) return
           }
@@ -277,12 +312,15 @@ export function applyCoreMethods(GlobeController) {
     }, Cesium.ScreenSpaceEventType.LEFT_DOWN)
 
     handler.setInputAction((movement) => {
-      if (!this.drawMode || !this._drawing || !this._drawCenter) return
-      const globePos = this.screenToLatLng(movement.endPosition)
-      if (globePos) {
-        const radius = this.haversineDistance(this._drawCenter, globePos)
-        this.showDrawPreview(this._drawCenter, radius)
+      if (this.drawMode && this._drawing && this._drawCenter) {
+        const globePos = this.screenToLatLng(movement.endPosition)
+        if (globePos) {
+          const radius = this.haversineDistance(this._drawCenter, globePos)
+          this.showDrawPreview(this._drawCenter, radius)
+        }
+        return
       }
+      this._updateHoverCursor(movement.endPosition)
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE)
 
     handler.setInputAction((click) => {
@@ -418,10 +456,82 @@ export function applyCoreMethods(GlobeController) {
     if (!this.viewer?.scene || !screenPos) return null
 
     const scene = this.viewer.scene
-    const picks = scene.drillPick(screenPos, 12) || []
+    // drillPick's width/height arguments are the pick tolerance, and omitting
+    // them takes Cesium's 3x3 default. A 10px dot was therefore a ~12px target:
+    // half the 24px pointer minimum, and about a ninth of the area of a
+    // fingertip. Widening the rectangle is the whole fix -- no extra entities,
+    // no extra state.
+    const picks = scene.drillPick(screenPos, PICK_DRILL_LIMIT, PICK_BOX_PX, PICK_BOX_PX) || []
     if (picks.length === 0) return scene.pick(screenPos)
 
-    return picks.find(pick => this._isPickOnVisibleHemisphere(pick)) || null
+    const visible = picks.filter(pick => this._isPickOnVisibleHemisphere(pick))
+    if (visible.length === 0) return null
+    return this._preferredPick(visible, screenPos)
+  }
+
+  // Widening the box without this makes things worse, not better. A halo is a
+  // transparent ring drawn under the pin it belongs to and larger than it, so
+  // the top hit at a dot's own centre is usually a halo -- and often a
+  // *neighbour's* halo, which is how a click on one story opened a confident
+  // panel about a different one. Rank by what the cursor was plausibly aimed
+  // at: real marks before decoration, then whichever centre is nearest.
+  GlobeController.prototype._preferredPick = function(picks, screenPos) {
+    const Cesium = window.Cesium
+    const scene = this.viewer.scene
+    const toWindow = Cesium.SceneTransforms.worldToWindowCoordinates
+      || Cesium.SceneTransforms.wgs84ToWindowCoordinates
+    const time = this.viewer.clock.currentTime
+
+    let best = null
+    let bestRank = Infinity
+    let bestDistance = Infinity
+
+    for (const pick of picks) {
+      const id = pick?.id?.id
+      let rank = 2
+      if (typeof id === "string") {
+        rank = DECORATION_PREFIXES.some(prefix => id.startsWith(prefix)) ? 1 : 0
+      }
+
+      let distance = Infinity
+      const position = pick?.id?.position?.getValue?.(time)
+      const win = position && toWindow(scene, position)
+      if (win) distance = Cesium.Cartesian2.distance(win, screenPos)
+
+      if (rank < bestRank || (rank === bestRank && distance < bestDistance)) {
+        best = pick
+        bestRank = rank
+        bestDistance = distance
+      }
+    }
+
+    return best || picks[0]
+  }
+
+  // Nothing on the globe admitted it was clickable -- no cursor change, no
+  // highlight, no tooltip. A pick on every mouse move would be wasteful, so
+  // this samples and only touches the DOM when the answer actually changes.
+  GlobeController.prototype._updateHoverCursor = function(screenPos) {
+    const canvas = this.viewer?.scene?.canvas
+    if (!canvas) return
+    // Country select and draw modes own the cursor while they are running.
+    if (this.countrySelectMode || this.drawMode) return
+
+    const now = performance.now()
+    if (now - (this._lastHoverPickAt || 0) < HOVER_PICK_INTERVAL_MS) return
+    this._lastHoverPickAt = now
+
+    // Deliberately NOT _pickClickableEntity. That runs drillPick, which is up to
+    // twelve full pick passes, and over a 22px box it measured 149ms against 22ms
+    // for a single pick at the same size -- called every 60ms of mouse movement,
+    // it simply ate the frame budget. The cursor only needs to know whether the
+    // topmost thing here is clickable, and one pass answers that.
+    const picked = this.viewer.scene.pick(screenPos, PICK_BOX_PX, PICK_BOX_PX)
+    const id = picked?.id?.id
+    const clickable = typeof id === "string"
+      && CLICKABLE_PREFIXES.some(prefix => id.startsWith(prefix))
+    const cursor = clickable ? "pointer" : ""
+    if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor
   }
 
   GlobeController.prototype._isPickOnVisibleHemisphere = function(pick) {
@@ -1047,6 +1157,7 @@ export function applyCoreMethods(GlobeController) {
   // ── Cities Layer ─────────────────────────────────────────
 
   GlobeController.prototype.disconnect = function() {
+    destroyAmbient(this)
     teardownCore(this)
   }
 

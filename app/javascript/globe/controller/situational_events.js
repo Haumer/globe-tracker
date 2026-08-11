@@ -4,6 +4,17 @@ import {
   renderEarthquakeDetailHtml,
   renderNaturalEventDetailHtml,
 } from "globe/controller/situational_presenters"
+import {
+  ambientColor,
+  ambientHaloPoint,
+  ambientOutlineWidth,
+  ambientPointSize,
+  beginAmbientLayer,
+  haloWeightCutoff,
+  clearAmbientLayer,
+  commitAmbientLayer,
+  registerAmbient,
+} from "globe/controller/ambient_pulse"
 
 export function applySituationalEventMethods(GlobeController) {
   GlobeController.prototype.getAirportsDataSource = function() { return getDataSource(this.viewer, this._ds, "airports") }
@@ -165,6 +176,13 @@ export function applySituationalEventMethods(GlobeController) {
     const dataSource = this.getEventsDataSource()
     dataSource.show = true
 
+    // Timeline playback drives its own arrival pulses; ambient motion is live-only.
+    const ambient = !this._timelineActive
+    if (ambient) beginAmbientLayer(this, "earthquakes")
+    const haloCutoff = ambient
+      ? haloWeightCutoff(this._earthquakeData.map(e => e.mag || 0))
+      : Infinity
+
     dataSource.entities.suspendEvents()
     this._earthquakeData.forEach(eq => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(eq.lat, eq.lng)) return
@@ -208,14 +226,35 @@ export function applySituationalEventMethods(GlobeController) {
       })
       this._earthquakeEntities.push(ring)
 
+      // Bigger quakes breathe harder and rank higher for a halo ping.
+      const ambientKey = ambient
+        ? registerAmbient(this, "earthquakes", eq.id, { lat: eq.lat, lng: eq.lng, weight: mag })
+        : null
+
+      if (ambientKey && mag >= haloCutoff) {
+        const halo = ambientHaloPoint(this, ambientKey, color, {
+          minSize: pixelSize,
+          maxSize: pixelSize + 24 + t * 30,
+          peakAlpha: 0.18 + t * 0.3,
+        })
+        if (halo) {
+          const haloEntity = dataSource.entities.add({
+            id: `eq-halo-${eq.id}`,
+            position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 5),
+            point: halo,
+          })
+          this._earthquakeEntities.push(haloEntity)
+        }
+      }
+
       const entity = dataSource.entities.add({
         id: `eq-${eq.id}`,
         position: Cesium.Cartesian3.fromDegrees(eq.lng, eq.lat, 10),
         point: {
-          pixelSize,
-          color: color.withAlpha(0.85 * alpha),
+          pixelSize: ambientKey ? ambientPointSize(this, ambientKey, pixelSize, 0.16) : pixelSize,
+          color: ambientKey ? ambientColor(this, ambientKey, color, 0.85 * alpha, 0.18) : color.withAlpha(0.85 * alpha),
           outlineColor: color.withAlpha(0.4 * alpha),
-          outlineWidth: pulseScale,
+          outlineWidth: ambientKey ? ambientOutlineWidth(this, ambientKey, pulseScale, 1.8) : pulseScale,
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -235,6 +274,7 @@ export function applySituationalEventMethods(GlobeController) {
       this._earthquakeEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    if (ambient) commitAmbientLayer(this, "earthquakes")
     this._requestRender()
   }
 
@@ -246,6 +286,7 @@ export function applySituationalEventMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._earthquakeEntities = []
+    clearAmbientLayer(this, "earthquakes")
   }
 
   GlobeController.prototype.showEarthquakeDetail = function(eq) {
@@ -502,6 +543,12 @@ export function applySituationalEventMethods(GlobeController) {
     const dataSource = this.getEventsDataSource()
     dataSource.show = true
 
+    const ambient = !this._timelineActive
+    if (ambient) beginAmbientLayer(this, "naturalEvents")
+    const haloCutoff = ambient
+      ? haloWeightCutoff(this._naturalEventData.map(e => Number.isFinite(e.magnitudeValue) ? e.magnitudeValue : 1))
+      : Infinity
+
     dataSource.entities.suspendEvents()
     this._naturalEventData.forEach(ev => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(ev.lat, ev.lng)) return
@@ -552,14 +599,35 @@ export function applySituationalEventMethods(GlobeController) {
       })
       this._naturalEventEntities.push(ring)
 
+      const ambientKey = ambient
+        ? registerAmbient(this, "naturalEvents", ev.id, {
+            lat: ev.lat,
+            lng: ev.lng,
+            weight: Number.isFinite(ev.magnitudeValue) ? ev.magnitudeValue : 1,
+          })
+        : null
+
+      const naturalWeight = Number.isFinite(ev.magnitudeValue) ? ev.magnitudeValue : 1
+      if (ambientKey && naturalWeight >= haloCutoff) {
+        const halo = ambientHaloPoint(this, ambientKey, color, { minSize: 8, maxSize: 40, peakAlpha: 0.3 })
+        if (halo) {
+          const haloEntity = dataSource.entities.add({
+            id: `eonet-halo-${ev.id}`,
+            position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 5),
+            point: halo,
+          })
+          this._naturalEventEntities.push(haloEntity)
+        }
+      }
+
       const entity = dataSource.entities.add({
         id: `eonet-${ev.id}`,
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 10),
         point: {
-          pixelSize: 8,
-          color: color.withAlpha(0.9 * alpha),
+          pixelSize: ambientKey ? ambientPointSize(this, ambientKey, 8, 0.2) : 8,
+          color: ambientKey ? ambientColor(this, ambientKey, color, 0.9 * alpha, 0.18) : color.withAlpha(0.9 * alpha),
           outlineColor: color.withAlpha(0.35 * alpha),
-          outlineWidth: 3,
+          outlineWidth: ambientKey ? ambientOutlineWidth(this, ambientKey, 3, 1.8) : 3,
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -579,6 +647,7 @@ export function applySituationalEventMethods(GlobeController) {
       this._naturalEventEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    if (ambient) commitAmbientLayer(this, "naturalEvents")
     this._requestRender()
   }
 
@@ -590,6 +659,7 @@ export function applySituationalEventMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._naturalEventEntities = []
+    clearAmbientLayer(this, "naturalEvents")
   }
 
   GlobeController.prototype.showNaturalEventDetail = function(ev) {

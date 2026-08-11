@@ -42,3 +42,6 @@
 news-pipeline-todo.md
 bin/dist
 .gstack/
+
+# Agent scratch space and throwaway git worktrees.
+.claude/

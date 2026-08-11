@@ -13,6 +13,19 @@ export function applyCoreEntityClickMethods(GlobeController) {
       return false
     }
 
+    const showNewsByIndex = (id) => {
+      const index = parseInt(id, 10)
+      const data = this._newsData?.[index]
+      if (!data) return false
+      // Mark the pin the panel is about. Without this the map gave no sign of
+      // which of two hundred dots you had just hit -- and since a halo or a
+      // threat ring can be what actually got picked, "the one under the cursor"
+      // was not something the user could work out either.
+      this._highlightNewsPin?.(this._newsEntityByEventIdx?.get(index))
+      if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
+      return true
+    }
+
     const flightData = this.flightData.get(entityId)
     if (flightData) {
       this.toggleFlightSelection(entityId)
@@ -125,20 +138,6 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showStrikeDetail(data, { id, picked })
         return true
       }},
-      { prefix: "fire-complex-ring-", skip: [], handler: (id) => {
-        const data = this._fireComplexById?.get(id)
-        if (!data) return false
-        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
-        else this.openFireDossier(data)
-        return true
-      }},
-      { prefix: "fire-complex-", skip: [], handler: (id) => {
-        const data = this._fireComplexById?.get(id)
-        if (!data) return false
-        if (showAnchored("fire_complex", data, { id })) this._hydrateActiveFireCard?.()
-        else this.openFireDossier(data)
-        return true
-      }},
       { prefix: "fire-cluster-ring-", skip: [], handler: (id) => {
         const idx = parseInt(id, 10)
         const data = this._fireHotspotClusterData?.[idx]
@@ -185,12 +184,12 @@ export function applyCoreEntityClickMethods(GlobeController) {
         this.showNewsArcDetail(idx)
         return true
       }},
-      { prefix: "news-", skip: ["news-arc-"], handler: (id) => {
-        const data = this._newsData?.[parseInt(id, 10)]
-        if (!data) return false
-        if (!showAnchored("news", data, { id })) this.showNewsDetail(data)
-        return true
-      }},
+      // The halo and the threat ring are drawn under the pin and are larger than
+      // it, so they intercept a good share of the clicks aimed at it. Both carry
+      // the lead event's index, same as the pin, and resolve to the same story.
+      { prefix: "news-halo-", skip: [], handler: (id) => showNewsByIndex(id) },
+      { prefix: "news-threat-", skip: [], handler: (id) => showNewsByIndex(id) },
+      { prefix: "news-", skip: ["news-arc-", "news-halo-", "news-threat-"], handler: (id) => showNewsByIndex(id) },
       { prefix: "outage-ring-", skip: [], handler: (id) => {
         const data = this._outageData?.find(outage => outage.code === id)
         if (!data) return false
@@ -430,13 +429,6 @@ export function applyCoreEntityClickMethods(GlobeController) {
         const cell = this._hexCellData?.[idx]
         if (!cell) return false
         this._showHexDetail(cell)
-        return true
-      }},
-      { prefix: "cpulse-surface-", skip: [], handler: (id) => {
-        const key = decodeURIComponent(id)
-        const data = this._conflictPulseData?.find(zone => `${zone.cell_key}` === key)
-        if (!data) return false
-        this.showConflictPulseDetail(data, { picked })
         return true
       }},
       { prefix: "cpulse-strat-ring-", skip: [], handler: (id) => {

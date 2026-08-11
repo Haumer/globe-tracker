@@ -52,6 +52,34 @@ class ThreatClassifierTest < ActiveSupport::TestCase
     assert_equal "positive", ThreatClassifier.tone_level(3)
   end
 
+  test "normalize_category accepts the canonical vocabulary" do
+    ThreatClassifier::CATEGORY_NAMES.each do |name|
+      assert_equal name, ThreatClassifier.normalize_category(name)
+    end
+  end
+
+  test "normalize_category folds the spellings the AI enricher used to emit" do
+    assert_equal "economy", ThreatClassifier.normalize_category("economic")
+    assert_equal "politics", ThreatClassifier.normalize_category("political")
+    assert_equal "politics", ThreatClassifier.normalize_category("poiltics")
+  end
+
+  test "normalize_category is case and whitespace insensitive" do
+    assert_equal "conflict", ThreatClassifier.normalize_category("  Conflict ")
+  end
+
+  test "normalize_category returns nil for values it cannot place" do
+    assert_nil ThreatClassifier.normalize_category("hamilton")
+    assert_nil ThreatClassifier.normalize_category("")
+    assert_nil ThreatClassifier.normalize_category(nil)
+  end
+
+  test "every classified category is part of the canonical vocabulary" do
+    ThreatClassifier::CATEGORIES.each do |category|
+      assert_includes ThreatClassifier::CATEGORY_NAMES, category[:name]
+    end
+  end
+
   test "categorize_themes from GDELT themes" do
     assert_equal "conflict", ThreatClassifier.categorize_themes(["ARMEDCONFLICT"])
     assert_equal "unrest", ThreatClassifier.categorize_themes(["PROTEST"])

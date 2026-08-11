@@ -70,13 +70,21 @@ class NewsEnrichmentService
         For each headline, determine:
         1. The PHYSICAL LOCATION where the event occurred (not the news source location)
         2. The category
+        3. The tone
 
-        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict"}, ...]
+        Return JSON array: [{"i": 1, "city": "Baghdad", "country": "Iraq", "cat": "conflict", "tone": -6}, ...]
 
-        Categories: conflict, terror, disaster, political, economic, health, science, sports, other
+        Categories: #{ThreatClassifier::CATEGORY_NAMES.join(', ')}
+        Use exactly one of those strings. Do not invent variants.
+
         For city: use the most specific known city name only if the headline supports it.
         For country: use the standard English country name only if the headline supports it.
         If the location is unclear from the headline, return null for city and/or country.
+
+        For tone: an integer from -10 to 10 describing how grave the event is.
+        -10 is a mass-casualty catastrophe, -5 a serious negative development,
+        0 a routine or purely factual report, +5 a clearly positive development,
+        +10 a historic breakthrough. Most routine coverage is between -2 and 2.
 
         Only return the JSON array, no other text.
 
@@ -117,10 +125,20 @@ class NewsEnrichmentService
           updates.merge!(LocationResolver.news_event_attributes(location))
         end
 
-        # Category — always update if valid (even without location fix)
-        cat = r["cat"]&.strip&.downcase
-        if cat.present? && %w[conflict terror disaster political economic health science sports other].include?(cat)
-          updates[:category] = cat
+        # Category — always update if valid (even without location fix).
+        # Normalised so the AI's spelling cannot diverge from the vocabulary the
+        # rest of the app reads; an unrecognised value leaves the existing one be.
+        category = ThreatClassifier.normalize_category(r["cat"])
+        updates[:category] = category if category
+
+        # Tone. Sitemaps carry no summary, so ThreatClassifier scores a bare
+        # headline and returns 0 for almost everything -- 96% of live rows. The
+        # model has already read the headline for category, so this costs nothing
+        # extra and gives the globe a size signal that is not always zero.
+        tone = normalize_tone(r["tone"])
+        unless tone.nil?
+          updates[:tone] = tone
+          updates[:level] = ThreatClassifier.tone_level(tone)
         end
 
         article.update_columns(updates)
@@ -215,6 +233,19 @@ class NewsEnrichmentService
     rescue JSON::ParserError => e
       Rails.logger.warn("NewsEnrichmentService JSON parse error: #{e.message}")
       nil
+    end
+
+    # The model is asked for -10..10. Anything outside that, or non-numeric, is
+    # discarded rather than clamped -- a value we cannot trust is worse than the
+    # keyword score already on the row. nil means "leave the existing tone".
+    def normalize_tone(value)
+      return nil if value.nil? || value.to_s.strip.empty?
+      return nil unless value.is_a?(Numeric) || value.to_s.match?(/\A-?\d+(\.\d+)?\z/)
+
+      tone = value.to_f
+      return nil unless tone.finite? && tone >= -10.0 && tone <= 10.0
+
+      tone.round(1)
     end
 
     # Extra locations the AI might return that aren't in our standard lookups

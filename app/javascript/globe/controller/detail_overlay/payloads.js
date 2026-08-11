@@ -4,10 +4,12 @@ import {
   conflictPulseStroke,
   firstPresent,
   kindLabel,
+  sentenceCase,
   shortLine,
   situationClassLabel,
   toNumber,
 } from "globe/controller/detail_overlay/shared"
+import { newsCategoryColor } from "globe/controller/news_palette"
 import {
   attentionAssessment,
   attentionContextLabel,
@@ -31,16 +33,11 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       case "natural_event":
         return this.eonetCategoryIcons?.[data?.categoryId]?.color || "#78909c"
       case "news":
-        return {
-          conflict: "#f44336",
-          unrest: "#ff9800",
-          disaster: "#ff5722",
-          health: "#e91e63",
-          economy: "#ffc107",
-          diplomacy: "#4caf50",
-          cyber: "#7c4dff",
-          other: "#90a4ae",
-        }[data?.category] || "#90a4ae"
+        // Was a private eight-key copy of the palette that had drifted: cyber
+        // came out purple here and cyan on the globe, and terror, politics,
+        // science and sports were missing entirely, so those four dots opened a
+        // grey card whatever colour they were on the map.
+        return newsCategoryColor(data?.category)
       case "conflict_pulse":
         return attentionPalette(data).stroke || conflictPulseStroke(toNumber(data?.pulse_score) || 0)
       case "strategic_situation": {
@@ -226,6 +223,10 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       liveSource = null,
       // Controller method rendering a kind-specific card body.
       bodyRenderer = null,
+      // shortLine's 96-char default suits a card whose brief is a metadata line.
+      // A news standfirst is prose and gets cut mid-clause at that width, so a
+      // kind can ask for more.
+      briefMaxLength = 96,
     }) => ({
       kind,
       record: data,
@@ -236,7 +237,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       bodyRenderer,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
-      brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
+      brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief, briefMaxLength),
       facts: compactFacts(facts.length ? facts : genericFacts),
       chips: chips.filter(Boolean).slice(0, 2),
       timeLabel: payloadTimeLabel,
@@ -368,16 +369,64 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       }
       case "news": {
         const actors = Array.isArray(data?.actors) ? data.actors.map(actor => actor.name).filter(Boolean) : []
-        const location = firstPresent(data?.name, data?.location, data?.place, data?.publisher, data?.origin_source, "Reported event")
+        // `name` on a news record is the publisher, never the headline --
+        // multi_news_service.rb fills it from the feed's source or author. It
+        // used to head both of these chains, so a story with no title rendered
+        // the publisher as its headline, the publisher again as its subtitle,
+        // and the source slug in the brief. The real headline appeared nowhere.
+        const publisher = firstPresent(data?.publisher, data?.source, data?.origin_source)
+        // `place_name` is the key the API actually sends. This read `location`
+        // and `place`, neither of which exists on a news record, so `place` was
+        // undefined on every pin ever rendered: the subtitle always fell through
+        // to the publisher, and the `place ? publisher : null` term below was
+        // always null. Together with claim fields being absent on the ~80% of
+        // events with no extracted claim, that left the publisher as the only
+        // thing in the whole card.
+        // `place_name` only -- deliberately not `name`, which on a news record
+        // is frequently the publisher ("Die Zeit", "Free Malaysia Today") rather
+        // than a location, and the API already nulls place_name on the coarse
+        // geocode tiers where that confusion happens.
+        const place = data?.place_name
         const claimType = data?.claim_event_type ? `${data.claim_event_type}`.replace(/_/g, " ") : null
-        const verification = data?.claim_verification_status ? `${data.claim_verification_status}`.replace(/_/g, " ") : null
+        const verification = firstPresent(data?.verification_status, data?.claim_verification_status)
+        const verificationLabel = verification ? `${verification}`.replace(/_/g, " ") : null
+        const corroboration = data?.article_count > 1
+          ? `${data.article_count} reports · ${data.source_count || data.article_count} sources`
+          : null
+        // What the story says goes in the brief, which is the only body the
+        // anchored card renders -- `facts` reaches the right panel but not the
+        // card, so anything the card should show has to end up here.
+        //
+        // GDELT records have no summary and usually no claim, which left this
+        // as just the publisher. Their themes are the one thing they do carry,
+        // so they lead the fallback: "Armed conflict · National security ·
+        // Critical tone" says more about the pin than "KLIF" ever did.
+        const themes = Array.isArray(data?.theme_labels) ? data.theme_labels.filter(Boolean) : []
+        const toneLabel = data?.level ? sentenceCase(`${data.level} tone`) : null
+        // A dot on a country centroid should admit it rather than imply a street
+        // address. geo_precision is populated on every row, unlike claim fields.
+        const coarseGeo = ["country", "unknown"].includes(data?.geo_precision) ? "Approximate location" : null
+        // Themes stand in for the claim when there is none, which for a GDELT
+        // record is the normal case rather than the exception.
+        const lead = firstPresent(claimType, actors.slice(0, 2).join(", "), themes.join(" · "))
+        // compactFacts caps at 2 by default, which would drop everything after
+        // the lead. A news card has room for a few more.
+        const metadata = compactFacts([
+          lead,
+          corroboration,
+          verificationLabel,
+          toneLabel,
+          coarseGeo,
+          // Only worth a second mention when the subtitle is showing a place.
+          // Otherwise the publisher is already the line above.
+          place ? publisher : null,
+        ], 4)
         return makePayload({
-          title: firstPresent(data?.title, data?.name, "News signal"),
-          subtitle: location,
-          brief: compactFacts([
-            firstPresent(claimType, actors.slice(0, 2).join(", ")),
-            firstPresent(verification, data?.publisher, data?.source),
-          ]).join(" · "),
+          title: firstPresent(data?.title, "Untitled report"),
+          subtitle: firstPresent(place, publisher, "Reported event"),
+          brief: firstPresent(data?.summary, metadata.join(" · "), ""),
+          briefMaxLength: 240,
+          facts: data?.summary ? metadata : [],
           chips: [
             chip(firstPresent(data?.category, "News"), data?.threat === "high" ? "critical" : "accent"),
             chip(firstPresent(data?.claim_verification_status, data?.credibility), "neutral"),

@@ -1,4 +1,15 @@
 import { getDataSource, LABEL_DEFAULTS } from "globe/utils"
+import {
+  ambientColor,
+  ambientHaloPoint,
+  ambientOutlineWidth,
+  ambientPointSize,
+  beginAmbientLayer,
+  haloWeightCutoff,
+  clearAmbientLayer,
+  commitAmbientLayer,
+  registerAmbient,
+} from "globe/controller/ambient_pulse"
 
 export function applyConflictsMethods(GlobeController) {
   GlobeController.prototype.getConflictsDataSource = function() { return getDataSource(this.viewer, this._ds, "conflicts") }
@@ -61,6 +72,12 @@ export function applyConflictsMethods(GlobeController) {
       3: "#e040fb", // one-sided
     }
 
+    const ambient = !this._timelineActive
+    if (ambient) beginAmbientLayer(this, "conflicts")
+    const haloCutoff = ambient
+      ? haloWeightCutoff(this._conflictData.map(c => c.deaths || 0))
+      : Infinity
+
     dataSource.entities.suspendEvents()
     this._conflictData.forEach(c => {
       if (this.hasActiveFilter() && !this.pointPassesFilter(c.lat, c.lng)) return
@@ -96,14 +113,35 @@ export function applyConflictsMethods(GlobeController) {
         this._conflictEntities.push(ring)
       }
 
+      // Deadlier events rank higher, so the halo budget goes to what matters.
+      const ambientKey = ambient
+        ? registerAmbient(this, "conflicts", c.id, { lat: c.lat, lng: c.lng, weight: deaths })
+        : null
+
+      if (ambientKey && deaths >= haloCutoff) {
+        const halo = ambientHaloPoint(this, ambientKey, cesiumColor, {
+          minSize: pixelSize,
+          maxSize: pixelSize + 20 + Math.min(deaths, 60) * 0.5,
+          peakAlpha: 0.16 + Math.min(deaths / 100, 1) * 0.26,
+        })
+        if (halo) {
+          const haloEntity = dataSource.entities.add({
+            id: `conf-halo-${c.id}`,
+            position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 5),
+            point: { ...halo, scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4) },
+          })
+          this._conflictEntities.push(haloEntity)
+        }
+      }
+
       const entity = dataSource.entities.add({
         id: `conf-${c.id}`,
         position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 10),
         point: {
-          pixelSize,
-          color: cesiumColor.withAlpha(0.85 * alpha),
+          pixelSize: ambientKey ? ambientPointSize(this, ambientKey, pixelSize, 0.14) : pixelSize,
+          color: ambientKey ? ambientColor(this, ambientKey, cesiumColor, 0.85 * alpha, 0.18) : cesiumColor.withAlpha(0.85 * alpha),
           outlineColor: cesiumColor.withAlpha(0.4 * alpha),
-          outlineWidth: 2,
+          outlineWidth: ambientKey ? ambientOutlineWidth(this, ambientKey, 2, 1.6) : 2,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 8e6, 0.4),
           heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -126,6 +164,7 @@ export function applyConflictsMethods(GlobeController) {
       this._conflictEntities.push(entity)
     })
     dataSource.entities.resumeEvents()
+    if (ambient) commitAmbientLayer(this, "conflicts")
     this._requestRender()
   }
 
@@ -137,6 +176,7 @@ export function applyConflictsMethods(GlobeController) {
       ds.entities.resumeEvents()
     }
     this._conflictEntities = []
+    clearAmbientLayer(this, "conflicts")
   }
 
   GlobeController.prototype.showConflictDetail = function(c) {

@@ -146,6 +146,56 @@ class NewsNormalizationRecorder
   ].to_set.freeze
 
   class << self
+    # Stamp records with their normalization ids, including the ones that had
+    # no match.
+    #
+    # The keys must exist on every record even when there is nothing to put in
+    # them. NewsEvent.upsert_all requires a uniform key set across the batch,
+    # and callers used to `next unless ids`, which left two shapes in the
+    # array. Postgres raised "All objects being inserted must have the same
+    # keys", the caller's bare rescue turned that into a return of 0, and the
+    # whole cycle's news was silently dropped -- so one unnormalizable URL cost
+    # every article fetched alongside it.
+    #
+    # Google News proxy links miss routinely, which is why RSS, GDELT and the
+    # API providers all stopped producing map events within two days of each
+    # other in April 2026, while sitemap ingest -- whose URLs are direct
+    # publisher links that always normalize -- carried on working.
+    def apply_ids!(records, normalized_ids, model: NewsEvent)
+      records.each do |record|
+        ids = normalized_ids[record[:url]]
+        record[:news_source_id]  = ids&.dig(:news_source_id)
+        record[:news_article_id] = ids&.dig(:news_article_id)
+        record[:content_scope]   = ids ? ids[:content_scope] : record[:content_scope]
+      end
+
+      harmonize_keys!(records, model: model)
+    end
+
+    # Give every row in the batch the same key set, filling gaps with nil.
+    #
+    # Stamping the ids uniformly is not enough on its own, because record
+    # builders diverge for reasons of their own: NewsRefreshService merges GKG
+    # features and conflict-query articles into one batch, and the shapes drift
+    # apart depending on what came back. That surfaced as an intermittent
+    # "All objects being inserted must have the same keys" that cost a whole
+    # cycle whenever it hit.
+    #
+    # Gaps are filled from the column defaults rather than with nil, because
+    # several of the columns a record can omit are NOT NULL with a default --
+    # geocode_precision and geocode_kind default to "unknown", confidence to
+    # 0.0. Filling nil there just trades a lost batch for a NotNullViolation.
+    def harmonize_keys!(records, model: NewsEvent)
+      return records if records.size < 2
+
+      defaults = model.respond_to?(:column_defaults) ? model.column_defaults : {}
+      all_keys = records.each_with_object(Set.new) { |record, keys| keys.merge(record.keys) }
+      records.each do |record|
+        (all_keys - record.keys).each { |key| record[key] = defaults[key.to_s] }
+      end
+      records
+    end
+
     def record_all(records)
       return {} if records.blank?
 

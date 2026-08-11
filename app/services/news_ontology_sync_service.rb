@@ -81,9 +81,17 @@ class NewsOntologySyncService
     end
 
     def sync_story_cluster(cluster)
-      place_entity = sync_place_entity(cluster)
+      resolution = resolve_cluster_place(cluster)
+      place_entity = sync_place_entity(cluster, resolution: resolution)
       event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: "news-story-cluster:#{cluster.cluster_key}") do |record|
         record.place_entity = place_entity
+        # Only a coordinate that describes the story. coordinate_trusted? rejects
+        # the publisher-derived bases, which are a third of all news coordinates
+        # and would put a Chilean paper's Gaza story in Santiago.
+        if resolution.coordinate_trusted?
+          record.latitude = resolution.latitude
+          record.longitude = resolution.longitude
+        end
         record.primary_story_cluster = cluster
         record.event_family = cluster.event_family
         record.event_type = cluster.event_type
@@ -159,21 +167,66 @@ class NewsOntologySyncService
       end
     end
 
-    def sync_place_entity(cluster)
-      return if cluster.location_name.blank?
+    # Anchors the event to a place, or to nothing.
+    #
+    # This used to read cluster.location_name, which the clusterer filled from
+    # NewsEvent#name -- the publisher. That is how "France 24" and "Guardian
+    # World" became the two most common places in the graph. It now resolves
+    # from the geocode_* columns of the cluster's own articles, which record how
+    # each coordinate was derived, and returns nil rather than guessing: an
+    # event with no place is honest, an event placed at its newspaper is not.
+    def sync_place_entity(cluster, resolution: nil)
+      resolution ||= resolve_cluster_place(cluster)
+      return if resolution.none?
+      # A country is a real answer, and one the graph already has a node for --
+      # so point at the existing country entity instead of minting a "place"
+      # named CL beside it.
+      return country_entity_for(resolution.country_code) if resolution.country?
 
       OntologySyncSupport.upsert_entity(
-        canonical_key: "place:#{OntologySyncSupport.slugify(cluster.location_name)}",
+        canonical_key: "place:#{OntologySyncSupport.slugify(resolution.name)}",
         entity_type: PLACE_ENTITY_TYPE,
-        canonical_name: cluster.location_name,
+        canonical_name: resolution.name,
+        country_code: resolution.country_code&.upcase,
         metadata: {
-          "latitude" => cluster.latitude,
-          "longitude" => cluster.longitude,
-          "geo_precision" => cluster.geo_precision,
+          "latitude" => resolution.latitude,
+          "longitude" => resolution.longitude,
+          "geo_precision" => resolution.precision,
+          "geocode_basis" => resolution.basis,
         }.compact
       ).tap do |entity|
-        OntologySyncSupport.upsert_alias(entity, cluster.location_name, alias_type: "official")
+        OntologySyncSupport.upsert_alias(entity, resolution.name, alias_type: "official")
       end
+    end
+
+    # Members disagree about how precisely they were geocoded -- one article's
+    # headline names the city while another only implies the country -- so take
+    # the most specific trustworthy answer rather than the lead article's.
+    def resolve_cluster_place(cluster)
+      events = cluster_news_events(cluster)
+      resolutions = events.map { |event| NewsPlaceResolver.call(event) }.reject(&:none?)
+      return NewsPlaceResolver::NONE if resolutions.empty?
+
+      resolutions.max_by do |resolution|
+        [ resolution.place? ? 1 : 0, resolution.confidence.to_f ]
+      end
+    end
+
+    def cluster_news_events(cluster)
+      article_ids = cluster.news_story_memberships.pluck(:news_article_id)
+      article_ids << cluster.lead_news_article_id if cluster.lead_news_article_id.present?
+      return [] if article_ids.compact.empty?
+
+      NewsEvent.where(news_article_id: article_ids.compact.uniq).to_a
+    end
+
+    # Only ever reuses a country node that already exists. Minting one from an
+    # ISO-2 code would sit a "country:cl" beside the "country:chl" the identity
+    # service already maintains, and the two would never merge.
+    def country_entity_for(code)
+      return if code.blank?
+
+      OntologyEntity.find_by(entity_type: "country", country_code: code.upcase)
     end
 
     def sync_event_entities(event, cluster)

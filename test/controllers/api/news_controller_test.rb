@@ -58,6 +58,48 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     NewsClaimActor.create!(news_claim: claim, news_actor: iran, role: "target", position: 1, confidence: 0.89)
   end
 
+  test "news response exposes the geocode family" do
+    @news.update_columns(
+      geocode_precision: "city",
+      geocode_confidence: 0.912,
+      geocode_basis: "title_place",
+      geocode_country_code: "at",
+      geocode_place_name: "Vienna"
+    )
+
+    get "/api/news"
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_equal "city", event["geo_precision"]
+    assert_in_delta 0.91, event["geo_confidence"], 0.001
+    assert_equal "title_place", event["geo_basis"]
+    assert_equal "at", event["geo_country_code"]
+    assert_equal "Vienna", event["place_name"]
+  end
+
+  test "place_name is withheld for country-precision rows" do
+    # geocode_place_name on a country centroid is routinely the publisher
+    # ("Die Zeit", "NYT World"), so surfacing it would label a centroid with a
+    # masthead. The coordinates are a whole country; there is no place to name.
+    @news.update_columns(geocode_precision: "country", geocode_place_name: "Die Zeit")
+
+    get "/api/news"
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_nil event["place_name"]
+    assert_equal "country", event["geo_precision"]
+  end
+
+  test "clustered response also carries the geocode family" do
+    @news.update_columns(geocode_precision: "place", geocode_place_name: "Vienna")
+
+    get "/api/news", params: { clustered: "true" }
+    event = JSON.parse(response.body).find { |e| e["title"] == "Test news event" }
+
+    assert_equal "place", event["geo_precision"]
+    assert_equal "Vienna", event["place_name"]
+  end
+
   test "GET /api/news returns JSON array" do
     get "/api/news"
     assert_response :success
@@ -140,5 +182,139 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
 
     assert data.any? { |entry| entry["title"] == "Unclustered story one" }
     assert data.any? { |entry| entry["title"] == "Unclustered story two" }
+  end
+
+  # content_scope gated claim extraction and clustering but never the map, so
+  # two thirds of pins were headlines the scope classifier had already rejected.
+  test "out_of_scope events are kept off the map" do
+    scoped_event("news-ctrl-scope-out", "Local derby ends in a draw", scope: "out_of_scope")
+    scoped_event("news-ctrl-scope-in", "Shelling reported near the border", scope: "core")
+
+    get "/api/news"
+    titles = JSON.parse(response.body).map { |entry| entry["title"] }
+
+    assert_includes titles, "Shelling reported near the border"
+    assert_not_includes titles, "Local derby ends in a draw"
+  end
+
+  # NewsArticle requires a scope, but a NewsEvent whose normalization returned no
+  # ids has none. A plain `where.not` would drop these, because SQL evaluates
+  # NOT (NULL = 'out_of_scope') to NULL rather than true.
+  test "events with no content_scope still reach the map" do
+    NewsEvent.create!(
+      url: "https://example.com/news-ctrl-scope-nil", title: "Unclassified report",
+      name: "Vienna", latitude: 48.2, longitude: 16.3, tone: -2.0, source: "example",
+      content_scope: nil, published_at: 1.hour.ago, fetched_at: Time.current
+    )
+
+    get "/api/news"
+    titles = JSON.parse(response.body).map { |entry| entry["title"] }
+
+    assert_includes titles, "Unclassified report", "NULL scope is unknown, not out of scope"
+  end
+
+  test "serializes a prose summary and rejects feed tag lists" do
+    scoped_event("news-ctrl-sum-good", "Quake hits the coast", scope: "core",
+      summary: "A powerful earthquake struck the coast on Monday, killing at least eleven people and toppling homes.")
+    scoped_event("news-ctrl-sum-tags", "Border incident reported", scope: "core",
+      summary: "Rusija, Karas Ukrainoje")
+    scoped_event("news-ctrl-sum-slug", "Strait transit resumes", scope: "core", summary: "us-iran")
+
+    get "/api/news"
+    by_title = JSON.parse(response.body).index_by { |entry| entry["title"] }
+
+    assert_match(/powerful earthquake struck/, by_title["Quake hits the coast"]["summary"])
+    assert_nil by_title["Border incident reported"]["summary"], "tag list is not a summary"
+    assert_nil by_title["Strait transit resumes"]["summary"], "slug is not a summary"
+  end
+
+  # RSS descriptions arrive wrapped in markup. Measuring length before stripping
+  # let a link block clear the minimum, then truncation cut the tag in half and
+  # served a literal "<a…" as the standfirst.
+  test "strips markup out of a summary before measuring or truncating it" do
+    scoped_event("news-ctrl-sum-html", "Markup standfirst", scope: "core",
+      summary: '<p>Rescue teams reached the village on Tuesday, according to officials.</p> <a href="https://example.com/more">Read more</a>')
+    scoped_event("news-ctrl-sum-htmlonly", "Link only", scope: "core",
+      summary: '<a href="https://example.com/a-very-long-tracking-url-that-is-plenty-long">Read more</a>')
+
+    get "/api/news"
+    by_title = JSON.parse(response.body).index_by { |entry| entry["title"] }
+
+    summary = by_title["Markup standfirst"]["summary"]
+    assert_equal "Rescue teams reached the village on Tuesday, according to officials. Read more", summary
+    assert_no_match(/[<>]/, summary)
+    assert_nil by_title["Link only"]["summary"], "a bare link is not a standfirst"
+  end
+
+  test "decodes entities and rejects comma-separated keyword lists" do
+    scoped_event("news-ctrl-sum-ents", "Entity standfirst", scope: "core",
+      summary: "Rescue teams reached the village&nbsp;&nbsp;on Tuesday, according to &quot;officials&quot;.")
+    scoped_event("news-ctrl-sum-kw", "Keyword standfirst", scope: "core",
+      summary: "North Korea, Russia, Ukraine, conflict, troops, missiles")
+
+    get "/api/news"
+    by_title = JSON.parse(response.body).index_by { |entry| entry["title"] }
+
+    summary = by_title["Entity standfirst"]["summary"]
+    assert_no_match(/&nbsp;|&quot;/, summary)
+    assert_equal 'Rescue teams reached the village on Tuesday, according to "officials".', summary
+    assert_nil by_title["Keyword standfirst"]["summary"], "keyword list is not a standfirst"
+  end
+
+  test "truncates a long summary on a sentence boundary" do
+    long = "#{'The situation developed over several hours. ' * 8}Trailing clause that runs past the limit."
+    scoped_event("news-ctrl-sum-long", "Long standfirst", scope: "core", summary: long)
+
+    get "/api/news"
+    entry = JSON.parse(response.body).find { |row| row["title"] == "Long standfirst" }
+
+    assert_operator entry["summary"].length, :<=, 281
+    assert entry["summary"].end_with?(".", "…"), "expected a clean cut, got #{entry['summary'][-20..].inspect}"
+  end
+
+  # A GDELT record has no standfirst and usually no claim, so its themes are the
+  # only substance the card can show. They were serialized raw and never used.
+  test "humanizes gdelt themes and drops taxonomy noise" do
+    scoped_event("news-ctrl-themes", "Trump scoffs at demand", scope: "core",
+      themes: %w[LEADER ARMEDCONFLICT EPU_CATS_NATIONAL_SECURITY TAX_FNCACT_IMAM])
+
+    get "/api/news"
+    entry = JSON.parse(response.body).find { |row| row["title"] == "Trump scoffs at demand" }
+
+    assert_equal ["Leader", "Armed conflict", "National security"], entry["theme_labels"]
+    assert_not_includes entry["theme_labels"].to_s, "IMAM", "TAX_* tags nouns, not events"
+  end
+
+  test "theme labels stay empty when there are no themes" do
+    scoped_event("news-ctrl-nothemes", "No themes here", scope: "core", themes: [])
+
+    get "/api/news"
+    entry = JSON.parse(response.body).find { |row| row["title"] == "No themes here" }
+
+    assert_equal [], entry["theme_labels"]
+  end
+
+  private
+
+  def scoped_event(slug, title, scope:, summary: nil, themes: nil)
+    source = NewsSource.find_or_create_by!(canonical_key: "publisher:example.com:#{slug}") do |row|
+      row.name = "Example"
+      row.source_kind = "publisher"
+      row.publisher_domain = "example.com"
+    end
+    article = NewsArticle.create!(
+      news_source: source,
+      url: "https://example.com/#{slug}",
+      canonical_url: "https://example.com/#{slug}",
+      title: title, summary: summary, content_scope: scope,
+      publisher_name: "Example", publisher_domain: "example.com",
+      published_at: 1.hour.ago, fetched_at: Time.current
+    )
+    NewsEvent.create!(
+      url: "https://example.com/#{slug}", title: title, name: "Vienna",
+      latitude: 48.2, longitude: 16.3, tone: -2.0, source: "example",
+      content_scope: scope, news_source: source, news_article: article,
+      themes: themes, published_at: 1.hour.ago, fetched_at: Time.current
+    )
   end
 end

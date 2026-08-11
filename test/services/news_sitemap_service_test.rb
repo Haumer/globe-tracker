@@ -180,11 +180,38 @@ class NewsSitemapServiceTest < ActiveSupport::TestCase
   test "current_batch rotates and covers every source across a full cycle" do
     sources = Array.new(42) { |i| { "domain" => "d#{i}" } }
     seen = []
-    NewsSitemapService::BATCH_COUNT.times do
-      seen.concat(@service.send(:current_batch, sources))
+    start = Time.utc(2026, 1, 1)
+
+    # The cursor is derived from the clock, so a cycle is BATCH_COUNT polls one
+    # BATCH_INTERVAL apart. Calling it six times in the same instant would
+    # correctly return the same batch six times.
+    NewsSitemapService::BATCH_COUNT.times do |i|
+      travel_to(start + i * NewsSitemapService::BATCH_INTERVAL.minutes) do
+        seen.concat(@service.send(:current_batch, sources))
+      end
     end
 
     assert_equal sources.size, seen.uniq.size
+  end
+
+  # The rotation used to be a Rails.cache counter, which reads back nil under
+  # the NullStore that development runs on -- so the index was always zero and
+  # 215 of 253 publishers were never polled. The suite runs on a MemoryStore,
+  # which is why that went unnoticed, so make the hostile store explicit here.
+  test "current_batch rotates even when the cache store discards writes" do
+    sources = Array.new(42) { |i| { "domain" => "d#{i}" } }
+    start = Time.utc(2026, 1, 1)
+
+    batches = Rails.stub(:cache, ActiveSupport::Cache::NullStore.new) do
+      NewsSitemapService::BATCH_COUNT.times.map do |i|
+        travel_to(start + i * NewsSitemapService::BATCH_INTERVAL.minutes) do
+          @service.send(:current_batch, sources).map { |s| s["domain"] }
+        end
+      end
+    end
+
+    assert_equal NewsSitemapService::BATCH_COUNT, batches.uniq.size,
+                 "every poll returned the same batch: #{batches.first.inspect}"
   end
 
   # ── redirects ───────────────────────────────────────────────

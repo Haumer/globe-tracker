@@ -3,9 +3,9 @@ import {
   attentionAnchorLabel,
   attentionPalette,
   attentionSeverity,
-  attentionSurfaceAlpha,
   shouldRenderAttentionSurface,
 } from "globe/controller/infrastructure/conflict_pulse_attention"
+import { ambientHash01 } from "globe/controller/ambient_pulse"
 
 export function applyConflictPulseRenderingMethods(GlobeController) {
   GlobeController.prototype._conflictPulseEntityKey = function(value, fallback = "unknown") {
@@ -83,30 +83,10 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       })
     }
 
-    surfaceZones.forEach(({ zone, idx }) => {
-      const zoneKey = this._conflictPulseEntityKey(zone.cell_key || `zone-${idx}`)
-      const palette = attentionPalette(zone)
-      const color = Cesium.Color.fromCssColorString(palette.fill)
-      const axes = this._attentionSurfaceAxes(zone, idx)
-      const surface = ds.entities.add({
-        id: `cpulse-surface-${zoneKey}`,
-        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
-        ellipse: {
-          semiMajorAxis: axes.major,
-          semiMinorAxis: axes.minor,
-          rotation: axes.rotation,
-          material: color.withAlpha(attentionSurfaceAlpha(zone)),
-          outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(palette.stroke).withAlpha(0.6),
-          outlineWidth: 2,
-          height: 0,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          classificationType: Cesium.ClassificationType.BOTH,
-          zIndex: 1000 + idx,
-        },
-      })
-      this._conflictPulseEntities.push(surface)
-    })
+    // Attention-region ellipses removed: they were synthetic shapes drawn around a
+    // cluster centroid, and the country/admin-boundary surfaces already carry the
+    // real conflict geography. surfaceZones is still computed above because the hex
+    // filter uses surfaceZoneKeys to decide which cells belong to a ranked zone.
 
     if (this._strikeArcData?.length && this._strikeArcsVisible !== false) {
       this._strikeArcData.forEach((arc, idx) => {
@@ -191,10 +171,14 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       })
       this._conflictPulseEntities.push(ring)
 
+      // Every live zone pulses. The old gate required critical severity or a
+      // "surging" trend, and real data carries neither, so nothing ever animated.
+      // Intensity now scales with the zone instead of gating it on/off.
       const shouldPulse = !this._timelineActive
-        && (severity === "critical" || zone.escalation_trend === "surging" || increased.has(zone.cell_key))
+      const emphasis = severity === "critical" || zone.escalation_trend === "surging" || increased.has(zone.cell_key)
 
       if (shouldPulse) {
+        const strength = emphasis ? 1 : 0.35 + Math.min(Math.max(t, 0), 1) * 0.4
         const pulseRing = ds.entities.add({
           id: `cpulse-pulse-${zoneKey}`,
           position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
@@ -203,8 +187,8 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
             semiMinorAxis: radius,
             material: Cesium.Color.TRANSPARENT,
             outline: true,
-            outlineColor: color.withAlpha(0.8),
-            outlineWidth: 3,
+            outlineColor: color.withAlpha(0.8 * strength),
+            outlineWidth: emphasis ? 3 : 2,
             height: 0,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             classificationType: Cesium.ClassificationType.BOTH,
@@ -212,7 +196,16 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
           },
         })
         this._conflictPulseEntities.push(pulseRing)
-        this._pulsingRings.push({ entity: pulseRing, baseRadius: radius, color, phaseOffset: idx * 0.7 })
+        // Hash-derived phase and period so zones never ripple in lockstep.
+        const seed = ambientHash01(`${zone.cell_key || zoneKey}`)
+        this._pulsingRings.push({
+          entity: pulseRing,
+          baseRadius: radius,
+          color,
+          strength,
+          phaseOffset: seed,
+          period: 2.8 + ambientHash01(`${zone.cell_key || zoneKey}#p`) * 1.8,
+        })
       }
 
       if (score >= 55) {
@@ -341,14 +334,18 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       if (!this._pulsingRings?.length) return
       const elapsed = (performance.now() - startTime) / 1000
 
-      this._pulsingRings.forEach(({ entity, baseRadius, color, phaseOffset }) => {
+      this._pulsingRings.forEach(({ entity, color, phaseOffset, period, strength = 1 }) => {
         if (!entity.ellipse) return
-        const phase = ((elapsed + phaseOffset) % 3) / 3
-        const expandFactor = 1.0 + phase * 0.5
-        const alpha = 0.8 * (1 - phase)
-        entity.ellipse.semiMajorAxis = baseRadius * expandFactor
-        entity.ellipse.semiMinorAxis = baseRadius * expandFactor
-        entity.ellipse.outlineColor = color.withAlpha(alpha)
+        const cycle = period || 3
+        // phaseOffset is a 0..1 fraction of the cycle, so each ring starts elsewhere.
+        const phase = (((elapsed / cycle) + phaseOffset) % 1 + 1) % 1
+        // Colour only. These are CLAMP_TO_GROUND + classificationType.BOTH ellipses:
+        // changing semiMajorAxis/semiMinorAxis per frame makes Cesium rebuild the
+        // classified geometry every frame, which throws out of
+        // createPotentiallyVisibleSet and kills the render loop. A colour change is
+        // a per-instance attribute update, so the geometry is left alone.
+        const glow = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2)
+        entity.ellipse.outlineColor = color.withAlpha(0.2 + 0.65 * strength * glow)
       })
 
       this._requestRender()
@@ -385,29 +382,6 @@ export function applyConflictPulseRenderingMethods(GlobeController) {
       positions.push(Cesium.Cartesian3.fromDegrees(lng, lat, arcHeight))
     }
     return positions
-  }
-
-  GlobeController.prototype._attentionSurfaceAxes = function(zone, idx = 0) {
-    const score = Number(zone?.pulse_score || 0)
-    const sources = Number(zone?.source_count || 0)
-    const key = `${zone?.cell_key || zone?.situation_name || idx}`
-    let hash = 0
-    for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash) + key.charCodeAt(i)
-    const jitter = Math.abs(hash % 1000) / 1000
-    const severity = attentionSeverity(zone)
-    const base = {
-      critical: 360000,
-      high: 300000,
-      elevated: 230000,
-      watch: 155000,
-    }[severity] || 155000
-    const major = Math.min(base + score * 3600 + Math.min(sources, 20) * 5500, 900000)
-    const minor = Math.min(major * (0.52 + jitter * 0.18), 620000)
-    return {
-      major,
-      minor,
-      rotation: jitter * Math.PI,
-    }
   }
 
   GlobeController.prototype._makeAttentionAnchorIcon = function(label, color, severity) {

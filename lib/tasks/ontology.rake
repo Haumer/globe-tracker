@@ -176,6 +176,102 @@ namespace :ontology do
     puts format("  %-22s %6d of %6d all events  (%.1f%%)", "", live_coords, OntologyEvent.count, 100.0 * live_coords / OntologyEvent.count)
   end
 
+  # Phase 1.3. Hand-written on purpose. There are twelve corridors, the plan asks
+  # for exactly this ("Jizan"/"JAZAN", "Bab al-"/"Bab el-"), and deriving short
+  # forms mechanically goes wrong in ways no rule catches cheaply: stripping the
+  # geographic words off "Taiwan Strait" yields "Taiwan", which then matches every
+  # story about the island -- and Taiwan is absent from the 238 country entities,
+  # so the country guard cannot catch it either. "Cape Horn" yields "Horn", which
+  # would take the Horn of Africa. Those three are deliberately left with no short
+  # form; a missed link costs recall, a wrong one costs precision everywhere.
+  CORRIDOR_ALIASES = {
+    "corridor:chokepoint:hormuz" => ["Hormuz", "Straits of Hormuz"],
+    "corridor:chokepoint:bab_el_mandeb" => ["Bab el-Mandeb", "Bab al-Mandab", "Bab al-Mandeb", "Mandeb", "Mandab"],
+    "corridor:chokepoint:suez" => ["Suez"],
+    "corridor:chokepoint:malacca" => ["Malacca", "Straits of Malacca"],
+    "corridor:chokepoint:bosphorus" => ["Bosphorus", "Bosporus"],
+    "corridor:chokepoint:gibraltar" => ["Gibraltar"],
+    "corridor:chokepoint:panama" => ["Panama Canal"],
+    "corridor:chokepoint:mozambique" => ["Mozambique Channel"],
+    "corridor:chokepoint:danish_straits" => ["Danish Straits"],
+    "corridor:chokepoint:taiwan_strait" => ["Taiwan Strait"],
+    "corridor:chokepoint:cape" => ["Cape of Good Hope"],
+    "corridor:chokepoint:cape_horn" => ["Cape Horn"],
+  }.freeze
+
+  desc "Seed reviewed short-form aliases for the 12 corridor entities (DRY_RUN=1 to preview)"
+  task seed_corridor_aliases: :environment do
+    dry_run = ENV["DRY_RUN"].present?
+    stats = Hash.new(0)
+
+    CORRIDOR_ALIASES.each do |canonical_key, names|
+      entity = OntologyEntity.find_by(canonical_key: canonical_key)
+      unless entity
+        puts format("  %-36s MISSING", canonical_key)
+        stats[:missing_entity] += 1
+        next
+      end
+
+      names.each do |name|
+        if OntologyEntityAlias.exists?(ontology_entity: entity, name: name)
+          stats[:already_present] += 1
+          next
+        end
+
+        stats[:created] += 1
+        next if dry_run
+
+        OntologySyncSupport.upsert_alias(entity, name, alias_type: "short_form")
+      end
+      puts format("  %-22s %s", entity.canonical_name, names.join(", "))
+    end
+
+    puts
+    puts(dry_run ? "DRY RUN - nothing written" : "Seeded corridor aliases")
+    stats.sort.each { |name, count| puts format("  %-18s %4d", name, count) }
+  end
+
+  desc "Measure registry name resolution against the eval sets (DAYS=21)"
+  task measure_registry_links: :environment do
+    days = ENV.fetch("DAYS", 21).to_i
+    clusters = NewsStoryCluster.where("last_seen_at >= ?", days.days.ago).pluck(:id, :canonical_title)
+    index = RegistryNameIndex.new
+
+    puts "Registry name index"
+    puts format("  usable surfaces   %7d", index.usable.size)
+    index.rejections.sort_by { |_, count| -count }.each { |name, count| puts format("    rejected %-24s %6d", name, count) }
+
+    matches = clusters.to_h { |id, title| [id, index.match(title)] }
+    linked = matches.count { |_, found| found.any? }
+    confident = matches.count { |_, found| found.any?(&:confident?) }
+
+    puts
+    puts format("  clusters              %6d", clusters.size)
+    puts format("  with any match        %6d (%.1f%%)", linked, 100.0 * linked / clusters.size)
+    puts format("  with confident match  %6d (%.1f%%)", confident, 100.0 * confident / clusters.size)
+
+    puts
+    puts "Eval sets"
+    hormuz = clusters.select { |_, title| title.to_s.downcase.include?("hormuz") }
+    hit = hormuz.count { |id, _| matches[id].any? { |m| m.entity_name.to_s.downcase.include?("hormuz") } }
+    puts format("  Hormuz corridor   %3d of %3d (%.0f%%)", hit, hormuz.size, 100.0 * hit / [hormuz.size, 1].max)
+
+    jazan = clusters.select { |_, title| title.to_s.downcase.match?(/jazan|jizan/) }
+    hit = jazan.count { |id, _| matches[id].any? { |m| m.entity_name.to_s.upcase.match?(/JAZAN|JIZAN/) } }
+    puts format("  Jazan asset       %3d of %3d (%.0f%%)", hit, jazan.size, 100.0 * hit / [jazan.size, 1].max)
+
+    puts
+    puts "Matches by entity type"
+    matches.values.flatten.group_by(&:entity_type).transform_values(&:size)
+      .sort_by { |_, count| -count }.each { |type, count| puts format("  %-18s %5d", type, count) }
+
+    puts
+    puts "Confident matches, most frequent"
+    matches.values.flatten.select(&:confident?).map { |m| "#{m.entity_type}:#{m.entity_name}" }
+      .tally.sort_by { |_, count| -count }.first(15)
+      .each { |name, count| puts format("  %-44s %4d", name.first(42), count) }
+  end
+
   desc "Delete entity links whose polymorphic parent is gone (DRY_RUN=1 to preview, WINDOW=250000)"
   task collect_dangling_links: :environment do
     dry_run = ENV["DRY_RUN"].present?

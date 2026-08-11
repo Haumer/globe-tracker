@@ -272,9 +272,31 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
     assert entry["summary"].end_with?(".", "…"), "expected a clean cut, got #{entry['summary'][-20..].inspect}"
   end
 
+  # A GDELT record has no standfirst and usually no claim, so its themes are the
+  # only substance the card can show. They were serialized raw and never used.
+  test "humanizes gdelt themes and drops taxonomy noise" do
+    scoped_event("news-ctrl-themes", "Trump scoffs at demand", scope: "core",
+      themes: %w[LEADER ARMEDCONFLICT EPU_CATS_NATIONAL_SECURITY TAX_FNCACT_IMAM])
+
+    get "/api/news"
+    entry = JSON.parse(response.body).find { |row| row["title"] == "Trump scoffs at demand" }
+
+    assert_equal ["Leader", "Armed conflict", "National security"], entry["theme_labels"]
+    assert_not_includes entry["theme_labels"].to_s, "IMAM", "TAX_* tags nouns, not events"
+  end
+
+  test "theme labels stay empty when there are no themes" do
+    scoped_event("news-ctrl-nothemes", "No themes here", scope: "core", themes: [])
+
+    get "/api/news"
+    entry = JSON.parse(response.body).find { |row| row["title"] == "No themes here" }
+
+    assert_equal [], entry["theme_labels"]
+  end
+
   private
 
-  def scoped_event(slug, title, scope:, summary: nil)
+  def scoped_event(slug, title, scope:, summary: nil, themes: nil)
     source = NewsSource.find_or_create_by!(canonical_key: "publisher:example.com:#{slug}") do |row|
       row.name = "Example"
       row.source_kind = "publisher"
@@ -292,7 +314,7 @@ class Api::NewsControllerTest < ActionDispatch::IntegrationTest
       url: "https://example.com/#{slug}", title: title, name: "Vienna",
       latitude: 48.2, longitude: 16.3, tone: -2.0, source: "example",
       content_scope: scope, news_source: source, news_article: article,
-      published_at: 1.hour.ago, fetched_at: Time.current
+      themes: themes, published_at: 1.hour.ago, fetched_at: Time.current
     )
   end
 end

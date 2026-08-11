@@ -4,6 +4,7 @@ import {
   conflictPulseStroke,
   firstPresent,
   kindLabel,
+  sentenceCase,
   shortLine,
   situationClassLabel,
   toNumber,
@@ -222,6 +223,10 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       liveSource = null,
       // Controller method rendering a kind-specific card body.
       bodyRenderer = null,
+      // shortLine's 96-char default suits a card whose brief is a metadata line.
+      // A news standfirst is prose and gets cut mid-clause at that width, so a
+      // kind can ask for more.
+      briefMaxLength = 96,
     }) => ({
       kind,
       record: data,
@@ -232,7 +237,7 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
       bodyRenderer,
       title: title || genericTitle,
       subtitle: shortLine(subtitle || genericSubtitle, 84),
-      brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief),
+      brief: shortLine(brief || compactFacts(facts.length ? facts : genericFacts).join(" · ") || genericBrief, briefMaxLength),
       facts: compactFacts(facts.length ? facts : genericFacts),
       chips: chips.filter(Boolean).slice(0, 2),
       timeLabel: payloadTimeLabel,
@@ -388,22 +393,39 @@ export function applyDetailOverlayPayloadMethods(GlobeController) {
         const corroboration = data?.article_count > 1
           ? `${data.article_count} reports · ${data.source_count || data.article_count} sources`
           : null
-        // What the story says goes in the brief, which renders as a paragraph.
-        // The metadata that used to be crammed in there moves to `facts`, the
-        // short row above it -- so a pin now shows both, instead of showing a
-        // metadata line that was empty whenever no claim had been extracted.
+        // What the story says goes in the brief, which is the only body the
+        // anchored card renders -- `facts` reaches the right panel but not the
+        // card, so anything the card should show has to end up here.
+        //
+        // GDELT records have no summary and usually no claim, which left this
+        // as just the publisher. Their themes are the one thing they do carry,
+        // so they lead the fallback: "Armed conflict · National security ·
+        // Critical tone" says more about the pin than "KLIF" ever did.
+        const themes = Array.isArray(data?.theme_labels) ? data.theme_labels.filter(Boolean) : []
+        const toneLabel = data?.level ? sentenceCase(`${data.level} tone`) : null
+        // A dot on a country centroid should admit it rather than imply a street
+        // address. geo_precision is populated on every row, unlike claim fields.
+        const coarseGeo = ["country", "unknown"].includes(data?.geo_precision) ? "Approximate location" : null
+        // Themes stand in for the claim when there is none, which for a GDELT
+        // record is the normal case rather than the exception.
+        const lead = firstPresent(claimType, actors.slice(0, 2).join(", "), themes.join(" · "))
+        // compactFacts caps at 2 by default, which would drop everything after
+        // the lead. A news card has room for a few more.
         const metadata = compactFacts([
-          firstPresent(claimType, actors.slice(0, 2).join(", ")),
+          lead,
           corroboration,
           verificationLabel,
+          toneLabel,
+          coarseGeo,
           // Only worth a second mention when the subtitle is showing a place.
           // Otherwise the publisher is already the line above.
           place ? publisher : null,
-        ])
+        ], 4)
         return makePayload({
           title: firstPresent(data?.title, "Untitled report"),
           subtitle: firstPresent(place, publisher, "Reported event"),
           brief: firstPresent(data?.summary, metadata.join(" · "), ""),
+          briefMaxLength: 240,
           facts: data?.summary ? metadata : [],
           chips: [
             chip(firstPresent(data?.category, "News"), data?.threat === "high" ? "critical" : "accent"),

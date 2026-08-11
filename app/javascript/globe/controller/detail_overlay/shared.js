@@ -36,6 +36,13 @@ export function compactFacts(values, limit = 2) {
   return values.filter(value => value != null && `${value}`.trim() !== "").slice(0, limit)
 }
 
+export function sentenceCase(value) {
+  if (value == null) return null
+  const normalized = `${value}`.trim()
+  if (!normalized) return null
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
 export function chip(label, tone = "neutral") {
   if (!label) return null
   return { label, tone }

@@ -62,6 +62,7 @@ module Api
         threat: ev.threat_level,
         credibility: ev.credibility,
         themes: parse_json_field(ev.themes),
+        theme_labels: theme_labels(ev),
         source: ev.source,
         publisher: publisher_name,
         origin_source: origin_source_name,
@@ -134,6 +135,46 @@ module Api
         .gsub(/[\u00a0\u2007\u202f]/, " ")
         .gsub(/\s+/, " ")
         .strip
+    end
+
+    # GDELT records arrive with no standfirst and, unless a rule and a known
+    # actor both match, no claim either -- so their themes are the only thing
+    # the card has left to say. They were serialized raw and never displayed,
+    # which is how a pin ended up showing its publisher and nothing else.
+    #
+    # GDELT's taxonomy is not presentable as-is: codes are SCREAMING_SNAKE with
+    # dataset prefixes (EPU_CATS_, WB_695_) and the TAX_* family tags nouns
+    # rather than events -- TAX_FNCACT_IMAM says a cleric was mentioned, not
+    # what happened.
+    THEME_LABELS = {
+      "ARMEDCONFLICT" => "Armed conflict",
+      "CYBER_ATTACK" => "Cyber attack",
+      "ECON_BANKRUPTCY" => "Bankruptcy",
+      "ECON_STOCKMARKET" => "Stock market",
+      "ENV_EARTHQUAKE" => "Earthquake",
+      "ENV_FLOOD" => "Flood",
+      "ENV_HURRICANE" => "Hurricane",
+      "ENV_VOLCANO" => "Volcano",
+      "ENV_WILDFIRE" => "Wildfire",
+      "EPU_CATS_NATIONAL_SECURITY" => "National security",
+      "GENERAL_GOVERNMENT" => "Government",
+      "GENERAL_HEALTH" => "Health",
+      "HEALTH_EPIDEMIC" => "Epidemic",
+      "HEALTH_PANDEMIC" => "Pandemic",
+      "WB_695_POVERTY" => "Poverty",
+    }.freeze
+
+    THEME_NOISE = /\A(?:TAX_|SOC_POINTSOF|UNGP_|CRISISLEX_)/
+    THEME_STRIP = /\A(?:EPU_CATS_|WB_\d+_|ECON_|ENV_|HEALTH_|GENERAL_)/
+    THEME_LIMIT = 3
+
+    def theme_labels(ev)
+      Array(parse_json_field(ev.themes)).filter_map do |theme|
+        code = theme.to_s.strip.upcase
+        next if code.blank? || code.match?(THEME_NOISE)
+
+        THEME_LABELS[code] || code.sub(THEME_STRIP, "").tr("_", " ").downcase.upcase_first.presence
+      end.uniq.first(THEME_LIMIT)
     end
 
     # A comma-separated keyword list is not a standfirst. Feeds emit plenty of

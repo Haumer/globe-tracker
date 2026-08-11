@@ -120,11 +120,12 @@
   flex: 1 1 100%;
   // A headline is the point of the card, and on one nowrap line it was landing
   // at about three words. The date and close button sit beside it, so even with
-  // its own row it only gets part of the width -- two lines is what makes a
-  // real headline fit.
+  // its own row it only gets part of the width. Two lines still cut ordinary
+  // wire headlines mid-phrase ("Trump Scoffs At Irans Demand For War…"); three
+  // fits them, and the card has the vertical room.
   white-space: normal;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

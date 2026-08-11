@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_08_150100) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_11_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -960,8 +960,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_08_150100) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.float "latitude"
+    t.float "longitude"
     t.index ["canonical_key"], name: "index_ontology_events_on_canonical_key", unique: true
     t.index ["event_family", "last_seen_at"], name: "index_ontology_events_on_event_family_and_last_seen_at"
+    t.index ["latitude", "longitude"], name: "index_ontology_events_on_latitude_and_longitude"
     t.index ["place_entity_id"], name: "index_ontology_events_on_place_entity_id"
     t.index ["primary_story_cluster_id"], name: "index_ontology_events_on_primary_story_cluster_id"
     t.index ["verification_status"], name: "index_ontology_events_on_verification_status"

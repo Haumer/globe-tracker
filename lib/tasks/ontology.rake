@@ -99,6 +99,83 @@ namespace :ontology do
     puts format("  %-12s %d (left in place, now unreferenced)", "orphaned", orphaned)
   end
 
+  desc "Populate ontology_events.latitude/longitude from NewsPlaceResolver (DRY_RUN=1 to preview)"
+  task backfill_event_coordinates: :environment do
+    dry_run = ENV["DRY_RUN"].present?
+    scope = OntologyEvent.where.not(primary_story_cluster_id: nil).includes(:primary_story_cluster)
+    stats = Hash.new(0)
+
+    scope.find_each do |event|
+      cluster = event.primary_story_cluster
+      next unless cluster
+
+      stats[:examined] += 1
+      resolution = NewsOntologySyncService.send(:resolve_cluster_place, cluster)
+
+      # Deliberately narrower than "has a coordinate". A publisher-derived
+      # coordinate is precisely the defect NewsPlaceResolver exists to stop, and
+      # writing it to an indexed column would make it cheap to query and easy to
+      # believe. An event with no coordinate is honest; one sitting on its
+      # newspaper is not.
+      unless resolution.coordinate_trusted?
+        stats[resolution.none? ? :unresolved : :untrusted_coordinate] += 1
+        next
+      end
+
+      if event.latitude == resolution.latitude && event.longitude == resolution.longitude
+        stats[:unchanged] += 1
+        next
+      end
+
+      stats[:populated] += 1
+      next if dry_run
+
+      event.update_columns(latitude: resolution.latitude, longitude: resolution.longitude)
+    end
+
+    # Hazard events carry a real observation coordinate on the evidence record
+    # they were built from -- a satellite pass or a seismograph, which reports
+    # where the thing happened. No publisher gate applies.
+    OntologyEvent.where("canonical_key LIKE ?", "event:%").includes(:place_entity).find_each do |event|
+      stats[:hazard_examined] += 1
+      place = event.place_entity
+      lat = place&.metadata&.dig("latitude")
+      lng = place&.metadata&.dig("longitude")
+
+      # Outage events anchor to a country-shaped place. A country has no point,
+      # and inventing a centroid for one would be a coordinate nobody measured.
+      if lat.blank? || lng.blank?
+        stats[:hazard_no_point] += 1
+        next
+      end
+
+      if event.latitude.present?
+        stats[:hazard_unchanged] += 1
+        next
+      end
+
+      stats[:hazard_populated] += 1
+      next if dry_run
+
+      event.update_columns(latitude: lat.to_f, longitude: lng.to_f)
+    end
+
+    puts(dry_run ? "DRY RUN - nothing written" : "Backfilled event coordinates")
+    stats.sort.each { |name, count| puts format("  %-22s %6d", name, count) }
+
+    # Reported against live events, not the whole table. 83% of ontology_events
+    # are tombstones whose story cluster was purged by retention: they cannot be
+    # re-resolved because the cluster they would resolve from is gone. Counting
+    # them would make coverage a statement about how much dead weight the table
+    # carries rather than about how many real events are addressable.
+    live = OntologyEvent.where("primary_story_cluster_id IS NOT NULL OR canonical_key LIKE ?", "event:%")
+    live_total = live.count
+    live_coords = live.where.not(latitude: nil).count + (dry_run ? stats[:populated] + stats[:hazard_populated] : 0)
+    puts
+    puts format("  %-22s %6d of %6d live events (%.1f%%)", "carry coordinates", live_coords, live_total, 100.0 * live_coords / live_total)
+    puts format("  %-22s %6d of %6d all events  (%.1f%%)", "", live_coords, OntologyEvent.count, 100.0 * live_coords / OntologyEvent.count)
+  end
+
   desc "Delete entity links whose polymorphic parent is gone (DRY_RUN=1 to preview, WINDOW=250000)"
   task collect_dangling_links: :environment do
     dry_run = ENV["DRY_RUN"].present?

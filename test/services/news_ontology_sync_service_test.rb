@@ -210,6 +210,51 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
     assert_not OntologyEntity.exists?(entity_type: "place", canonical_name: "France 24")
   end
 
+  test "carries a trusted coordinate onto the event itself" do
+    article = create_article(
+      suffix: "ontology-coord", publisher: "Reuters", domain: "reuters.com",
+      title: "Refinery fire in Jazan", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+    cluster = create_cluster(article, key: "cluster:ontology-coord")
+
+    NewsEvent.where(news_article: article).update_all(
+      latitude: 16.94, longitude: 42.63,
+      geocode_place_name: "Jazan", geocode_country_code: "SA",
+      geocode_precision: "city", geocode_basis: "ai_place", geocode_confidence: 0.8
+    )
+
+    synced_event = NewsOntologySyncService.sync_story_cluster(cluster.reload)
+
+    assert_in_delta 16.94, synced_event.latitude, 0.001
+    assert_in_delta 42.63, synced_event.longitude, 0.001
+  end
+
+  # The coordinate column is indexed and therefore cheap to query and easy to
+  # believe, which makes it exactly the wrong place for a newsroom's location.
+  test "refuses to carry a publisher-derived coordinate onto the event" do
+    article = create_article(
+      suffix: "ontology-pubcoord", publisher: "France 24", domain: "france24.com",
+      title: "Clashes reported overnight", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+    cluster = create_cluster(article, key: "cluster:ontology-pubcoord")
+
+    # Paris — where the newsroom is, not where the clashes were.
+    NewsEvent.where(news_article: article).update_all(
+      latitude: 48.85, longitude: 2.35,
+      geocode_place_name: "France 24", geocode_country_code: "FR",
+      geocode_precision: "country", geocode_basis: "publisher_domain", geocode_confidence: 0.2
+    )
+
+    synced_event = NewsOntologySyncService.sync_story_cluster(cluster.reload)
+
+    assert_nil synced_event.latitude, "publisher coordinate must not reach the event"
+    assert_nil synced_event.longitude
+  end
+
   test "anchors to an existing country entity when only a country is known" do
     country = OntologyEntity.create!(canonical_key: "country:irn", entity_type: "country",
                                      canonical_name: "Iran", country_code: "IR")

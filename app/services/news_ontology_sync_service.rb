@@ -81,9 +81,17 @@ class NewsOntologySyncService
     end
 
     def sync_story_cluster(cluster)
-      place_entity = sync_place_entity(cluster)
+      resolution = resolve_cluster_place(cluster)
+      place_entity = sync_place_entity(cluster, resolution: resolution)
       event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: "news-story-cluster:#{cluster.cluster_key}") do |record|
         record.place_entity = place_entity
+        # Only a coordinate that describes the story. coordinate_trusted? rejects
+        # the publisher-derived bases, which are a third of all news coordinates
+        # and would put a Chilean paper's Gaza story in Santiago.
+        if resolution.coordinate_trusted?
+          record.latitude = resolution.latitude
+          record.longitude = resolution.longitude
+        end
         record.primary_story_cluster = cluster
         record.event_family = cluster.event_family
         record.event_type = cluster.event_type
@@ -167,8 +175,8 @@ class NewsOntologySyncService
     # from the geocode_* columns of the cluster's own articles, which record how
     # each coordinate was derived, and returns nil rather than guessing: an
     # event with no place is honest, an event placed at its newspaper is not.
-    def sync_place_entity(cluster)
-      resolution = resolve_cluster_place(cluster)
+    def sync_place_entity(cluster, resolution: nil)
+      resolution ||= resolve_cluster_place(cluster)
       return if resolution.none?
       # A country is a real answer, and one the graph already has a node for --
       # so point at the existing country entity instead of minting a "place"

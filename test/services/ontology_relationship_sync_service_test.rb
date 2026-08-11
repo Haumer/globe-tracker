@@ -756,6 +756,11 @@ class OntologyRelationshipSyncServiceTest < ActiveSupport::TestCase
       assert port_relation.active?
       assert cable_relation.active?
       assert_equal "thermal_strike", event.event_type
+      # The satellite's own fix, carried onto the indexed columns so the event is
+      # reachable by bounding box rather than only through its place entity's
+      # unindexed JSONB.
+      assert_in_delta 29.08, event.latitude, 0.001
+      assert_in_delta 50.82, event.longitude, 0.001
       assert_equal "port", port_relation.metadata.fetch("asset_type")
       assert_equal "submarine_cable", cable_relation.metadata.fetch("asset_type")
       assert_includes port_relation.explanation, port.name

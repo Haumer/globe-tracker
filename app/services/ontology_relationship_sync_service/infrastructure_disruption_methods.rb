@@ -16,6 +16,11 @@ class OntologyRelationshipSyncService
       place_entity = sync_hazard_place_entity(payload)
       event = OntologySyncSupport.persist_upsert(OntologyEvent, canonical_key: infrastructure_disruption_event_key(payload)) do |event_record|
         event_record.place_entity = place_entity
+        # A satellite pass or a seismograph reports where the thing happened, not
+        # where someone wrote about it, so these coordinates need no publisher
+        # gate the way the news path does — hence geo_precision "point" below.
+        event_record.latitude = payload[:latitude]
+        event_record.longitude = payload[:longitude]
         event_record.event_family = payload.fetch(:event_family, "infrastructure")
         event_record.event_type = payload.fetch(:event_type, payload.fetch(:kind).to_s)
         event_record.status = "active"

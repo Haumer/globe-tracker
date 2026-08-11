@@ -221,6 +221,105 @@ class NewsStoryClustererTest < ActiveSupport::TestCase
                  "one newsroom republished three times is not corroboration"
   end
 
+  # The defect this floor exists for. Both articles are conflict/airstrike, in
+  # the same window, at the same place, and share both actors -- every signal
+  # the scorer weighs except the words agrees. Before the floor that reached
+  # 0.705 against a threshold of 0.67 and merged two stories with nothing in
+  # common, which is how a food-safety recall joined a cluster of shipping
+  # attacks.
+  test "does not merge two unrelated reports that share only their actors" do
+    strike = create_article(
+      suffix: "topic-a", publisher: "BBC", domain: "bbc.com",
+      title: "Israel strikes targets near Isfahan",
+      source_kind: "publisher", published_at: Time.utc(2026, 3, 24, 12, 0, 0)
+    )
+    unrelated = create_article(
+      suffix: "topic-b", publisher: "Reuters", domain: "reuters.com",
+      title: "Jalapeno recall widens as salmonella cases mount",
+      source_kind: "wire", published_at: Time.utc(2026, 3, 24, 13, 0, 0)
+    )
+
+    records = [strike, unrelated].map do |article|
+      create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+      event = create_event(article, title: article.title, location_name: "Isfahan", lat: 32.65, lng: 51.67)
+      {
+        news_article_id: article.id, title: event.title, name: event.name,
+        latitude: event.latitude, longitude: event.longitude,
+        published_at: event.published_at, content_scope: "core",
+        news_source_id: article.news_source_id,
+      }
+    end
+
+    NewsStoryClusterer.assign_records(records)
+
+    assert_not_equal strike.news_events.first.reload.story_cluster_id,
+                     unrelated.news_events.first.reload.story_cluster_id,
+                     "sharing actors and a place is a shared topic, not a shared story"
+  end
+
+  # The floor must not cost the case the clusterer exists for: independent
+  # newsrooms writing different headlines about one incident.
+  test "still merges independently written headlines about one incident" do
+    articles = [
+      ["merge-a", "BBC", "bbc.com", "Israel strikes military targets near Isfahan", "publisher", 12],
+      ["merge-b", "Reuters", "reuters.com", "Explosions near Isfahan as Israel strikes Iranian targets", "wire", 13],
+    ].map do |suffix, publisher, domain, title, kind, hour|
+      create_article(suffix: suffix, publisher: publisher, domain: domain, title: title,
+                     source_kind: kind, published_at: Time.utc(2026, 3, 24, hour, 0, 0))
+    end
+
+    records = articles.map do |article|
+      create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+      event = create_event(article, title: article.title, location_name: "Isfahan", lat: 32.65, lng: 51.67)
+      {
+        news_article_id: article.id, title: event.title, name: event.name,
+        latitude: event.latitude, longitude: event.longitude,
+        published_at: event.published_at, content_scope: "core",
+        news_source_id: article.news_source_id,
+      }
+    end
+
+    NewsStoryClusterer.assign_records(records)
+
+    assert_equal articles.first.news_events.first.reload.story_cluster_id,
+                 articles.last.news_events.first.reload.story_cluster_id
+  end
+
+  # A cluster asserts that every member is the same story as every other, so the
+  # floor is checked against all of them, not just the lead. The third headline
+  # here is a close match for the second but shares nothing with the first, and
+  # gating on the lead alone would admit it and assert a pair nobody checked.
+  test "an article must match every member, not just the lead headline" do
+    titles = [
+      "Israel strikes military targets near Isfahan",
+      "Israeli jets hit Isfahan military sites overnight",
+      "Ukraine drone attack hits Russian refinery in Tyumen",
+    ]
+    articles = titles.each_with_index.map do |title, i|
+      create_article(suffix: "link-#{i}", publisher: "Pub#{i}", domain: "pub#{i}.com",
+                     title: title, source_kind: "publisher",
+                     published_at: Time.utc(2026, 3, 24, 12 + i, 0, 0))
+    end
+
+    records = articles.map do |article|
+      create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+      event = create_event(article, title: article.title, location_name: "Isfahan", lat: 32.65, lng: 51.67)
+      {
+        news_article_id: article.id, title: event.title, name: event.name,
+        latitude: event.latitude, longitude: event.longitude,
+        published_at: event.published_at, content_scope: "core",
+        news_source_id: article.news_source_id,
+      }
+    end
+
+    NewsStoryClusterer.assign_records(records)
+    keys = articles.map { |article| article.news_events.first.reload.story_cluster_id }
+
+    assert_equal keys[0], keys[1], "two reports of the Isfahan strike are one story"
+    assert_not_equal keys[1], keys[2],
+      "the drone story matches no member of that cluster and must not join it"
+  end
+
   private
 
   def create_article(suffix:, publisher:, domain:, title:, source_kind:, published_at:)

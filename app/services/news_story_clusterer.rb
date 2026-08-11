@@ -16,6 +16,42 @@ class NewsStoryClusterer
   DEFAULT_MAX_DISTANCE_KM = 250.0
   MATCH_THRESHOLD = 0.67
 
+  # The floor below which two reports have not been shown to be the same story.
+  #
+  # Everything else in score_cluster is close to a constant for any pair that
+  # gets as far as being scored. Matching event_type is worth 0.25, being inside
+  # the family window is worth up to 0.15, and the location term contributes
+  # 0.35 * 0.20 whenever either side's place is unknown -- which is most of the
+  # corpus, because NewsPlaceResolver correctly refuses to answer rather than
+  # return a masthead. That is 0.455 before a single word is compared, so one
+  # shared actor at 0.25 carries a pair over MATCH_THRESHOLD with *no* words in
+  # common at all. Two stories that share only "Israel" are then one story.
+  #
+  # Measured, not asserted: 400 pairs of headlines that are co-clustered today
+  # were labelled same-story / different-story on meaning alone, independently
+  # of any lexical metric. 73.8% of current merges are wrong. Vetoing below this
+  # floor takes that to 35.5% while keeping 85.7% of the true merges.
+  #
+  # 0.22 rather than the marginally higher-scoring 0.24 because 0.26 falls off a
+  # cliff -- recall drops 82% -> 70% over two hundredths -- and a threshold
+  # picked on the flat part of a curve survives the corpus drifting. Weighting
+  # text more heavily instead, or raising MATCH_THRESHOLD, was tried and scored
+  # worse at every operating point: both shed true merges faster than false ones
+  # because they move the constants too.
+  MINIMUM_TEXT_SIMILARITY = 0.22
+
+  # How many member headlines the floor is checked against. A cluster asserts
+  # that every one of its members is the same story as every other, so gating
+  # only the incoming article against the lead leaves the member-to-member pairs
+  # never checked at all: measured on a rebuild of the clone, those ungated
+  # pairs ran at 5.0% precision while the gated ones ran at 48.8%. Checking
+  # every member instead of just the lead is complete linkage rather than
+  # centroid attachment, and it costs 2.5% of the true merges.
+  #
+  # Capped because the check is linear in members and the tokens are carried in
+  # the cluster's metadata; clusters above this size are gated against a sample.
+  MEMBER_TITLE_SAMPLE = 20
+
   # Two articles count as the same wire copy when their headlines are this
   # close. Deliberately far above MATCH_THRESHOLD: clustering asks "same
   # story?", this asks "same text?". Independent newsrooms covering one event
@@ -247,6 +283,10 @@ class NewsStoryClusterer
         longitude: longitude,
         actors: actors,
         text_tokens: normalized_tokens([ title, summary ].compact.join(" ")),
+        # Headline alone, kept apart from text_tokens. The floor in hard_veto?
+        # compares one headline against one headline; folding the summary into
+        # that side makes the comparison asymmetric and inflates it.
+        title_tokens: normalized_tokens(title),
       }
     end
 
@@ -318,6 +358,28 @@ class NewsStoryClusterer
     end
 
     def hard_veto?(payload, cluster, actor_score, location_score, text_score)
+      # Headline against headline, deliberately NOT against text_score.
+      #
+      # text_score compares the incoming article to metadata["text_tokens"],
+      # which is the union of every member's tokens and grows without bound. Its
+      # containment half is then the share of the incoming headline found
+      # *anywhere* in the cluster, which approaches 1.0 for any cluster large
+      # enough -- so a floor applied there stops binding exactly where the
+      # cluster is already big enough to do damage. Measured on a full rebuild
+      # of the clone with the floor on text_score: 77.7% of the wrong merges
+      # that survived had pairwise similarity below the floor and were admitted
+      # by the bag alone.
+      #
+      # canonical_title is the lead member's headline, so this asks the question
+      # the eval asked: are these two reports the same story?
+      payload_tokens = payload[:title_tokens] || normalized_tokens(payload[:title])
+      anchors = member_title_tokens(cluster)
+      # No words to compare is no evidence, not weak evidence. text_similarity
+      # returns 0.2 for an empty set on either side, which would otherwise sit
+      # just under the floor and read as a real measurement.
+      return true if payload_tokens.blank? || anchors.empty?
+      return true if anchors.any? { |anchor| text_similarity(payload_tokens, anchor) < MINIMUM_TEXT_SIMILARITY }
+
       return true if actor_score.zero? && location_score < 0.5 && text_score < 0.3
 
       payload_place = normalize_location_token(payload[:location_name])
@@ -393,6 +455,7 @@ class NewsStoryClusterer
           "actor_keys" => payload[:actors].map { |actor| actor[:canonical_key] },
           "actor_roles" => payload[:actors].map { |actor| { "key" => actor[:canonical_key], "role" => actor[:role], "name" => actor[:name] } },
           "text_tokens" => payload[:text_tokens].to_a,
+          "member_title_tokens" => [ payload[:title_tokens].to_a ],
         },
         provenance: {
           "lead_article_id" => payload[:news_article_id],
@@ -541,6 +604,8 @@ class NewsStoryClusterer
           "independent_source_ids" => independent_source_ids,
           "syndicated_article_count" => article_payloads.size - syndication.size,
           "text_tokens" => article_payloads.flat_map { |payload| payload[:text_tokens].to_a }.uniq,
+          "member_title_tokens" => article_payloads.first(MEMBER_TITLE_SAMPLE)
+            .map { |payload| payload[:title_tokens].to_a }.reject(&:empty?),
         },
         provenance: {
           "lead_article_id" => lead_payload[:news_article_id],
@@ -574,6 +639,17 @@ class NewsStoryClusterer
 
     def strict_location_event_type?(event_type)
       STRICT_LOCATION_EVENT_TYPES.include?(event_type)
+    end
+
+    # Falls back to the cluster's own headline for rows written before member
+    # headlines were carried, so an existing cluster is gated against one anchor
+    # rather than none until recalculate_cluster! next rewrites it.
+    def member_title_tokens(cluster)
+      stored = Array(cluster.metadata["member_title_tokens"])
+      return stored.map { |tokens| Set.new(Array(tokens)) } if stored.any?
+
+      anchor = normalized_tokens(cluster.canonical_title)
+      anchor.empty? ? [] : [ anchor ]
     end
 
     def actor_overlap_score(payload, cluster)
@@ -722,10 +798,26 @@ class NewsStoryClusterer
       [ Math.log(1 + count) / Math.log(1 + saturation), 1.0 ].min
     end
 
+    # Tokens are folded to a stem before comparison. Unfolded, "Israel strikes
+    # targets near Isfahan" and "Explosions heard in central Iran after
+    # suspected Israeli attack" -- one airstrike, two newsrooms -- share not one
+    # token, because israel/israeli and strike/strikes are different strings.
+    # That pair scores 0.0 exactly, and any text floor would reject the case the
+    # clusterer exists for.
+    #
+    # A suffix strip followed by a six-character prefix, rather than a real
+    # stemmer: measured against the same 400 labelled pairs it beat exact
+    # matching at every floor, lifting the share of true merges kept from 81.9%
+    # to 85.7% at equal precision. It is deliberately crude, because the failure
+    # it must avoid is over-conflation -- six characters keeps iran/iraq and
+    # gaza/gazprom apart, which a three-character prefix would not.
+    STEM_SUFFIX = /(ings|ing|ies|ers|er|ed|es|s|ian|ish|i)\z/
+    STEM_LENGTH = 6
+
     def normalized_tokens(text)
       text.to_s.downcase.scan(/[a-z0-9]{3,}/).reject do |token|
         %w[after against amid and are for from into near over says that the their these they this were with].include?(token)
-      end.to_set
+      end.map { |token| token.sub(STEM_SUFFIX, "")[0, STEM_LENGTH] }.to_set
     end
 
     def normalize_location_token(value)

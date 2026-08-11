@@ -207,11 +207,17 @@ class OntologyScorecardService
   end
 
   # Built from the data rather than a hardcoded list, so it stays true as feeds
-  # are added. NewsEvent#name is included because that column is where the
-  # publisher leaks in -- it is the field the clusterer mistakes for a place.
+  # are added.
+  #
+  # Drawn from the publisher columns only. An earlier version also folded in
+  # NewsEvent#name on the reasoning that it is where the publisher leaks in --
+  # but that column is mixed, holding real place names as often as mastheads, so
+  # including it marked legitimate anchors like "Milwaukee" as publishers and
+  # overstated the defect by roughly 2.5x. Measure the disease with a clean
+  # instrument or the cure looks better than it is.
   def publisher_names
     @publisher_names ||= begin
-      names = NewsSource.pluck(:name) + NewsEvent.distinct.pluck(:name)
+      names = NewsSource.pluck(:name) + NewsArticle.distinct.pluck(:publisher_name)
       names.compact.map { |name| normalize(name) }.reject(&:blank?).to_set
     end
   end

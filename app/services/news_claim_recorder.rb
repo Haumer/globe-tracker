@@ -112,7 +112,9 @@ class NewsClaimRecorder
           origin_source_name: article.origin_source_name,
           origin_source_kind: article.origin_source_kind,
           origin_source_domain: article.origin_source_domain,
-          location_name: event&.name,
+          # Resolved, not event&.name -- that field is the publisher as often as
+          # it is a place, and this context feeds the clusterer's location.
+          location_name: NewsPlaceResolver.call(event).name,
           latitude: event&.latitude,
           longitude: event&.longitude,
           event_id: event&.id,

@@ -162,7 +162,12 @@ class NewsStoryClusterer
           summary: fetch(record, :summary) || existing[:summary],
           published_at: normalize_time(fetch(record, :published_at)) || existing[:published_at],
           fetched_at: normalize_time(fetch(record, :fetched_at)) || existing[:fetched_at],
-          location_name: fetch(record, :name) || existing[:location_name],
+          # Deliberately not seeded from the record's :name. On a news record
+          # that field is frequently the publisher, and seeding it here is how
+          # "France 24" became one of the most common places in the graph.
+          # build_payload resolves the location from the persisted NewsEvent's
+          # geocode_* columns instead, which record how each fix was derived.
+          location_name: existing[:location_name],
           latitude: fetch(record, :latitude) || existing[:latitude],
           longitude: fetch(record, :longitude) || existing[:longitude],
           content_scope: fetch(record, :content_scope) || existing[:content_scope],
@@ -208,7 +213,11 @@ class NewsStoryClusterer
       summary = context[:summary] || article.summary
       published_at = context[:published_at] || claim.published_at || article.published_at || event&.published_at
       fetched_at = context[:fetched_at] || article.fetched_at || event&.fetched_at
-      location_name = scrub_location_name(context[:location_name] || event&.name)
+      # Never event&.name -- that is the publisher. NewsPlaceResolver works from
+      # the geocode_* columns and returns nothing rather than a masthead, so a
+      # blank location here means "we do not know", which is a usable signal.
+      # It used to mean nothing at all, because the slot was always filled.
+      location_name = scrub_location_name(context[:location_name] || NewsPlaceResolver.call(event).name)
       latitude = numeric_coordinate(context[:latitude] || event&.latitude)
       longitude = numeric_coordinate(context[:longitude] || event&.longitude)
       return nil if strict_location_event_type?(claim.event_type) && location_name.blank? && (latitude.nil? || longitude.nil?)

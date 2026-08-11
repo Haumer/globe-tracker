@@ -64,6 +64,13 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
       name: "Isfahan",
       latitude: 32.65,
       longitude: 51.67,
+      # The place anchor is resolved from these, never from `name` -- on a real
+      # record that field is as often the publisher as the place.
+      geocode_place_name: "Isfahan",
+      geocode_country_code: "IR",
+      geocode_precision: "city",
+      geocode_basis: "title_place",
+      geocode_confidence: 0.82,
       tone: -3.0,
       level: "elevated",
       category: "conflict",
@@ -180,6 +187,51 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
     assert_equal [second_article.id], synced_event.ontology_evidence_links.where(evidence_role: "lead_article").pluck(:evidence_id)
   end
 
+  test "refuses to anchor an event to its publisher" do
+    article = create_article(
+      suffix: "ontology-pub", publisher: "France 24", domain: "france24.com",
+      title: "Clashes reported overnight", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+    cluster = create_cluster(article, key: "cluster:ontology-pub")
+
+    # What the geocoder actually produced: the publisher's own country, derived
+    # from its domain. The old resolver read `name` and anchored the event to
+    # "France 24"; this must produce no place at all rather than a masthead.
+    NewsEvent.where(news_article: article).update_all(
+      name: "France 24", geocode_place_name: "France 24", geocode_country_code: nil,
+      geocode_precision: "country", geocode_basis: "publisher_domain", geocode_confidence: 0.2
+    )
+
+    synced_event = NewsOntologySyncService.sync_story_cluster(cluster.reload)
+
+    assert_nil synced_event.place_entity, "a publisher-derived location must not become a place"
+    assert_not OntologyEntity.exists?(entity_type: "place", canonical_name: "France 24")
+  end
+
+  test "anchors to an existing country entity when only a country is known" do
+    country = OntologyEntity.create!(canonical_key: "country:irn", entity_type: "country",
+                                     canonical_name: "Iran", country_code: "IR")
+    article = create_article(
+      suffix: "ontology-country", publisher: "Reuters", domain: "reuters.com",
+      title: "Talks resume", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+    cluster = create_cluster(article, key: "cluster:ontology-country")
+
+    NewsEvent.where(news_article: article).update_all(
+      geocode_place_name: "IR", geocode_country_code: "IR",
+      geocode_precision: "country", geocode_basis: "title_country_keyword", geocode_confidence: 0.5
+    )
+
+    synced_event = NewsOntologySyncService.sync_story_cluster(cluster.reload)
+
+    assert_equal country, synced_event.place_entity, "should reuse the country node, not mint a place named IR"
+    assert_not OntologyEntity.exists?(entity_type: "place", canonical_name: "IR")
+  end
+
   private
 
   def create_article(suffix:, publisher:, domain:, title:, source_kind:, published_at:)
@@ -242,6 +294,13 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
       name: "Isfahan",
       latitude: 32.65,
       longitude: 51.67,
+      # The place anchor is resolved from these, never from `name` -- on a real
+      # record that field is as often the publisher as the place.
+      geocode_place_name: "Isfahan",
+      geocode_country_code: "IR",
+      geocode_precision: "city",
+      geocode_basis: "title_place",
+      geocode_confidence: 0.82,
       tone: -3.0,
       level: "elevated",
       category: "conflict",

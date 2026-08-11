@@ -51,6 +51,54 @@ namespace :ontology do
     puts
   end
 
+  desc "Re-anchor existing ontology events through NewsPlaceResolver (DRY_RUN=1 to preview)"
+  task repair_places: :environment do
+    dry_run = ENV["DRY_RUN"].present?
+    scope = OntologyEvent.where.not(primary_story_cluster_id: nil).includes(:primary_story_cluster)
+    stats = Hash.new(0)
+
+    scope.find_each do |event|
+      cluster = event.primary_story_cluster
+      next unless cluster
+
+      resolved = NewsOntologySyncService.send(:resolve_cluster_place, cluster)
+      before = event.place_entity_id
+
+      after = if resolved.none?
+        nil
+      elsif resolved.country?
+        OntologyEntity.find_by(entity_type: "country", country_code: resolved.country_code.to_s.upcase)&.id
+      elsif dry_run
+        # Look the place up rather than syncing it. sync_place_entity upserts,
+        # so calling it here would make DRY_RUN write the very rows it claims
+        # not to. A miss just means "would be created".
+        OntologyEntity.find_by(
+          entity_type: "place",
+          canonical_key: "place:#{OntologySyncSupport.slugify(resolved.name)}"
+        )&.id
+      else
+        NewsOntologySyncService.send(:sync_place_entity, cluster)&.id
+      end
+
+      stats[:examined] += 1
+      next stats[:unchanged] += 1 if before == after
+
+      stats[resolved.none? ? :cleared : (resolved.country? ? :to_country : :to_place)] += 1
+      event.update_column(:place_entity_id, after) unless dry_run
+    end
+
+    puts(dry_run ? "DRY RUN - nothing written" : "Re-anchored ontology events")
+    stats.sort.each { |name, count| puts format("  %-12s %d", name, count) }
+
+    # Places nothing points at any more. Left in place rather than deleted: they
+    # are cheap, and a masthead entity with no inbound edges is inert, whereas a
+    # delete would cascade into aliases and links that may predate this.
+    orphaned = OntologyEntity.where(entity_type: "place")
+      .where.not(id: OntologyEvent.select(:place_entity_id).where.not(place_entity_id: nil))
+      .count
+    puts format("  %-12s %d (left in place, now unreferenced)", "orphaned", orphaned)
+  end
+
   desc "Freeze a contiguous corpus window to a manifest (DAYS=14, OUT=tmp/ontology_corpus.json)"
   task corpus: :environment do
     days = ENV.fetch("DAYS", 14).to_i

@@ -99,6 +99,50 @@ namespace :ontology do
     puts format("  %-12s %d (left in place, now unreferenced)", "orphaned", orphaned)
   end
 
+  desc "Delete entity links whose polymorphic parent is gone (DRY_RUN=1 to preview, WINDOW=250000)"
+  task collect_dangling_links: :environment do
+    dry_run = ENV["DRY_RUN"].present?
+    window = ENV.fetch("WINDOW", 250_000).to_i
+
+    # PurgeStaleDataJob sweeps these hourly, but it caps each table at 1M rows
+    # per run to stay off the write path. That is the right shape for steady
+    # state and the wrong one for draining an accumulated backlog, which is what
+    # this task is for: it walks the id space in windows so every statement is
+    # index-backed and short, rather than opening one transaction over the lot.
+    totals = Hash.new(0)
+
+    OntologyEntityLink.distinct.pluck(:linkable_type).compact.sort.each do |type_name|
+      owner = type_name.safe_constantize
+      # Same call as the hourly sweep: deleting rows on behalf of a class we can
+      # no longer resolve is not a decision this task should make.
+      unless owner.respond_to?(:primary_key)
+        puts format("  %-18s skipped (class missing)", type_name)
+        next
+      end
+
+      scope = OntologyEntityLink.where(linkable_type: type_name)
+      min_id, max_id = scope.pick(Arel.sql("MIN(id), MAX(id)"))
+      next if min_id.nil?
+
+      deleted = 0
+      cursor = min_id
+      while cursor <= max_id
+        batch = scope.where(id: cursor...(cursor + window)).where.not(linkable_id: owner.select(:id))
+        deleted += dry_run ? batch.count : batch.delete_all
+        cursor += window
+      end
+
+      totals[type_name] = deleted
+      puts format("  %-18s %10d dangling", type_name, deleted) if deleted.positive?
+    end
+
+    remaining = OntologyEntityLink.count
+    puts
+    puts(dry_run ? "DRY RUN - nothing written" : "Collected dangling entity links")
+    puts format("  %-18s %10d", "total", totals.values.sum)
+    puts format("  %-18s %10d", dry_run ? "would remain" : "remaining", remaining - (dry_run ? totals.values.sum : 0))
+  end
+
   desc "Freeze a contiguous corpus window to a manifest (DAYS=14, OUT=tmp/ontology_corpus.json)"
   task corpus: :environment do
     days = ENV.fetch("DAYS", 14).to_i

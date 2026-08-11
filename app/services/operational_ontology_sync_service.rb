@@ -84,6 +84,7 @@ class OperationalOntologySyncService
       OntologySyncSupport.upsert_alias(entity, flight.registration, alias_type: "registration")
       OntologySyncSupport.upsert_alias(entity, flight.icao24, alias_type: "icao24")
       OntologySyncSupport.upsert_link(entity, flight, role: "tracked_flight", method: "operational_ontology_sync_v1")
+      supersede_sighting_links(entity, role: "tracked_flight", linkable_type: "Flight", current_id: flight.id)
       entity
     end
 
@@ -105,6 +106,7 @@ class OperationalOntologySyncService
       OntologySyncSupport.upsert_alias(entity, ship.name, alias_type: "official")
       OntologySyncSupport.upsert_alias(entity, ship.mmsi, alias_type: "mmsi")
       OntologySyncSupport.upsert_link(entity, ship, role: "tracked_ship", method: "operational_ontology_sync_v1")
+      supersede_sighting_links(entity, role: "tracked_ship", linkable_type: "Ship", current_id: ship.id)
       entity
     end
 
@@ -141,6 +143,21 @@ class OperationalOntologySyncService
     end
 
     private
+
+    # A flights or ships row is a sighting, not an identity. The pollers purge
+    # rows untouched for five minutes and re-insert on the next sweep, so one
+    # aircraft cycles through many row ids a day while its entity — keyed on the
+    # durable icao24/mmsi — outlives all of them. upsert_link keys on
+    # linkable_id, so every cycle left the previous link behind pointing at a
+    # deleted row: 20.9M links for 267k aircraft, 100% of them dangling, before
+    # this was collected. One link per entity is the whole truth here; the
+    # superseded ones carry no history worth keeping.
+    def supersede_sighting_links(entity, role:, linkable_type:, current_id:)
+      OntologyEntityLink
+        .where(ontology_entity_id: entity.id, role: role, linkable_type: linkable_type)
+        .where.not(linkable_id: current_id)
+        .delete_all
+    end
 
     def batch_relation(target, ids:, cursor:, batch_size:, updated_after:)
       relation = case target.to_s

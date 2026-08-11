@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_11_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_11_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -680,10 +680,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_120000) do
     t.string "origin_source_name"
     t.string "origin_source_kind"
     t.string "origin_source_domain"
+    t.float "title_embedding", array: true
+    t.string "title_embedding_model"
+    t.string "title_embedding_digest"
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url", unique: true
     t.index ["content_scope"], name: "index_news_articles_on_content_scope"
     t.index ["hydrated_at"], name: "index_news_articles_on_hydrated_at"
     t.index ["hydration_status"], name: "index_news_articles_on_hydration_status"
+    t.index ["id"], name: "index_news_articles_pending_title_embedding", where: "((title_embedding IS NULL) AND (title IS NOT NULL))"
     t.index ["news_ingest_id"], name: "index_news_articles_on_news_ingest_id"
     t.index ["news_source_id"], name: "index_news_articles_on_news_source_id"
     t.index ["origin_source_domain"], name: "index_news_articles_on_origin_source_domain"

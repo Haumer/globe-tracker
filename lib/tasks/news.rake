@@ -33,4 +33,62 @@ namespace :news do
 
     puts "clusters: #{total}, with tokens: #{examined}, re-folded: #{changed}#{' (dry run)' if dry_run}"
   end
+
+  desc "Embed article headlines for the clusterer's cosine gate (SCOPE=all, LIMIT=n, THREADS=4)"
+  # Only in-scope, titled articles by default: out_of_scope rows never reach the
+  # clusterer, so embedding them buys nothing and is 45k of the 62k corpus.
+  #
+  # Idempotent through title_embedding_digest, which covers the model, the width
+  # and the prepared text. Changing any of the three re-embeds; re-running after
+  # a clean pass does nothing.
+  task backfill_headline_embeddings: :environment do
+    scope = NewsArticle.where.not(title: nil)
+    scope = scope.where.not(content_scope: "out_of_scope") unless ENV["SCOPE"] == "all"
+    scope = scope.limit(Integer(ENV["LIMIT"])) if ENV["LIMIT"].present?
+
+    total = scope.count
+    tag = NewsHeadlineEmbeddingService.model_tag
+    puts "corpus: #{total} articles, model #{tag}"
+
+    embedded = 0
+    skipped = 0
+    failed = 0
+    started = Time.current
+
+    scope.select(:id, :title, :title_embedding_digest).find_in_batches(batch_size: NewsHeadlineEmbeddingService::BATCH_SIZE) do |batch|
+      pending = batch.reject do |article|
+        current = article.title_embedding_digest.present? &&
+          article.title_embedding_digest == NewsHeadlineEmbeddingService.digest_for(article.title)
+        skipped += 1 if current
+        current
+      end
+      next if pending.empty?
+
+      vectors = NewsHeadlineEmbeddingService.embed(pending.map(&:title))
+      rows = pending.each_with_index.filter_map do |article, index|
+        vector = vectors[index]
+        next (failed += 1) && nil if vector.blank?
+
+        [ article.id, vector, article.title ]
+      end
+
+      NewsArticle.transaction do
+        rows.each do |id, vector, title|
+          NewsArticle.where(id: id).update_all(
+            title_embedding: "{#{vector.join(',')}}",
+            title_embedding_model: tag,
+            title_embedding_digest: NewsHeadlineEmbeddingService.digest_for(title),
+            updated_at: Time.current
+          )
+        end
+      end
+      embedded += rows.size
+
+      done = embedded + skipped + failed
+      print "\r  #{done}/#{total}  (#{(done / [ Time.current - started, 0.001 ].max).round} rows/s)"
+    end
+
+    puts "\nembedded: #{embedded}, already current: #{skipped}, failed: #{failed}"
+    puts "coverage: #{NewsArticle.where.not(title_embedding: nil).count} of #{total}"
+  end
 end

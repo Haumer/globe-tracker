@@ -40,6 +40,80 @@ class NewsStoryClusterer
   # because they move the constants too.
   MINIMUM_TEXT_SIMILARITY = 0.22
 
+  # The floor below which two headlines do not mean the same thing.
+  #
+  # MINIMUM_TEXT_SIMILARITY asks whether two reports share words. That is close
+  # to exhausted -- it took the share of merges that are really the same story
+  # from 24.3% to 47.0%, and the errors left over are semantic. "Israel strikes
+  # targets near Isfahan" and "Explosions heard in central Iran after suspected
+  # Israeli attack" are one airstrike written by two newsrooms; the stem barely
+  # connects them, and nothing lexical connects a story to its own follow-up.
+  #
+  # Measured on 300 co-clustered pairs from the post-fix rebuild, labelled
+  # same-story / different-story on meaning alone. The embedding separates the
+  # two populations at AUC 0.916 against 0.721 for the stem, on the same pairs.
+  # This table is a *filter* over pairs that already exist, which is known to
+  # run optimistic -- re-clustering seeks out passing pairs the old code never
+  # formed -- so it is what the bounds were chosen on, not what they deliver.
+  # Verified by two full rebuilds rather than by this table; see hard_veto?.
+  #
+  #   cosine floor   precision   keeps true merges
+  #   (none)             47.0%       100%
+  #   0.45               57.6%        99.3%
+  #   0.50               65.9%        97.2%
+  #   0.55               75.0%        93.6%
+  #   0.60               82.7%        87.9%
+  #   0.65               88.9%        73.8%
+  #
+  # 0.50 because of how the pairs it discards are distributed rather than how
+  # many: below 0.50 only 4.3% of the pairs are the same story, so the floor is
+  # buying most of its precision out of a population that is 96% wrong.
+  # Between it and HEADLINE_COSINE_CERTAIN the split is 51% -- a coin flip, and
+  # 44% of all pairs -- which is why that range goes to a model rather than to
+  # a constant. A floor high enough to be precise on its own, 0.65, throws away
+  # a quarter of the true merges, which is what the band exists to avoid.
+  #
+  # Tuned at 256 dimensions. The absolute value does not survive a change of
+  # width or model; see NewsHeadlineEmbeddingService::DIMENSION_CHOICE.
+  MINIMUM_HEADLINE_COSINE = 0.50
+
+  # The cosine above which the embedding decides on its own, measured on the
+  # same 300 pairs: at 0.70 a merge is right 90.9% of the time, which is at the
+  # ceiling of what this can be measured against at all -- two competent human
+  # referees agree on only 87.7% of these pairs, because "is a continuing
+  # episode the same story?" is genuinely fuzzy.
+  #
+  # Everything between this and MINIMUM_HEADLINE_COSINE is the overlap of the
+  # two populations, 44% of the pairs that get this far and a 51% coin flip
+  # inside, which is why it goes to NewsClusterAdjudicator rather than to a
+  # constant placed somewhere in the middle of it.
+  #
+  # Verified end to end by three full rebuilds of the clone over the same 17,061
+  # articles, differing only by the change, 600 labelled pairs and 80 judged
+  # clusters per arm:
+  #
+  #                        baseline   + floor   + adjudication
+  #   pair precision         56.7%     63.5%      76.3%
+  #   cluster purity         71.5%     82.8%      89.5%
+  #   clusters 100% pure     37.5%     51.3%      73.8%
+  #   asserted pairs         7,875     5,529      5,056
+  #   est. correct pairs     4,463     3,511      3,859
+  #
+  # Report the two together: pair precision punishes one bad member n-1 times,
+  # so a 27-member cluster with a single outlier loses 26 pairs and reads far
+  # worse than the one bad member it actually has.
+  #
+  # 76.3% is measured against a judge-agreement ceiling of 87.7% -- two
+  # competent referees disagree on one of these pairs in eight -- so the
+  # remaining gap is not all error and is not all recoverable.
+  HEADLINE_COSINE_CERTAIN = 0.70
+
+  # How many of the undecided candidates the adjudicator is shown. Three because
+  # the model is being asked to compare the alternatives against each other, and
+  # a longer list is what made RegistryEntityResolver stop answering "none":
+  # given more options it starts finding one plausible.
+  ADJUDICATION_CANDIDATES = 3
+
   # How many member headlines the floor is checked against. A cluster asserts
   # that every one of its members is the same story as every other, so gating
   # only the incoming article against the lead leaves the member-to-member pairs
@@ -287,6 +361,17 @@ class NewsStoryClusterer
         # compares one headline against one headline; folding the summary into
         # that side makes the comparison asymmetric and inflates it.
         title_tokens: normalized_tokens(title),
+        # Read, never computed. An article without one is clustered on the
+        # lexical floor alone; news:backfill_headline_embeddings is what fills
+        # them.
+        #
+        # Gated on the digest rather than on the title matching, because callers
+        # pass the title from the feed record and the stored vector is of the
+        # title on the row -- when a later poll revises a headline the two drift,
+        # and comparing this article's words against another headline's vector
+        # is a wrong answer rather than a missing one. The digest is over the
+        # prepared text, so a differing publisher suffix is not a mismatch.
+        title_embedding: embedding_for(article, title),
       }
     end
 
@@ -303,23 +388,88 @@ class NewsStoryClusterer
       }
     end
 
+    # Three tiers. Below MINIMUM_HEADLINE_COSINE hard_veto? has already rejected
+    # the cluster; at or above HEADLINE_COSINE_CERTAIN the embedding is right on
+    # its own and the merge is taken; in between the two populations overlap and
+    # no constant can separate them, so the question goes to a model.
     def best_cluster_for(payload)
-      candidates = candidate_clusters(payload)
-      best_cluster = nil
-      best_score = nil
-
-      candidates.each do |cluster|
+      scored = candidate_clusters(payload).filter_map do |cluster|
         score = score_cluster(payload, cluster)
-        next if score.nil?
-        next if best_score && score <= best_score
+        next if score.nil? || score < MATCH_THRESHOLD
 
-        best_cluster = cluster
-        best_score = score
+        [ cluster, score ]
       end
+      return [ nil, nil ] if scored.empty?
 
-      return [ nil, nil ] if best_score.nil? || best_score < MATCH_THRESHOLD
+      # Position is part of the sort key because Ruby's sort_by is not stable
+      # and score ties are common -- score_cluster is mostly constants. Without
+      # it, two rebuilds of the same corpus disagree on which cluster an article
+      # joins, which is enough to move the cluster count between arms of an
+      # experiment that is supposed to differ only by the change under test.
+      # Ties go to the earlier candidate, i.e. the more recently seen cluster,
+      # which is what the previous max-scan did.
+      ranked = scored.each_with_index.sort_by { |(_cluster, score), index| [ -score, index ] }.map(&:first)
+      certain, undecided = ranked.partition { |cluster, _score| headline_certain?(payload, cluster) }
+      # A certain candidate wins even where an undecided one scores higher.
+      # score_cluster is mostly constants -- that is the defect this whole line
+      # of work started from -- while the cosine separates same-story from
+      # different-story at AUC 0.916, so it is the better of the two signals to
+      # rank on when they disagree. It also spends nothing.
+      return certain.first if certain.any?
 
-      [ best_cluster, best_score ]
+      adjudicated(payload, undecided.first(ADJUDICATION_CANDIDATES))
+    end
+
+    # True when every member is far enough from the incoming headline to decide
+    # without a model, and -- deliberately -- when there is nothing to measure.
+    # An article or cluster with no embedding falls back to the behaviour it had
+    # before embeddings existed rather than to a model call it cannot inform.
+    def headline_certain?(payload, cluster)
+      cosines = headline_cosines(payload, cluster)
+      return true if cosines.empty?
+
+      cosines.min >= HEADLINE_COSINE_CERTAIN
+    end
+
+    def adjudicated(payload, undecided)
+      return [ nil, nil ] if undecided.empty?
+
+      verdict = NewsClusterAdjudicator.call(
+        title: payload[:title],
+        candidates: undecided.map { |cluster, _score| adjudication_candidate(cluster) }
+      )
+      # Not reached, rather than answered "none". An unavailable model leaves the
+      # decision where it was before the model existed -- the band was merged
+      # outright then -- because the alternative failure mode is that an API
+      # outage silently fragments the corpus into singletons, which no later
+      # pass revisits. Same reasoning as the missing-embedding fallback.
+      return undecided.first unless verdict.called
+      return [ nil, nil ] unless verdict.chose?
+
+      undecided[verdict.index]
+    end
+
+    def adjudication_candidate(cluster)
+      {
+        titles: member_titles(cluster),
+        # Clean on any cluster this code wrote: predominant_location takes it
+        # from NewsPlaceResolver, which returns nothing rather than a masthead.
+        # Clusters written before the resolver landed still carry feed labels
+        # and never self-heal, so until those age out the model occasionally
+        # sees "GN: World" as a place. It reads the member headlines too.
+        location_name: cluster.location_name,
+        actors: Array(cluster.metadata["actor_names"]),
+        first_seen_at: cluster.first_seen_at,
+        last_seen_at: cluster.last_seen_at,
+      }
+    end
+
+    def member_titles(cluster)
+      ids = Array(cluster.provenance["article_ids"]).first(MEMBER_TITLE_SAMPLE)
+      return [ cluster.canonical_title ].compact if ids.empty?
+
+      by_id = NewsArticle.where(id: ids).pluck(:id, :title).to_h
+      ids.filter_map { |id| by_id[id] }.presence || [ cluster.canonical_title ].compact
     end
 
     def candidate_clusters(payload)
@@ -379,6 +529,41 @@ class NewsStoryClusterer
       # just under the floor and read as a real measurement.
       return true if payload_tokens.blank? || anchors.empty?
       return true if anchors.any? { |anchor| text_similarity(payload_tokens, anchor) < MINIMUM_TEXT_SIMILARITY }
+
+      # The semantic floor, deliberately *after* the lexical one and not merged
+      # with it. Two reasons, one of them arithmetic:
+      #
+      # A cosine is a 256-dimension dot product, and this runs against every
+      # member of every candidate cluster -- up to 150 clusters of up to 20
+      # members for each of 17,061 articles on a rebuild, which is 13 billion
+      # multiply-adds in Ruby if it runs first. Behind the lexical floor it runs
+      # only on the pairs lexical already admitted, which is a few per article.
+      #
+      # The second reason is that the two floors answer different questions and
+      # both must hold: shared words without shared meaning is a topic, and
+      # shared meaning without shared words is usually the same *kind* of event
+      # somewhere else. A merge needs both.
+      #
+      # Complete linkage, exactly like the lexical floor above: a cluster
+      # asserts every member is the same story as every other, so one member
+      # below the floor vetoes the whole cluster rather than being averaged away
+      # by the rest.
+      #
+      # This linkage, not the floor, is what recall costs. Measured against the
+      # baseline arm's labelled pairs: a *pairwise* floor at 0.50 keeps 99.4% of
+      # the true merges, but the rebuild that applies it keeps only 73.2%. Of
+      # the 45 true merges lost, 44 had a pairwise cosine above the floor --
+      # median 0.67 -- and all 45 articles still clustered, just not together.
+      # They were vetoed by some *other* member of the cluster they belonged in,
+      # and then went somewhere else.
+      #
+      # So lowering the floor would buy back almost nothing, and the lever for
+      # recall is the linkage rule or a later merge pass over cluster centroids.
+      # Complete linkage costs the lexical floor 2.5% of true merges and costs
+      # this one an order of magnitude more, because a continuing episode
+      # legitimately drifts in meaning across a day of coverage while it keeps
+      # reusing the same words.
+      return true if headline_cosines(payload, cluster).any? { |cosine| cosine < MINIMUM_HEADLINE_COSINE }
 
       return true if actor_score.zero? && location_score < 0.5 && text_score < 0.3
 
@@ -650,6 +835,62 @@ class NewsStoryClusterer
 
       anchor = normalized_tokens(cluster.canonical_title)
       anchor.empty? ? [] : [ anchor ]
+    end
+
+    def embedding_for(article, title)
+      vector = article.title_embedding
+      return nil if vector.blank?
+      # Rows embedded before the digest column carried a value are trusted only
+      # when the caller is using the row's own title, which is what rebuild_all
+      # and recluster_article both do.
+      return vector if article.title_embedding_digest.blank? && title == article.title
+
+      vector if article.title_embedding_digest == NewsHeadlineEmbeddingService.digest_for(title)
+    end
+
+    # Cosine of the incoming headline against each member headline the cluster
+    # is gated on. Empty when either side has no embedding, which reads as "not
+    # measured" and lets the pair through on the lexical floor alone -- the
+    # pre-embedding behaviour. Failing open is deliberate: an embedding backfill
+    # that has not finished, or an API that is down, must not silently send
+    # every article to its own singleton, which is what failing closed would do.
+    def headline_cosines(payload, cluster)
+      vector = payload[:title_embedding]
+      return [] if vector.blank?
+
+      member_ids = Array(cluster.provenance["article_ids"]).first(MEMBER_TITLE_SAMPLE)
+      return [] if member_ids.empty?
+
+      member_embeddings(member_ids).filter_map do |member_vector|
+        NewsHeadlineEmbeddingService.cosine(vector, member_vector)
+      end
+    end
+
+    # Member vectors are read from news_articles rather than carried in the
+    # cluster's metadata, unlike the token bags. Twenty members at 256 floats is
+    # about 100KB of JSON per cluster and 385MB across the corpus, to store what
+    # is already one indexed lookup away.
+    #
+    # Bounded, because the live path runs inside a long-lived worker: an
+    # unbounded memo would hold every article the process has ever clustered.
+    # Ruby hashes iterate in insertion order, so shift evicts the oldest.
+    EMBEDDING_CACHE_LIMIT = 20_000
+
+    def member_embeddings(member_ids)
+      cache = (@embedding_cache ||= {})
+      missing = member_ids.reject { |id| cache.key?(id) }
+      if missing.any?
+        NewsArticle.where(id: missing).pluck(:id, :title_embedding).each do |id, vector|
+          cache[id] = vector.presence
+        end
+        # Anything the query did not answer for is absent, not pending: record
+        # it so a cluster whose members predate the backfill is not re-queried
+        # once per candidate scoring, for every article, forever.
+        missing.each { |id| cache[id] = nil unless cache.key?(id) }
+        cache.shift while cache.size > EMBEDDING_CACHE_LIMIT
+      end
+
+      member_ids.filter_map { |id| cache[id] }
     end
 
     def actor_overlap_score(payload, cluster)

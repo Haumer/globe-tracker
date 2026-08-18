@@ -290,13 +290,16 @@ class NewsStoryClusterer
       article_ids = contexts.keys
       return [] if article_ids.empty?
 
-      NewsArticle.includes(:news_source, :news_events, news_claims: { news_claim_actors: :news_actor })
+      articles = NewsArticle.includes(:news_source, :news_events, news_claims: { news_claim_actors: :news_actor })
         .where(id: article_ids)
-        .filter_map do |article|
-          claim = article.news_claims.find(&:primary?)
-          context = contexts[article.id] || {}
-          build_payload(article, claim, context)
-        end
+        .to_a
+      ensure_headline_embeddings(articles, contexts)
+
+      articles.filter_map do |article|
+        claim = article.news_claims.find(&:primary?)
+        context = contexts[article.id] || {}
+        build_payload(article, claim, context)
+      end
     end
 
     def build_payload(article, claim, context)
@@ -361,9 +364,10 @@ class NewsStoryClusterer
         # compares one headline against one headline; folding the summary into
         # that side makes the comparison asymmetric and inflates it.
         title_tokens: normalized_tokens(title),
-        # Read, never computed. An article without one is clustered on the
-        # lexical floor alone; news:backfill_headline_embeddings is what fills
-        # them.
+        # Written a moment ago by ensure_headline_embeddings, or already on the
+        # row from news:backfill_headline_embeddings. An article still without
+        # one -- API down, key missing -- is clustered on the lexical floor
+        # alone rather than sent to a singleton.
         #
         # Gated on the digest rather than on the title matching, because callers
         # pass the title from the feed record and the stored vector is of the
@@ -835,6 +839,72 @@ class NewsStoryClusterer
 
       anchor = normalized_tokens(cluster.canonical_title)
       anchor.empty? ? [] : [ anchor ]
+    end
+
+    # Embed the headlines this run is about to score, and write the vectors to
+    # the rows before anything reads them.
+    #
+    # headline_cosines and headline_certain? both fail open on a missing
+    # vector: no embedding reads as "not measured", the gate never fires, and
+    # the pair is settled on the lexical floor alone. That is the right
+    # behaviour for a backfill still in progress -- and it is exactly why the
+    # gate was inert for live traffic. Nothing on the ingest path had ever
+    # written a vector, so only the rows news:backfill_headline_embeddings had
+    # already reached were ever measured; every freshly polled article took the
+    # pre-embedding path in silence, and the measured 56.7% -> 76.3% pair
+    # precision applied to none of them.
+    #
+    # Only headlines that will actually be compared are embedded. An
+    # out_of_scope article, or one whose claim never clears build_payload, is
+    # never scored against anything, and those are most of the corpus.
+    def ensure_headline_embeddings(articles, contexts)
+      pending = articles.filter_map do |article|
+        next unless embeddable?(article)
+
+        title = (contexts.dig(article.id, :title) || article.title).to_s
+        next if title.blank? || embedding_for(article, title)
+
+        [ article, title ]
+      end
+      return if pending.empty?
+
+      vectors = NewsHeadlineEmbeddingService.embed(pending.map(&:last))
+      tag = NewsHeadlineEmbeddingService.model_tag
+
+      pending.each_with_index do |(article, title), index|
+        vector = vectors[index]
+        next if vector.blank?
+
+        digest = NewsHeadlineEmbeddingService.digest_for(title)
+        NewsArticle.where(id: article.id).update_all(
+          title_embedding: "{#{vector.join(',')}}",
+          title_embedding_model: tag,
+          title_embedding_digest: digest,
+          updated_at: Time.current
+        )
+        # The loaded row is what build_payload reads a moment from now, so it
+        # has to carry what the column now holds. update_all already wrote the
+        # column, so none of this is pending a save.
+        article.title_embedding = vector
+        article.title_embedding_model = tag
+        article.title_embedding_digest = digest
+      end
+    rescue StandardError => e
+      # An embedding outage must never stop an article being clustered. The
+      # cosine gate is an improvement on the lexical floor, not a dependency of
+      # it, and the fail-open readers below already handle an absent vector.
+      Rails.logger.warn("NewsStoryClusterer embedding: #{e.class} #{e.message}")
+    end
+
+    # The gate build_payload applies, asked before the part that costs money.
+    def embeddable?(article)
+      return false if article.content_scope == "out_of_scope"
+
+      claim = article.news_claims.find(&:primary?)
+      return false if claim.blank? || claim.event_family == "general"
+      return false unless CLUSTERABLE_EVENT_FAMILIES.include?(claim.event_family)
+
+      !GENERAL_EVENT_TYPES.include?(claim.event_type)
     end
 
     def embedding_for(article, title)

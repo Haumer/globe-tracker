@@ -91,4 +91,40 @@ namespace :news do
     puts "\nembedded: #{embedded}, already current: #{skipped}, failed: #{failed}"
     puts "coverage: #{NewsArticle.where.not(title_embedding: nil).count} of #{total}"
   end
+
+  desc "Classify claims into a real event family (DRY_RUN=1, LIMIT=n, SCOPE=all|fallback)"
+  # The `general` fallthrough holds more claims than the clusterer accepts in
+  # total. This is the arm that opens it; run it with DRY_RUN=1 first and read
+  # the none-rate before letting it write. A resolver that assigns nearly
+  # everything has stopped classifying.
+  task resolve_claim_types: :environment do
+    dry_run = ENV["DRY_RUN"].present?
+    limit = ENV["LIMIT"].present? ? Integer(ENV["LIMIT"]) : nil
+    scope = (ENV["SCOPE"].presence || "fallback").to_sym
+
+    pending = NewsClaimTypeBackfillService.candidates(scope: scope).count
+    puts "catalog: #{NewsClaimTypeResolver::CATALOG.size} event kinds, model #{NewsClaimTypeResolver::MODEL}"
+    puts "scope: #{scope} -- #{pending} claims to classify"
+    puts "(dry run -- nothing will be written)" if dry_run
+
+    started = Time.current
+    stats = NewsClaimTypeBackfillService.run(dry_run: dry_run, limit: limit, scope: scope)
+    considered = stats[:candidates].to_i
+
+    puts "\nconsidered: #{considered} in #{(Time.current - started).round}s"
+    puts "assigned:   #{stats[:assigned].to_i}#{percent_of(stats[:assigned], considered)}"
+    puts "none:       #{stats[:none].to_i}#{percent_of(stats[:none], considered)}"
+    # Never a silent zero. NewsClusterAdjudicator lost 16% of an arm to
+    # connection failures that nothing counted, and the arm looked fine.
+    puts "unreachable: #{stats[:unreachable].to_i}#{percent_of(stats[:unreachable], considered)}"
+
+    stats[:families].each { |family, count| puts "  #{family.ljust(15)} #{count}" }
+    puts "\nrevert with: NewsClaimTypeBackfillService.revert" unless dry_run || stats[:assigned].to_i.zero?
+  end
+
+  def percent_of(count, total)
+    return "" unless total.to_i.positive?
+
+    " (#{((count.to_f / total) * 100).round(1)}%)"
+  end
 end

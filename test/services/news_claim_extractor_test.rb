@@ -91,4 +91,27 @@ class NewsClaimExtractorTest < ActiveSupport::TestCase
   test "returns nil when no actor can be identified" do
     assert_nil NewsClaimExtractor.extract("Markets tumble after surprise rate move")
   end
+
+  # A hazard happens to a place and has no perpetrator to recognise, so the
+  # actor requirement discarded them outright. Measured on the clone, 516 of the
+  # 5,034 articles that produce no claim match a hazard rule -- among them an
+  # F-35B crash at Miramar and floods in Sri Lanka.
+  test "a hazard with no recognisable actor still produces a claim" do
+    claim = NewsClaimExtractor.extract("Wildfire strikes Peloponnese village, homes destroyed")
+
+    assert claim, "an actorless wildfire must not be dropped"
+    assert_empty claim[:actors]
+    # The label is wrong on purpose, and shows why the model has to be primary:
+    # "strikes" wins at index 11 over "wildfire" at index 22. Getting the claim
+    # written is this change's whole job; NewsClaimTypeResolver fixes the type.
+    assert_equal "conflict", claim[:event_family]
+    assert_equal "ground_operation", claim[:event_type]
+  end
+
+  # Deliberately narrow: dropping the requirement outright admits roughly 3,800
+  # rows of celebrity, sport and product copy alongside the 1,250 real events.
+  test "a non-hazard with no recognisable actor is still dropped" do
+    assert_nil NewsClaimExtractor.extract("Natural History Museum to launch LEGO Natural Brickstory")
+    assert_nil NewsClaimExtractor.extract("Invisible kitchens: the trend changing interior design")
+  end
 end

@@ -4,7 +4,7 @@ This directory is the curated staging area for regional city enrichment.
 
 Repo-wide rule:
 
-- follow [DATA_SOURCING.md](/tmp/globe-dach-regional-profile/DATA_SOURCING.md)
+- follow [DATA_SOURCING.md](../../../DATA_SOURCING.md)
 
 Rules:
 

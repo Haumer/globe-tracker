@@ -4,7 +4,7 @@ This directory is the offline import staging area for `db/data/commodity_sites.j
 
 Repo-wide rule:
 
-- follow [DATA_SOURCING.md](/tmp/globe-dach-regional-profile/DATA_SOURCING.md)
+- follow [DATA_SOURCING.md](../../../DATA_SOURCING.md)
 
 Rules:
 

@@ -48,3 +48,7 @@ bin/dist
 
 # Playwright MCP session artifacts (screenshots, console logs)
 .playwright-mcp/
+
+# Story-pair eval output (regenerable, not tracked).
+STORY_PAIR_EVAL.json
+STORY_PAIR_EVAL_REBUILD.json

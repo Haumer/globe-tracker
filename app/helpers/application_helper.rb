@@ -132,7 +132,7 @@ module ApplicationHelper
   def globe_map_href
     return area_workspace_globe_href(@area_workspace) if defined?(@area_workspace) && @area_workspace.present? && respond_to?(:area_workspace_globe_href)
 
-    root_path
+    explore_path
   end
 
   def sidebar_primary_layers

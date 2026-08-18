@@ -34,7 +34,7 @@ class AreaWorkspacesFlowTest < ApplicationSystemTestCase
     assert_text "Gulf States"
     click_link "Open On Globe"
 
-    assert_current_path root_path, ignore_query: true
+    assert_current_path explore_path, ignore_query: true
     assert_selector "#globe-container", wait: 10
 
     fragment = URI.parse(page.current_url).fragment
@@ -62,7 +62,7 @@ class AreaWorkspacesFlowTest < ApplicationSystemTestCase
     visit area_path(area)
     click_link "Map"
 
-    assert_current_path root_path, ignore_query: true
+    assert_current_path explore_path, ignore_query: true
     assert_selector "#globe-container", wait: 10
 
     fragment = URI.parse(page.current_url).fragment

@@ -4,7 +4,7 @@ class StrikeAnchorProbeTest < ApplicationSystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1400]
 
   test "directly opened strike anchor remains visible" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click
@@ -42,7 +42,7 @@ class StrikeAnchorProbeTest < ApplicationSystemTestCase
   end
 
   test "strike anchor survives delayed empty click after open" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click
@@ -85,7 +85,7 @@ class StrikeAnchorProbeTest < ApplicationSystemTestCase
   end
 
   test "strike anchor closes once offscreen grace has elapsed" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click

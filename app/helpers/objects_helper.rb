@@ -47,7 +47,7 @@ module ObjectsHelper
   end
 
   def object_globe_href_for(request, context)
-    return root_path unless request.present?
+    return explore_path unless request.present?
 
     options = {
       focus_kind: request.fetch(:kind),
@@ -56,7 +56,7 @@ module ObjectsHelper
     }
     anchor = globe_focus_anchor_for(context)
     options[:anchor] = anchor if anchor.present?
-    root_path(options)
+    explore_path(options)
   end
 
   def object_relation_label(value)

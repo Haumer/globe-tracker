@@ -4,7 +4,7 @@ class ShippingLanesToggleTest < ApplicationSystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1400]
 
   test "shipping, railway, and train layers stay disabled in the sidebar" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click

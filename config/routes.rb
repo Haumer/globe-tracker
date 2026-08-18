@@ -1,6 +1,10 @@
 Rails.application.routes.draw do
   devise_for :users
-  root to: "pages#home"
+  # The situation board is the default view: what is happening, explained.
+  # The full-signal globe is Explore -- what is out there right now -- and it
+  # keeps its own path so a link to the map still means the map.
+  root to: "pages#situations"
+  get "explore", to: "pages#home", as: :explore
   get "home", to: "pages#landing", as: :landing
   get "sources", to: "pages#sources"
   get "situations", to: "pages#situations"

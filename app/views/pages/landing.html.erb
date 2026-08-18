@@ -6,10 +6,10 @@
       <h1 class="landing-headline">Every open-source signal, mapped.</h1>
       <p class="landing-sub">An experimental situational-awareness platform that brings together 30+ open and public data feeds — flights, ships, satellites, conflict history, earthquakes, fires, news, and infrastructure — onto a single 3D globe.</p>
       <div class="landing-cta-row">
-        <%= link_to root_path, class: "landing-cta" do %>
+        <%= link_to explore_path, class: "landing-cta" do %>
           Open the Globe
         <% end %>
-        <%= link_to root_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
+        <%= link_to explore_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
           Open DACH Local
         <% end %>
         <%= link_to "Data Sources", sources_path, class: "landing-cta landing-cta--secondary" %>
@@ -182,10 +182,10 @@
   <%# ── Bottom ── %>
   <section class="landing-bottom">
     <div class="landing-section-inner">
-      <%= link_to root_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
+      <%= link_to explore_path(region: "dach", profile: "local"), class: "landing-cta landing-cta--accent" do %>
         Open DACH Local
       <% end %>
-      <%= link_to root_path, class: "landing-cta landing-cta--secondary", style: "margin-left:10px;" do %>
+      <%= link_to explore_path, class: "landing-cta landing-cta--secondary", style: "margin-left:10px;" do %>
         Open the Globe
       <% end %>
       <p class="landing-bottom-note">Personal project. Feed freshness, confidence, and methodological maturity vary by layer.</p>

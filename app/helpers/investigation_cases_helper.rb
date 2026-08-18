@@ -56,14 +56,14 @@ module InvestigationCasesHelper
       ].join(",")
     end
 
-    root_path(options)
+    explore_path(options)
   end
 
   def investigation_case_return_globe_href(return_to = nil)
-    return root_path if return_to.blank?
+    return explore_path if return_to.blank?
 
     value = return_to.to_s
-    return root_path unless value.start_with?("/") && !value.start_with?("//")
+    return explore_path unless value.start_with?("/") && !value.start_with?("//")
 
     value
   end

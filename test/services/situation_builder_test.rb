@@ -142,4 +142,52 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert_empty OntologyEntity.where(entity_type: "situation"),
       "present in 100% of the window, so it names no particular story"
   end
+
+  # A hazard names no facility and has no actor of its own, so the rarest-actor
+  # rule files it under whoever it happened to mention: the 62-article cluster on
+  # the Colombia quake keyed on "United Nations" and joined the UN situation.
+  test "an occurrence outranks the actor a hazard report merely mentions" do
+    place = OntologyEntity.create!(canonical_key: "place:hazard:earthquake:q1", entity_type: "place",
+                                   canonical_name: "5 km S of San Jose del Palmar, Colombia",
+                                   metadata: { "latitude" => 4.84, "longitude" => -76.24 })
+    un = actor("United Nations")
+    [ "q1", "q2" ].each do |key|
+      _c, event = cluster(key: key, title: "Quake kills more than 100 in western Colombia")
+      tag(event, un)
+      OntologyRelationship.create!(source_node: event, target_node: place,
+                                   relation_type: HazardOccurrenceLinkService::RELATION_TYPE,
+                                   confidence: 0.75, derived_by: "hazard_occurrence_link_v1")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal [ "5 km S of San Jose del Palmar, Colombia situation" ],
+                 OntologyEntity.where(entity_type: "situation").pluck(:canonical_name)
+    assert OntologyRelationship.exists?(relation_type: "concerns", target_node: place),
+      "the occurrence is a registry entity like any other, so ring traversal is unchanged"
+  end
+
+  # A report that names a strait is about the strait, even when a quake happened
+  # in the same country that week.
+  test "a named registry entity still outranks an occurrence" do
+    corridor = OntologyEntity.create!(canonical_key: "corridor:hormuz", entity_type: "corridor",
+                                       canonical_name: "Strait of Hormuz")
+    place = OntologyEntity.create!(canonical_key: "place:hazard:earthquake:q1", entity_type: "place",
+                                    canonical_name: "near Bandar Abbas, Iran",
+                                    metadata: { "latitude" => 27.2, "longitude" => 56.3 })
+    [ "h1", "h2" ].each do |key|
+      _c, event = cluster(key: key, title: "Tankers rerouted around the Strait of Hormuz")
+      OntologyRelationship.create!(source_node: event, target_node: corridor,
+                                   relation_type: "names_entity", confidence: 0.9,
+                                   derived_by: "news_registry_link_v1")
+      OntologyRelationship.create!(source_node: event, target_node: place,
+                                   relation_type: HazardOccurrenceLinkService::RELATION_TYPE,
+                                   confidence: 0.75, derived_by: "hazard_occurrence_link_v1")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal [ "Strait of Hormuz situation" ],
+                 OntologyEntity.where(entity_type: "situation").pluck(:canonical_name)
+  end
 end

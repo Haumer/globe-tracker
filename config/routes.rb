@@ -3,6 +3,7 @@ Rails.application.routes.draw do
   root to: "pages#home"
   get "home", to: "pages#landing", as: :landing
   get "sources", to: "pages#sources"
+  get "situations", to: "pages#situations"
   get "about", to: "pages#about"
   # Unrouted until RelationshipLensGraphService is snapshot-backed. Building the
   # graph inline walks every theater/corridor/country/commodity entity and issues
@@ -77,6 +78,7 @@ Rails.application.routes.draw do
     resources :weather_alerts, only: [:index]
     resources :insights, only: [:index]
     resources :situation_surfaces, only: [:index]
+    resources :situations, only: [:index]
     get "node_context", to: "node_contexts#show"
     get "situation_assessments", to: "situation_assessments#index"
     get "situation_assessment", to: "situation_assessments#show"

@@ -1,7 +1,10 @@
 class PagesController < ApplicationController
-  skip_before_action :authenticate_user!, only: [ :home, :sources, :about, :landing, :relationship_lens ]
+  skip_before_action :authenticate_user!, only: [ :home, :sources, :about, :landing, :relationship_lens, :situations ]
 
   def home
+  end
+
+  def situations
   end
 
   def sources

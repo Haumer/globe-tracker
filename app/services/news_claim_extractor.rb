@@ -209,12 +209,15 @@ class NewsClaimExtractor
     },
     "kr" => {
       name: "South Korea",
-      patterns: [ "south korean", "korean" ],
+      # Not bare "korean": it is a substring of "north korean", so every DPRK
+      # headline also credited South Korea as an actor. Ambiguous mentions
+      # ("Korean peninsula") now match neither, which is the honest answer.
+      patterns: [ "south korean" ],
     },
-    "kp" => {
-      name: "North Korea",
-      patterns: [ "north korean" ],
-    },
+    # "kp" deliberately absent: STATE_ALIAS_OVERRIDES only decorates states that
+    # exist in NewsGeocodable::COUNTRY_NAME_MAP, and North Korea is not in that
+    # map -- an override here never becomes an actor. It lives in
+    # ADDITIONAL_STATE_ACTORS instead, like the other unmapped states.
     "pk" => {
       name: "Pakistan",
       patterns: [ "pakistani" ],
@@ -239,6 +242,7 @@ class NewsClaimExtractor
     { canonical_key: "state:kw", name: "Kuwait", actor_type: "state", country_code: "KW", patterns: [ "kuwait", "kuwaiti" ] },
     { canonical_key: "state:lb", name: "Lebanon", actor_type: "state", country_code: "LB", patterns: [ "lebanon", "lebanese", "beirut" ] },
     { canonical_key: "state:jo", name: "Jordan", actor_type: "state", country_code: "JO", patterns: [ "jordan", "jordanian", "amman" ] },
+    { canonical_key: "state:kp", name: "North Korea", actor_type: "state", country_code: "KP", patterns: [ "north korea", "north korean", /\bDPRK\b/, "pyongyang" ] },
   ].freeze
 
   ORGANIZATION_ACTORS = [

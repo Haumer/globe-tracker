@@ -188,6 +188,17 @@ class NewsRefreshService
     end
 
     records = dedup_by_url(records)
+
+    # Skip URLs that already have an event, like every other news service does.
+    # This service upserted unconditionally, and its conflict-query rows carry
+    # latitude: nil (enrichment places them later) -- so when GDELT re-served a
+    # URL that RSS or a sitemap had already geocoded, the upsert overwrote real
+    # coordinates with nil and the geocode_* columns with their defaults.
+    # Measured on the dev capture: 13 of the 18 shared-URL nil-coordinate
+    # events were exactly this overwrite. The other services then refused the
+    # URL as already-known, so nothing ever repaired it.
+    existing_urls = NewsEvent.where(url: records.map { |record| record[:url] }).pluck(:url).to_set
+    records = records.reject { |record| existing_urls.include?(record[:url]) }
     return 0 if records.empty?
 
     ingest_ids = NewsIngestRecorder.record_all(ingest_items)

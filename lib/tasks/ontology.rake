@@ -231,6 +231,37 @@ namespace :ontology do
     stats.sort.each { |name, count| puts format("  %-18s %4d", name, count) }
   end
 
+  desc "Link news reports to the sensor occurrences they describe (DAYS=21)"
+  task link_occurrences: :environment do
+    days = ENV.fetch("DAYS", 21).to_i
+    stats = HazardOccurrenceLinkService.sync_recent(days: days)
+
+    puts "Occurrence links over #{days}d"
+    %i[occurrences grouped no_group edges].each do |key|
+      puts format("  %-12s %5d", key, stats[key].to_i)
+    end
+  end
+
+  desc "Group clusters that are one story into situations (DAYS=21; run link_occurrences first)"
+  task build_situations: :environment do
+    days = ENV.fetch("DAYS", 21).to_i
+    stats = SituationBuilder.call(days: days)
+
+    puts "Situations over #{days}d"
+    %i[situations members incoherent no_key no_event too_small].each do |key|
+      puts format("  %-12s %5d", key, stats[key].to_i)
+    end
+
+    puts
+    puts "Built"
+    OntologyEntity.where(entity_type: SituationBuilder::ENTITY_TYPE)
+      .sort_by { |entity| -entity.metadata["member_count"].to_i }
+      .each do |entity|
+        puts format("  %-40s %-8s %4d", entity.canonical_name.first(38),
+                    entity.metadata["grouped_by"], entity.metadata["member_count"].to_i)
+      end
+  end
+
   desc "Measure registry name resolution against the eval sets (DAYS=21)"
   task measure_registry_links: :environment do
     days = ENV.fetch("DAYS", 21).to_i

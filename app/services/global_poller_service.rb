@@ -41,6 +41,10 @@ class GlobalPollerService
     { job: RefreshNewsSitemapJob, every: 5.minutes, offset: 90.seconds },
     { job: RefreshMultiNewsJob, every: 5.minutes, offset: 2.minutes },
     { job: EnrichNewsJob, every: 5.minutes, offset: 3.minutes },
+    # After ingest and before the next clustering cycle: the clusterer reads
+    # event_family the instant it scores an article, so a claim still sitting at
+    # `general` when its cluster is decided has already been dropped.
+    { job: ResolveClaimTypesJob, every: 5.minutes, offset: 210.seconds },
     { job: RefreshNaturalEventsJob, every: 5.minutes, offset: 150.seconds },
     { job: RefreshInternetOutagesJob, every: 5.minutes, offset: 210.seconds },
     { job: RefreshConflictPulseSnapshotJob, every: 5.minutes, offset: 4.minutes },

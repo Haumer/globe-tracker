@@ -703,3 +703,93 @@ class NewsStoryClustererAdjudicationTest < ActiveSupport::TestCase
     assert_equal 1, cluster_count_for([ a, b ])
   end
 end
+
+# Embedding on the clustering path, rather than only in the rake backfill.
+#
+# The cosine gate was measured at 56.7% -> 76.3% pair precision and then never
+# fired for a live article: every reader fails open on a missing vector, and
+# nothing on the ingest path wrote one. These assert the vector exists by the
+# time the gate looks for it.
+class NewsStoryClustererIngestEmbeddingTest < ActiveSupport::TestCase
+  include CosineGateFixtures
+
+  def stub_embed(vectors_by_title, &block)
+    calls = []
+    stub = lambda do |texts, **|
+      calls << Array(texts)
+      Array(texts).map { |text| vectors_by_title[text] }
+    end
+    NewsHeadlineEmbeddingService.stub(:embed, stub, &block)
+    calls
+  end
+
+  test "an article without a vector is embedded before it is clustered" do
+    article = article_with("ing-a", title: TITLES[0], embedding: nil)
+
+    stub_embed(TITLES[0] => unit(0.4)) { assign(article) }
+
+    article.reload
+    assert_equal unit(0.4), article.title_embedding
+    assert_equal NewsHeadlineEmbeddingService.model_tag, article.title_embedding_model
+    assert_equal NewsHeadlineEmbeddingService.digest_for(TITLES[0]), article.title_embedding_digest
+  end
+
+  # The whole point. Two headlines this lexically close always merged before;
+  # they must now be separated by vectors that did not exist when the run began.
+  test "a vector written this run decides the pair in the same run" do
+    a = article_with("ing-b", title: TITLES[0], embedding: nil)
+    b = article_with("ing-c", title: TITLES[1], embedding: nil,
+      published_at: Time.utc(2026, 3, 24, 13, 0, 0))
+
+    assert_operator NewsHeadlineEmbeddingService.cosine(unit(0.0), unit(1.2)), :<,
+      NewsStoryClusterer::MINIMUM_HEADLINE_COSINE
+
+    stub_embed(TITLES[0] => unit(0.0), TITLES[1] => unit(1.2)) { assign(a, b) }
+
+    assert_equal 2, cluster_count_for([ a, b ]),
+      "the gate has to read the vector this run just wrote, not the absence it started with"
+  end
+
+  test "a headline already embedded is not paid for twice" do
+    article = article_with("ing-d", title: TITLES[0], embedding: unit(0.4))
+
+    NewsHeadlineEmbeddingService.stub(:embed, ->(*) { flunk "already current" }) do
+      assign(article)
+    end
+  end
+
+  # The digest covers the prepared text, so a headline a later poll revised is
+  # a mismatch and has to be re-embedded rather than left describing old words.
+  test "a stale vector is replaced" do
+    article = article_with("ing-e", title: TITLES[0], embedding: unit(0.4))
+    article.update_columns(title_embedding_digest: NewsHeadlineEmbeddingService.digest_for("older wording"))
+
+    stub_embed(TITLES[0] => unit(0.9)) { assign(article) }
+
+    assert_equal unit(0.9), article.reload.title_embedding
+  end
+
+  test "an article the clusterer would never score is not embedded" do
+    article = article_with("ing-f", title: TITLES[0], embedding: nil)
+    article.news_claims.first.update!(event_family: "general", event_type: "actor_mention")
+
+    NewsHeadlineEmbeddingService.stub(:embed, ->(*) { flunk "build_payload drops this before it is compared" }) do
+      assign(article)
+    end
+
+    assert_nil article.reload.title_embedding
+  end
+
+  # Failing open is the contract everywhere else in the gate, and it has to
+  # hold here too: an embedding outage costs precision, never an article.
+  test "an embedding failure still clusters the article" do
+    article = article_with("ing-g", title: TITLES[0], embedding: nil)
+
+    NewsHeadlineEmbeddingService.stub(:embed, ->(*) { raise Errno::ECONNREFUSED }) do
+      assign(article)
+    end
+
+    assert_nil article.reload.title_embedding
+    assert_equal 1, cluster_count_for([ article ])
+  end
+end

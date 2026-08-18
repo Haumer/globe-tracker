@@ -276,21 +276,45 @@ class NewsClaimExtractor
     end
   end
 
+  # A hazard happens *to* a place; it has no perpetrator to recognise. Requiring
+  # an actor therefore discards them wholesale -- "Wildfire strikes Peloponnese
+  # village, homes destroyed" names no country or organisation on the 79-entry
+  # list, so no claim was written at all and the article left the pipeline here.
+  # Measured on the clone, 516 of the 5,034 articles that produce no claim match
+  # a hazard rule, among them an F-35B crash at Miramar, an explosion in central
+  # Malmo and floods in Sri Lanka.
+  #
+  # Deliberately narrow. Dropping the actor requirement outright admits all
+  # 5,034, and a sample of those is roughly three-quarters celebrity, sport and
+  # product copy that the scope classifier failed to exclude.
+  HAZARD_EVENT_TYPES = %w[earthquake flood wildfire storm explosion crash outage].freeze
+
+  # Asked of the text directly rather than of the winning rule, because the
+  # winner is decided by position and the hazard rules sit last. "Wildfire
+  # strikes Peloponnese village" matches ground_operation on "strikes" at index
+  # 11, nine places ahead of wildfire at index 22 -- so keying the guard off
+  # rule[:event_type] would drop the very headline it exists to keep. The label
+  # is left wrong here and corrected by NewsClaimTypeResolver; what matters at
+  # this point is only that a claim gets written at all.
+  HAZARD_RULES = EVENT_RULES.select { |rule| HAZARD_EVENT_TYPES.include?(rule[:event_type]) }.freeze
+
   def extract(title:, summary: nil)
     return nil if title.blank?
 
     full_text = [ title, summary ].compact.join(" ").squish
     actors = extract_actors(full_text)
-    return nil if actors.empty?
 
     rule = EVENT_RULES.find { |event_rule| full_text.match?(event_rule[:regex]) }
+    hazard = HAZARD_RULES.any? { |hazard_rule| full_text.match?(hazard_rule[:regex]) }
+    return nil if actors.empty? && !hazard
+
     event_family = rule&.fetch(:event_family) || fallback_event_family
     event_type = rule&.fetch(:event_type) || fallback_event_type(actors)
     matched_on = if rule
       title.match?(rule[:regex]) ? "title" : "summary"
     end
     assignments = assign_roles(full_text, actors, rule)
-    return nil if assignments.empty?
+    return nil if assignments.empty? && !hazard
 
     event_confidence = claim_confidence(rule, assignments, matched_on)
     actor_confidence = actor_confidence(assignments)
@@ -347,6 +371,10 @@ class NewsClaimExtractor
   end
 
   def assign_roles(text, actors, rule)
+    # Every strategy below assumes at least one actor to hang a role on --
+    # directional_roles dereferences `initiator` unconditionally. An actorless
+    # hazard has no roles by definition, so it gets none rather than a nil one.
+    return [] if actors.empty?
     return fallback_roles(actors) unless rule
 
     case rule[:strategy]

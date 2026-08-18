@@ -91,14 +91,35 @@ class SituationBuilder
   # shared actor: two clusters naming Bab el-Mandeb are one story, two sharing
   # "Houthis" may be a shipping attack and a domestic politics piece. Actor is
   # the fallback, and only a specific one.
+  #
+  # The occurrence sits between them, and the ordering is load-bearing in both
+  # directions. Below names_entity, because a report that names a strait is
+  # about the strait even if a quake happened in the same country that week.
+  # Above the actor fallback, because without it the rarest-actor rule files
+  # stories that have no actor under whoever they happened to mention: the
+  # 62-article cluster on the Colombia quake keyed on "United Nations" at 3.4%
+  # and became a member of the UN situation.
   def grouping_key(cluster, event)
     entity_id = named_entity_ids[event.id]&.first
     return [:entity, entity_id] if entity_id
+
+    occurrence_id = occurrence_ids[event.id]
+    return [:entity, occurrence_id] if occurrence_id
 
     actor = specific_actor_for(event)
     return [:actor, actor] if actor
 
     nil
+  end
+
+  # place:hazard:* entities are OntologyEntity rows like any registry asset, so
+  # an occurrence key needs no new node type: persist, link_concerns and the
+  # whole read side downstream work on it unchanged.
+  def occurrence_ids
+    @occurrence_ids ||= OntologyRelationship
+      .where(source_node_type: "OntologyEvent", source_node_id: event_ids,
+             relation_type: HazardOccurrenceLinkService::RELATION_TYPE)
+      .pluck(:source_node_id, :target_node_id).to_h
   end
 
   def specific_actor_for(event)

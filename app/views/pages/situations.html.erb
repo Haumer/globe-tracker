@@ -1,0 +1,43 @@
+<div id="situations-page"
+     data-controller="situations"
+     data-situations-cesium-token-value="<%= ENV['CESIUM_ION_TOKEN'] %>">
+  <div id="situations-viewer"></div>
+
+  <div class="sit-header">
+    <div class="sit-header-title">SITUATIONS</div>
+    <div class="sit-header-sub" data-situations-target="status">Loading…</div>
+  </div>
+
+  <div class="sit-list" data-situations-target="list"></div>
+
+  <div class="sit-panel" data-situations-target="panel" style="display:none;"></div>
+
+  <div class="sit-legend">
+    <div class="sit-legend-row">
+      <span class="sit-swatch sit-swatch-registry"></span>
+      <span>Anchored on a registry entity</span>
+    </div>
+    <div class="sit-legend-row">
+      <span class="sit-swatch sit-swatch-medoid"></span>
+      <span>No place of its own — drawn at its most central report</span>
+    </div>
+    <div class="sit-legend-row">
+      <span class="sit-line sit-line-evidence"></span>
+      <span>Reports converging on the anchor</span>
+    </div>
+    <div class="sit-legend-row">
+      <span class="sit-swatch sit-swatch-asset"></span>
+      <span>Assets standing beside the anchor</span>
+    </div>
+    <div class="sit-legend-row">
+      <span class="sit-line sit-line-exposure"></span>
+      <span>Countries exposed through the anchor</span>
+    </div>
+    <div class="sit-legend-note">
+      A footprint is drawn on the ground at every distance, so it foreshortens
+      toward the limb like the ground it covers. Its radius is the extent of the
+      thing named — never how much was written about it. The dot marks one too
+      small to see yet.
+    </div>
+  </div>
+</div>

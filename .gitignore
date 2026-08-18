@@ -45,3 +45,6 @@ bin/dist
 
 # Agent scratch space and throwaway git worktrees.
 .claude/
+
+# Playwright MCP session artifacts (screenshots, console logs)
+.playwright-mcp/

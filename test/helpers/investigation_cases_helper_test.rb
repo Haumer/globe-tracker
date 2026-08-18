@@ -59,9 +59,9 @@ class InvestigationCasesHelperTest < ActionView::TestCase
     assert_not investigation_case_object_viewable?(obj)
   end
 
-  test "investigation_case_return_globe_href returns root for blank input" do
-    assert_equal "/", investigation_case_return_globe_href(nil)
-    assert_equal "/", investigation_case_return_globe_href("")
+  test "investigation_case_return_globe_href returns the globe for blank input" do
+    assert_equal "/explore", investigation_case_return_globe_href(nil)
+    assert_equal "/explore", investigation_case_return_globe_href("")
   end
 
   test "investigation_case_return_globe_href returns path for valid relative URL" do
@@ -69,7 +69,7 @@ class InvestigationCasesHelperTest < ActionView::TestCase
   end
 
   test "investigation_case_return_globe_href rejects protocol-relative URLs" do
-    assert_equal "/", investigation_case_return_globe_href("//evil.com")
+    assert_equal "/explore", investigation_case_return_globe_href("//evil.com")
   end
 
   test "investigation_case_source_context_label returns titleized trend" do

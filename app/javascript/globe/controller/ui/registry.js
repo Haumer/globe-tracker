@@ -37,35 +37,22 @@ const BASE_LAYER_REGISTRY = [
   { key: "terrain", toggleTarget: "terrainToggle", method: "toggleTerrain", visibleProp: "terrainEnabled", qlTarget: "qlTerrain", section: "map", pill: null },
 ]
 
-// The globe is temporarily narrowed to news alone.
+// Nothing is held any more -- the narrowing became a view instead.
 //
 // Signals accumulated one at a time, each reasonable on its own, until roughly
 // thirty of them competed for the same pixels and none could be read properly.
-// Rather than tune that in place, they are held inert while the news layer is
-// rebuilt, then reintroduced deliberately -- each one earning its place against
-// a map that already works.
+// The answer was to hold them inert while the news layer was rebuilt. That hold
+// is now a split: the situation board at / answers "what is happening", and
+// this globe is Explore -- "what is out there" -- where thirty signals at once
+// is the point rather than the problem.
 //
-// Nothing is deleted. A held layer keeps its registry entry, toggle, quick-bar
-// slot and saved preference; it simply cannot be switched on. Remove a key from
-// this set and the layer returns exactly as it was.
-//
-// Cartography is not held: cities, airports, borders and terrain are context
-// for reading position, not signals competing for attention.
-export const SIGNALS_ON_HOLD = new Set([
-  // tracking
-  "flights", "ships", "trains", "notams",
-  // events (news is the exception -- it is what we are building)
-  "earthquakes", "naturalEvents", "fireHotspots", "weather", "conflicts",
-  "situationSurfaces", "situations", "insights",
-  // military
-  "militaryFlights", "airbases", "militaryBases", "navalVessels",
-  "verifiedStrikes", "heatSignatures",
-  // infrastructure
-  "cables", "ports", "shippingLanes", "pipelines", "railways", "powerPlants",
-  "commoditySites", "cameras", "financial", "chokepoints",
-  // cyber
-  "traffic", "outages", "gpsJamming",
-])
+// The set stays, empty, because it is still the right lever. Put a key back in
+// and that layer is suppressed everywhere at once: quick bar, layer library,
+// saved preferences and deep links all read it. `trains`, `railways` and
+// `shippingLanes` are not listed here -- they carry `disabled: true` in the
+// registry above for their own reasons, and emptying this set does not revive
+// them.
+export const SIGNALS_ON_HOLD = new Set([])
 
 export const LAYER_REGISTRY = BASE_LAYER_REGISTRY.map(layer => (
   SIGNALS_ON_HOLD.has(layer.key) ? { ...layer, disabled: true } : layer

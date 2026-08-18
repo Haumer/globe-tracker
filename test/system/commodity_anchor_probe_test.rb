@@ -4,7 +4,7 @@ class CommodityAnchorProbeTest < ApplicationSystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1400]
 
   test "commodity detail uses anchored popup instead of legacy detail panel" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click

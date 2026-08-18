@@ -5,7 +5,7 @@ class TimelinePlaybackProbeTest < ApplicationSystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1400]
 
   test "timeline auto-enables ephemeral layers and renders time-scoped data" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click
@@ -258,7 +258,7 @@ class TimelinePlaybackProbeTest < ApplicationSystemTestCase
   end
 
   test "timeline playback appends news and updates theater state as the cursor advances" do
-    visit root_path
+    visit explore_path
 
     if page.has_selector?("#onboarding-overlay", visible: true, wait: 5)
       find("#onboarding-dismiss").click

@@ -2,7 +2,7 @@ require "test_helper"
 
 class PagesControllerTest < ActionDispatch::IntegrationTest
   test "home page renders the selected context pane" do
-    get "/"
+    get "/explore"
 
     assert_response :success
     assert_match(/selected context/i, response.body)

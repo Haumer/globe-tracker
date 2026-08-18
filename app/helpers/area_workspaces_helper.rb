@@ -33,7 +33,7 @@ module AreaWorkspacesHelper
   }.freeze
 
   def area_workspace_globe_href(area_workspace)
-    root_path + area_workspace_globe_anchor(area_workspace)
+    explore_path + area_workspace_globe_anchor(area_workspace)
   end
 
   def area_workspace_globe_anchor(area_workspace)

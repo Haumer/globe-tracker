@@ -156,7 +156,7 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Port disruption near the gulf corridor"
     assert_includes response.body, "Flight surge"
     assert_includes response.body, "Hormuz pressure"
-    assert_includes response.body, "/#25.2500,55.2500,350000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
+    assert_includes response.body, "/explore#25.2500,55.2500,350000,0.000,-1.120;l:nw,in,fl;co:United Arab Emirates"
   end
 
   test "area page renders linked impact assessments for military and market spillover" do
@@ -369,7 +369,7 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
-    assert_includes response.body, "/#27.0000,50.0000,1610000,0.000,-0.850;l:sh,cp,nw;r:gulf-states"
+    assert_includes response.body, "/explore#27.0000,50.0000,1610000,0.000,-0.850;l:sh,cp,nw;r:gulf-states"
   end
 
   test "custom bbox area emits a circle deeplink" do
@@ -390,7 +390,7 @@ class AreaWorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
-    assert_includes response.body, "/#48.2000,16.3000,300000,0.000,-1.120;l:tns,rl,nw;ci:48.2000,16.3000,50000"
+    assert_includes response.body, "/explore#48.2000,16.3000,300000,0.000,-1.120;l:tns,rl,nw;ci:48.2000,16.3000,50000"
   end
 
   test "index shows open on globe links for saved areas" do

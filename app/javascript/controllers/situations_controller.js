@@ -602,27 +602,39 @@ export default class extends Controller {
   // ── chrome ──────────────────────────────────────────────────────────
 
   _renderList() {
-    this.listTarget.innerHTML = this._situations.map((situation) => {
-      const registry = situation.anchor.kind === "registry"
-      const selected = situation.id === this._selectedId
-      const reach = situation.rings.ring3_countries.total
+    // The payload arrives corroborated-first; emerging situations render below
+    // a divider, dimmed, instead of being hidden — thin sourcing is a signal
+    // worth seeing, just not one worth leading with.
+    const corroborated = this._situations.filter((s) => s.tier !== "emerging")
+    const emerging = this._situations.filter((s) => s.tier === "emerging")
 
-      return `
-        <button type="button" class="sit-row ${selected ? "is-selected" : ""}"
-                data-situation-id="${situation.id}"
-                data-action="click->situations#selectFromList">
-          <span class="sit-row-dot ${registry ? "is-registry" : "is-medoid"}"></span>
-          <span class="sit-row-body">
-            <span class="sit-row-name">${escapeHtml(situation.name)}</span>
-            <span class="sit-row-meta">
-              ${pluralize(situation.member_count, "story", "stories")}
-              ${reach > 0 ? `· ${reach} countries exposed` : ""}
-              ${registry ? "" : "· no place of its own"}
-            </span>
+    this.listTarget.innerHTML = [
+      corroborated.map((situation) => this._listRow(situation)).join(""),
+      emerging.length ? `<div class="sit-list-divider">Emerging · thin sourcing</div>` : "",
+      emerging.map((situation) => this._listRow(situation)).join("")
+    ].join("")
+  }
+
+  _listRow(situation) {
+    const registry = situation.anchor.kind === "registry"
+    const selected = situation.id === this._selectedId
+    const reach = situation.rings.ring3_countries.total
+
+    return `
+      <button type="button" class="sit-row ${selected ? "is-selected" : ""} ${situation.tier === "emerging" ? "is-emerging" : ""}"
+              data-situation-id="${situation.id}"
+              data-action="click->situations#selectFromList">
+        <span class="sit-row-dot ${registry ? "is-registry" : "is-medoid"}"></span>
+        <span class="sit-row-body">
+          <span class="sit-row-name">${escapeHtml(situation.name)}</span>
+          <span class="sit-row-meta">
+            ${pluralize(situation.member_count, "story", "stories")}
+            ${reach > 0 ? `· ${reach} countries exposed` : ""}
+            ${registry ? "" : "· no place of its own"}
           </span>
-          ${this._sparkline(situation.daily)}
-        </button>`
-    }).join("")
+        </span>
+        ${this._sparkline(situation.daily)}
+      </button>`
   }
 
   _sparkline(daily) {
@@ -687,7 +699,7 @@ export default class extends Controller {
       </div>
 
       <div class="sit-panel-stats">
-        <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports</div>
+        <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}</div>
         <div><b>${situation.geo_member_count}</b> located${ungeocoded > 0 ? ` · ${ungeocoded} not` : ""}</div>
         <div>${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
       </div>

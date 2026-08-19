@@ -79,6 +79,27 @@
   background: rgba(40, 32, 12, 0.9);
 }
 
+.sit-row.is-emerging {
+  opacity: 0.55;
+}
+
+.sit-row.is-emerging.is-selected,
+.sit-row.is-emerging:hover {
+  opacity: 1;
+}
+
+.sit-list-divider {
+  margin: 10px 2px 5px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a8794;
+}
+
+.sit-tier-emerging {
+  color: #ffc44d;
+}
+
 .sit-row-dot {
   flex: 0 0 auto;
   width: 10px;

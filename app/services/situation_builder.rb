@@ -72,14 +72,16 @@ class SituationBuilder
       grouped[key] << [cluster, event]
     end
 
+    built_keys = []
     grouped.each do |key, members|
       next @stats[:too_small] += 1 if members.size < MINIMUM_MEMBERS
 
-      persist(key, members)
+      built_keys << persist(key, members).canonical_key
       @stats[:situations] += 1
       @stats[:members] += members.size
     end
 
+    prune_stale(built_keys)
     @stats
   end
 
@@ -180,6 +182,32 @@ class SituationBuilder
       .where.not(id: kept).delete_all
 
     link_concerns(situation, kind, reference)
+    situation
+  end
+
+  # The inverse of persist, which scheduled runs need and one-shot rake runs
+  # never did: persist only upserts the groups that exist *now*, so a situation
+  # whose story has left the window -- or whose members regrouped under another
+  # key -- would stay on the board forever, at whatever member_count it last
+  # had. Scoped to DERIVED_BY so nothing else's entities can be swept.
+  #
+  # Evidence rows are deleted explicitly: OntologyEntity's relationship
+  # cascades are delete_all, which skips the relationships' own callbacks and
+  # would orphan their evidence.
+  def prune_stale(built_keys)
+    stale = OntologyEntity.where(entity_type: ENTITY_TYPE)
+      .where("metadata->>'derived_by' = ?", DERIVED_BY)
+    stale = stale.where.not(canonical_key: built_keys) if built_keys.any?
+    stale_ids = stale.pluck(:id)
+    return if stale_ids.empty?
+
+    relationship_ids = OntologyRelationship
+      .where(source_node_type: "OntologyEntity", source_node_id: stale_ids)
+      .or(OntologyRelationship.where(target_node_type: "OntologyEntity", target_node_id: stale_ids))
+      .pluck(:id)
+    OntologyRelationshipEvidence.where(ontology_relationship_id: relationship_ids).delete_all
+    stale.each(&:destroy)
+    @stats[:removed] = stale_ids.size
   end
 
   def link_concerns(situation, kind, reference)

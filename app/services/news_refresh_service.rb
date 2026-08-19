@@ -38,8 +38,11 @@ class NewsRefreshService
 
   # GDELT asks for no more than one request every five seconds and answers 429
   # in plain text when you exceed it -- "Please limit requests to one every 5
-  # seconds". The conflict queries used to fire back to back, so the second was
-  # rejected on most cycles. Six seconds leaves a little slack.
+  # seconds". Fifteen rather than six: measured, the limiter refuses
+  # pace-compliant requests anyway (see gdelt_get -- it reads as load
+  # shedding, not a rate window), so tight pacing buys no reliability and
+  # generous spacing at least avoids knocking on a limiter that is already
+  # refusing. Reliability comes from the spaced retry, not from this number.
   MIN_REQUEST_INTERVAL = 15
 
   # api.gdeltproject.org takes about ten seconds to complete a TLS handshake.
@@ -375,7 +378,8 @@ class NewsRefreshService
         Rails.logger.warn("NewsRefreshService conflict query #{qi}: #{e.message}")
       end
 
-      sleep(6) # GDELT rate limit: 1 request per 5 seconds
+      # No trailing sleep: throttle! already spaces every GDELT request
+      # process-wide, so sleeping here only padded the cycle.
     end
 
     { records: records, ingest_items: ingest_items }

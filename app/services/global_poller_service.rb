@@ -62,6 +62,13 @@ class GlobalPollerService
     # so each reports its own polling source instead of hiding behind a sibling.
     { job: SyncHazardRelationshipsJob, every: 10.minutes, offset: 7.minutes },
     { job: SyncTheaterRelationshipsJob, every: 10.minutes, offset: 9.minutes },
+    # The situation chain, previously manual-only (rake ontology:build_situations),
+    # which left the situations board frozen at whatever the last operator run
+    # built. Offset behind the relationship syncs above so a build sees the
+    # edges from the same cycle. Registry links run far slower than the builder
+    # because their resolver tier spends model calls -- see the job.
+    { job: BuildSituationsJob, every: 15.minutes, offset: 13.minutes },
+    { job: SyncNewsRegistryLinksJob, every: 3.hours, offset: 40.minutes },
     # The v2 graph, split by how fast its inputs move. The live chain derives
     # from events arriving continuously, so it keeps the ten-minute cadence the
     # old monolith nominally had. The reference chain walks ~56,000 rows of

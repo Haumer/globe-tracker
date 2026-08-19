@@ -20,7 +20,10 @@ class FirmsRefreshService
   private
 
   def fetch_data
-    map_key = ENV["FIRMS_MAP_KEY"]
+    # Both names, because both exist: the code has always read FIRMS_MAP_KEY,
+    # but the .env that holds the actual credential names it FIRMS_MAP_API_KEY —
+    # so FIRMS ran keyless for as long as nobody compared the two strings.
+    map_key = ENV["FIRMS_MAP_KEY"].presence || ENV["FIRMS_MAP_API_KEY"]
     return nil unless map_key.present?
 
     # Return the map_key as the "data" — parse_records handles fetching per-source

@@ -223,7 +223,7 @@ class SituationLayerPlanService
 
   def probe_availability
     {
-      "fires" => probe(FireHotspot.recent, key: ENV["FIRMS_MAP_KEY"]),
+      "fires" => probe(FireHotspot.recent, key: ENV["FIRMS_MAP_KEY"].presence || ENV["FIRMS_MAP_API_KEY"]),
       "aircraft" => Flight.where("updated_at > ?", 10.minutes.ago).exists? ? "ready" : "empty",
       "ships" => probe(Ship.where("updated_at > ?", 6.hours.ago), key: ENV["AISSTREAM_API_KEY"]),
       "webcams" => webcams_status,

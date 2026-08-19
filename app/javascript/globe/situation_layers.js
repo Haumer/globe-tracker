@@ -439,9 +439,9 @@ export class SituationLayerManager {
     const deaths = events.reduce((sum, e) => sum + (Number(e.deaths) || 0), 0)
     const latest = events.map((e) => e.date_start).filter(Boolean).sort().pop()
     this._notes.set(layer.key, events.length
-      ? `${events.length} events in 12mo` + (deaths ? ` · ${deaths.toLocaleString()} deaths` : "") +
+      ? `${events.length} events in 2y` + (deaths ? ` · ${deaths.toLocaleString()} deaths` : "") +
         (latest ? ` · latest ${latest.slice(0, 10)}` : "")
-      : "none recorded in 12mo")
+      : "none recorded in 2y")
   }
 
   async _renderEarthquakes(layer, payloads) {

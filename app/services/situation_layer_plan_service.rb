@@ -28,10 +28,11 @@ class SituationLayerPlanService
 
   # Time scoping per layer. The situation itself is a 3-day story, so live
   # corroboration (fires) matches its window; UCDP is an annual-release
-  # historical dataset where a 3-day filter would always be empty — a year is
-  # context, and the client renders age so old events cannot pass as current.
+  # historical dataset released annually — a tight window can trail the latest
+  # release and blank the layer. Two years always contains one full release;
+  # the client renders age, so old events cannot pass as current.
   FIRES_WINDOW = SituationBuilder::WINDOW_DAYS.days
-  CONFLICT_WINDOW = 1.year
+  CONFLICT_WINDOW = 2.years
 
   # meaning: is written for two readers at once -- the curator's prompt and the
   # chip tooltip -- so it says what the data is, not how it is drawn.

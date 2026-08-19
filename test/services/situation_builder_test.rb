@@ -233,4 +233,77 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert OntologyEntity.exists?(id: foreign.id),
       "prune is scoped to DERIVED_BY -- it must not sweep entities it did not build"
   end
+
+  def place(name, key: nil, lat: 35.89, lng: -5.31)
+    OntologyEntity.create!(
+      canonical_key: key || "place:#{name.parameterize}", entity_type: "place",
+      canonical_name: name, metadata: { "latitude" => lat, "longitude" => lng }
+    )
+  end
+
+  # The largest keyless population: no registry entity, no occurrence, and only
+  # country actors. A shared sub-country place is the story of that place.
+  test "groups keyless clusters around the place they resolved to" do
+    ceuta = place("Ceuta")
+    [ "p1", "p2" ].each do |key|
+      _c, event = cluster(key: key, title: "Migrant arrivals strain Ceuta services")
+      event.update!(place_entity: ceuta)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    situation = OntologyEntity.find_by(entity_type: "situation", canonical_key: "situation:place:#{ceuta.id}")
+    assert_not_nil situation, "two keyless clusters sharing a place are that place's story"
+    assert_equal "Ceuta situation", situation.canonical_name
+    assert OntologyRelationship.exists?(source_node: situation, target_node: ceuta, relation_type: "concerns"),
+      "the place carries the coordinate the board anchors on"
+  end
+
+  # "Colombia" and "China" arrive as place-typed entities. Keying on them would
+  # rebuild the every-story-about-a-country group the actor exclusion prevents.
+  test "does not build a situation around a country-named or region-named place" do
+    # "Lebanon" is the trap: it is a real country missing from COUNTRY_NAME_MAP,
+    # so an exclusion built on that map alone let it through.
+    [ place("Colombia", lat: 4.6, lng: -74.1), place("Lebanon", lat: 33.9, lng: 35.5),
+      place("Asia", lat: 30.0, lng: 100.0), place("August", lat: 0.0, lng: 0.0) ].each_with_index do |bad, index|
+      [ "a#{index}", "b#{index}" ].each do |key|
+        _c, event = cluster(key: key, title: "Assorted news item #{key}")
+        event.update!(place_entity: bad)
+      end
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "countries, regions and calendar words are places the geocoder minted, not stories"
+  end
+
+  test "ignores a place that is not specific enough" do
+    everywhere = place("Newsville")
+    [ "p1", "p2" ].each do |key|
+      _c, event = cluster(key: key, title: "Everything happens in Newsville")
+      event.update!(place_entity: everywhere)
+    end
+
+    # Both of the window's two clusters carry the place: frequency 1.0 against
+    # a threshold of 0.5, so it is describing the window, not a story.
+    SituationBuilder.call(actor_specificity: 0.5)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count
+  end
+
+  test "clusters outside the recency window do not form situations" do
+    corridor = OntologyEntity.create!(canonical_key: "corridor:hormuz", entity_type: "corridor", canonical_name: "Strait of Hormuz")
+    [ "s1", "s2" ].each do |key|
+      record, event = cluster(key: key, title: "Tankers rerouted around the Strait of Hormuz")
+      record.update!(last_seen_at: (SituationBuilder::WINDOW_DAYS + 2).days.ago)
+      OntologyRelationship.create!(source_node: event, target_node: corridor,
+                                  relation_type: "names_entity", confidence: 0.9, derived_by: "news_registry_link_v1")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "a story last seen #{SituationBuilder::WINDOW_DAYS + 2} days ago is not happening"
+  end
 end

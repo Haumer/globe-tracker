@@ -29,11 +29,26 @@ class SituationBoardService
     ring3_countries: "chokepoint_exposure"
   }.freeze
 
-  def self.call(days: 21, now: Time.current)
+  # Display tiering. The builder's MINIMUM_MEMBERS = 2 admits a pair of
+  # single-article, single-source clusters -- two lone mentions wearing a
+  # situation's clothes -- and until now the board rendered that with the same
+  # standing as a 600-report story. Weak situations still ship (this is an
+  # early-warning surface, and the first two reports of a coup are exactly what
+  # must not be hidden); they are tiered "emerging" so the UI leads with
+  # corroborated stories instead of hiding thin ones.
+  #
+  # Both floors must hold. Five articles from one newsroom is a beat, not
+  # corroboration; three newsrooms with one report each is barely more. Sources
+  # are counted distinct across the whole situation -- the same wire in three
+  # clusters is one source, which the per-cluster counts cannot see.
+  CORROBORATED_MIN_ARTICLES = 5
+  CORROBORATED_MIN_SOURCES = 3
+
+  def self.call(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
     new(days: days, now: now).call
   end
 
-  def initialize(days: 21, now: Time.current)
+  def initialize(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
     @days = days
     @now = now
   end
@@ -43,7 +58,7 @@ class SituationBoardService
       generated_at: now.iso8601,
       window_days: days,
       situations: situations.map { |situation| present(situation) }.compact
-        .sort_by { |row| -row[:member_count] }
+        .sort_by { |row| [ row[:tier] == "corroborated" ? 0 : 1, -row[:member_count] ] }
     }
   end
 
@@ -63,6 +78,8 @@ class SituationBoardService
     return unless anchor
 
     concerns = concerns_entity(situation)
+    article_count = members.sum { |member| member[:article_count].to_i }
+    source_count = distinct_source_count(members)
 
     {
       id: situation.id,
@@ -74,7 +91,9 @@ class SituationBoardService
       # member_count counts clusters, one per member. A cluster is several
       # reports of one story, so the two are not interchangeable and the caller
       # was previously labelling 78 clusters as 78 reports.
-      article_count: members.sum { |member| member[:article_count].to_i },
+      article_count: article_count,
+      source_count: source_count,
+      tier: tier_for(article_count, source_count),
       geo_member_count: members.count { |member| member[:lat] },
       first_seen_at: members.filter_map { |m| m[:last_seen_at] }.min,
       last_seen_at: members.filter_map { |m| m[:last_seen_at] }.max,
@@ -301,6 +320,27 @@ class SituationBoardService
   # is stranded at zero and nothing recounts it -- four ingest services carry a
   # comment saying so. Counting the memberships is one extra query and cannot be
   # stale.
+  def tier_for(article_count, source_count)
+    article_count >= CORROBORATED_MIN_ARTICLES && source_count >= CORROBORATED_MIN_SOURCES ? "corroborated" : "emerging"
+  end
+
+  def distinct_source_count(members)
+    members.filter_map { |member| member[:cluster_id] }
+      .flat_map { |cluster_id| source_ids_by_cluster[cluster_id] }
+      .uniq.size
+  end
+
+  def source_ids_by_cluster
+    @source_ids_by_cluster ||= NewsStoryMembership
+      .where(news_story_cluster_id: cluster_ids)
+      .joins(:news_article)
+      .distinct
+      .pluck(:news_story_cluster_id, Arel.sql("news_articles.news_source_id"))
+      .group_by(&:first)
+      .transform_values { |rows| rows.filter_map(&:last) }
+      .tap { |hash| hash.default = [] }
+  end
+
   def counts_by_cluster
     @counts_by_cluster ||= NewsStoryMembership
       .where(news_story_cluster_id: cluster_ids)

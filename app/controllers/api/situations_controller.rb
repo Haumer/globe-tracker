@@ -2,7 +2,7 @@ module Api
   class SituationsController < ApplicationController
     skip_before_action :authenticate_user!
 
-    DEFAULT_DAYS = 21
+    DEFAULT_DAYS = SituationBuilder::WINDOW_DAYS
     MAX_DAYS = 90
 
     def index

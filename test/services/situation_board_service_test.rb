@@ -196,6 +196,32 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal ["Big", "Small"], SituationBoardService.call[:situations].map { |row| row[:name] }
   end
 
+  # Corroboration outranks raw member count: the weak situation below has MORE
+  # clusters than the strong one, and still renders second, tiered emerging --
+  # four lone mentions from one publisher are not a corroborated story.
+  test "tiers thin sourcing as emerging and leads with corroborated situations" do
+    weak_events = 4.times.map do |i|
+      record, event = cluster(key: "weak#{i}", title: "Lone mention #{i}", lat: 10.0, lng: 10.0)
+      articles(record, %w[solo.example])
+      event
+    end
+    situation(key: "situation:actor:1", name: "Weak situation", grouped_by: "actor", events: weak_events)
+
+    strong_events = 3.times.map do |i|
+      record, event = cluster(key: "strong#{i}", title: "Big story #{i}", lat: 20.0, lng: 20.0)
+      articles(record, [ "a#{i}.example", "b#{i}.example" ])
+      event
+    end
+    situation(key: "situation:actor:2", name: "Strong situation", grouped_by: "actor", events: strong_events)
+
+    rows = SituationBoardService.call[:situations]
+
+    assert_equal [ "Strong", "Weak" ], rows.map { |row| row[:name] }
+    assert_equal %w[corroborated emerging], rows.map { |row| row[:tier] }
+    assert_equal 6, rows.first[:source_count], "six distinct publishers"
+    assert_equal 1, rows.last[:source_count], "the same publisher across four clusters is one source"
+  end
+
   # The columns say 4 and 0; the memberships say 3 articles from 2 sources. A
   # cluster built before its news event exists is stranded at zero and nothing
   # ever recounts it, so the panel has to count rather than read.

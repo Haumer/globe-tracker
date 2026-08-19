@@ -33,13 +33,20 @@ class SituationBuilder
   # A story needs corroboration to be a story.
   MINIMUM_MEMBERS = 2
 
+  # The recency window situations are built over. Three days, because the board
+  # answers "what is happening": a cluster last seen four days ago is not
+  # happening, it is history -- and over 21 days an actor group is the actor's
+  # whole news cycle rather than a story. The sweep in prune_stale retires
+  # whatever falls out. Widen per run (rake DAYS=21) for a retrospective build.
+  WINDOW_DAYS = 3
+
   STOPWORDS = %w[
     the a an and or of to in on for with as at by from is are was were be been
     it its this that has have had will would can could new says say said after
     over into up out about more than then them they not all any one two first
   ].to_set.freeze
 
-  def self.call(days: 21, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
+  def self.call(days: WINDOW_DAYS, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
     new(days: days, now: now, actor_specificity: actor_specificity).call
   end
 
@@ -47,7 +54,7 @@ class SituationBuilder
   # separately from everything built on top of it: in a fixture of two clusters
   # every actor occurs in 100% of them, and the production value would reject
   # them all.
-  def initialize(days: 21, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
+  def initialize(days: WINDOW_DAYS, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
     @days = days
     @now = now
     @actor_specificity = actor_specificity
@@ -111,7 +118,69 @@ class SituationBuilder
     actor = specific_actor_for(event)
     return [:actor, actor] if actor
 
+    place_id = place_key_for(event)
+    return [:place, place_id] if place_id
+
     nil
+  end
+
+  # The place fallback, below actors on purpose: a story with a specific actor
+  # is that actor's story wherever it happens, but a keyless cluster that
+  # resolved to a real sub-country place is the story of that place -- Ceuta's
+  # migrant surge, Kyiv under drones. Measured on the dev capture, 570 of 894
+  # in-window clusters had no key at all and 246 of them shared a place with
+  # another; this is the single largest recovery available without new coding.
+  #
+  # Two guards, both learned elsewhere. Country-named places are refused for
+  # the reason country actors are: "Colombia" and "China" arrive as place-typed
+  # entities, and keying on them would rebuild the every-story-about-a-country
+  # group the actor exclusion exists to prevent. And the same specificity rule
+  # applies -- a place carried by a large share of the window is describing the
+  # news cycle, not a story.
+  def place_key_for(event)
+    place = event_place_entities[event.place_entity_id]
+    return unless place
+    return if country_place_names.include?(place.canonical_name.to_s.downcase)
+    return if place_frequency[place.id].to_f >= actor_specificity
+
+    place.id
+  end
+
+  def event_place_entities
+    @event_place_entities ||= OntologyEntity
+      .where(id: events_by_cluster.values.filter_map(&:place_entity_id).uniq,
+             entity_type: NewsOntologySyncService::PLACE_ENTITY_TYPE)
+      .index_by(&:id)
+  end
+
+  def place_frequency
+    @place_frequency ||= begin
+      total = [ event_ids.size, 1 ].max
+      events_by_cluster.values.filter_map(&:place_entity_id)
+        .tally.transform_values { |count| count.to_f / total }
+    end
+  end
+
+  # Names that can never key a place situation. Principled classes rather than
+  # a whack-a-mole denylist: country-scale names (the same rule as country
+  # actors -- and COUNTRY_NAME_MAP alone misses Lebanon, Oman and friends,
+  # which is why the claim extractor's state-actor names join it), geography
+  # too big to be a story (continents, oceans, regions), and month names,
+  # which the title geocoder occasionally mints as places ("August"). That
+  # last one is upstream debt; it just should not become a situation while it
+  # lasts. Anything junk that slips past lands in the emerging tier, dimmed.
+  def country_place_names
+    @country_place_names ||= begin
+      countries = NewsGeocodable::COUNTRY_NAME_MAP.keys
+      states = NewsClaimExtractor::ACTOR_DEFINITIONS
+        .select { |actor| actor[:actor_type] == "state" }
+        .map { |actor| actor[:name].downcase }
+      regions = %w[africa asia europe antarctica oceania pacific atlantic arctic mediterranean] +
+        [ "north america", "south america", "latin america", "middle east", "indian ocean" ]
+      months = Date::MONTHNAMES.compact.map(&:downcase)
+
+      (countries + states + regions + months).to_set
+    end
   end
 
   # place:hazard:* entities are OntologyEntity rows like any registry asset, so
@@ -211,7 +280,10 @@ class SituationBuilder
   end
 
   def link_concerns(situation, kind, reference)
-    return unless kind == :entity
+    # :place is a concerns edge like :entity -- the place entity carries the
+    # coordinate the board anchors on. Only :actor situations have no place of
+    # their own.
+    return unless kind == :entity || kind == :place
 
     entity = OntologyEntity.find_by(id: reference)
     return unless entity

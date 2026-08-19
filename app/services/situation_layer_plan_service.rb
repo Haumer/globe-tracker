@@ -14,14 +14,21 @@
 # The plan carries defaults, never permissions: baseline layers always render,
 # curated layers start on, and the user's toggle wins over both.
 class SituationLayerPlanService
-  # Half-width of the box around the anchor when it has no measured extent.
-  # Wide enough to catch the airfield and the port serving a city, small
-  # enough that a Kyiv box does not reach Minsk.
+  # Half-width of the box around the anchor when neither the curator nor a
+  # measured extent says otherwise. Wide enough to catch the airfield and the
+  # port serving a city, small enough that a Kyiv box does not reach Minsk.
   DEFAULT_RADIUS_KM = 150.0
-  # A measured footprint can widen the box (Hormuz), but it stays bounded --
-  # past this, "near this situation" has become "on this continent".
+  # Fallback cap when the radius is geometric (measured footprint, no curator
+  # judgement) -- past this, "near this situation" has become "on this
+  # continent". The curator may judge wider (a regional exchange of strikes),
+  # bounded by its own MAX_RADIUS_KM.
   MAX_RADIUS_KM = 600.0
   KM_PER_DEGREE_LAT = 111.32
+
+  # How many other situations the curator gets to consider as possibly part of
+  # the same story, and how far away one can be and still plausibly qualify.
+  NEIGHBOR_LIMIT = 8
+  NEIGHBOR_MAX_KM = 3000.0
 
   # The curator may find five layers relevant; drawing five at once buries the
   # situation's own evidence arcs. Only the strongest picks start on -- the
@@ -71,10 +78,11 @@ class SituationLayerPlanService
   ].freeze
 
   def self.call(situation_id:, curator: SituationLayerCurator, now: Time.current)
-    situation = board(now: now)[:situations]&.find { |row| row[:id] == situation_id }
+    rows = board(now: now)[:situations] || []
+    situation = rows.find { |row| row[:id] == situation_id }
     return nil unless situation
 
-    new(situation: situation, curator: curator, now: now).call
+    new(situation: situation, siblings: rows, curator: curator, now: now).call
   end
 
   # The board is what /api/situations already serves; a layer plan should not
@@ -85,8 +93,9 @@ class SituationLayerPlanService
     end
   end
 
-  def initialize(situation:, curator: SituationLayerCurator, now: Time.current)
+  def initialize(situation:, siblings: [], curator: SituationLayerCurator, now: Time.current)
     @situation = situation
+    @siblings = siblings
     @curator = curator
     @now = now
   end
@@ -94,7 +103,6 @@ class SituationLayerPlanService
   def call
     return nil unless anchor[:lat] && anchor[:lng]
 
-    curation = curate
     default_on = curation.picks.keys
       .select { |key| availability[key] == "ready" }
       .first(DEFAULT_ON_LIMIT)
@@ -106,20 +114,27 @@ class SituationLayerPlanService
       radius_km: radius_km,
       bbox: bbox,
       curated_by: curation.basis,
+      brief: curation.brief,
+      regions: curation.regions,
+      related: related_rows,
       layers: CATALOG.map { |layer| present(layer, curation, default_on) }
     }
   end
 
   private
 
-  attr_reader :situation, :curator, :now
+  attr_reader :situation, :siblings, :curator, :now
 
   def anchor
     situation[:anchor] || {}
   end
 
   def present(layer, curation, default_on)
-    status = availability[layer[:key]]
+    # The boundary layer can outgrow the anchor's own country once the curator
+    # names affected regions across a border (Hormuz strikes land in Iran and
+    # the UAE), so its readiness is judged here -- after curation -- rather
+    # than in the shared probe.
+    status = layer[:key] == "boundaries" ? boundary_status : availability[layer[:key]]
     reason = curation.picks[layer[:key]]
 
     {
@@ -138,19 +153,62 @@ class SituationLayerPlanService
     }
   end
 
-  def curate
-    curator.call(situation: situation, available_keys: available_keys)
+  def curation
+    @curation ||= curator.call(situation: situation, available_keys: available_keys, neighbors: neighbors)
   end
 
   def available_keys
     availability.filter_map { |key, status| key if status == "ready" }
   end
 
+  # Other current situations close enough to plausibly be the same story,
+  # nearest first, handed to the curator so "related" can only ever name a
+  # situation that actually exists on the board.
+  def neighbors
+    @neighbors ||= siblings
+      .reject { |row| row[:id] == situation[:id] }
+      .filter_map do |row|
+        lat = row.dig(:anchor, :lat)
+        lng = row.dig(:anchor, :lng)
+        next unless lat && lng
+
+        distance = haversine_km(anchor[:lat].to_f, anchor[:lng].to_f, lat.to_f, lng.to_f)
+        next if distance > NEIGHBOR_MAX_KM
+
+        { id: row[:id], name: row[:name], distance_km: distance,
+          country: row.dig(:concerns, :country_code), anchor: { lat: lat, lng: lng } }
+      end
+      .sort_by { |row| row[:distance_km] }
+      .first(NEIGHBOR_LIMIT)
+  end
+
+  def related_rows
+    curation.related.to_a.filter_map do |rel|
+      neighbor = neighbors.find { |n| n[:id] == rel[:id] }
+      next unless neighbor
+
+      { id: neighbor[:id], name: neighbor[:name], reason: rel[:reason],
+        distance_km: neighbor[:distance_km].round, anchor: neighbor[:anchor] }
+    end
+  end
+
   # ── geometry ─────────────────────────────────────────────────────────
 
+  # The curator's judgement wins: scope is a property of the story (a city
+  # protest vs a regional exchange of strikes), not of the anchor's geometry.
+  # Without one, geometry decides as before.
   def radius_km
-    measured = situation.dig(:concerns, :radius_km).to_f
-    [[measured, DEFAULT_RADIUS_KM].max, MAX_RADIUS_KM].min
+    @radius_km ||= curation.radius_km ||
+      [[situation.dig(:concerns, :radius_km).to_f, DEFAULT_RADIUS_KM].max, MAX_RADIUS_KM].min
+  end
+
+  def haversine_km(lat1, lng1, lat2, lng2)
+    rad = Math::PI / 180
+    dlat = (lat2 - lat1) * rad
+    dlng = (lng2 - lng1) * rad
+    h = Math.sin(dlat / 2)**2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dlng / 2)**2
+    6371 * 2 * Math.asin(Math.sqrt([h, 1.0].min))
   end
 
   def bbox
@@ -184,12 +242,13 @@ class SituationLayerPlanService
   def sources_for(key)
     case key
     when "boundaries"
-      country = situation.dig(:concerns, :country_code)
-      return [] unless country
+      codes = boundary_country_codes
+      return [] if codes.empty?
 
+      country_codes = codes.join(",")
       [
-        { url: "/api/regional_district_boundaries", params: { country_codes: country } },
-        { url: "/api/geography/boundaries", params: { dataset: "admin1", country_codes: country } }
+        { url: "/api/regional_district_boundaries", params: { country_codes: country_codes } },
+        { url: "/api/geography/boundaries", params: { dataset: "admin1", country_codes: country_codes } }
       ]
     when "fires"
       [{ url: "/api/fire_hotspots",
@@ -221,6 +280,19 @@ class SituationLayerPlanService
     else
       []
     end
+  end
+
+  # The anchor's own country plus any country the curator's affected regions
+  # reach into -- an earthquake or a cross-border exchange is not confined to
+  # the country the anchor happens to sit in.
+  def boundary_country_codes
+    ([situation.dig(:concerns, :country_code)] +
+      curation.regions.to_a.filter_map { |region| region[:country_code] })
+      .compact.uniq
+  end
+
+  def boundary_status
+    boundary_country_codes.any? ? "ready" : "empty"
   end
 
   # ── availability ─────────────────────────────────────────────────────

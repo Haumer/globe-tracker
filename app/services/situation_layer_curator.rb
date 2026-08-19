@@ -1,35 +1,59 @@
-# Which optional overlays deserve to be on by default for one situation.
+# The per-situation judgement call, made once and cached: everything about one
+# situation's globe view that is a matter of reading the story rather than of
+# geometry or data plumbing.
 #
-# The layer catalog is fixed and every layer is always available to toggle by
-# hand -- this service only chooses the defaults. Two bases, reported so the
-# client can say which one it is showing:
+# One model call answers five questions together, because they are the same
+# read of the same evidence:
 #
-#   "ai"        -- the model read the situation (name, event types, headlines)
-#                  and picked from the catalog. Same discipline as
-#                  NewsClaimTypeResolver: it picks from a closed list, an
-#                  unknown key is dropped, a failure never raises.
+#   brief     -- two or three sentences of prose the panel leads with
+#   radius_km -- how far "relevant context" extends. A city protest is a 40 km
+#                story; strikes across a strait reach three countries. This is
+#                the lever that sizes the bbox every layer fetches with, so it
+#                is also the clutter control.
+#   picks     -- which optional overlays inform this story (the original job)
+#   regions   -- first-level admin regions materially affected, graded
+#                high/moderate, so the boundary layer can shade nuance instead
+#                of one containing polygon
+#   related   -- other current situations that are plausibly the same story
+#                (a retaliation pair, one campaign in two theaters)
+#
+# Two bases, reported so the client can say which one it is showing:
+#
+#   "ai"        -- the model read the situation. Closed catalog, unknown keys
+#                  dropped, values clamped, a failure never raises.
 #   "heuristic" -- no model available (or it failed); rules keyed on the event
-#                  types and the anchor entity pick instead.
+#                  types and the anchor entity pick layers, and the judgement
+#                  fields stay empty rather than being faked.
 #
-# The result is cached: curation reads slow-moving facts about the situation,
-# and a browser toggling layers should not bill an OpenAI call per click.
+# Caching is the point, not an optimization: the result is computed in the
+# background (WarmSituationLayersJob) as soon as a situation is built or
+# changes, so selecting one on the globe reads a warm cache instead of paying
+# a live model call. The cache key is a fingerprint of what the model actually
+# read -- membership and report volume -- so a new cluster joining, or the
+# report count doubling, is exactly the "new info requires a rethink" trigger;
+# one more article on an existing cluster is not.
 class SituationLayerCurator
   MODEL = ENV.fetch("LAYER_CURATOR_MODEL", "gpt-4.1-mini").freeze
   ENDPOINT = "https://api.openai.com/v1/chat/completions".freeze
   OPEN_TIMEOUT = 10
   READ_TIMEOUT = 30
   MAX_PICKS = 6
-  CACHE_TTL = 6.hours
+  MAX_REGIONS = 6
+  MAX_RELATED = 3
+  MIN_RADIUS_KM = 25
+  MAX_RADIUS_KM = 1200
+  CACHE_TTL = 24.hours
 
-  Result = Struct.new(:basis, :picks, keyword_init: true)
+  Result = Struct.new(:basis, :picks, :brief, :radius_km, :regions, :related, keyword_init: true)
 
-  def self.call(situation:, available_keys:, client: nil)
-    new(situation: situation, available_keys: available_keys, client: client).call
+  def self.call(situation:, available_keys:, neighbors: [], client: nil)
+    new(situation: situation, available_keys: available_keys, neighbors: neighbors, client: client).call
   end
 
-  def initialize(situation:, available_keys:, client: nil)
+  def initialize(situation:, available_keys:, neighbors: [], client: nil)
     @situation = situation
     @available_keys = available_keys
+    @neighbors = neighbors
     @client = client
   end
 
@@ -41,16 +65,24 @@ class SituationLayerCurator
 
   private
 
-  attr_reader :situation, :available_keys
+  attr_reader :situation, :available_keys, :neighbors
 
+  # The rethink trigger. Membership changing (a cluster joins or leaves) or the
+  # report volume doubling are new information worth a fresh read; one more
+  # article trickling into an existing cluster is not, and keying on
+  # last_seen_at (as v1 did) busted the cache on every trickle -- which is why
+  # selection used to pay a live model call.
   def cache_key
+    cluster_ids = situation[:members].to_a.filter_map { |m| m[:cluster_id] }.sort.join(",")
+    volume_bucket = Math.log2([situation[:article_count].to_i, 1].max).floor
+
     fingerprint = [
       situation[:id],
-      situation[:last_seen_at],
-      situation[:member_count],
+      Digest::MD5.hexdigest(cluster_ids),
+      volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
-    "situation-layer-curation:v1:#{fingerprint}"
+    "situation-layer-curation:v2:#{fingerprint}"
   end
 
   # ── model path ───────────────────────────────────────────────────────
@@ -60,10 +92,10 @@ class SituationLayerCurator
     return nil unless client
 
     content = client.call(system: system_prompt, user: user_prompt)
-    picks = parse_picks(content)
-    return nil if picks.nil?
+    parsed = parse_response(content)
+    return nil if parsed.nil?
 
-    Result.new(basis: "ai", picks: picks)
+    parsed
   rescue StandardError => error
     Rails.logger.warn("[SituationLayerCurator] model call failed: #{error.class}: #{error.message}")
     nil
@@ -77,18 +109,44 @@ class SituationLayerCurator
 
   def system_prompt
     <<~PROMPT
-      You choose which live data overlays belong on a globe view of one news
-      situation. Pick only overlays that would genuinely inform this specific
-      story -- an analyst glancing at the globe should see corroborating or
-      contextual data, not decoration. Fewer is better: every overlay you add
-      competes with the story's own evidence for the reader's eye. Order your
-      picks by how much each informs -- only the strongest two or three will
-      be drawn; the rest are offered as suggestions. Never pick more than
-      #{MAX_PICKS}. Respond with JSON only:
-      {"layers": [{"key": "...", "reason": "..."}]}.
-      Each reason is one short sentence tied to this situation. Use only keys
-      from the list given. If nothing beyond the baseline would help, respond
-      {"layers": []}.
+      You are the analyst setting up the globe view for one news situation.
+      Respond with JSON only, in this shape:
+      {"brief": "...", "radius_km": <number>,
+       "layers": [{"key": "...", "reason": "..."}],
+       "regions": [{"name": "...", "country_code": "..", "impact": "high"}],
+       "related": [{"id": <id from the nearby list>, "reason": "..."}]}
+
+      brief: two or three plain sentences an analyst would want first -- what
+      is happening, where it stands, what to watch. No hedging boilerplate.
+
+      radius_km: how far relevant context extends from the anchor. This sizes
+      the box every data overlay is fetched with, so it is also the clutter
+      control: hyper-local unrest in one city is 30-80 km; one metropolitan
+      area and its surroundings 100-200; a war fought across one country
+      300-600; a regional exchange of strikes spanning several countries
+      500-1200. Read the headlines: if the events they report span multiple
+      countries, the radius must reach them. Pick the number this story
+      needs, between #{MIN_RADIUS_KM} and #{MAX_RADIUS_KM}.
+
+      layers: overlays that would genuinely inform this specific story,
+      ordered by how much each informs -- only the strongest two or three
+      will be drawn, the rest are offered as suggestions. Fewer is better;
+      never more than #{MAX_PICKS}; use only keys from the list given. [] if
+      nothing beyond the baseline would help. Each reason is one short
+      sentence tied to this situation.
+
+      regions: the first-level administrative regions (provinces, states,
+      governorates) materially affected, graded "high" or "moderate" impact,
+      with the ISO 3166-1 alpha-2 country code. An earthquake shakes several
+      provinces unevenly; strikes land in specific ones. Name only regions
+      you are confident about, at most #{MAX_REGIONS}. [] if none.
+
+      related: ids from the nearby-situations list that are plausibly part of
+      the same story -- a retaliation pair, one campaign seen from two
+      theaters, the same place tracked under two names, a shared cause. The
+      board often splits one story; connecting the pieces is valuable, so
+      name every genuine connection you see. At most #{MAX_RELATED}, only
+      from the list given. [] if none.
     PROMPT
   end
 
@@ -97,16 +155,25 @@ class SituationLayerCurator
       .sort_by { |_, count| -count }.first(6).map { |type, count| "#{type} x#{count}" }
     headlines = situation[:members].to_a.filter_map { |m| m[:headline] }.first(8)
 
+    neighbor_lines = neighbors.map do |n|
+      "- id #{n[:id]}: #{n[:name]} (#{n[:distance_km].round} km away#{n[:country] ? ", #{n[:country]}" : ""})"
+    end
+
     <<~PROMPT
       Situation: #{situation[:name]}
       Anchored on: #{situation.dig(:concerns, :entity_type) || "actor (no place of its own)"}
       Country: #{situation.dig(:concerns, :country_code) || "unknown"}
+      Anchor: #{situation.dig(:anchor, :lat)&.round(2)}, #{situation.dig(:anchor, :lng)&.round(2)}
+      Measured extent: #{situation.dig(:concerns, :radius_km) ? "#{situation.dig(:concerns, :radius_km)} km" : "none"}
       Event types: #{types.join(", ").presence || "unknown"}
       Sample headlines:
       #{headlines.map { |h| "- #{h}" }.join("\n")}
 
       Available overlays:
       #{catalog_lines.join("\n")}
+
+      Nearby situations:
+      #{neighbor_lines.join("\n").presence || "(none)"}
     PROMPT
   end
 
@@ -119,13 +186,29 @@ class SituationLayerCurator
     end
   end
 
-  def parse_picks(content)
+  def parse_response(content)
     return nil if content.blank?
 
     json = content[/\{.*\}/m]
     return nil unless json
 
-    rows = JSON.parse(json)["layers"]
+    data = JSON.parse(json)
+    picks = parse_picks(data["layers"])
+    return nil if picks.nil?
+
+    Result.new(
+      basis: "ai",
+      picks: picks,
+      brief: data["brief"].to_s.strip.presence,
+      radius_km: parse_radius(data["radius_km"]),
+      regions: parse_regions(data["regions"]),
+      related: parse_related(data["related"])
+    )
+  rescue JSON::ParserError
+    nil
+  end
+
+  def parse_picks(rows)
     return nil unless rows.is_a?(Array)
 
     rows.first(MAX_PICKS).each_with_object({}) do |row, picks|
@@ -134,14 +217,56 @@ class SituationLayerCurator
 
       picks[key] = row["reason"].to_s.presence || "picked by the curator"
     end
-  rescue JSON::ParserError
-    nil
+  end
+
+  def parse_radius(value)
+    radius = value.to_f
+    return nil unless radius.positive?
+
+    radius.clamp(MIN_RADIUS_KM, MAX_RADIUS_KM)
+  end
+
+  def parse_regions(rows)
+    Array(rows).first(MAX_REGIONS).filter_map do |row|
+      next unless row.is_a?(Hash)
+
+      name = row["name"].to_s.strip
+      impact = row["impact"].to_s
+      next if name.blank?
+      next unless %w[high moderate].include?(impact)
+
+      code = row["country_code"].to_s.strip.upcase
+      { name: name, country_code: code.match?(/\A[A-Z]{2}\z/) ? code : nil, impact: impact }
+    end
+  end
+
+  def parse_related(rows)
+    valid_ids = neighbors.map { |n| n[:id] }
+
+    Array(rows).first(MAX_RELATED).filter_map do |row|
+      next unless row.is_a?(Hash)
+
+      id = row["id"].to_i
+      next unless valid_ids.include?(id)
+
+      { id: id, reason: row["reason"].to_s.presence || "part of the same story" }
+    end
   end
 
   # ── rules path ───────────────────────────────────────────────────────
 
+  # No model, no fabricated judgement: layers come from rules, the scope stays
+  # geometric (the plan service falls back to the measured extent), and the
+  # prose/region/relation fields stay empty rather than pretending.
   def heuristic_result
-    Result.new(basis: "heuristic", picks: heuristic_picks.first(MAX_PICKS).to_h)
+    Result.new(
+      basis: "heuristic",
+      picks: heuristic_picks.first(MAX_PICKS).to_h,
+      brief: nil,
+      radius_km: nil,
+      regions: [],
+      related: []
+    )
   end
 
   def heuristic_picks

@@ -3,11 +3,16 @@ require "test_helper"
 class SituationLayerPlanServiceTest < ActiveSupport::TestCase
   # A curator stub: deterministic, never network-bound.
   class FixedCurator
-    def initialize(basis: "heuristic", picks: {})
-      @result = SituationLayerCurator::Result.new(basis: basis, picks: picks)
+    attr_reader :neighbors_seen
+
+    def initialize(basis: "heuristic", picks: {}, brief: nil, radius_km: nil, regions: [], related: [])
+      @result = SituationLayerCurator::Result.new(
+        basis: basis, picks: picks, brief: brief, radius_km: radius_km, regions: regions, related: related
+      )
     end
 
-    def call(situation:, available_keys:)
+    def call(situation:, available_keys:, neighbors: [])
+      @neighbors_seen = neighbors
       @result
     end
   end
@@ -180,6 +185,84 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
 
     conflict = layers["conflict_events"][:sources].first[:params]
     assert conflict.key?(:from), "UCDP history is bounded, not all-time"
+  end
+
+  test "the curator's radius sizes the box" do
+    place = place_entity
+    event = cluster(key: "r1", title: "Protest downtown", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:r1", name: "Kyiv situation", events: [event], concerns: place)
+
+    plan = SituationLayerPlanService.call(
+      situation_id: entity.id,
+      curator: FixedCurator.new(basis: "ai", radius_km: 50.0)
+    )
+
+    assert_equal 50.0, plan[:radius_km], "story scope beats the geometric default"
+    # ±50 km is ~0.45° of latitude.
+    assert_in_delta 0.45, plan[:bbox][:north] - 50.45, 0.02
+  end
+
+  test "curated regions cross borders: the boundary sources cover their countries too" do
+    place = place_entity
+    event = cluster(key: "r2", title: "Strikes exchanged", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:r2", name: "Kyiv situation", events: [event], concerns: place)
+
+    regions = [
+      { name: "Kyiv Oblast", country_code: "UA", impact: "high" },
+      { name: "Gomel", country_code: "BY", impact: "moderate" }
+    ]
+    plan = SituationLayerPlanService.call(
+      situation_id: entity.id,
+      curator: FixedCurator.new(basis: "ai", regions: regions, brief: "Two sentences of prose.")
+    )
+
+    assert_equal regions, plan[:regions]
+    assert_equal "Two sentences of prose.", plan[:brief]
+
+    boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
+    assert boundaries[:sources].all? { |s| s[:params][:country_codes] == "UA,BY" }
+  end
+
+  test "an actor situation gains boundary sources when the curator names regions" do
+    event_a = cluster(key: "r3", title: "One", lat: 15.3, lng: 44.2)
+    event_b = cluster(key: "r4", title: "Two", lat: 15.4, lng: 44.3)
+    entity = situation(key: "situation:actor:r3", name: "Houthis situation", events: [event_a, event_b])
+
+    plan = SituationLayerPlanService.call(
+      situation_id: entity.id,
+      curator: FixedCurator.new(basis: "ai", regions: [{ name: "Sanaa", country_code: "YE", impact: "high" }])
+    )
+    boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
+
+    assert_equal "ready", boundaries[:status]
+    assert boundaries[:sources].all? { |s| s[:params][:country_codes] == "YE" }
+  end
+
+  test "related keeps only situations actually on the board, and the curator sees its neighbors" do
+    place = place_entity
+    event_a = cluster(key: "n1", title: "Strike", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:n1", name: "Kyiv situation", events: [event_a], concerns: place)
+
+    other_place = place_entity(name: "Odesa", lat: 46.48, lng: 30.72)
+    event_b = cluster(key: "n2", title: "Port hit", lat: 46.5, lng: 30.7)
+    other = situation(key: "situation:place:n2", name: "Odesa situation", events: [event_b], concerns: other_place)
+
+    curator = FixedCurator.new(basis: "ai", related: [
+      { id: other.id, reason: "same campaign" },
+      { id: 999_999, reason: "hallucinated" }
+    ])
+    plan = SituationLayerPlanService.call(situation_id: entity.id, curator: curator)
+
+    assert_equal 1, plan[:related].size
+    row = plan[:related].first
+    assert_equal other.id, row[:id]
+    assert_equal "Odesa", row[:name]
+    assert_equal "same campaign", row[:reason]
+    assert_in_delta 442, row[:distance_km], 15
+    assert row[:anchor][:lat], "the client draws the association between the two anchors"
+
+    assert_equal [other.id], curator.neighbors_seen.map { |n| n[:id] },
+                 "the curator is offered the board's other situations, never itself"
   end
 
   test "fires window matches the situation window and conflict gets a year of context" do

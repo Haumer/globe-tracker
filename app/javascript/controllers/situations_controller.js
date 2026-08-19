@@ -432,8 +432,12 @@ export default class extends Controller {
     this._applyAnchorStyling()
     this._flyTo(situation)
     // Fire-and-forget: the dossier is complete without the live layers, and
-    // the chip bar reports its own failures.
-    this._layers?.activate(situation).catch((error) => console.error("Layers failed", error))
+    // the chip bar reports its own failures. When the plan does arrive it
+    // carries the curator's judgement -- prose brief, story scope, related
+    // situations -- which refines what is already on screen.
+    this._layers?.activate(situation)
+      .then((plan) => { if (plan && this._selectedId === id) this._applyPlan(situation, plan) })
+      .catch((error) => console.error("Layers failed", error))
   }
 
   _clearSelection() {
@@ -589,21 +593,83 @@ export default class extends Controller {
     return positions
   }
 
-  _flyTo(situation) {
+  // Frame the story's scope, not its reporting. Member reports can sit a
+  // hemisphere from the anchor (Washington reporting on Hormuz), and framing
+  // them zoomed a hyper-local story out to a continent. The camera now fits
+  // the situation's radius -- the curator's judgement of how far relevant
+  // context extends, refined by _applyPlan when the plan arrives; until then,
+  // the measured footprint or the 150 km default stands in.
+  _flyTo(situation, radiusKm = null) {
     const Cesium = window.Cesium
-    const points = [situation.anchor, ...situation.members.filter((m) => m.lat != null)]
-    const lats = points.map((p) => p.lat)
-    const lngs = points.map((p) => p.lng)
-
-    // Members can be a whole hemisphere from the anchor, so framing all of them
-    // zooms out to nothing useful. Frame the anchor and let the arcs run off.
-    const spread = Math.max(...lats) - Math.min(...lats) + Math.max(...lngs) - Math.min(...lngs)
-    const height = Math.min(4_000_000 + spread * 60_000, 20_000_000)
+    const km = radiusKm || situation.concerns?.radius_km || 150
+    const height = this._heightForRadius(km)
 
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(situation.anchor.lng, situation.anchor.lat, height),
       duration: 1.2,
     })
+    this._framedRadiusKm = km
+  }
+
+  // Height at which a circle of this radius fills most of the view, with room
+  // around it for the layer data at the box edges.
+  _heightForRadius(km) {
+    return Math.min(Math.max(km * 1000 * 2.6, 200_000), 20_000_000)
+  }
+
+  // The plan is the curator's read of the story. Three of its fields land
+  // outside the chip bar: the prose brief leads the panel, related situations
+  // become links and quiet arcs, and the story's scope re-frames the camera
+  // when it disagrees with the geometric first guess.
+  _applyPlan(situation, plan) {
+    const Cesium = window.Cesium
+
+    if (plan.radius_km && this._framedRadiusKm) {
+      const ratio = plan.radius_km / this._framedRadiusKm
+      if (ratio > 1.3 || ratio < 0.7) this._flyTo(situation, plan.radius_km)
+    }
+
+    const brief = document.getElementById("sit-brief")
+    if (brief && plan.brief) {
+      brief.innerHTML = `${escapeHtml(plan.brief)} <span class="sit-brief-basis">AI brief</span>`
+      brief.style.display = "block"
+    }
+
+    const related = document.getElementById("sit-related")
+    if (related && plan.related?.length) {
+      related.innerHTML = `
+        <div class="sit-section-title">Possibly the same story</div>
+        ${plan.related.map((row) => `
+          <button type="button" class="sit-related-row" data-situation-id="${row.id}"
+                  data-action="click->situations#selectFromList" title="${escapeAttr(row.reason || "")}">
+            <span class="sit-ring-name">${escapeHtml(row.name)}</span>
+            <span class="sit-ring-detail">${row.distance_km} km · ${escapeHtml(row.reason || "")}</span>
+          </button>`).join("")}`
+    }
+
+    // A related situation is a claim about two anchors, so it is drawn as a
+    // line between them -- dashed and dim, an association rather than evidence.
+    ;(plan.related || []).forEach((row, index) => {
+      if (row.anchor?.lat == null) return
+      const positions = this._arcPositions(situation.anchor, row.anchor)
+      if (!positions) return
+
+      this._detail.entities.add({
+        id: `sit-related-${situation.id}-${index}`,
+        polyline: {
+          positions: positions,
+          width: 1,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString(MEDOID_COLOR).withAlpha(0.55),
+            dashLength: 12,
+          }),
+          arcType: Cesium.ArcType.NONE,
+        },
+        situationId: situation.id,
+      })
+    })
+
+    this.viewer.scene.requestRender()
   }
 
   // ── chrome ──────────────────────────────────────────────────────────
@@ -696,6 +762,9 @@ export default class extends Controller {
          </div>`
     }
 
+    // Prose leads; controls and reference material follow. The brief and the
+    // related list are empty shells here -- _applyPlan fills them when the
+    // curator's plan arrives, which is usually instant off the warm cache.
     this.panelTarget.innerHTML = `
       <div class="sit-panel-head">
         <div>
@@ -705,39 +774,22 @@ export default class extends Controller {
         <button type="button" class="sit-panel-close" data-action="click->situations#close">&times;</button>
       </div>
 
+      <div id="sit-brief" class="sit-brief" style="display:none"></div>
+
       <div class="sit-panel-stats">
-        <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}</div>
-        <div><b>${situation.geo_member_count}</b> located${ungeocoded > 0 ? ` · ${ungeocoded} not` : ""}</div>
-        <div>${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
+        <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}
+        · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
       </div>
 
-      <div class="sit-footprint sit-footprint-${footprint.basis}">
-        <span class="sit-footprint-label">Circle on the ground</span>
-        <span class="sit-footprint-value">${footprint.label} · ${footprint.basis}</span>
-      </div>
-
-      ${chain}
-
-      <div id="sit-layer-chips"></div>
-      <div id="sit-layer-sections"></div>
-
-      ${this._ringSection("Countries exposed", rings.ring3_countries, (row) => `
-        <span class="sit-ring-name">${escapeHtml(row.name)}</span>
-        <span class="sit-ring-detail">${escapeHtml(row.commodities.slice(0, 3).join(", "))}</span>`)}
-
-      ${this._ringSection("Commodities through this anchor", rings.ring2_commodities, (row) => `
-        <span class="sit-ring-name">${escapeHtml(row.name)}</span>
-        <span class="sit-ring-detail">${(row.score * 100).toFixed(0)}% of flow</span>`)}
-
-      ${this._ringSection("Assets nearby", rings.ring1_assets, (row) => `
-        <span class="sit-ring-name">${escapeHtml(row.name)}</span>
-        <span class="sit-ring-detail">${row.distance_km != null ? `${row.distance_km.toFixed(0)} km` : escapeHtml(row.entity_type)}</span>`)}
+      <div id="sit-related"></div>
 
       <div class="sit-section-title">The reports this is made of</div>
       <div class="sit-members">
         ${situation.members.map((member) => `
           <div class="sit-member">
-            <div class="sit-member-head">${escapeHtml(member.headline || "(untitled cluster)")}</div>
+            <div class="sit-member-head">${member.url
+              ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
+              : escapeHtml(member.headline || "(untitled cluster)")}</div>
             <div class="sit-member-meta">
               ${formatDay(member.last_seen_at)} ·
               ${pluralize(member.article_count, "report")} from
@@ -746,7 +798,33 @@ export default class extends Controller {
               ${member.lat == null ? " · no location" : ""}
             </div>
           </div>`).join("")}
-      </div>`
+      </div>
+
+      <div id="sit-layer-chips"></div>
+      <div id="sit-layer-sections"></div>
+
+      <details class="sit-exposure">
+        <summary>Exposure &amp; footprint${ungeocoded > 0 ? ` · ${situation.geo_member_count}/${situation.member_count} located` : ""}</summary>
+
+        <div class="sit-footprint sit-footprint-${footprint.basis}">
+          <span class="sit-footprint-label">Circle on the ground</span>
+          <span class="sit-footprint-value">${footprint.label} · ${footprint.basis}</span>
+        </div>
+
+        ${chain}
+
+        ${this._ringSection("Countries exposed", rings.ring3_countries, (row) => `
+          <span class="sit-ring-name">${escapeHtml(row.name)}</span>
+          <span class="sit-ring-detail">${escapeHtml(row.commodities.slice(0, 3).join(", "))}</span>`)}
+
+        ${this._ringSection("Commodities through this anchor", rings.ring2_commodities, (row) => `
+          <span class="sit-ring-name">${escapeHtml(row.name)}</span>
+          <span class="sit-ring-detail">${(row.score * 100).toFixed(0)}% of flow</span>`)}
+
+        ${this._ringSection("Assets nearby", rings.ring1_assets, (row) => `
+          <span class="sit-ring-name">${escapeHtml(row.name)}</span>
+          <span class="sit-ring-detail">${row.distance_km != null ? `${row.distance_km.toFixed(0)} km` : escapeHtml(row.entity_type)}</span>`)}
+      </details>`
 
     this.panelTarget.style.display = "block"
     this.panelTarget.scrollTop = 0
@@ -778,6 +856,10 @@ function escapeHtml(value) {
   const div = document.createElement("div")
   div.textContent = value == null ? "" : String(value)
   return div.innerHTML
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll('"', "&quot;")
 }
 
 function haversineKm(a, b) {

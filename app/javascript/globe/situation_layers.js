@@ -256,42 +256,81 @@ export class SituationLayerManager {
     }
   }
 
-  // The boundary that contains the anchor, drawn instead of guessed at.
-  // District boundaries are tried first (finer), admin1 as the fallback; if
-  // neither polygon set contains the anchor the layer says so and draws
-  // nothing, because highlighting the wrong district is worse than a circle.
+  // The boundary that contains the anchor, drawn instead of guessed at --
+  // plus the regions the curator judged affected, shaded by grade. District
+  // boundaries are tried first (finer), admin1 as the fallback; if neither
+  // polygon set contains the anchor and no named region matches, the layer
+  // says so and draws nothing, because highlighting the wrong district is
+  // worse than a circle.
   async _renderBoundaries(layer, payloads) {
-    const Cesium = window.Cesium
     const anchor = this._plan.anchor
     const [districts, admin1] = payloads
+    const drawnNames = new Set()
+
+    // The curator names affected regions ("Hormozgan", "Balochistan") with a
+    // grade; matching is by normalized name against both polygon sets, and a
+    // region that matches nothing is skipped rather than guessed at.
+    let shaded = 0
+    ;(this._plan.regions || []).forEach((region) => {
+      const feature = this._featureByName(districts, region.name) || this._featureByName(admin1, region.name)
+      if (!feature) return
+
+      const high = region.impact === "high"
+      this._drawBoundaryFeature(layer.key, feature, {
+        fillAlpha: high ? 0.14 : 0.06,
+        outlineAlpha: high ? 0.9 : 0.5,
+        width: high ? 2 : 1.5,
+      })
+      drawnNames.add(normalizeName(featureName(feature)))
+      shaded++
+    })
 
     const feature = this._containingFeature(districts, anchor) || this._containingFeature(admin1, anchor)
-    if (!feature) {
+    let anchorName = null
+    if (feature && !drawnNames.has(normalizeName(featureName(feature)))) {
+      this._drawBoundaryFeature(layer.key, feature, { fillAlpha: 0.05, outlineAlpha: 0.85, width: 2 })
+      anchorName = featureName(feature)
+    } else if (feature) {
+      anchorName = featureName(feature)
+    }
+
+    if (!anchorName && !shaded) {
       this._notes.set(layer.key, "no polygon contains the anchor")
       return
     }
+    this._notes.set(layer.key, [anchorName, shaded ? `${shaded} affected shaded` : null]
+      .filter(Boolean).join(" · "))
+  }
 
-    const name = feature.properties?.name || feature.properties?.NAME || feature.properties?.shapeName || "unnamed"
-    const rings = this._outerRings(feature.geometry)
-    rings.forEach((ring) => {
+  _drawBoundaryFeature(key, feature, { fillAlpha, outlineAlpha, width }) {
+    const Cesium = window.Cesium
+    this._outerRings(feature.geometry).forEach((ring) => {
       const positions = ring.map(([lng, lat]) => Cesium.Cartesian3.fromDegrees(lng, lat))
-      this._add(layer.key, {
+      this._add(key, {
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(positions),
-          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(0.05),
+          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(fillAlpha),
           height: 0,
         },
       })
-      this._add(layer.key, {
+      this._add(key, {
         polyline: {
           positions: positions,
-          width: 2,
-          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(0.85),
+          width: width,
+          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(outlineAlpha),
           clampToGround: false,
         },
       })
     })
-    this._notes.set(layer.key, name)
+  }
+
+  _featureByName(collection, name) {
+    const wanted = normalizeName(name)
+    if (!wanted) return null
+    return (collection?.features || []).find((feature) => {
+      const candidate = normalizeName(featureName(feature))
+      return candidate === wanted || candidate.includes(wanted) || wanted.includes(candidate)
+    })
   }
 
   async _renderAircraft(layer, payloads) {
@@ -660,6 +699,21 @@ export class SituationLayerManager {
 }
 
 // ── geometry helpers ────────────────────────────────────────────────────
+
+function featureName(feature) {
+  return feature?.properties?.name || feature?.properties?.NAME || feature?.properties?.shapeName || ""
+}
+
+// The curator says "Hormozgan"; the polygon says "Hormozgān Province". Strip
+// diacritics and the administrative furniture words before comparing.
+function normalizeName(value) {
+  return String(value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(province|state|governorate|region|district|prefecture|oblast|county)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
 
 function geometryContains(geometry, lng, lat) {
   if (!geometry) return false

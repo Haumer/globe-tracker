@@ -498,9 +498,11 @@ export class SituationLayerManager {
         ellipse: {
           semiMajorAxis: zone.radius_m,
           semiMinorAxis: zone.radius_m,
-          material: Cesium.Color.fromCssColorString(LAYER_COLORS.notams).withAlpha(0.06),
+          // Outline only — a filled disc per restriction turns three NOTAMs
+          // into a red wash over the whole box.
+          material: Cesium.Color.TRANSPARENT,
           outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(LAYER_COLORS.notams).withAlpha(0.5),
+          outlineColor: Cesium.Color.fromCssColorString(LAYER_COLORS.notams).withAlpha(0.45),
           height: 0,
         },
       })
@@ -542,7 +544,7 @@ export class SituationLayerManager {
         polyline: {
           positions: coords.map((pt) => Cesium.Cartesian3.fromDegrees(pt[1], pt[0])),
           width: 1.5,
-          material: Cesium.Color.fromCssColorString(pipe.color || LAYER_COLORS.pipelines).withAlpha(0.6),
+          material: Cesium.Color.fromCssColorString(pipe.color || LAYER_COLORS.pipelines).withAlpha(0.4),
           arcType: Cesium.ArcType.GEODESIC,
         },
       })
@@ -559,7 +561,7 @@ export class SituationLayerManager {
           polyline: {
             positions: points.map((pt) => Cesium.Cartesian3.fromDegrees(pt[0], pt[1])),
             width: 1,
-            material: Cesium.Color.fromCssColorString(cable.color || LAYER_COLORS.cables).withAlpha(0.55),
+            material: Cesium.Color.fromCssColorString(cable.color || LAYER_COLORS.cables).withAlpha(0.35),
             arcType: Cesium.ArcType.GEODESIC,
           },
         })
@@ -612,8 +614,9 @@ export class SituationLayerManager {
         unavailable ? `Unavailable: ${layer.status}` : null,
       ].filter(Boolean).join("\n")
 
+      const suggested = !on && !unavailable && layer.reason
       return `<button type="button"
-        class="sit-chip ${on ? "is-on" : ""} ${unavailable ? "is-unavailable" : ""} ${layer.baseline ? "is-baseline" : ""}"
+        class="sit-chip ${on ? "is-on" : ""} ${unavailable ? "is-unavailable" : ""} ${layer.baseline ? "is-baseline" : ""} ${suggested ? "is-suggested" : ""}"
         data-layer-key="${layer.key}" title="${escapeAttr(title)}" ${unavailable ? "disabled" : ""}>
         ${escapeHtml(layer.title)}${note ? `<span class="sit-chip-note">${escapeHtml(note)}</span>` : ""}
       </button>`

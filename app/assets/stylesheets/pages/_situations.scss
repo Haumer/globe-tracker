@@ -515,3 +515,11 @@
   font-weight: 700;
   color: #ffffff;
 }
+
+// A layer the curator found relevant but did not start: visibly offered,
+// clearly not drawn.
+.sit-chip.is-suggested {
+  border-style: dashed;
+  border-color: #7a6a3a;
+  color: #b9a97a;
+}

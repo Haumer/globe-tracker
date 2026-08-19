@@ -134,6 +134,32 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     assert_not boundaries[:on_by_default]
   end
 
+  test "at most DEFAULT_ON_LIMIT curated layers start on; the rest stay suggested" do
+    place = place_entity
+    event = cluster(key: "p8", title: "Strike", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:8", name: "Kyiv situation", events: [event], concerns: place)
+
+    # Make four more layers genuinely ready so the cap, not availability,
+    # is what limits the defaults.
+    MilitaryBase.create!(external_id: "mb1", latitude: 50.0, longitude: 30.0, base_type: "air_force")
+    Pipeline.create!(pipeline_id: "pl1", name: "Test line")
+    Camera.create!(webcam_id: "cam1", source: "windy", latitude: 50.0, longitude: 30.0, status: "active")
+    ConflictEvent.create!(external_id: "ce1", latitude: 50.0, longitude: 30.0, date_start: 1.month.ago)
+
+    curator = FixedCurator.new(basis: "ai", picks: {
+      "notams" => "first", "military_bases" => "second", "conflict_events" => "third",
+      "infrastructure" => "fourth", "webcams" => "fifth"
+    })
+    plan = SituationLayerPlanService.call(situation_id: entity.id, curator: curator)
+    layers = plan[:layers].index_by { |l| l[:key] }
+
+    on = plan[:layers].reject { |l| l[:baseline] }.select { |l| l[:on_by_default] }.map { |l| l[:key] }
+    assert_equal %w[conflict_events military_bases notams], on.sort
+
+    assert_not layers["infrastructure"][:on_by_default]
+    assert_equal "fourth", layers["infrastructure"][:reason], "an over-limit pick keeps its reason as a suggestion"
+  end
+
   test "bbox params speak each endpoint's dialect" do
     place = place_entity
     event = cluster(key: "p6", title: "Strike", lat: 50.4, lng: 30.5)

@@ -23,6 +23,11 @@ class SituationLayerPlanService
   MAX_RADIUS_KM = 600.0
   KM_PER_DEGREE_LAT = 111.32
 
+  # The curator may find five layers relevant; drawing five at once buries the
+  # situation's own evidence arcs. Only the strongest picks start on -- the
+  # rest ship with their reason and render as suggested-but-off chips.
+  DEFAULT_ON_LIMIT = 3
+
   BOARD_CACHE_TTL = 2.minutes
   AVAILABILITY_CACHE_TTL = 5.minutes
 
@@ -90,6 +95,9 @@ class SituationLayerPlanService
     return nil unless anchor[:lat] && anchor[:lng]
 
     curation = curate
+    default_on = curation.picks.keys
+      .select { |key| availability[key] == "ready" }
+      .first(DEFAULT_ON_LIMIT)
 
     {
       situation_id: situation[:id],
@@ -98,7 +106,7 @@ class SituationLayerPlanService
       radius_km: radius_km,
       bbox: bbox,
       curated_by: curation.basis,
-      layers: CATALOG.map { |layer| present(layer, curation) }
+      layers: CATALOG.map { |layer| present(layer, curation, default_on) }
     }
   end
 
@@ -110,7 +118,7 @@ class SituationLayerPlanService
     situation[:anchor] || {}
   end
 
-  def present(layer, curation)
+  def present(layer, curation, default_on)
     status = availability[layer[:key]]
     reason = curation.picks[layer[:key]]
 
@@ -121,7 +129,9 @@ class SituationLayerPlanService
       meaning: layer[:meaning],
       baseline: layer[:baseline] || false,
       status: status,
-      on_by_default: (layer[:baseline] || reason.present?) && status == "ready",
+      on_by_default: (layer[:baseline] || default_on.include?(layer[:key])) && status == "ready",
+      # A pick beyond the on-limit keeps its reason: the chip renders as
+      # suggested rather than on, and the tooltip still says why.
       reason: reason,
       refresh_seconds: layer[:refresh_seconds],
       sources: sources_for(layer[:key])

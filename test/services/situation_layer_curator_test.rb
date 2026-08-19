@@ -3,6 +3,17 @@ require "test_helper"
 class SituationLayerCuratorTest < ActiveSupport::TestCase
   ALL_KEYS = SituationLayerPlanService::CATALOG.reject { |l| l[:baseline] }.map { |l| l[:key] }
 
+  # The curator builds a real OpenAI client whenever OPENAI_API_KEY is present,
+  # and a developer's .env makes it present. These tests must be deterministic
+  # on any machine, so the key is hidden for their duration.
+  setup do
+    @openai_key = ENV.delete("OPENAI_API_KEY")
+  end
+
+  teardown do
+    ENV["OPENAI_API_KEY"] = @openai_key if @openai_key
+  end
+
   def situation(name: "Kyiv", entity_type: "place", country: "UA", types: ["airstrike"], headlines: ["Strike hits depot"])
     {
       id: 1,

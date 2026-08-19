@@ -398,3 +398,120 @@
 .sit-line-exposure {
   background: #ffb300;
 }
+
+// ── live layers ──────────────────────────────────────────────────────
+
+.sit-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sit-chip {
+  padding: 3px 7px;
+  background: #141a22;
+  border: 1px solid #2b3542;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: #8b9aa8;
+  cursor: pointer;
+}
+
+.sit-chip:hover {
+  border-color: #3a4653;
+  color: #c8d4e0;
+}
+
+.sit-chip.is-on {
+  background: #24303d;
+  border-color: #4fc3f7;
+  color: #cfeeff;
+}
+
+.sit-chip.is-baseline.is-on {
+  border-color: #ffc44d;
+  color: #ffe0a3;
+  background: #2b2414;
+}
+
+.sit-chip.is-unavailable {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sit-chip-note {
+  display: block;
+  margin-top: 1px;
+  font-size: 8px;
+  color: #6b7885;
+}
+
+.sit-chip.is-on .sit-chip-note {
+  color: #9fc4d8;
+}
+
+.sit-chip-basis {
+  margin-left: 6px;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: #6b7885;
+  text-transform: none;
+}
+
+// ── webcams ──────────────────────────────────────────────────────────
+
+.sit-cams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.sit-cam {
+  display: block;
+  border: 1px solid #232b35;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #10151c;
+  text-decoration: none;
+  color: #c8d4e0;
+}
+
+.sit-cam:hover {
+  border-color: #3a4653;
+}
+
+.sit-cam-img {
+  display: block;
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+}
+
+.sit-cam-meta {
+  display: block;
+  padding: 4px 6px;
+  font-size: 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sit-cam-meta em {
+  display: block;
+  font-style: normal;
+  color: #6b7885;
+}
+
+.sit-cam-live {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 3px;
+  background: #b71c1c;
+  border-radius: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #ffffff;
+}

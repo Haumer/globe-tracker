@@ -1,0 +1,847 @@
+// The live-data layers for one selected situation.
+//
+// The main globe already ingests flights, ships, fire hotspots, webcams,
+// satellites, conflict events, earthquakes, weather alerts, NOTAMs, bases and
+// infrastructure. This module puts them on the situations globe one situation
+// at a time: the server's layer plan (/api/situations/:id/layers) says which
+// layers matter here and exactly what to fetch; this class fetches, draws,
+// re-polls the live ones, and owns the chip bar + panel sections.
+//
+// The user's toggle always wins. Overrides live for the session, keyed by
+// layer, so turning fires off once keeps them off on the next selection.
+
+const CHIP_CONTAINER_ID = "sit-layer-chips"
+const SECTIONS_CONTAINER_ID = "sit-layer-sections"
+
+const SATELLITE_JS_URL = "https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"
+
+// Render caps. Every cap that can drop data is reported in the layer's count
+// line, so a clipped view never reads as a complete one.
+const MAX_AIRCRAFT = 400
+const MAX_SHIPS = 600
+const MAX_FIRES = 800
+const MAX_CONFLICT_EVENTS = 500
+const MAX_BASES = 300
+const MAX_NOTAMS = 100
+const LABEL_BUDGET = 40
+
+// Satellite pass search: a day ahead, minute steps, and a pass counts once the
+// satellite is well above the horizon rather than skimming it.
+const PASS_LOOKAHEAD_HOURS = 24
+const PASS_STEP_SECONDS = 60
+const PASS_MIN_ELEVATION_DEG = 25
+const PASS_MAX_SATELLITES = 150
+const PASS_LIST_LIMIT = 10
+// A LEO imaging pass lasts minutes. Anything above the horizon longer than
+// this is geostationary or highly elliptical -- a continuous watcher, not a
+// pass -- and one SBIRS bird "overhead now" forever would crowd every real
+// pass off the list.
+const PASS_MAX_MINUTES = 45
+
+const LAYER_COLORS = {
+  aircraft: "#9fd8ff",
+  aircraftMilitary: "#ff7043",
+  ships: "#7ee0c3",
+  shipsNaval: "#ff7043",
+  fires: "#ff6a3d",
+  firesStrike: "#ff2d00",
+  webcams: "#c792ea",
+  conflict: "#e05f5f",
+  quakes: "#ffd24d",
+  weather: "#ffe082",
+  notams: "#ef5350",
+  bases: "#90a4ae",
+  pipelines: "#b0847a",
+  cables: "#4dd0e1",
+  boundary: "#ffc44d",
+}
+
+export class SituationLayerManager {
+  constructor(viewer) {
+    this.viewer = viewer
+    this._ds = null
+    this._plan = null
+    this._situation = null
+    this._entities = new Map()   // key -> [entity]
+    this._timers = new Map()     // key -> interval id
+    this._sections = new Map()   // key -> html string for the dossier
+    this._notes = new Map()      // key -> one-line count note for the chip row
+    this._overrides = new Map()  // key -> bool, survives across selections
+    this._on = new Set()         // keys currently enabled
+    this._epoch = 0              // bumped on every (de)activate to drop stale fetches
+  }
+
+  async activate(situation) {
+    this.deactivate()
+    const epoch = ++this._epoch
+    this._situation = situation
+
+    let plan
+    try {
+      const resp = await fetch(`/api/situations/${situation.id}/layers`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      plan = await resp.json()
+    } catch (error) {
+      console.error("Layer plan fetch failed", error)
+      this._renderChipsError()
+      return null
+    }
+    if (epoch !== this._epoch) return null
+
+    this._plan = plan
+    await this._ensureDataSource()
+    this._renderChips()
+
+    for (const layer of plan.layers) {
+      const wanted = this._overrides.has(layer.key)
+        ? this._overrides.get(layer.key)
+        : (layer.baseline || layer.on_by_default)
+      if (wanted && layer.status === "ready") this._enable(layer, epoch)
+    }
+    return plan
+  }
+
+  deactivate() {
+    this._epoch++
+    this._timers.forEach((timer) => clearInterval(timer))
+    this._timers.clear()
+    this._entities.forEach((list) => list.forEach((entity) => this._ds?.entities.remove(entity)))
+    this._entities.clear()
+    this._on.clear()
+    this._sections.clear()
+    this._notes.clear()
+    this._plan = null
+    this._situation = null
+    const chips = document.getElementById(CHIP_CONTAINER_ID)
+    if (chips) chips.innerHTML = ""
+    const sections = document.getElementById(SECTIONS_CONTAINER_ID)
+    if (sections) sections.innerHTML = ""
+    this._requestRender()
+  }
+
+  toggle(key) {
+    const layer = this._plan?.layers.find((l) => l.key === key)
+    if (!layer || layer.status !== "ready") return
+
+    const on = this._on.has(key)
+    this._overrides.set(key, !on)
+    if (on) this._disable(key)
+    else this._enable(layer, this._epoch)
+    this._renderChips()
+  }
+
+  // ── plumbing ──────────────────────────────────────────────────────────
+
+  async _ensureDataSource() {
+    if (this._ds) return
+    const Cesium = window.Cesium
+    this._ds = new Cesium.CustomDataSource("situation-layers")
+    await this.viewer.dataSources.add(this._ds)
+  }
+
+  async _enable(layer, epoch) {
+    this._on.add(layer.key)
+    await this._refresh(layer, epoch)
+    if (layer.refresh_seconds > 0 && epoch === this._epoch) {
+      const timer = setInterval(() => this._refresh(layer, epoch), layer.refresh_seconds * 1000)
+      this._timers.set(layer.key, timer)
+    }
+    this._renderChips()
+  }
+
+  _disable(key) {
+    this._on.delete(key)
+    const timer = this._timers.get(key)
+    if (timer) clearInterval(timer)
+    this._timers.delete(key)
+    this._clearEntities(key)
+    this._sections.delete(key)
+    this._notes.delete(key)
+    this._renderSections()
+    this._requestRender()
+  }
+
+  _clearEntities(key) {
+    const list = this._entities.get(key) || []
+    list.forEach((entity) => this._ds.entities.remove(entity))
+    this._entities.delete(key)
+  }
+
+  async _refresh(layer, epoch) {
+    let payloads
+    try {
+      payloads = await Promise.all(layer.sources.map((source) => this._json(source.url, source.params)))
+    } catch (error) {
+      console.error(`Layer ${layer.key} fetch failed`, error)
+      this._notes.set(layer.key, "fetch failed")
+      this._renderChips()
+      return
+    }
+    if (epoch !== this._epoch) return
+
+    this._clearEntities(layer.key)
+    this._sections.delete(layer.key)
+    this._notes.delete(layer.key)
+
+    const renderer = this._renderers()[layer.kind]
+    if (renderer) await renderer.call(this, layer, payloads)
+
+    this._renderSections()
+    this._renderChips()
+    this._requestRender()
+  }
+
+  async _json(url, params) {
+    const qs = new URLSearchParams(params || {}).toString()
+    const resp = await fetch(qs ? `${url}?${qs}` : url)
+    if (!resp.ok) throw new Error(`${url} → HTTP ${resp.status}`)
+    return resp.json()
+  }
+
+  _add(key, options) {
+    // Every entity carries the situation id: the page's picking treats an
+    // untagged pick as "clicked empty space" and closes the dossier, which
+    // must not happen when the click landed on the layer data the dossier
+    // just introduced.
+    const entity = this._ds.entities.add(options)
+    entity.situationId = this._situation?.id
+    if (!this._entities.has(key)) this._entities.set(key, [])
+    this._entities.get(key).push(entity)
+    return entity
+  }
+
+  _requestRender() {
+    this.viewer?.scene.requestRender()
+  }
+
+  _inBbox(lat, lng, pad = 0) {
+    const box = this._plan?.bbox
+    if (!box || lat == null || lng == null) return false
+    return lat <= box.north + pad && lat >= box.south - pad &&
+      lng <= box.east + pad && lng >= box.west - pad
+  }
+
+  // ── renderers ─────────────────────────────────────────────────────────
+
+  _renderers() {
+    return {
+      boundaries: this._renderBoundaries,
+      aircraft: this._renderAircraft,
+      ships: this._renderShips,
+      fires: this._renderFires,
+      webcams: this._renderWebcams,
+      conflict_events: this._renderConflictEvents,
+      earthquakes: this._renderEarthquakes,
+      weather_alerts: this._renderWeatherAlerts,
+      notams: this._renderNotams,
+      military_bases: this._renderMilitaryBases,
+      infrastructure: this._renderInfrastructure,
+      satellites: this._renderSatellites,
+    }
+  }
+
+  // The boundary that contains the anchor, drawn instead of guessed at.
+  // District boundaries are tried first (finer), admin1 as the fallback; if
+  // neither polygon set contains the anchor the layer says so and draws
+  // nothing, because highlighting the wrong district is worse than a circle.
+  async _renderBoundaries(layer, payloads) {
+    const Cesium = window.Cesium
+    const anchor = this._plan.anchor
+    const [districts, admin1] = payloads
+
+    const feature = this._containingFeature(districts, anchor) || this._containingFeature(admin1, anchor)
+    if (!feature) {
+      this._notes.set(layer.key, "no polygon contains the anchor")
+      return
+    }
+
+    const name = feature.properties?.name || feature.properties?.NAME || feature.properties?.shapeName || "unnamed"
+    const rings = this._outerRings(feature.geometry)
+    rings.forEach((ring) => {
+      const positions = ring.map(([lng, lat]) => Cesium.Cartesian3.fromDegrees(lng, lat))
+      this._add(layer.key, {
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(positions),
+          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(0.05),
+          height: 0,
+        },
+      })
+      this._add(layer.key, {
+        polyline: {
+          positions: positions,
+          width: 2,
+          material: Cesium.Color.fromCssColorString(LAYER_COLORS.boundary).withAlpha(0.85),
+          clampToGround: false,
+        },
+      })
+    })
+    this._notes.set(layer.key, name)
+  }
+
+  async _renderAircraft(layer, payloads) {
+    const Cesium = window.Cesium
+    const flights = (payloads[0] || []).slice(0, MAX_AIRCRAFT)
+    const labelled = flights.length <= LABEL_BUDGET
+
+    flights.forEach((flight) => {
+      if (flight.latitude == null || flight.longitude == null) return
+      const military = !!flight.military
+      const color = military ? LAYER_COLORS.aircraftMilitary : LAYER_COLORS.aircraft
+      const alpha = flight.on_ground ? 0.35 : 0.95
+
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(flight.longitude, flight.latitude),
+        billboard: {
+          image: triangleGlyph(color, alpha),
+          rotation: Cesium.Math.toRadians(-(flight.heading || 0)),
+          alignedAxis: Cesium.Cartesian3.UNIT_Z,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelled && flight.callsign ? layerLabel(flight.callsign.trim(), color) : undefined,
+      })
+    })
+
+    const military = flights.filter((f) => f.military).length
+    this._notes.set(layer.key, `${flights.length}${flights.length === MAX_AIRCRAFT ? "+" : ""} aloft` +
+      (military ? ` · ${military} military` : ""))
+  }
+
+  async _renderShips(layer, payloads) {
+    const Cesium = window.Cesium
+    const ships = (payloads[0] || []).slice(0, MAX_SHIPS)
+    const labelled = ships.length <= LABEL_BUDGET / 2
+
+    ships.forEach((ship) => {
+      const naval = /military|naval|warship|law/i.test(ship.ship_type || "")
+      const color = naval ? LAYER_COLORS.shipsNaval : LAYER_COLORS.ships
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude),
+        point: {
+          pixelSize: naval ? 5 : 3.5,
+          color: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelled && ship.name ? layerLabel(ship.name, color) : undefined,
+      })
+    })
+
+    const naval = ships.filter((s) => /military|naval|warship|law/i.test(s.ship_type || "")).length
+    this._notes.set(layer.key, ships.length
+      ? `${ships.length}${ships.length === MAX_SHIPS ? "+" : ""} underway` + (naval ? ` · ${naval} naval` : "")
+      : "none in the box")
+  }
+
+  // FireHotspot rows arrive as arrays:
+  // [id, lat, lng, brightness, confidence, satellite, instrument, frp,
+  //  daynight, acq_ms, possible_strike]
+  async _renderFires(layer, payloads) {
+    const Cesium = window.Cesium
+    const rows = (payloads[0] || []).filter((r) => this._inBbox(r[1], r[2]))
+    const shown = rows.slice(0, MAX_FIRES)
+
+    shown.forEach((row) => {
+      const strike = row[10] === 1
+      const frp = Number(row[7]) || 0
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(row[2], row[1]),
+        point: {
+          pixelSize: Math.min(3 + frp / 40, 8),
+          color: Cesium.Color.fromCssColorString(strike ? LAYER_COLORS.firesStrike : LAYER_COLORS.fires)
+            .withAlpha(strike ? 1 : 0.65),
+          outlineColor: strike ? Cesium.Color.WHITE.withAlpha(0.9) : Cesium.Color.TRANSPARENT,
+          outlineWidth: strike ? 1.5 : 0,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    })
+
+    const strikes = shown.filter((r) => r[10] === 1).length
+    this._notes.set(layer.key, shown.length
+      ? `${shown.length}${rows.length > shown.length ? "+" : ""} hotspots` + (strikes ? ` · ${strikes} possible strikes` : "")
+      : "no thermal anomalies in the box")
+  }
+
+  async _renderWebcams(layer, payloads) {
+    const Cesium = window.Cesium
+    const cams = payloads[0]?.webcams || []
+
+    cams.forEach((cam) => {
+      const loc = cam.location || {}
+      if (loc.latitude == null) return
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(loc.longitude, loc.latitude),
+        point: {
+          pixelSize: 5,
+          color: Cesium.Color.fromCssColorString(LAYER_COLORS.webcams).withAlpha(cam.live ? 1 : 0.6),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    })
+
+    const live = cams.filter((c) => c.live).length
+    this._notes.set(layer.key, cams.length ? `${cams.length} cams · ${live} live` : "none nearby")
+    if (cams.length) this._sections.set(layer.key, webcamSection(cams))
+  }
+
+  async _renderConflictEvents(layer, payloads) {
+    const Cesium = window.Cesium
+    const events = (payloads[0] || []).slice(0, MAX_CONFLICT_EVENTS)
+
+    events.forEach((event) => {
+      if (event.lat == null) return
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(event.lng, event.lat),
+        point: {
+          pixelSize: 3.5,
+          color: Cesium.Color.fromCssColorString(LAYER_COLORS.conflict).withAlpha(0.7),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    })
+
+    const deaths = events.reduce((sum, e) => sum + (Number(e.deaths) || 0), 0)
+    this._notes.set(layer.key, events.length
+      ? `${events.length} recorded events` + (deaths ? ` · ${deaths.toLocaleString()} deaths` : "")
+      : "none recorded in the box")
+  }
+
+  async _renderEarthquakes(layer, payloads) {
+    const Cesium = window.Cesium
+    const quakes = (payloads[0] || []).filter((q) => this._inBbox(q.lat, q.lng))
+    const labelled = quakes.length <= 20
+
+    quakes.forEach((quake) => {
+      const mag = Number(quake.mag) || 0
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(quake.lng, quake.lat),
+        point: {
+          pixelSize: 4 + mag * 1.5,
+          color: Cesium.Color.fromCssColorString(LAYER_COLORS.quakes).withAlpha(0.15),
+          outlineColor: Cesium.Color.fromCssColorString(LAYER_COLORS.quakes).withAlpha(0.9),
+          outlineWidth: 1.5,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelled ? layerLabel(`M${mag.toFixed(1)}`, LAYER_COLORS.quakes) : undefined,
+      })
+    })
+
+    this._notes.set(layer.key, quakes.length ? `${quakes.length} in 7 days` : "none in 7 days")
+  }
+
+  async _renderWeatherAlerts(layer, payloads) {
+    const Cesium = window.Cesium
+    const alerts = (payloads[0]?.alerts || []).filter((a) => a.lat != null)
+    const labelled = alerts.length <= 15
+
+    alerts.forEach((alert) => {
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(alert.lng, alert.lat),
+        billboard: {
+          image: triangleGlyph(LAYER_COLORS.weather, 0.9),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelled && alert.event ? layerLabel(alert.event, LAYER_COLORS.weather) : undefined,
+      })
+    })
+
+    this._notes.set(layer.key, alerts.length ? `${alerts.length} active alerts` : "no active alerts")
+  }
+
+  async _renderNotams(layer, payloads) {
+    const Cesium = window.Cesium
+    const zones = (payloads[0] || []).slice(0, MAX_NOTAMS)
+
+    zones.forEach((zone) => {
+      if (zone.lat == null || !zone.radius_m) return
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(zone.lng, zone.lat),
+        ellipse: {
+          semiMajorAxis: zone.radius_m,
+          semiMinorAxis: zone.radius_m,
+          material: Cesium.Color.fromCssColorString(LAYER_COLORS.notams).withAlpha(0.06),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString(LAYER_COLORS.notams).withAlpha(0.5),
+          height: 0,
+        },
+      })
+    })
+
+    this._notes.set(layer.key, zones.length ? `${zones.length} restrictions` : "none in the box")
+  }
+
+  async _renderMilitaryBases(layer, payloads) {
+    const Cesium = window.Cesium
+    // Rows arrive as arrays: [id, lat, lng, name, base_type, country, operator]
+    const bases = (payloads[0] || []).slice(0, MAX_BASES)
+
+    bases.forEach((base) => {
+      this._add(layer.key, {
+        position: Cesium.Cartesian3.fromDegrees(base[2], base[1]),
+        billboard: {
+          image: diamondGlyph(LAYER_COLORS.bases),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    })
+
+    this._notes.set(layer.key, bases.length ? `${bases.length} installations` : "none in the box")
+  }
+
+  async _renderInfrastructure(layer, payloads) {
+    const Cesium = window.Cesium
+    const [pipes, cables] = payloads
+    let drawn = 0
+
+    // Pipelines store [lat, lng]; cables store [lng, lat]. Same repo, opposite
+    // orders — mirror the main globe's renderers exactly.
+    ;(pipes?.pipelines || []).forEach((pipe) => {
+      const coords = pipe.coordinates || []
+      if (!coords.some((pt) => this._inBbox(pt[0], pt[1], 3))) return
+      drawn++
+      this._add(layer.key, {
+        polyline: {
+          positions: coords.map((pt) => Cesium.Cartesian3.fromDegrees(pt[1], pt[0])),
+          width: 1.5,
+          material: Cesium.Color.fromCssColorString(pipe.color || LAYER_COLORS.pipelines).withAlpha(0.6),
+          arcType: Cesium.ArcType.GEODESIC,
+        },
+      })
+    })
+
+    ;(cables?.cables || []).forEach((cable) => {
+      const segments = cable.coordinates || []
+      // Cable coordinates are segment lists of [lng, lat] pairs.
+      segments.forEach((segment) => {
+        const points = Array.isArray(segment[0]) ? segment : [segment]
+        if (!points.some((pt) => this._inBbox(pt[1], pt[0], 3))) return
+        drawn++
+        this._add(layer.key, {
+          polyline: {
+            positions: points.map((pt) => Cesium.Cartesian3.fromDegrees(pt[0], pt[1])),
+            width: 1,
+            material: Cesium.Color.fromCssColorString(cable.color || LAYER_COLORS.cables).withAlpha(0.55),
+            arcType: Cesium.ArcType.GEODESIC,
+          },
+        })
+      })
+    })
+
+    this._notes.set(layer.key, drawn ? `${drawn} lines through the area` : "nothing runs through the box")
+  }
+
+  // Passes are computed, not drawn: the useful fact is "a capable imager sees
+  // this anchor at 14:32", which is a list, not a shape on the ground.
+  async _renderSatellites(layer, payloads) {
+    const sats = (payloads[0] || []).filter((s) => s.tle_line1 && s.tle_line2).slice(0, PASS_MAX_SATELLITES)
+    if (!sats.length) {
+      this._notes.set(layer.key, "no TLEs available")
+      return
+    }
+
+    await loadSatelliteJs()
+    if (!window.satellite) {
+      this._notes.set(layer.key, "propagator failed to load")
+      return
+    }
+
+    const anchor = this._plan.anchor
+    const result = await computePasses(sats, anchor, () => this._epoch)
+    if (result == null) return // superseded mid-computation
+
+    const { passes, watchers } = result
+    const note = passes.length
+      ? `${passes.length} passes in 24h`
+      : `no passes above ${PASS_MIN_ELEVATION_DEG}° in 24h`
+    this._notes.set(layer.key, watchers ? `${note} · ${watchers} in continuous view` : note)
+    if (passes.length) this._sections.set(layer.key, passSection(passes))
+  }
+
+  // ── chips + sections ──────────────────────────────────────────────────
+
+  _renderChips() {
+    const container = document.getElementById(CHIP_CONTAINER_ID)
+    if (!container || !this._plan) return
+
+    const chips = this._plan.layers.map((layer) => {
+      const on = this._on.has(layer.key)
+      const unavailable = layer.status !== "ready"
+      const note = this._notes.get(layer.key)
+      const title = [
+        layer.meaning,
+        layer.reason ? `Why: ${layer.reason}` : null,
+        unavailable ? `Unavailable: ${layer.status}` : null,
+      ].filter(Boolean).join("\n")
+
+      return `<button type="button"
+        class="sit-chip ${on ? "is-on" : ""} ${unavailable ? "is-unavailable" : ""} ${layer.baseline ? "is-baseline" : ""}"
+        data-layer-key="${layer.key}" title="${escapeAttr(title)}" ${unavailable ? "disabled" : ""}>
+        ${escapeHtml(layer.title)}${note ? `<span class="sit-chip-note">${escapeHtml(note)}</span>` : ""}
+      </button>`
+    }).join("")
+
+    const basis = this._plan.curated_by === "ai" ? "AI-curated" : "rule-curated"
+    container.innerHTML = `
+      <div class="sit-section-title">Live layers <span class="sit-chip-basis">${basis}</span></div>
+      <div class="sit-chip-row">${chips}</div>`
+
+    container.querySelectorAll(".sit-chip[data-layer-key]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation()
+        this.toggle(button.dataset.layerKey)
+      })
+    })
+  }
+
+  _renderChipsError() {
+    const container = document.getElementById(CHIP_CONTAINER_ID)
+    if (container) container.innerHTML = `<div class="sit-note">Layer plan unavailable.</div>`
+  }
+
+  _renderSections() {
+    const container = document.getElementById(SECTIONS_CONTAINER_ID)
+    if (!container) return
+    container.innerHTML = [...this._sections.values()].join("")
+  }
+
+  _containingFeature(collection, anchor) {
+    const features = collection?.features || []
+    return features.find((feature) => geometryContains(feature.geometry, anchor.lng, anchor.lat))
+  }
+
+  _outerRings(geometry) {
+    if (!geometry) return []
+    if (geometry.type === "Polygon") return [geometry.coordinates[0]]
+    if (geometry.type === "MultiPolygon") return geometry.coordinates.map((poly) => poly[0])
+    return []
+  }
+}
+
+// ── geometry helpers ────────────────────────────────────────────────────
+
+function geometryContains(geometry, lng, lat) {
+  if (!geometry) return false
+  if (geometry.type === "Polygon") return polygonContains(geometry.coordinates, lng, lat)
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.some((poly) => polygonContains(poly, lng, lat))
+  }
+  return false
+}
+
+// Ray cast against the outer ring, then punch out holes.
+function polygonContains(rings, lng, lat) {
+  if (!rings?.length) return false
+  if (!ringContains(rings[0], lng, lat)) return false
+  return !rings.slice(1).some((hole) => ringContains(hole, lng, lat))
+}
+
+function ringContains(ring, lng, lat) {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+// ── satellite passes ────────────────────────────────────────────────────
+
+let satelliteJsPromise = null
+function loadSatelliteJs() {
+  if (window.satellite) return Promise.resolve()
+  if (satelliteJsPromise) return satelliteJsPromise
+
+  satelliteJsPromise = new Promise((resolve) => {
+    const script = document.createElement("script")
+    script.src = SATELLITE_JS_URL
+    script.onload = resolve
+    script.onerror = () => resolve() // caller checks window.satellite
+    document.head.appendChild(script)
+  })
+  return satelliteJsPromise
+}
+
+// Stepped SGP4 over the lookahead window, chunked so a hundred propagations a
+// frame never block the UI. epochCheck aborts the walk if the selection moved
+// on mid-computation.
+async function computePasses(sats, anchor, epochCheck) {
+  const sat = window.satellite
+  const startEpoch = epochCheck()
+  const observer = {
+    longitude: sat.degreesToRadians(anchor.lng),
+    latitude: sat.degreesToRadians(anchor.lat),
+    height: 0,
+  }
+
+  const now = Date.now()
+  const steps = (PASS_LOOKAHEAD_HOURS * 3600) / PASS_STEP_SECONDS
+  const passes = []
+  const watchers = new Set()
+
+  const flush = (record, pass) => {
+    const minutes = (pass.lastSeen - pass.start) / 60000
+    if (minutes > PASS_MAX_MINUTES) watchers.add(record.name)
+    else passes.push({ name: record.name, category: record.category, purpose: record.purpose,
+                       start: pass.start, maxElevation: pass.maxElevation })
+  }
+
+  for (let index = 0; index < sats.length; index++) {
+    if (index % 10 === 9) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (epochCheck() !== startEpoch) return null
+    }
+
+    const record = sats[index]
+    let satrec
+    try {
+      satrec = sat.twoline2satrec(record.tle_line1, record.tle_line2)
+    } catch { continue }
+
+    let current = null
+    for (let step = 0; step <= steps; step++) {
+      const time = new Date(now + step * PASS_STEP_SECONDS * 1000)
+      let elevation = -90
+      try {
+        const positionEci = sat.propagate(satrec, time)?.position
+        if (positionEci) {
+          const gmst = sat.gstime(time)
+          const positionEcf = sat.eciToEcf(positionEci, gmst)
+          const look = sat.ecfToLookAngles(observer, positionEcf)
+          elevation = sat.radiansToDegrees(look.elevation)
+        }
+      } catch { break }
+
+      if (elevation >= PASS_MIN_ELEVATION_DEG) {
+        if (!current) current = { start: time, maxElevation: elevation, lastSeen: time }
+        else { current.maxElevation = Math.max(current.maxElevation, elevation); current.lastSeen = time }
+      } else if (current) {
+        flush(record, current)
+        current = null
+        if (passes.length > PASS_LIST_LIMIT * 4) break
+      }
+    }
+    if (current) flush(record, current)
+  }
+
+  return {
+    passes: passes.sort((a, b) => a.start - b.start).slice(0, PASS_LIST_LIMIT),
+    watchers: watchers.size,
+  }
+}
+
+// ── section templates ───────────────────────────────────────────────────
+
+function webcamSection(cams) {
+  const rows = cams.slice(0, 8).map((cam) => {
+    const preview = cam.images?.current?.preview
+    const link = cam.player?.live?.embed || preview
+    const badge = cam.live ? `<span class="sit-cam-live">LIVE</span>` : ""
+    const place = [cam.location?.city, cam.location?.country].filter(Boolean).join(", ")
+
+    return `<a class="sit-cam" href="${escapeAttr(link || "#")}" target="_blank" rel="noopener">
+      ${preview ? `<img class="sit-cam-img" src="${escapeAttr(preview)}" alt="" loading="lazy">` : ""}
+      <span class="sit-cam-meta">${badge}${escapeHtml(cam.title || "untitled")}<em>${escapeHtml(place)}</em></span>
+    </a>`
+  }).join("")
+
+  return `<div class="sit-section-title">Cameras near the anchor</div>
+    <div class="sit-cams">${rows}</div>`
+}
+
+function passSection(passes) {
+  const rows = passes.map((pass) => {
+    const minutes = Math.round((pass.start - Date.now()) / 60000)
+    const when = minutes <= 0 ? "overhead now" : minutes < 60 ? `in ${minutes} min` : `in ${Math.round(minutes / 60)}h ${minutes % 60}m`
+    return `<div class="sit-ring-row">
+      <span class="sit-ring-name">${escapeHtml(pass.name)}</span>
+      <span class="sit-ring-detail">${when} · max ${Math.round(pass.maxElevation)}°</span>
+    </div>`
+  }).join("")
+
+  return `<div class="sit-section-title">Imaging passes over the anchor</div>
+    <div class="sit-ring">${rows}</div>`
+}
+
+// ── glyphs ──────────────────────────────────────────────────────────────
+
+const glyphCache = new Map()
+
+function triangleGlyph(color, alpha) {
+  const key = `tri:${color}:${alpha}`
+  if (glyphCache.has(key)) return glyphCache.get(key)
+
+  const size = 14
+  const canvas = document.createElement("canvas")
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext("2d")
+  ctx.globalAlpha = alpha
+  ctx.beginPath()
+  ctx.moveTo(size / 2, 1.5)
+  ctx.lineTo(size - 2.5, size - 2)
+  ctx.lineTo(2.5, size - 2)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = "rgba(0,0,0,0.7)"
+  ctx.stroke()
+
+  glyphCache.set(key, canvas)
+  return canvas
+}
+
+function diamondGlyph(color) {
+  const key = `dia:${color}`
+  if (glyphCache.has(key)) return glyphCache.get(key)
+
+  const size = 12
+  const canvas = document.createElement("canvas")
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext("2d")
+  ctx.beginPath()
+  ctx.moveTo(size / 2, 1)
+  ctx.lineTo(size - 1, size / 2)
+  ctx.lineTo(size / 2, size - 1)
+  ctx.lineTo(1, size / 2)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.globalAlpha = 0.9
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.lineWidth = 1
+  ctx.strokeStyle = "rgba(0,0,0,0.7)"
+  ctx.stroke()
+
+  glyphCache.set(key, canvas)
+  return canvas
+}
+
+function layerLabel(text, color) {
+  const Cesium = window.Cesium
+  return {
+    text: text,
+    font: `400 9px "JetBrains Mono", monospace`,
+    fillColor: Cesium.Color.fromCssColorString(color),
+    outlineColor: Cesium.Color.BLACK,
+    outlineWidth: 2,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    pixelOffset: new Cesium.Cartesian2(0, -10),
+    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+  }
+}
+
+// ── html helpers ────────────────────────────────────────────────────────
+
+function escapeHtml(value) {
+  const div = document.createElement("div")
+  div.textContent = value == null ? "" : String(value)
+  return div.innerHTML
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll('"', "&quot;")
+}

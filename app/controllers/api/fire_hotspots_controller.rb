@@ -19,7 +19,11 @@ module Api
     }.freeze
 
     def index
-      hotspots = FireHotspot.recent.order(acq_datetime: :desc).limit(5000)
+      # No params keeps the old contract: recent 48h, global. The situations
+      # view passes bounds + a time range so it never ships the whole world's
+      # hotspots to clip a 150 km box client-side.
+      hotspots = time_scoped(FireHotspot).within_bounds(parse_bounds)
+        .order(acq_datetime: :desc).limit(5000)
 
       render json: hotspots.map { |h|
         strike = possible_strike?(h)

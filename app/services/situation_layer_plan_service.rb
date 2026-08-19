@@ -26,6 +26,13 @@ class SituationLayerPlanService
   BOARD_CACHE_TTL = 2.minutes
   AVAILABILITY_CACHE_TTL = 5.minutes
 
+  # Time scoping per layer. The situation itself is a 3-day story, so live
+  # corroboration (fires) matches its window; UCDP is an annual-release
+  # historical dataset where a 3-day filter would always be empty — a year is
+  # context, and the client renders age so old events cannot pass as current.
+  FIRES_WINDOW = SituationBuilder::WINDOW_DAYS.days
+  CONFLICT_WINDOW = 1.year
+
   # meaning: is written for two readers at once -- the curator's prompt and the
   # chip tooltip -- so it says what the data is, not how it is drawn.
   # refresh_seconds: 0 means fetch once per selection; anything else is a live
@@ -174,8 +181,8 @@ class SituationLayerPlanService
         { url: "/api/geography/boundaries", params: { dataset: "admin1", country_codes: country } }
       ]
     when "fires"
-      # The endpoint serves the recent global set; the client clips to the box.
-      [{ url: "/api/fire_hotspots", params: {} }]
+      [{ url: "/api/fire_hotspots",
+         params: aviation_bbox.merge(from: (now - FIRES_WINDOW).iso8601, to: now.iso8601) }]
     when "aircraft"
       [{ url: "/api/flights", params: aviation_bbox }]
     when "ships"
@@ -183,7 +190,8 @@ class SituationLayerPlanService
     when "webcams"
       [{ url: "/api/webcams", params: compass_bbox.merge(limit: 40) }]
     when "conflict_events"
-      [{ url: "/api/conflict_events", params: aviation_bbox }]
+      [{ url: "/api/conflict_events",
+         params: aviation_bbox.merge(from: (now - CONFLICT_WINDOW).iso8601, to: now.iso8601) }]
     when "earthquakes"
       [{ url: "/api/earthquakes", params: { from: (now - 7.days).iso8601, to: now.iso8601 } }]
     when "weather_alerts"
@@ -223,11 +231,11 @@ class SituationLayerPlanService
 
   def probe_availability
     {
-      "fires" => probe(FireHotspot.recent, key: ENV["FIRMS_MAP_KEY"].presence || ENV["FIRMS_MAP_API_KEY"]),
+      "fires" => probe(FireHotspot.in_range(Time.current - FIRES_WINDOW, Time.current), key: ENV["FIRMS_MAP_KEY"].presence || ENV["FIRMS_MAP_API_KEY"]),
       "aircraft" => Flight.where("updated_at > ?", 10.minutes.ago).exists? ? "ready" : "empty",
       "ships" => probe(Ship.where("updated_at > ?", 6.hours.ago), key: ENV["AISSTREAM_API_KEY"]),
       "webcams" => webcams_status,
-      "conflict_events" => ConflictEvent.exists? ? "ready" : "empty",
+      "conflict_events" => ConflictEvent.in_range(Time.current - CONFLICT_WINDOW, Time.current).exists? ? "ready" : "empty",
       "earthquakes" => Earthquake.exists? ? "ready" : "empty",
       "weather_alerts" => WeatherAlert.active.exists? ? "ready" : "empty",
       # The NOTAM layer always has its static global no-fly zones.

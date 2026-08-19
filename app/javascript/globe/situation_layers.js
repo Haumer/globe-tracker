@@ -221,6 +221,22 @@ export class SituationLayerManager {
       lng <= box.east + pad && lng >= box.west - pad
   }
 
+  _distanceKm(lat, lng) {
+    const anchor = this._plan?.anchor
+    if (!anchor || lat == null) return null
+    return haversineKm(anchor.lat, anchor.lng, lat, lng)
+  }
+
+  // Proximity as brightness: a datum on top of the anchor draws at full
+  // strength, one at the corner of the box at less than half. The box admits
+  // it; the distance says how much it matters.
+  _proximityAlpha(base, lat, lng) {
+    const distance = this._distanceKm(lat, lng)
+    if (distance == null) return base
+    const reach = (this._plan?.radius_km || 150) * 1.45 // box corner
+    return base * (0.4 + 0.6 * Math.max(0, 1 - distance / reach))
+  }
+
   // ── renderers ─────────────────────────────────────────────────────────
 
   _renderers() {
@@ -336,18 +352,24 @@ export class SituationLayerManager {
   //  daynight, acq_ms, possible_strike]
   async _renderFires(layer, payloads) {
     const Cesium = window.Cesium
-    const rows = (payloads[0] || []).filter((r) => this._inBbox(r[1], r[2]))
+    // The server already scoped to the box and the situation's window; what is
+    // left to assess is quality and nearness. Low-confidence pixels are noise
+    // at this zoom — unless they are flagged possible strikes, which are the
+    // one thing this layer exists to not miss.
+    const rows = (payloads[0] || []).filter((r) => r[10] === 1 || fireConfidence(r[4]) >= 30)
+    const dropped = (payloads[0] || []).length - rows.length
     const shown = rows.slice(0, MAX_FIRES)
 
     shown.forEach((row) => {
       const strike = row[10] === 1
       const frp = Number(row[7]) || 0
+      const alpha = strike ? 1 : this._proximityAlpha(0.75, row[1], row[2])
       this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(row[2], row[1]),
         point: {
           pixelSize: Math.min(3 + frp / 40, 8),
           color: Cesium.Color.fromCssColorString(strike ? LAYER_COLORS.firesStrike : LAYER_COLORS.fires)
-            .withAlpha(strike ? 1 : 0.65),
+            .withAlpha(alpha),
           outlineColor: strike ? Cesium.Color.WHITE.withAlpha(0.9) : Cesium.Color.TRANSPARENT,
           outlineWidth: strike ? 1.5 : 0,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -357,7 +379,9 @@ export class SituationLayerManager {
 
     const strikes = shown.filter((r) => r[10] === 1).length
     this._notes.set(layer.key, shown.length
-      ? `${shown.length}${rows.length > shown.length ? "+" : ""} hotspots` + (strikes ? ` · ${strikes} possible strikes` : "")
+      ? `${shown.length}${rows.length > shown.length ? "+" : ""} hotspots` +
+        (strikes ? ` · ${strikes} possible strikes` : "") +
+        (dropped ? ` · ${dropped} low-conf hidden` : "")
       : "no thermal anomalies in the box")
   }
 
@@ -381,35 +405,49 @@ export class SituationLayerManager {
     })
 
     const live = cams.filter((c) => c.live).length
+    const ranked = cams
+      .map((cam) => ({ cam, km: this._distanceKm(cam.location?.latitude, cam.location?.longitude) }))
+      .sort((a, b) => (b.cam.live - a.cam.live) || ((a.km ?? Infinity) - (b.km ?? Infinity)))
     this._notes.set(layer.key, cams.length ? `${cams.length} cams · ${live} live` : "none nearby")
-    if (cams.length) this._sections.set(layer.key, webcamSection(cams))
+    if (cams.length) this._sections.set(layer.key, webcamSection(ranked))
   }
 
   async _renderConflictEvents(layer, payloads) {
     const Cesium = window.Cesium
     const events = (payloads[0] || []).slice(0, MAX_CONFLICT_EVENTS)
 
+    // UCDP is a historical record. Age is rendered — a year-old clash draws at
+    // a fraction of last week's — and the note names the span and the latest
+    // date, so history can inform without impersonating the present.
+    const now = Date.now()
+    const yearMs = 365 * 24 * 3600 * 1000
+
     events.forEach((event) => {
       if (event.lat == null) return
+      const age = event.date_start ? Math.min((now - Date.parse(event.date_start)) / yearMs, 1) : 1
+      const alpha = this._proximityAlpha(0.85 - 0.6 * age, event.lat, event.lng)
       this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(event.lng, event.lat),
         point: {
           pixelSize: 3.5,
-          color: Cesium.Color.fromCssColorString(LAYER_COLORS.conflict).withAlpha(0.7),
+          color: Cesium.Color.fromCssColorString(LAYER_COLORS.conflict).withAlpha(Math.max(alpha, 0.12)),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
     })
 
     const deaths = events.reduce((sum, e) => sum + (Number(e.deaths) || 0), 0)
+    const latest = events.map((e) => e.date_start).filter(Boolean).sort().pop()
     this._notes.set(layer.key, events.length
-      ? `${events.length} recorded events` + (deaths ? ` · ${deaths.toLocaleString()} deaths` : "")
-      : "none recorded in the box")
+      ? `${events.length} events in 12mo` + (deaths ? ` · ${deaths.toLocaleString()} deaths` : "") +
+        (latest ? ` · latest ${latest.slice(0, 10)}` : "")
+      : "none recorded in 12mo")
   }
 
   async _renderEarthquakes(layer, payloads) {
     const Cesium = window.Cesium
-    const quakes = (payloads[0] || []).filter((q) => this._inBbox(q.lat, q.lng))
+    // Below M2.5 is instrument chatter at situation scale.
+    const quakes = (payloads[0] || []).filter((q) => this._inBbox(q.lat, q.lng) && (Number(q.mag) || 0) >= 2.5)
     const labelled = quakes.length <= 20
 
     quakes.forEach((quake) => {
@@ -427,7 +465,7 @@ export class SituationLayerManager {
       })
     })
 
-    this._notes.set(layer.key, quakes.length ? `${quakes.length} in 7 days` : "none in 7 days")
+    this._notes.set(layer.key, quakes.length ? `${quakes.length} of M2.5+ in 7 days` : "none of M2.5+ in 7 days")
   }
 
   async _renderWeatherAlerts(layer, payloads) {
@@ -735,16 +773,19 @@ async function computePasses(sats, anchor, epochCheck) {
 
 // ── section templates ───────────────────────────────────────────────────
 
-function webcamSection(cams) {
-  const rows = cams.slice(0, 8).map((cam) => {
+// Live streams first, then nearest first — a live phone stream 4 km out beats
+// a periodic resort cam at the box edge.
+function webcamSection(ranked) {
+  const rows = ranked.slice(0, 8).map(({ cam, km }) => {
     const preview = cam.images?.current?.preview
     const link = cam.player?.live?.embed || preview
     const badge = cam.live ? `<span class="sit-cam-live">LIVE</span>` : ""
     const place = [cam.location?.city, cam.location?.country].filter(Boolean).join(", ")
+    const distance = km != null ? ` · ${Math.round(km)} km` : ""
 
     return `<a class="sit-cam" href="${escapeAttr(link || "#")}" target="_blank" rel="noopener">
       ${preview ? `<img class="sit-cam-img" src="${escapeAttr(preview)}" alt="" loading="lazy">` : ""}
-      <span class="sit-cam-meta">${badge}${escapeHtml(cam.title || "untitled")}<em>${escapeHtml(place)}</em></span>
+      <span class="sit-cam-meta">${badge}${escapeHtml(cam.title || "untitled")}<em>${escapeHtml(place)}${distance}</em></span>
     </a>`
   }).join("")
 
@@ -832,6 +873,25 @@ function layerLabel(text, color) {
     pixelOffset: new Cesium.Cartesian2(0, -10),
     disableDepthTestDistance: Number.POSITIVE_INFINITY,
   }
+}
+
+// FIRMS confidence arrives as "high"/"nominal"/"low", "h"/"n"/"l", or 0-100.
+function fireConfidence(value) {
+  const text = String(value ?? "").toLowerCase()
+  if (text.startsWith("h")) return 90
+  if (text.startsWith("n")) return 50
+  if (text.startsWith("l")) return 10
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 50
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const rad = Math.PI / 180
+  const dLat = (lat2 - lat1) * rad
+  const dLng = (lng2 - lng1) * rad
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.sqrt(Math.min(h, 1)))
 }
 
 // ── html helpers ────────────────────────────────────────────────────────

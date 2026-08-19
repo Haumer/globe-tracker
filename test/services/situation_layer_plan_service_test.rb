@@ -149,6 +149,29 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     assert webcams.key?(:north) && webcams.key?(:west), "webcams speak compass"
 
     fires = layers["fires"][:sources].first[:params]
-    assert_empty fires, "fires endpoint is global; the client clips"
+    assert fires.key?(:lamin), "fires are box-scoped server-side now"
+    assert fires.key?(:from), "fires are scoped to the situation's window"
+
+    conflict = layers["conflict_events"][:sources].first[:params]
+    assert conflict.key?(:from), "UCDP history is bounded, not all-time"
+  end
+
+  test "fires window matches the situation window and conflict gets a year of context" do
+    place = place_entity
+    event = cluster(key: "p7", title: "Strike", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:7", name: "Kyiv situation", events: [event], concerns: place)
+
+    now = Time.current
+    plan = SituationLayerPlanService.new(
+      situation: SituationLayerPlanService.board(now: now)[:situations].find { |r| r[:id] == entity.id },
+      curator: FixedCurator.new, now: now
+    ).call
+    layers = plan[:layers].index_by { |l| l[:key] }
+
+    fires_from = Time.parse(layers["fires"][:sources].first[:params][:from])
+    assert_in_delta (now - SituationLayerPlanService::FIRES_WINDOW).to_f, fires_from.to_f, 60
+
+    conflict_from = Time.parse(layers["conflict_events"][:sources].first[:params][:from])
+    assert_in_delta (now - SituationLayerPlanService::CONFLICT_WINDOW).to_f, conflict_from.to_f, 60
   end
 end

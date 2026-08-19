@@ -80,8 +80,12 @@ class SituationLayerCurator
       You choose which live data overlays belong on a globe view of one news
       situation. Pick only overlays that would genuinely inform this specific
       story -- an analyst glancing at the globe should see corroborating or
-      contextual data, not decoration. Pick between 1 and #{MAX_PICKS}.
-      Respond with JSON only: {"layers": [{"key": "...", "reason": "..."}]}.
+      contextual data, not decoration. Fewer is better: every overlay you add
+      competes with the story's own evidence for the reader's eye. Order your
+      picks by how much each informs -- only the strongest two or three will
+      be drawn; the rest are offered as suggestions. Never pick more than
+      #{MAX_PICKS}. Respond with JSON only:
+      {"layers": [{"key": "...", "reason": "..."}]}.
       Each reason is one short sentence tied to this situation. Use only keys
       from the list given. If nothing beyond the baseline would help, respond
       {"layers": []}.

@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { COUNTRY_CENTROIDS } from "globe/country_centroids"
+import { SituationLayerManager } from "globe/situation_layers"
 
 // The situations globe. Deliberately its own Cesium instance rather than a
 // layer inside globe_controller: the point of the view is that nothing else is
@@ -49,6 +50,7 @@ export default class extends Controller {
   }
 
   disconnect() {
+    this._layers?.deactivate()
     try { this.viewer?.destroy() } catch {}
     this.viewer = null
   }
@@ -118,6 +120,7 @@ export default class extends Controller {
       destination: Cesium.Cartesian3.fromDegrees(35, 20, 22_000_000)
     })
 
+    this._layers = new SituationLayerManager(this.viewer)
     this._wirePicking()
     await this._fetch()
   }
@@ -428,10 +431,14 @@ export default class extends Controller {
     this._renderList()
     this._applyAnchorStyling()
     this._flyTo(situation)
+    // Fire-and-forget: the dossier is complete without the live layers, and
+    // the chip bar reports its own failures.
+    this._layers?.activate(situation).catch((error) => console.error("Layers failed", error))
   }
 
   _clearSelection() {
     this._selectedId = null
+    this._layers?.deactivate()
     this._detail.entities.removeAll()
     this.panelTarget.style.display = "none"
     this._renderList()
@@ -710,6 +717,9 @@ export default class extends Controller {
       </div>
 
       ${chain}
+
+      <div id="sit-layer-chips"></div>
+      <div id="sit-layer-sections"></div>
 
       ${this._ringSection("Countries exposed", rings.ring3_countries, (row) => `
         <span class="sit-ring-name">${escapeHtml(row.name)}</span>

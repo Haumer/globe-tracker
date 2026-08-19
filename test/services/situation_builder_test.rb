@@ -233,4 +233,19 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert OntologyEntity.exists?(id: foreign.id),
       "prune is scoped to DERIVED_BY -- it must not sweep entities it did not build"
   end
+
+  test "clusters outside the recency window do not form situations" do
+    corridor = OntologyEntity.create!(canonical_key: "corridor:hormuz", entity_type: "corridor", canonical_name: "Strait of Hormuz")
+    [ "s1", "s2" ].each do |key|
+      record, event = cluster(key: key, title: "Tankers rerouted around the Strait of Hormuz")
+      record.update!(last_seen_at: (SituationBuilder::WINDOW_DAYS + 2).days.ago)
+      OntologyRelationship.create!(source_node: event, target_node: corridor,
+                                  relation_type: "names_entity", confidence: 0.9, derived_by: "news_registry_link_v1")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "a story last seen #{SituationBuilder::WINDOW_DAYS + 2} days ago is not happening"
+  end
 end

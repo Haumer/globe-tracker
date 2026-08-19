@@ -231,9 +231,9 @@ namespace :ontology do
     stats.sort.each { |name, count| puts format("  %-18s %4d", name, count) }
   end
 
-  desc "Link news reports to the sensor occurrences they describe (DAYS=21)"
+  desc "Link news reports to the sensor occurrences they describe (DAYS=3)"
   task link_occurrences: :environment do
-    days = ENV.fetch("DAYS", 21).to_i
+    days = ENV.fetch("DAYS", HazardOccurrenceLinkService::WINDOW_DAYS).to_i
     stats = HazardOccurrenceLinkService.sync_recent(days: days)
 
     puts "Occurrence links over #{days}d"
@@ -242,9 +242,9 @@ namespace :ontology do
     end
   end
 
-  desc "Group clusters that are one story into situations (DAYS=21; run link_occurrences first)"
+  desc "Group clusters that are one story into situations (DAYS=3; run link_occurrences first)"
   task build_situations: :environment do
-    days = ENV.fetch("DAYS", 21).to_i
+    days = ENV.fetch("DAYS", SituationBuilder::WINDOW_DAYS).to_i
     stats = SituationBuilder.call(days: days)
 
     puts "Situations over #{days}d"

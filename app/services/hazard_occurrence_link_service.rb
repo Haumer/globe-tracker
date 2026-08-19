@@ -38,13 +38,21 @@ class HazardOccurrenceLinkService
   # pairs and a spread that means something.
   MINIMUM_SEED = 3
 
+  # Three days, not 21. Candidates are every cluster carrying the occurrence's
+  # country, and over three weeks that pool is the country's entire news cycle:
+  # the Otura (Granada) quake drew 36 member clusters of which ~30 were the
+  # concurrent Ceuta migrant story, wildfires and sport. Coverage of a sensor
+  # occurrence runs days, not weeks -- a report three weeks out is a different
+  # story. Widen per run (rake DAYS=21) for a retrospective rebuild.
+  WINDOW_DAYS = 3
+
   class << self
-    def sync_recent(days: 21, now: Time.current)
+    def sync_recent(days: WINDOW_DAYS, now: Time.current)
       new(days: days, now: now).call
     end
   end
 
-  def initialize(days: 21, now: Time.current)
+  def initialize(days: WINDOW_DAYS, now: Time.current)
     @days = days
     @now = now
     @stats = Hash.new(0)
@@ -159,6 +167,8 @@ class HazardOccurrenceLinkService
     return [] unless bar
 
     grown = candidates.select do |event|
+      next false unless after_onset?(event, occurrence)
+
       vector = cluster_vectors[event.primary_story_cluster_id]
       vector && vectors.any? { |member| cosine(vector, member) >= bar }
     end
@@ -182,15 +192,21 @@ class HazardOccurrenceLinkService
     mean - deviation
   end
 
-  # A report cannot describe an occurrence that has not happened yet. This is the
-  # only time bound applied, and it is a physical constraint rather than a tuned
-  # window -- the candidates are already bounded by the caller's window.
+  # A report cannot describe an occurrence that has not happened yet. A physical
+  # constraint rather than a tuned window -- and it must bind the grown members,
+  # not just the seed. It originally bound only the seed, and that is where the
+  # Otura (Granada) situation got most of its contamination: 20 of its ~30 wrong
+  # members were published before the quake existed, admitted by the embedding
+  # alone because nothing asked whether they *could* describe the occurrence.
+  def after_onset?(event, occurrence)
+    event.last_seen_at.present? &&
+      occurrence.started_at.present? &&
+      event.last_seen_at >= occurrence.started_at
+  end
+
   def seed_from(candidates, occurrence)
     candidates.select do |event|
-      event.event_type == occurrence.event_type &&
-        event.last_seen_at.present? &&
-        occurrence.started_at.present? &&
-        event.last_seen_at >= occurrence.started_at
+      event.event_type == occurrence.event_type && after_onset?(event, occurrence)
     end
   end
 

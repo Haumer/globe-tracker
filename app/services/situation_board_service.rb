@@ -29,11 +29,11 @@ class SituationBoardService
     ring3_countries: "chokepoint_exposure"
   }.freeze
 
-  def self.call(days: 21, now: Time.current)
+  def self.call(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
     new(days: days, now: now).call
   end
 
-  def initialize(days: 21, now: Time.current)
+  def initialize(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
     @days = days
     @now = now
   end

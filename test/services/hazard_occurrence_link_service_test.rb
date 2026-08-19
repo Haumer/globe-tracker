@@ -177,18 +177,42 @@ class HazardOccurrenceLinkServiceTest < ActiveSupport::TestCase
 
   # A report cannot describe an occurrence that has not happened yet, so it
   # cannot be part of the sample that decides what the occurrence reads like.
+  #
+  # The reports sit inside the candidate window on purpose -- at 5.days.ago the
+  # 3-day window would exclude them before the onset check ever ran, and this
+  # test would pass without testing anything.
   test "a report filed before the occurrence cannot seed it" do
     colombia = country("Colombia", "CO")
     occurrence(key: "q1", title: "5 km S of San Jose del Palmar, Colombia", at: 1.day.ago)
     [["s1", vector(1, 0, 0, 0)], ["s2", vector(1, 0.4, 0, 0)], ["s3", vector(0.9, 0, 0.3, 0)]]
       .each do |key, embedding|
-        _c, event = report(key: key, title: "Quake #{key}", at: 5.days.ago, vectors: [embedding])
+        _c, event = report(key: key, title: "Quake #{key}", at: 2.days.ago, vectors: [embedding])
         tag(event, colombia)
       end
 
     HazardOccurrenceLinkService.sync_recent
 
     assert_equal 0, OntologyRelationship.where(relation_type: RELATION).count
+  end
+
+  # The Otura (Granada) failure: the onset constraint bound only the seed, so a
+  # report published before the quake existed could still be *grown* into it on
+  # embedding similarity alone -- 20 of that situation's ~30 wrong members
+  # predated the occurrence.
+  test "a report filed before the occurrence cannot be grown into it either" do
+    quake, seeds, _mistyped, colombia = colombia_scene
+
+    _c, early = report(key: "e1", title: "Feature on quake preparedness", event_type: "ground_operation",
+                       at: 60.hours.ago, vectors: [vector(1, 0, 0, 0)])
+    tag(early, colombia)
+
+    HazardOccurrenceLinkService.sync_recent
+
+    place = quake.place_entity
+    linked = OntologyRelationship.where(relation_type: RELATION, target_node: place).pluck(:source_node_id)
+    assert_not_includes linked, early.id,
+      "an identical embedding must not admit a report that predates the occurrence"
+    assert_includes linked, seeds.first.id, "the real seed still links"
   end
 
   # Both roles point at Colombia on the same report. Counted twice, the report

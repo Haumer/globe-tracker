@@ -33,13 +33,20 @@ class SituationBuilder
   # A story needs corroboration to be a story.
   MINIMUM_MEMBERS = 2
 
+  # The recency window situations are built over. Three days, because the board
+  # answers "what is happening": a cluster last seen four days ago is not
+  # happening, it is history -- and over 21 days an actor group is the actor's
+  # whole news cycle rather than a story. The sweep in prune_stale retires
+  # whatever falls out. Widen per run (rake DAYS=21) for a retrospective build.
+  WINDOW_DAYS = 3
+
   STOPWORDS = %w[
     the a an and or of to in on for with as at by from is are was were be been
     it its this that has have had will would can could new says say said after
     over into up out about more than then them they not all any one two first
   ].to_set.freeze
 
-  def self.call(days: 21, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
+  def self.call(days: WINDOW_DAYS, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
     new(days: days, now: now, actor_specificity: actor_specificity).call
   end
 
@@ -47,7 +54,7 @@ class SituationBuilder
   # separately from everything built on top of it: in a fixture of two clusters
   # every actor occurs in 100% of them, and the production value would reject
   # them all.
-  def initialize(days: 21, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
+  def initialize(days: WINDOW_DAYS, now: Time.current, actor_specificity: ACTOR_SPECIFICITY)
     @days = days
     @now = now
     @actor_specificity = actor_specificity

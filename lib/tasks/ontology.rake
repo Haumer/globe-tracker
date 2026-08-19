@@ -248,7 +248,7 @@ namespace :ontology do
     stats = SituationBuilder.call(days: days)
 
     puts "Situations over #{days}d"
-    %i[situations members incoherent no_key no_event too_small].each do |key|
+    %i[situations members incoherent no_key no_event too_small removed].each do |key|
       puts format("  %-12s %5d", key, stats[key].to_i)
     end
 

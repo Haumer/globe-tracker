@@ -187,6 +187,40 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
     assert_equal [second_article.id], synced_event.ontology_evidence_links.where(evidence_role: "lead_article").pluck(:evidence_id)
   end
 
+  # The reconciliation above must only sweep roles this sync derives. It used
+  # to index every membership on the event, so a cluster re-sync -- which
+  # happens the moment a new article joins any active cluster -- deleted the
+  # in_situation membership SituationBuilder had written, and every situation
+  # lost its members within minutes of being built.
+  test "sync_story_cluster leaves the situation membership alone" do
+    article = create_article(
+      suffix: "ontology-situation-a",
+      publisher: "BBC",
+      domain: "bbc.com",
+      title: "Israel strikes targets near Isfahan",
+      source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(article, family: "conflict", event_type: "airstrike", claim_text: article.title)
+    cluster = create_cluster(article, key: "cluster:ontology-situation")
+
+    event = NewsOntologySyncService.sync_story_cluster(cluster)
+    situation = OntologyEntity.create!(
+      canonical_key: "situation:actor:1", entity_type: "situation",
+      canonical_name: "Isfahan strikes situation",
+      metadata: { "derived_by" => "situation_builder_v1" }
+    )
+    membership = OntologyEventEntity.create!(
+      ontology_event: event, ontology_entity: situation,
+      role: SituationBuilder::MEMBERSHIP_ROLE, confidence: 0.7
+    )
+
+    NewsOntologySyncService.sync_story_cluster(cluster)
+
+    assert OntologyEventEntity.exists?(id: membership.id),
+      "a cluster re-sync must not sweep SituationBuilder's membership"
+  end
+
   test "refuses to anchor an event to its publisher" do
     article = create_article(
       suffix: "ontology-pub", publisher: "France 24", domain: "france24.com",

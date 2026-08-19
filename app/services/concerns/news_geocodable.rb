@@ -125,10 +125,8 @@ module NewsGeocodable
     "kharkiv" => [49.99, 36.23], "odesa" => [46.48, 30.73],
     "odessa" => [46.48, 30.73], "dnipro" => [48.46, 35.05],
     "donetsk" => [48.00, 37.80], "luhansk" => [48.57, 39.31],
-    "zaporizhzhia" => [47.84, 35.14], "mariupol" => [47.10, 37.55],
-    "kherson" => [46.64, 32.62], "lviv" => [49.84, 24.03],
-    "kramatorsk" => [48.74, 37.56], "bakhmut" => [48.60, 38.00],
-    "melitopol" => [46.84, 35.37], "sevastopol" => [44.62, 33.52],
+    "zaporizhzhia" => [47.84, 35.14], "lviv" => [49.84, 24.03],
+    "sevastopol" => [44.62, 33.52],
     "crimea" => [44.95, 34.10], "simferopol" => [44.95, 34.10],
 
     # --- Middle East ---
@@ -150,8 +148,7 @@ module NewsGeocodable
     "jerusalem" => [31.77, 35.23], "tel aviv" => [32.09, 34.78],
     "haifa" => [32.79, 34.99], "gaza" => [31.50, 34.47],
     "gaza city" => [31.50, 34.47], "west bank" => [31.95, 35.30],
-    "ramallah" => [31.90, 35.20], "rafah" => [31.30, 34.25],
-    "khan younis" => [31.35, 34.30], "nablus" => [32.22, 35.26],
+    "ramallah" => [31.90, 35.20], "nablus" => [32.22, 35.26],
     "sana'a" => [15.35, 44.21], "sanaa" => [15.35, 44.21],
     "aden" => [12.79, 45.04],
     "istanbul" => [41.01, 28.98], "ankara" => [39.93, 32.86],

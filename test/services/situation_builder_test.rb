@@ -190,4 +190,47 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert_equal [ "Strait of Hormuz situation" ],
                  OntologyEntity.where(entity_type: "situation").pluck(:canonical_name)
   end
+
+  # Scheduled runs need the inverse of persist: a situation whose story left
+  # the window would otherwise sit on the board forever at its last
+  # member_count, because persist only upserts the groups that exist now.
+  test "removes a situation whose story has left the window" do
+    stale = OntologyEntity.create!(
+      canonical_key: "situation:actor:9999", entity_type: "situation",
+      canonical_name: "Last month's story situation",
+      metadata: { "derived_by" => "situation_builder_v1", "grouped_by" => "actor" }
+    )
+    concerns = OntologyRelationship.create!(
+      source_node: stale, target_node: actor("Old Faction"),
+      relation_type: "concerns", confidence: 0.8, derived_by: "situation_builder_v1"
+    )
+
+    corridor = OntologyEntity.create!(canonical_key: "corridor:hormuz", entity_type: "corridor", canonical_name: "Strait of Hormuz")
+    [ "s1", "s2" ].each do |key|
+      _c, event = cluster(key: key, title: "Tankers rerouted around the Strait of Hormuz")
+      OntologyRelationship.create!(source_node: event, target_node: corridor,
+                                  relation_type: "names_entity", confidence: 0.9, derived_by: "news_registry_link_v1")
+    end
+
+    stats = SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_nil OntologyEntity.find_by(id: stale.id), "the windowed-out situation must be swept"
+    assert_nil OntologyRelationship.find_by(id: concerns.id), "its concerns edge goes with it"
+    assert OntologyEntity.exists?(entity_type: "situation", canonical_key: "situation:entity:#{corridor.id}"),
+      "the live situation survives the sweep"
+    assert_equal 1, stats[:removed]
+  end
+
+  test "the sweep leaves situation entities other derivers own untouched" do
+    foreign = OntologyEntity.create!(
+      canonical_key: "situation:manual:1", entity_type: "situation",
+      canonical_name: "Operator-curated situation",
+      metadata: { "derived_by" => "operator" }
+    )
+
+    SituationBuilder.call
+
+    assert OntologyEntity.exists?(id: foreign.id),
+      "prune is scoped to DERIVED_BY -- it must not sweep entities it did not build"
+  end
 end

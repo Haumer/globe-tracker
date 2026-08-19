@@ -231,7 +231,15 @@ class NewsOntologySyncService
 
     def sync_event_entities(event, cluster)
       actor_roles = aggregated_cluster_actor_roles(cluster)
-      existing_memberships = event.ontology_event_entities.index_by { |membership| [membership.ontology_entity_id, membership.role] }
+      # Reconcile only the actor roles this sync derives. The in_situation
+      # membership on the same event belongs to SituationBuilder, and including
+      # it here is what kept the situations board empty: any active cluster
+      # re-syncs the moment a new article joins it, and this delete swept the
+      # builder's membership as a stale actor row -- so every situation lost
+      # its members within minutes of being built.
+      existing_memberships = event.ontology_event_entities
+        .reject { |membership| membership.role == SituationBuilder::MEMBERSHIP_ROLE }
+        .index_by { |membership| [membership.ontology_entity_id, membership.role] }
       desired_memberships = {}
 
       actor_roles.each do |row|

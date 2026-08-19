@@ -1,6 +1,17 @@
 require "test_helper"
 
 class Api::SituationLayersControllerTest < ActionDispatch::IntegrationTest
+  # With an ambient OPENAI_API_KEY the plan service's default curator builds a
+  # real client, and WebMock turns that into a loud failure. Hidden for
+  # determinism; the curator has its own tests.
+  setup do
+    @openai_key = ENV.delete("OPENAI_API_KEY")
+  end
+
+  teardown do
+    ENV["OPENAI_API_KEY"] = @openai_key if @openai_key
+  end
+
   test "unknown situation is a 404" do
     get "/api/situations/999999/layers"
     assert_response :not_found

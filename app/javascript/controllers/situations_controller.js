@@ -399,6 +399,11 @@ export default class extends Controller {
 
     handler.setInputAction((click) => {
       const picked = this.viewer.scene.pick(click.position)
+      // A plane is clickable on its own: track it (click again to let go)
+      // without re-selecting the situation underneath.
+      const flight = picked?.id?.flightRef
+      if (flight) return this._layers?.trackFlight(flight)
+
       const id = picked?.id?.situationId
       if (id) this.select(id)
       else this._clearSelection()

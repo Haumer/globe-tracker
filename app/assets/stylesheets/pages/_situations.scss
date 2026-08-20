@@ -310,6 +310,15 @@
   color: #d4dde6;
 }
 
+.sit-ring-name a {
+  color: inherit;
+  text-decoration: underline dotted #4a5866;
+}
+
+.sit-ring-name a:hover {
+  color: #4fc3f7;
+}
+
 .sit-ring-detail {
   flex: 0 0 auto;
   color: #7d8b99;
@@ -408,7 +417,7 @@
 }
 
 .sit-chip {
-  padding: 3px 7px;
+  padding: 2px 6px;
   background: #141a22;
   border: 1px solid #2b3542;
   border-radius: 3px;
@@ -417,6 +426,8 @@
   letter-spacing: 0.04em;
   color: #8b9aa8;
   cursor: pointer;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .sit-chip:hover {
@@ -442,10 +453,12 @@
 }
 
 .sit-chip-note {
-  display: block;
-  margin-top: 1px;
+  display: inline;
+  margin-left: 5px;
   font-size: 8px;
   color: #6b7885;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .sit-chip.is-on .sit-chip-note {

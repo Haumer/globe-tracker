@@ -33,6 +33,15 @@ class SituationBuilder
   # A story needs corroboration to be a story.
   MINIMUM_MEMBERS = 2
 
+  # Place is the weakest key: it asserts only that two stories happened in the
+  # same place. Munich glued a footballer's injury to a Vietnamese flight
+  # probe. So a place group must also cohere semantically, measured on headline
+  # embeddings (mean per cluster, cosine between clusters). Calibrated on real
+  # headlines: same story 0.54-0.76, same city but different story 0.30-0.35 --
+  # the shared city name alone contributes ~0.3. Clusters connect at or above
+  # this floor; the group splits into its connected components.
+  PLACE_SPLIT_COSINE = 0.40
+
   # The recency window situations are built over. Three days, because the board
   # answers "what is happening": a cluster last seen four days ago is not
   # happening, it is history -- and over 21 days an actor group is the actor's
@@ -80,10 +89,10 @@ class SituationBuilder
     end
 
     built_keys = []
-    grouped.each do |key, members|
+    split_place_groups(grouped).each do |key, suffix, members|
       next @stats[:too_small] += 1 if members.size < MINIMUM_MEMBERS
 
-      built_keys << persist(key, members).canonical_key
+      built_keys << persist(key, members, suffix: suffix).canonical_key
       @stats[:situations] += 1
       @stats[:members] += members.size
     end
@@ -144,6 +153,96 @@ class SituationBuilder
     return if place_frequency[place.id].to_f >= actor_specificity
 
     place.id
+  end
+
+  # ── place-group splitting ──────────────────────────────────────────────
+
+  # Entity and actor groups pass through untouched; a place group is split into
+  # its semantically-connected components. Yields [key, suffix, members]: the
+  # largest component keeps the bare place key so the ongoing story keeps its
+  # identity across runs, the split-offs get a stable suffix from their oldest
+  # cluster. Singleton components fall to the MINIMUM_MEMBERS check downstream,
+  # so "a sports story and an unrelated flight probe in the same city" becomes
+  # no situation at all rather than one wrong one.
+  def split_place_groups(grouped)
+    grouped.flat_map do |key, members|
+      next [ [ key, nil, members ] ] unless key.first == :place && members.size > 1
+
+      components = coherent_components(key.last, members)
+      next [ [ key, nil, members ] ] if components.size == 1
+
+      @stats[:place_groups_split] += 1
+      largest = components.max_by(&:size)
+      components.map do |component|
+        suffix = component.equal?(largest) ? nil : ":c#{component.map { |cluster, _| cluster.id }.min}"
+        [ key, suffix, component ]
+      end
+    end
+  end
+
+  def coherent_components(place_id, members)
+    place_words = content_words(event_place_entities[place_id]&.canonical_name.to_s)
+    remaining = members.dup
+    components = []
+
+    until remaining.empty?
+      component = [ remaining.shift ]
+      component.each do |member|
+        akin, remaining = remaining.partition { |other| clusters_akin?(member.first, other.first, place_words) }
+        component.concat(akin)
+      end
+      components << component
+    end
+
+    components
+  end
+
+  # Embeddings decide when both sides are measured; headline word overlap when
+  # they are not; and a pair nothing can measure stays connected, because an
+  # embedding outage must degrade to the old grouping, not to no situations.
+  def clusters_akin?(cluster_a, cluster_b, place_words)
+    vector_a = cluster_embeddings[cluster_a.id]
+    vector_b = cluster_embeddings[cluster_b.id]
+    return cosine(vector_a, vector_b) >= PLACE_SPLIT_COSINE if vector_a && vector_b
+
+    # The place's own name is subtracted before comparing: every member of a
+    # place group mentions the place, so that overlap carries no information --
+    # it is exactly the signal that glued the quake to the football club.
+    sets_a = comparison_word_sets(cluster_a, place_words)
+    sets_b = comparison_word_sets(cluster_b, place_words)
+    return true if sets_a.empty? || sets_b.empty?
+
+    pairs = sets_a.product(sets_b).map { |a, b| (a & b).size.to_f / (a | b).size }
+    (pairs.sum / pairs.size) >= COHERENCE_FLOOR
+  end
+
+  def comparison_word_sets(cluster, place_words)
+    titles = article_titles_by_cluster[cluster.id].to_a
+    titles = [ cluster.canonical_title ] if titles.empty?
+    titles.map { |title| content_words(title) - place_words.to_a }.reject(&:empty?)
+  end
+
+  # Mean of the member headlines' vectors, per in-window cluster; one query,
+  # loaded lazily the first time a split is considered.
+  def cluster_embeddings
+    @cluster_embeddings ||= NewsStoryMembership
+      .where(news_story_cluster_id: clusters.map(&:id))
+      .joins(:news_article)
+      .where.not(news_articles: { title_embedding: nil })
+      .pluck(:news_story_cluster_id, "news_articles.title_embedding")
+      .group_by(&:first)
+      .transform_values do |rows|
+        vectors = rows.first(8).map(&:last)
+        vectors.transpose.map { |xs| xs.sum / xs.size.to_f }
+      end
+  end
+
+  def cosine(a, b)
+    dot = a.zip(b).sum { |x, y| x * y }
+    norm = Math.sqrt(a.sum { |x| x * x }) * Math.sqrt(b.sum { |x| x * x })
+    return 0.0 if norm.zero?
+
+    dot / norm
   end
 
   def event_place_entities
@@ -216,12 +315,12 @@ class SituationBuilder
       .distinct.pluck(:source_node_id)
   end
 
-  def persist(key, members)
+  def persist(key, members, suffix: nil)
     kind, reference = key
     situation = OntologySyncSupport.upsert_entity(
-      canonical_key: "situation:#{kind}:#{reference}",
+      canonical_key: "situation:#{kind}:#{reference}#{suffix}",
       entity_type: ENTITY_TYPE,
-      canonical_name: situation_name(kind, reference, members),
+      canonical_name: situation_name(kind, reference, members, suffix: suffix),
       metadata: {
         "grouped_by" => kind.to_s,
         "member_count" => members.size,
@@ -299,7 +398,11 @@ class SituationBuilder
     )
   end
 
-  def situation_name(kind, reference, members)
+  def situation_name(kind, reference, members, suffix: nil)
+    # A split-off component is not "the <place> situation" -- that name stays
+    # with the main component; the split-off is named by its own story.
+    return members.first.first.canonical_title.to_s.first(80) if suffix
+
     subject = OntologyEntity.find_by(id: reference)&.canonical_name
     return "#{subject} situation" if subject.present?
 
@@ -320,7 +423,11 @@ class SituationBuilder
   end
 
   def content_words(title)
-    title.to_s.downcase.gsub(/[^a-z0-9 ]/, " ").split
+    # Diacritics are stripped, not destroyed: "Cañada" must become "canada" so
+    # a place named with one can be subtracted from headlines that spell it
+    # without -- gsub-ing the ñ to a space would split it into junk instead.
+    title.to_s.unicode_normalize(:nfkd).gsub(/\p{Mn}/, "")
+      .downcase.gsub(/[^a-z0-9 ]/, " ").split
       .reject { |word| word.length < 4 || STOPWORDS.include?(word) }.to_set
   end
 

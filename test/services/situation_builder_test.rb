@@ -259,6 +259,85 @@ class SituationBuilderTest < ActiveSupport::TestCase
       "the place carries the coordinate the board anchors on"
   end
 
+  # Place is the weakest key: sharing a city is not sharing a story. The Munich
+  # group glued a footballer's injury to a Vietnamese flight probe.
+  test "a place group of unrelated stories does not become a situation" do
+    munich = place("Munich")
+    [
+    [ "m1", "Musiala reveals neurological issue", [ "Bayern Munich's Musiala reveals neurological issue after second collapse" ] ],
+    [ "m2", "Vietnam ministry seeks flight probe", [ "Vietnam ministry calls for cooperation in probe into flight incident in Munich" ] ]
+    ].each do |key, title, articles|
+      _c, event = cluster(key: key, title: title, article_titles: articles)
+      event.update!(place_entity: munich)
+    end
+
+    stats = SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "two stories sharing only a city are two singletons, not one situation"
+    assert_equal 1, stats[:place_groups_split]
+  end
+
+  test "a place group splits into components and each coherent one survives" do
+    munich = place("Munich")
+    [
+    [ "q1", "Quake shakes the region", [ "Earthquake damages buildings across Munich suburbs overnight" ] ],
+    [ "q2", "Residents flee aftershocks", [ "Aftershocks keep Munich residents outdoors as earthquake damage is assessed" ] ],
+    [ "f1", "Musiala injury update", [ "Bayern Munich's Musiala reveals neurological issue after collapse" ] ]
+    ].each do |key, title, articles|
+      _c, event = cluster(key: key, title: title, article_titles: articles)
+      event.update!(place_entity: munich)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    situations = OntologyEntity.where(entity_type: "situation")
+    assert_equal 1, situations.count, "the quake pair coheres; the injury story is a singleton"
+    assert_equal "situation:place:#{munich.id}", situations.first.canonical_key,
+      "the largest component keeps the place's own key"
+    assert_equal 2, OntologyEventEntity.where(ontology_entity: situations.first, role: "in_situation").count
+  end
+
+  test "a place named with diacritics still subtracts from plain-spelled headlines" do
+    # Seen in dev data: the geocoder filed two unrelated Canada stories under
+    # "La Cañada", and the ñ kept the place name from being stripped -- the
+    # shared word "Canada" then passed the coherence floor on its own.
+    canada = place("La Cañada")
+    [
+    [ "d1", "Care homes testing", [ "Rapid on-site testing at care homes could prevent thousands of visits across Canada" ] ],
+    [ "d2", "Foreign visit", [ "Organisation chief plans visit spanning Canada and Britain" ] ]
+    ].each do |key, title, articles|
+      _c, event = cluster(key: key, title: title, article_titles: articles)
+      event.update!(place_entity: canada)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "sharing only the place's own name is not coherence"
+  end
+
+  test "embeddings outrank word overlap when both clusters carry them" do
+    munich = place("Munich")
+    # Lexically these two share "collapse" and nothing else; the embeddings say
+    # opposite directions, and the measured signal must win over the words.
+    pairs = [
+      [ "e1", "Stadium roof collapse injures dozens", [ 1.0, 0.0, 0.0 ] ],
+      [ "e2", "Talks collapse over stadium financing", [ 0.0, 1.0, 0.0 ] ]
+    ]
+    pairs.each do |key, title, vector|
+      record, event = cluster(key: key, title: title, article_titles: [ title ])
+      event.update!(place_entity: munich)
+      NewsArticle.where(id: NewsStoryMembership.where(news_story_cluster: record).select(:news_article_id))
+        .update_all(title_embedding: "{#{vector.join(',')}}", title_embedding_model: "test")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "orthogonal embeddings split the pair regardless of shared words"
+  end
+
   # "Colombia" and "China" arrive as place-typed entities. Keying on them would
   # rebuild the every-story-about-a-country group the actor exclusion prevents.
   test "does not build a situation around a country-named or region-named place" do

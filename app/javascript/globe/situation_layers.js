@@ -10,6 +10,8 @@
 // The user's toggle always wins. Overrides live for the session, keyed by
 // layer, so turning fires off once keeps them off on the next selection.
 
+import { createPlaneIcon } from "globe/utils"
+
 const CHIP_CONTAINER_ID = "sit-layer-chips"
 const SECTIONS_CONTAINER_ID = "sit-layer-sections"
 
@@ -69,6 +71,12 @@ export class SituationLayerManager {
     this._overrides = new Map()  // key -> bool, survives across selections
     this._on = new Set()         // keys currently enabled
     this._epoch = 0              // bumped on every (de)activate to drop stale fetches
+    this._trackedFlightId = null // icao24 the camera is following, if any
+    this._trackedShipId = null   // mmsi the camera is following, if any
+    this._planeIcons = new Map() // color -> canvas, drawn once
+    // The page sets this to hear whether the boundary layer drew a polygon
+    // over the anchor -- the nominal footprint circle is redundant then.
+    this.onBoundaryState = null
   }
 
   async activate(situation) {
@@ -103,6 +111,8 @@ export class SituationLayerManager {
 
   deactivate() {
     this._epoch++
+    this._trackedFlightId = null
+    this._trackedShipId = null
     this._timers.forEach((timer) => clearInterval(timer))
     this._timers.clear()
     this._entities.forEach((list) => list.forEach((entity) => this._ds?.entities.remove(entity)))
@@ -157,6 +167,9 @@ export class SituationLayerManager {
     this._clearEntities(key)
     this._sections.delete(key)
     this._notes.delete(key)
+    if (key === "boundaries") this.onBoundaryState?.({ anchorPolygon: false })
+    if (key === "aircraft") this._trackedFlightId = null
+    if (key === "ships") this._trackedShipId = null
     this._renderSections()
     this._requestRender()
   }
@@ -269,17 +282,21 @@ export class SituationLayerManager {
 
     // The curator names affected regions ("Hormozgan", "Balochistan") with a
     // grade; matching is by normalized name against both polygon sets, and a
-    // region that matches nothing is skipped rather than guessed at.
+    // region that matches nothing is skipped rather than guessed at -- but
+    // counted, so the note admits what could not be drawn.
     let shaded = 0
+    let unmatched = 0
     ;(this._plan.regions || []).forEach((region) => {
       const feature = this._featureByName(districts, region.name) || this._featureByName(admin1, region.name)
-      if (!feature) return
+      if (!feature) { unmatched++; return }
 
+      // Two visibly different shades: heavy fill for high impact, light for
+      // moderate. Anything fainter disappears against the dark basemap.
       const high = region.impact === "high"
       this._drawBoundaryFeature(layer.key, feature, {
-        fillAlpha: high ? 0.14 : 0.06,
-        outlineAlpha: high ? 0.9 : 0.5,
-        width: high ? 2 : 1.5,
+        fillAlpha: high ? 0.3 : 0.14,
+        outlineAlpha: high ? 1.0 : 0.7,
+        width: high ? 2.5 : 2,
       })
       drawnNames.add(normalizeName(featureName(feature)))
       shaded++
@@ -294,12 +311,19 @@ export class SituationLayerManager {
       anchorName = featureName(feature)
     }
 
+    // The page hides the nominal footprint circle once a real polygon covers
+    // the anchor -- an accurate boundary beats a radius guess.
+    this.onBoundaryState?.({ anchorPolygon: !!feature })
+
     if (!anchorName && !shaded) {
       this._notes.set(layer.key, "no polygon contains the anchor")
       return
     }
-    this._notes.set(layer.key, [anchorName, shaded ? `${shaded} affected shaded` : null]
-      .filter(Boolean).join(" · "))
+    this._notes.set(layer.key, [
+      anchorName,
+      shaded ? `${shaded} affected shaded` : null,
+      unmatched ? `${unmatched} unmatched` : null,
+    ].filter(Boolean).join(" · "))
   }
 
   _drawBoundaryFeature(key, feature, { fillAlpha, outlineAlpha, width }) {
@@ -327,63 +351,143 @@ export class SituationLayerManager {
   _featureByName(collection, name) {
     const wanted = normalizeName(name)
     if (!wanted) return null
-    return (collection?.features || []).find((feature) => {
-      const candidate = normalizeName(featureName(feature))
-      return candidate === wanted || candidate.includes(wanted) || wanted.includes(candidate)
-    })
+    // An exact match anywhere in the collection beats a substring match: with
+    // both "Gaza Strip" and "Gaza Governorate" present, "Gaza" must not settle
+    // for whichever happens to come first.
+    const features = collection?.features || []
+    const candidatesOf = (feature) => featureNames(feature).map(normalizeName).filter(Boolean)
+    return features.find((feature) => candidatesOf(feature).some((c) => c === wanted)) ||
+      features.find((feature) => candidatesOf(feature).some((c) => c.includes(wanted) || wanted.includes(c)))
   }
 
   async _renderAircraft(layer, payloads) {
     const Cesium = window.Cesium
     const flights = (payloads[0] || []).slice(0, MAX_AIRCRAFT)
     const labelled = flights.length <= LABEL_BUDGET
+    let tracked = null
 
     flights.forEach((flight) => {
       if (flight.latitude == null || flight.longitude == null) return
       const military = !!flight.military
       const color = military ? LAYER_COLORS.aircraftMilitary : LAYER_COLORS.aircraft
-      const alpha = flight.on_ground ? 0.35 : 0.95
+      const isTracked = this._trackedFlightId && flight.icao24 === this._trackedFlightId
+      if (isTracked) tracked = flight
 
-      this._add(layer.key, {
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(flight.longitude, flight.latitude),
         billboard: {
-          image: triangleGlyph(color, alpha),
+          image: this._planeIcon(color),
+          scale: isTracked ? 1.1 : 0.7,
           rotation: Cesium.Math.toRadians(-(flight.heading || 0)),
           alignedAxis: Cesium.Cartesian3.UNIT_Z,
+          color: Cesium.Color.WHITE.withAlpha(flight.on_ground ? 0.35 : 1),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: labelled && flight.callsign ? layerLabel(flight.callsign.trim(), color) : undefined,
+        label: (isTracked || (labelled && flight.callsign))
+          ? layerLabel((flight.callsign || flight.icao24 || "").trim(), color)
+          : undefined,
       })
+      // Clicking a plane tracks it; the page's pick handler reads this tag.
+      entity.flightRef = {
+        icao24: flight.icao24, callsign: flight.callsign,
+        latitude: flight.latitude, longitude: flight.longitude,
+      }
     })
+
+    // Keep the camera on the tracked plane as positions refresh; a plane that
+    // left the box (or landed) releases the camera rather than pinning it to
+    // its last known position.
+    if (this._trackedFlightId) {
+      if (tracked) this._followTarget(tracked)
+      else this._trackedFlightId = null
+    }
 
     const military = flights.filter((f) => f.military).length
     this._notes.set(layer.key, `${flights.length}${flights.length === MAX_AIRCRAFT ? "+" : ""} aloft` +
-      (military ? ` · ${military} military` : ""))
+      (military ? ` · ${military} military` : "") +
+      (tracked ? ` · tracking ${(tracked.callsign || tracked.icao24 || "").trim()}` : ""))
+  }
+
+  // Toggle: clicking the tracked plane again lets go; clicking another plane
+  // switches to it.
+  trackFlight(ref) {
+    if (!ref?.icao24 || this._trackedFlightId === ref.icao24) {
+      this._trackedFlightId = null
+      this._renderChips()
+      return
+    }
+    this._trackedFlightId = ref.icao24
+    this._followTarget(ref, { approach: true })
+    this._renderChips()
+  }
+
+  _followTarget(target, { approach = false } = {}) {
+    const Cesium = window.Cesium
+    if (target.latitude == null || target.longitude == null) return
+    const current = this.viewer.camera.positionCartographic.height
+    // First click swoops in; refreshes keep whatever height the user chose.
+    const height = approach ? Math.min(current, 150_000) : current
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(target.longitude, target.latitude, Math.max(height, 20_000)),
+      duration: approach ? 1.4 : 1.0,
+    })
+  }
+
+  _planeIcon(color) {
+    if (!this._planeIcons.has(color)) this._planeIcons.set(color, createPlaneIcon(color))
+    return this._planeIcons.get(color)
   }
 
   async _renderShips(layer, payloads) {
     const Cesium = window.Cesium
     const ships = (payloads[0] || []).slice(0, MAX_SHIPS)
     const labelled = ships.length <= LABEL_BUDGET / 2
+    let tracked = null
 
     ships.forEach((ship) => {
       const naval = /military|naval|warship|law/i.test(ship.ship_type || "")
       const color = naval ? LAYER_COLORS.shipsNaval : LAYER_COLORS.ships
-      this._add(layer.key, {
+      const isTracked = this._trackedShipId && ship.mmsi === this._trackedShipId
+      if (isTracked) tracked = ship
+
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude),
         point: {
-          pixelSize: naval ? 5 : 3.5,
+          pixelSize: isTracked ? 7 : naval ? 5 : 3.5,
           color: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          outlineColor: isTracked ? Cesium.Color.WHITE.withAlpha(0.9) : Cesium.Color.TRANSPARENT,
+          outlineWidth: isTracked ? 1.5 : 0,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: labelled && ship.name ? layerLabel(ship.name, color) : undefined,
+        label: (isTracked || (labelled && ship.name)) ? layerLabel(ship.name || String(ship.mmsi), color) : undefined,
       })
+      entity.shipRef = {
+        mmsi: ship.mmsi, name: ship.name,
+        latitude: ship.latitude, longitude: ship.longitude,
+      }
     })
+
+    if (this._trackedShipId) {
+      if (tracked) this._followTarget(tracked)
+      else this._trackedShipId = null
+    }
 
     const naval = ships.filter((s) => /military|naval|warship|law/i.test(s.ship_type || "")).length
     this._notes.set(layer.key, ships.length
-      ? `${ships.length}${ships.length === MAX_SHIPS ? "+" : ""} underway` + (naval ? ` · ${naval} naval` : "")
+      ? `${ships.length}${ships.length === MAX_SHIPS ? "+" : ""} underway` + (naval ? ` · ${naval} naval` : "") +
+        (tracked ? ` · tracking ${tracked.name || tracked.mmsi}` : "")
       : "none in the box")
+  }
+
+  trackShip(ref) {
+    if (!ref?.mmsi || this._trackedShipId === ref.mmsi) {
+      this._trackedShipId = null
+      this._renderChips()
+      return
+    }
+    this._trackedShipId = ref.mmsi
+    this._followTarget(ref, { approach: true })
+    this._renderChips()
   }
 
   // FireHotspot rows arrive as arrays:
@@ -431,7 +535,7 @@ export class SituationLayerManager {
     cams.forEach((cam) => {
       const loc = cam.location || {}
       if (loc.latitude == null) return
-      this._add(layer.key, {
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(loc.longitude, loc.latitude),
         point: {
           pixelSize: 5,
@@ -441,6 +545,8 @@ export class SituationLayerManager {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
+      // Clicking the dot opens the same watchable target the dossier row does.
+      entity.openUrl = webcamLink(cam)
     })
 
     const live = cams.filter((c) => c.live).length
@@ -491,7 +597,7 @@ export class SituationLayerManager {
 
     quakes.forEach((quake) => {
       const mag = Number(quake.mag) || 0
-      this._add(layer.key, {
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(quake.lng, quake.lat),
         point: {
           pixelSize: 4 + mag * 1.5,
@@ -502,9 +608,11 @@ export class SituationLayerManager {
         },
         label: labelled ? layerLabel(`M${mag.toFixed(1)}`, LAYER_COLORS.quakes) : undefined,
       })
+      if (quake.url) entity.openUrl = quake.url
     })
 
     this._notes.set(layer.key, quakes.length ? `${quakes.length} of M2.5+ in 7 days` : "none of M2.5+ in 7 days")
+    if (quakes.length) this._sections.set(layer.key, quakeSection(quakes))
   }
 
   async _renderWeatherAlerts(layer, payloads) {
@@ -552,8 +660,12 @@ export class SituationLayerManager {
 
   async _renderMilitaryBases(layer, payloads) {
     const Cesium = window.Cesium
-    // Rows arrive as arrays: [id, lat, lng, name, base_type, country, operator]
-    const bases = (payloads[0] || []).slice(0, MAX_BASES)
+    // Rows arrive as arrays: [id, lat, lng, name, base_type, country, operator].
+    // The box is re-checked here: a server that ignores or mishandles the bbox
+    // params must not paint the whole world's bases onto one situation.
+    const bases = (payloads[0] || [])
+      .filter((base) => this._inBbox(base[1], base[2]))
+      .slice(0, MAX_BASES)
 
     bases.forEach((base) => {
       this._add(layer.key, {
@@ -643,10 +755,20 @@ export class SituationLayerManager {
     const container = document.getElementById(CHIP_CONTAINER_ID)
     if (!container || !this._plan) return
 
-    const chips = this._plan.layers.map((layer) => {
+    // On first, suggested next, plain available after, unavailable last -- the
+    // chips the user can act on lead, dead ones trail as a dim tail. The note
+    // rides inline on active chips only; everything else lives in the tooltip.
+    const rank = (layer) => {
+      if (this._on.has(layer.key)) return 0
+      if (layer.status !== "ready") return 3
+      return layer.reason ? 1 : 2
+    }
+    const ordered = [...this._plan.layers].sort((a, b) => rank(a) - rank(b))
+
+    const chips = ordered.map((layer) => {
       const on = this._on.has(layer.key)
       const unavailable = layer.status !== "ready"
-      const note = this._notes.get(layer.key)
+      const note = on ? this._notes.get(layer.key) : null
       const title = [
         layer.meaning,
         layer.reason ? `Why: ${layer.reason}` : null,
@@ -702,6 +824,17 @@ export class SituationLayerManager {
 
 function featureName(feature) {
   return feature?.properties?.name || feature?.properties?.NAME || feature?.properties?.shapeName || ""
+}
+
+// Every name the polygon answers to: local name, English name, GeoNames name,
+// alternates. Natural Earth's `name` is often the local form ("Bayern"), and
+// the curator speaks English ("Bavaria") — matching on one property misses the
+// other.
+function featureNames(feature) {
+  const props = feature?.properties || {}
+  return [props.name, props.NAME, props.shapeName, props.name_en, props.gn_name, props.name_alt, props.woe_name]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split("|"))
 }
 
 // The curator says "Hormozgan"; the polygon says "Hormozgān Province". Strip
@@ -832,10 +965,18 @@ async function computePasses(sats, anchor, epochCheck) {
 
 // Live streams first, then nearest first — a live phone stream 4 km out beats
 // a periodic resort cam at the box edge.
+// A watchable page beats a frozen JPEG: the player when there is one, the
+// Windy webcam page for Windy cams, and only then the raw still.
+function webcamLink(cam) {
+  const windyPage = cam.source === "windy" && cam.webcamId
+    ? `https://www.windy.com/webcams/${encodeURIComponent(cam.webcamId)}` : null
+  return cam.player?.live?.embed || windyPage || cam.images?.current?.preview
+}
+
 function webcamSection(ranked) {
   const rows = ranked.slice(0, 8).map(({ cam, km }) => {
     const preview = cam.images?.current?.preview
-    const link = cam.player?.live?.embed || preview
+    const link = webcamLink(cam)
     const badge = cam.live ? `<span class="sit-cam-live">LIVE</span>` : ""
     const place = [cam.location?.city, cam.location?.country].filter(Boolean).join(", ")
     const distance = km != null ? ` · ${Math.round(km)} km` : ""
@@ -848,6 +989,29 @@ function webcamSection(ranked) {
 
   return `<div class="sit-section-title">Cameras near the anchor</div>
     <div class="sit-cams">${rows}</div>`
+}
+
+function quakeSection(quakes) {
+  const strongest = [...quakes].sort((a, b) => (Number(b.mag) || 0) - (Number(a.mag) || 0)).slice(0, 6)
+  const rows = strongest.map((quake) => {
+    const mag = Number(quake.mag) || 0
+    const hours = quake.time ? Math.round((Date.now() - quake.time) / 3600000) : null
+    const when = hours == null ? "" : hours < 1 ? "just now" : hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`
+    const depth = quake.depth != null ? `${Math.round(quake.depth)} km deep` : null
+    const detail = [depth, when].filter(Boolean).join(" · ")
+    const name = escapeHtml(quake.title || `M${mag.toFixed(1)}`)
+    const label = quake.url
+      ? `<a href="${escapeAttr(quake.url)}" target="_blank" rel="noopener">${name}</a>`
+      : name
+
+    return `<div class="sit-ring-row">
+      <span class="sit-ring-name">${label}</span>
+      <span class="sit-ring-detail">${escapeHtml(detail)}</span>
+    </div>`
+  }).join("")
+
+  return `<div class="sit-section-title">Strongest recent quakes</div>
+    <div class="sit-ring">${rows}</div>`
 }
 
 function passSection(passes) {

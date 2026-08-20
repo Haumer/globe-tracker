@@ -82,7 +82,9 @@ class SituationLayerCurator
       volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
-    "situation-layer-curation:v2:#{fingerprint}"
+    # v3: prompt learned that picks need a concrete mechanism and routine
+    # stories need none -- cached v2 judgements predate that discipline.
+    "situation-layer-curation:v3:#{fingerprint}"
   end
 
   # ── model path ───────────────────────────────────────────────────────
@@ -130,10 +132,16 @@ class SituationLayerCurator
 
       layers: overlays that would genuinely inform this specific story,
       ordered by how much each informs -- only the strongest two or three
-      will be drawn, the rest are offered as suggestions. Fewer is better;
-      never more than #{MAX_PICKS}; use only keys from the list given. [] if
-      nothing beyond the baseline would help. Each reason is one short
-      sentence tied to this situation.
+      will be drawn, the rest are offered as suggestions. A pick needs a
+      concrete mechanism in THIS story: ships because the story is about
+      vessels or a waterway, aircraft because an actual flight or airspace
+      matters, heat because something is burning or being struck. Never pick
+      a layer because it is generically nearby -- ships for a landlocked
+      city, airspace for a story with no aviation angle. A routine story
+      (sports, entertainment, culture, ordinary politics) usually needs
+      none: return [] and a small radius rather than inventing relevance.
+      Fewer is better; never more than #{MAX_PICKS}; use only keys from the
+      list given. Each reason is one short sentence tied to this situation.
 
       regions: the first-level administrative regions (provinces, states,
       governorates) materially affected, graded "high" or "moderate" impact,

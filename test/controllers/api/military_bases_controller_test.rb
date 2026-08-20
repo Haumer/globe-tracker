@@ -56,6 +56,24 @@ class Api::MilitaryBasesControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes ids, @base2.id
   end
 
+  test "bbox filtering also applies to named logistics bases" do
+    # The named-logistics branch of the type filter used to be built from an
+    # unscoped relation, so every named depot worldwide leaked through any bbox.
+    MilitaryBase.create!(
+      external_id: "mb-depot-kr",
+      name: "Supply Depot Seoul",
+      base_type: "logistics",
+      latitude: 37.5, longitude: 127.0,
+      fetched_at: Time.current,
+    )
+
+    get "/api/military_bases", params: { north: 50, south: 48, east: 8, west: 7 }
+    data = JSON.parse(response.body)
+    names = data.map { |r| r[3] }
+    assert_includes names, "Ramstein Air Base"
+    assert_not_includes names, "Supply Depot Seoul"
+  end
+
   test "bbox filtering excludes bases outside bounds" do
     get "/api/military_bases", params: { north: 10, south: 5, east: 10, west: 5 }
     data = JSON.parse(response.body)

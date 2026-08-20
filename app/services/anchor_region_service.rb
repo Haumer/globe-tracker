@@ -52,6 +52,7 @@ class AnchorRegionService
     def resolve(anchors)
       return {} if anchors.empty?
 
+      Rails.logger.info("[AnchorRegionService] resolving #{anchors.size} uncached anchors")
       admin1 = index_features(admin1_features)
       return {} if admin1.empty?
 
@@ -83,23 +84,32 @@ class AnchorRegionService
       end
     end
 
+    # Read-through on purpose: http_get's cache_key is a *fallback* cache --
+    # it downloads first and reads the cache only on failure -- so without
+    # this layer every resolve re-downloaded the 25MB admin-1 set. Prod paid
+    # ~30s per /regions request until this was learned the hard way.
     def admin1_features
-      dataset = GeographyBoundaryService.fetch("admin1")
-      dataset.is_a?(Hash) ? Array(dataset["features"]) : []
+      Rails.cache.fetch("anchor-region:admin1:v1", expires_in: 12.hours) do
+        dataset = GeographyBoundaryService.fetch("admin1")
+        dataset.is_a?(Hash) ? Array(dataset["features"]) : []
+      end
     end
 
     # The app's own district files are authoritative where they exist; the
-    # global ADM2 set covers everywhere else.
+    # global ADM2 set covers everywhere else. Cached per country including
+    # the empty answer: geoBoundaries has no ADM2 release for some countries
+    # (and Natural Earth writes codes like PSX it has never heard of), and
+    # re-asking is a guaranteed 404 per request until the circuit opens.
     def district_features(admin1_properties)
       iso2 = admin1_properties["iso_a2"].to_s.strip.upcase
       adm0 = admin1_properties["adm0_a3"].to_s.strip.upcase
       codes = [ iso2, adm0 ].select { |code| code.match?(/\A[A-Z]{2,3}\z/) }
       return [] if codes.empty?
 
-      local = RegionalDistrictBoundaryCatalog.all_features(country_codes: codes)
-      return local if local.any?
-
-      GeoBoundariesService.adm2_features(adm0)
+      Rails.cache.fetch("anchor-region:districts:#{codes.join('-')}:v1", expires_in: 7.days) do
+        local = RegionalDistrictBoundaryCatalog.all_features(country_codes: codes)
+        local.any? ? local : GeoBoundariesService.adm2_features(adm0)
+      end
     end
 
     # Bboxes are computed once per feature set so each anchor ray-casts only

@@ -97,4 +97,40 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
 
     assert_operator result.picks.size, :<=, SituationLayerCurator::MAX_PICKS
   end
+
+  test "the full judgement parses: brief, clamped radius, graded regions, related from the board" do
+    neighbors = [{ id: 42, name: "Bandar Abbas port", distance_km: 120.0, country: "IR" }]
+    client = FakeClient.new({
+      brief: "Strikes continue around the strait. Watch tanker transits.",
+      radius_km: 5_000,
+      layers: [{ key: "fires", reason: "corroborates" }],
+      regions: [
+        { name: "Hormozgan", country_code: "ir", impact: "high" },
+        { name: "Dubai", country_code: "AE", impact: "catastrophic" },
+        { name: "", country_code: "AE", impact: "high" }
+      ],
+      related: [{ id: 42, reason: "same theater" }, { id: 999, reason: "not on the board" }]
+    }.to_json)
+
+    result = SituationLayerCurator.call(
+      situation: situation, available_keys: ALL_KEYS, neighbors: neighbors, client: client
+    )
+
+    assert_equal "Strikes continue around the strait. Watch tanker transits.", result.brief
+    assert_equal SituationLayerCurator::MAX_RADIUS_KM, result.radius_km, "an absurd radius is clamped, not trusted"
+    assert_equal [{ name: "Hormozgan", country_code: "IR", impact: "high" }], result.regions,
+                 "unknown grades and empty names are dropped"
+    assert_equal [{ id: 42, reason: "same theater" }], result.related,
+                 "related may only name situations from the given list"
+  end
+
+  test "the heuristic path fabricates no judgement" do
+    result = SituationLayerCurator.call(situation: situation, available_keys: ALL_KEYS)
+
+    assert_equal "heuristic", result.basis
+    assert_nil result.brief
+    assert_nil result.radius_km, "scope falls back to geometry in the plan service"
+    assert_empty result.regions
+    assert_empty result.related
+  end
 end

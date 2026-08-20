@@ -136,6 +136,7 @@ class SituationBoardService
         event_id: event.id,
         cluster_id: event.primary_story_cluster_id,
         headline: headline_for(cluster),
+        url: article_urls_by_cluster[event.primary_story_cluster_id],
         article_count: counts[:articles],
         source_count: counts[:sources],
         event_type: event.event_type,
@@ -339,6 +340,32 @@ class SituationBoardService
       .group_by(&:first)
       .transform_values { |rows| rows.filter_map(&:last) }
       .tap { |hash| hash.default = [] }
+  end
+
+  # One link per member so a headline in the panel can be verified at its
+  # source. The cluster's lead article is the canonical choice; clusters built
+  # before their lead existed (the same drift the counts above route around)
+  # fall back to any member article rather than to no link at all.
+  def article_urls_by_cluster
+    @article_urls_by_cluster ||= begin
+      leads = clusters_by_id.values
+        .filter_map { |cluster| [cluster.id, cluster.lead_news_article_id] if cluster.lead_news_article_id }
+        .to_h
+      urls_by_article = NewsArticle.where(id: leads.values).pluck(:id, :url).to_h
+      urls = leads.each_with_object({}) do |(cluster_id, article_id), hash|
+        hash[cluster_id] = urls_by_article[article_id]
+      end
+
+      missing = cluster_ids - urls.keys.select { |id| urls[id] }
+      if missing.any?
+        NewsStoryMembership.where(news_story_cluster_id: missing)
+          .joins(:news_article)
+          .pluck(:news_story_cluster_id, Arel.sql("news_articles.url"))
+          .each { |cluster_id, url| urls[cluster_id] ||= url }
+      end
+
+      urls.tap { |hash| hash.default = nil }
+    end
   end
 
   def counts_by_cluster

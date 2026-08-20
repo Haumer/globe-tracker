@@ -523,3 +523,86 @@
   border-color: #7a6a3a;
   color: #b9a97a;
 }
+
+// ── prose-first dossier ──────────────────────────────────────────────
+
+// The curator's brief leads the panel: what is happening, in sentences,
+// before any counts or controls.
+.sit-brief {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  background: #131922;
+  border-left: 2px solid #4fc3f7;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #d4dde6;
+}
+
+.sit-brief-basis {
+  margin-left: 6px;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #5b6875;
+  white-space: nowrap;
+}
+
+.sit-member-head a {
+  color: #d4dde6;
+  text-decoration: none;
+  border-bottom: 1px dotted #3a4654;
+}
+
+.sit-member-head a:hover {
+  color: #4fc3f7;
+  border-bottom-color: #4fc3f7;
+}
+
+.sit-related-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #1a212a;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sit-related-row:hover {
+  background: #131922;
+}
+
+.sit-related-row .sit-ring-name {
+  color: #8fa3b8;
+}
+
+// The reference material folds away so the prose and the reports lead.
+.sit-exposure {
+  margin-top: 10px;
+  border-top: 1px solid #1a212a;
+}
+
+.sit-exposure summary {
+  padding: 8px 0;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7885;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sit-exposure summary::before {
+  content: "▸ ";
+  color: #3a4654;
+}
+
+.sit-exposure[open] summary::before {
+  content: "▾ ";
+}

@@ -250,6 +250,27 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal 3, row[:article_count], "three reports behind them"
   end
 
+  test "members link to the lead article, falling back to any member article" do
+    lead_record, lead_event = cluster(key: "u1", title: "Strike on the depot", lat: 50.4, lng: 30.5)
+    articles(lead_record, %w[reuters.com apnews.com])
+    lead_article = NewsArticle.find_by!(url: "https://apnews.com/u1-1")
+    lead_record.update!(lead_news_article_id: lead_article.id)
+
+    stranded_record, stranded_event = cluster(key: "u2", title: "Follow-up", lat: 50.5, lng: 30.6)
+    articles(stranded_record, %w[bbc.com])
+
+    situation(key: "situation:actor:u", name: "Test situation", grouped_by: "actor",
+              events: [lead_event, stranded_event])
+
+    members = SituationBoardService.call[:situations].first[:members]
+
+    assert_equal "https://apnews.com/u1-1",
+                 members.find { |m| m[:cluster_id] == lead_record.id }[:url]
+    assert_equal "https://bbc.com/u2-0",
+                 members.find { |m| m[:cluster_id] == stranded_record.id }[:url],
+                 "a cluster stranded without a lead article still gets a verifiable link"
+  end
+
   # The suffix is why "Bangkok Post" once resolved to the port of BANGKOK. It
   # reaches one headline in six and was being rendered verbatim.
   test "strips the publisher suffix from the headline it shows" do

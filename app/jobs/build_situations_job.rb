@@ -17,5 +17,10 @@ class BuildSituationsJob < ApplicationJob
   def perform
     HazardOccurrenceLinkService.sync_recent
     SituationBuilder.call
+    # Curation (the per-situation model call) is cached on a membership
+    # fingerprint; warming it now means selecting a situation never waits on
+    # a live model call. Enqueued rather than inlined so a slow or failing
+    # warm never reads as a failed build in polling telemetry.
+    WarmSituationLayersJob.perform_later
   end
 end

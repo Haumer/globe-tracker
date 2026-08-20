@@ -139,6 +139,7 @@ export default class extends Controller {
       this._renderAnchors()
       this._renderList()
       this._setStatus(this._summary())
+      this._fetchRegions()
     } catch (error) {
       console.error("Situations fetch failed", error)
       this._setStatus("Could not load situations")
@@ -261,6 +262,20 @@ export default class extends Controller {
       entity.label.show = selected != null
         ? isSelected
         : registry || isHovered
+    })
+
+    // Regions dim with their anchors so the selected story stays the loudest
+    // shape on the globe.
+    this._regions?.entities.values.forEach((entity) => {
+      const dimmed = selected != null && !entity.regionSituationIds?.includes(selected)
+      if (entity.polygon) {
+        entity.polygon.material = Cesium.Color.fromCssColorString(REGISTRY_COLOR)
+          .withAlpha(dimmed ? 0.03 : 0.1)
+      }
+      if (entity.polyline) {
+        entity.polyline.material = Cesium.Color.fromCssColorString("#fff6e0")
+          .withAlpha(dimmed ? 0.15 : 0.6)
+      }
     })
 
     this.viewer.scene.requestRender()
@@ -426,6 +441,11 @@ export default class extends Controller {
       if (anchorIds.length > 1) return this._showOverlapChooser(anchorIds, click.position)
       if (anchorIds.length === 1) return this.select(anchorIds[0])
 
+      // A shared region (Hamas and Gaza both live in the Gaza Strip) offers
+      // the same choice a stack of anchors does.
+      const regionIds = picked?.id?.regionSituationIds
+      if (regionIds?.length > 1) return this._showOverlapChooser(regionIds, click.position)
+
       const id = picked?.id?.situationId
       if (id) this.select(id)
       else this._clearSelection()
@@ -444,12 +464,90 @@ export default class extends Controller {
     this._handler = handler
   }
 
-  // The boundary polygon and the nominal circle say the same thing; when the
-  // polygon is on screen the circle only blurs it.
+  // ── board regions ───────────────────────────────────────────────────
+
+  // The admin-1 region containing each anchor, drawn for every situation the
+  // server could resolve -- a real shape where the board used to guess with a
+  // circle. Sea anchors (straits) and unresolvable coordinates stay dots.
+  async _fetchRegions() {
+    try {
+      const resp = await fetch("/api/situations/regions")
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+      await this._renderRegions(data.features || [])
+    } catch (error) {
+      console.error("Situation regions fetch failed", error)
+    }
+  }
+
+  async _renderRegions(features) {
+    const Cesium = window.Cesium
+    if (!this._regions) {
+      this._regions = new Cesium.CustomDataSource("situation-regions")
+      await this.viewer.dataSources.add(this._regions)
+    }
+    this._regions.entities.removeAll()
+    this._regionIds = new Set()
+
+    features.forEach((feature) => {
+      const ids = feature.properties?.situation_ids || []
+      if (!ids.length) return
+      ids.forEach((id) => this._regionIds.add(id))
+
+      this._outerRings(feature.geometry).forEach((ring) => {
+        const positions = ring.map(([lng, lat]) => Cesium.Cartesian3.fromDegrees(lng, lat))
+        const polygon = this._regions.entities.add({
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(positions),
+            material: Cesium.Color.fromCssColorString(REGISTRY_COLOR).withAlpha(0.1),
+            height: 0,
+          },
+        })
+        const outline = this._regions.entities.add({
+          polyline: {
+            positions: positions,
+            width: 1.5,
+            material: Cesium.Color.fromCssColorString("#fff6e0").withAlpha(0.6),
+            clampToGround: false,
+          },
+        })
+        // One region can cover several situations (Hamas and Gaza share the
+        // Gaza Strip); a click on it offers the same chooser stacked anchors
+        // get.
+        polygon.situationId = ids[0]
+        polygon.regionSituationIds = ids
+        outline.situationId = ids[0]
+        outline.regionSituationIds = ids
+      })
+    })
+
+    this._syncFootprints()
+    this._applyAnchorStyling()
+    this.viewer?.scene.requestRender()
+  }
+
+  _outerRings(geometry) {
+    if (!geometry) return []
+    if (geometry.type === "Polygon") return [geometry.coordinates[0]].filter(Boolean)
+    if (geometry.type === "MultiPolygon") return geometry.coordinates.map((poly) => poly[0]).filter(Boolean)
+    return []
+  }
+
+  // The boundary polygon, the board region and the nominal circle all say the
+  // same thing; when a real shape is on screen the circle only blurs it.
   _setFootprintHidden(hidden) {
-    if (this._selectedId == null) return
-    const entity = this._anchors?.entities.getById(`sit-${this._selectedId}`)
-    if (entity?.ellipse) entity.ellipse.show = !hidden
+    this._boundaryHidesFootprint = hidden
+    this._syncFootprints()
+  }
+
+  _syncFootprints() {
+    this._anchors?.entities.values.forEach((entity) => {
+      if (!entity.ellipse) return
+      const id = entity.situationId
+      const covered = this._regionIds?.has(id) ||
+        (id === this._selectedId && this._boundaryHidesFootprint)
+      entity.ellipse.show = !covered
+    })
     this.viewer?.scene.requestRender()
   }
 

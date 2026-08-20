@@ -126,12 +126,28 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     assert boundaries[:sources].all? { |s| s[:params][:country_codes] == "UA" }
   end
 
-  test "an actor situation with no place gets no boundary sources" do
+  test "an actor situation with no concerns recovers its country from the anchor" do
     event_a = cluster(key: "a1", title: "One", lat: 15.3, lng: 44.2)
     event_b = cluster(key: "a2", title: "Two", lat: 15.4, lng: 44.3)
     entity = situation(key: "situation:actor:5", name: "Houthis situation", events: [event_a, event_b])
 
-    plan = SituationLayerPlanService.call(situation_id: entity.id, curator: FixedCurator.new)
+    plan = AnchorRegionService.stub(:country_code_for, "YEM") do
+      SituationLayerPlanService.call(situation_id: entity.id, curator: FixedCurator.new)
+    end
+    boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
+
+    assert_equal "ready", boundaries[:status]
+    assert boundaries[:sources].all? { |s| s[:params][:country_codes] == "YEM" }
+  end
+
+  test "an actor situation whose anchor resolves nowhere gets no boundary sources" do
+    event_a = cluster(key: "a3", title: "One", lat: 15.3, lng: 44.2)
+    event_b = cluster(key: "a4", title: "Two", lat: 15.4, lng: 44.3)
+    entity = situation(key: "situation:actor:6", name: "Houthis situation", events: [event_a, event_b])
+
+    plan = AnchorRegionService.stub(:country_code_for, nil) do
+      SituationLayerPlanService.call(situation_id: entity.id, curator: FixedCurator.new)
+    end
     boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
 
     assert_equal "empty", boundaries[:status]
@@ -228,10 +244,12 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     event_b = cluster(key: "r4", title: "Two", lat: 15.4, lng: 44.3)
     entity = situation(key: "situation:actor:r3", name: "Houthis situation", events: [event_a, event_b])
 
-    plan = SituationLayerPlanService.call(
-      situation_id: entity.id,
-      curator: FixedCurator.new(basis: "ai", regions: [{ name: "Sanaa", country_code: "YE", impact: "high" }])
-    )
+    plan = AnchorRegionService.stub(:country_code_for, nil) do
+      SituationLayerPlanService.call(
+        situation_id: entity.id,
+        curator: FixedCurator.new(basis: "ai", regions: [{ name: "Sanaa", country_code: "YE", impact: "high" }])
+      )
+    end
     boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
 
     assert_equal "ready", boundaries[:status]

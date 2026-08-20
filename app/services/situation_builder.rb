@@ -33,14 +33,20 @@ class SituationBuilder
   # A story needs corroboration to be a story.
   MINIMUM_MEMBERS = 2
 
-  # Place is the weakest key: it asserts only that two stories happened in the
-  # same place. Munich glued a footballer's injury to a Vietnamese flight
-  # probe. So a place group must also cohere semantically, measured on headline
-  # embeddings (mean per cluster, cosine between clusters). Calibrated on real
-  # headlines: same story 0.54-0.76, same city but different story 0.30-0.35 --
-  # the shared city name alone contributes ~0.3. Clusters connect at or above
-  # this floor; the group splits into its connected components.
-  PLACE_SPLIT_COSINE = 0.40
+  # Place and actor are weak keys: they assert only that two stories share a
+  # location or a participant. Munich glued a footballer's injury to a
+  # Vietnamese flight probe; "United Nations" glued ICC sanctions to North
+  # Korean missiles to South Sudan. So both group kinds must also cohere
+  # semantically, measured on headline embeddings (mean per cluster, cosine
+  # between clusters). Calibrated on real headlines: same story 0.54-0.76,
+  # same city but different story 0.30-0.35 -- the shared name alone
+  # contributes ~0.3. Clusters connect at or above this floor; the group
+  # splits into its connected components. Entity groups are exempt: a report
+  # that names a strait is about the strait.
+  SPLIT_COSINE = 0.40
+
+  # The key kinds that need the semantic split. Not :entity, per above.
+  SPLITTABLE_KINDS = [ :place, :actor ].freeze
 
   # The recency window situations are built over. Three days, because the board
   # answers "what is happening": a cluster last seen four days ago is not
@@ -89,7 +95,7 @@ class SituationBuilder
     end
 
     built_keys = []
-    split_place_groups(grouped).each do |key, suffix, members|
+    split_weak_groups(merge_synonym_groups(grouped)).each do |key, suffix, members|
       next @stats[:too_small] += 1 if members.size < MINIMUM_MEMBERS
 
       built_keys << persist(key, members, suffix: suffix).canonical_key
@@ -155,23 +161,58 @@ class SituationBuilder
     place.id
   end
 
-  # ── place-group splitting ──────────────────────────────────────────────
+  # ── weak-group merging and splitting ──────────────────────────────────
 
-  # Entity and actor groups pass through untouched; a place group is split into
+  # The same real thing can arrive as two registry rows: "Strait of Hormuz"
+  # the corridor entity and "Strait Of Hormuz" the place entity each built a
+  # top-ten situation for the same story. Keys whose referents share a
+  # normalized name collapse into one group under the strongest kind
+  # (entity > actor > place); the losing keys' situations retire through
+  # prune_stale on the same run.
+  def merge_synonym_groups(grouped)
+    preload_referent_names(grouped.keys.map(&:last))
+    grouped.group_by { |key, _| normalized_referent_name(key.last) }.flat_map do |name, entries|
+      next entries if name.blank? || entries.size == 1
+
+      winner = entries.min_by { |key, members| [ SYNONYM_KIND_RANK.fetch(key.first, 9), -members.size ] }
+      merged = entries.flat_map(&:last)
+      @stats[:synonym_groups_merged] += entries.size - 1
+      [ [ winner.first, merged ] ]
+    end.to_h
+  end
+
+  SYNONYM_KIND_RANK = { entity: 0, actor: 1, place: 2 }.freeze
+
+  # Every grouping reference -- entity, actor or place -- is an OntologyEntity
+  # id, so one preloaded name map serves both the synonym merge and the
+  # referent-name subtraction in the splitter.
+  def preload_referent_names(ids)
+    @referent_names = OntologyEntity.where(id: ids.uniq).pluck(:id, :canonical_name).to_h
+  end
+
+  def referent_name(reference)
+    (@referent_names || {})[reference]
+  end
+
+  def normalized_referent_name(reference)
+    referent_name(reference).to_s.downcase.gsub(/\s+/, " ").strip
+  end
+
+  # Entity groups pass through untouched; a place or actor group is split into
   # its semantically-connected components. Yields [key, suffix, members]: the
-  # largest component keeps the bare place key so the ongoing story keeps its
+  # largest component keeps the bare key so the ongoing story keeps its
   # identity across runs, the split-offs get a stable suffix from their oldest
   # cluster. Singleton components fall to the MINIMUM_MEMBERS check downstream,
   # so "a sports story and an unrelated flight probe in the same city" becomes
   # no situation at all rather than one wrong one.
-  def split_place_groups(grouped)
+  def split_weak_groups(grouped)
     grouped.flat_map do |key, members|
-      next [ [ key, nil, members ] ] unless key.first == :place && members.size > 1
+      next [ [ key, nil, members ] ] unless SPLITTABLE_KINDS.include?(key.first) && members.size > 1
 
       components = coherent_components(key.last, members)
       next [ [ key, nil, members ] ] if components.size == 1
 
-      @stats[:place_groups_split] += 1
+      @stats[:"#{key.first}_groups_split"] += 1
       largest = components.max_by(&:size)
       components.map do |component|
         suffix = component.equal?(largest) ? nil : ":c#{component.map { |cluster, _| cluster.id }.min}"
@@ -180,15 +221,15 @@ class SituationBuilder
     end
   end
 
-  def coherent_components(place_id, members)
-    place_words = content_words(event_place_entities[place_id]&.canonical_name.to_s)
+  def coherent_components(reference, members)
+    referent_words = content_words(referent_name(reference))
     remaining = members.dup
     components = []
 
     until remaining.empty?
       component = [ remaining.shift ]
       component.each do |member|
-        akin, remaining = remaining.partition { |other| clusters_akin?(member.first, other.first, place_words) }
+        akin, remaining = remaining.partition { |other| clusters_akin?(member.first, other.first, referent_words) }
         component.concat(akin)
       end
       components << component
@@ -200,26 +241,26 @@ class SituationBuilder
   # Embeddings decide when both sides are measured; headline word overlap when
   # they are not; and a pair nothing can measure stays connected, because an
   # embedding outage must degrade to the old grouping, not to no situations.
-  def clusters_akin?(cluster_a, cluster_b, place_words)
+  def clusters_akin?(cluster_a, cluster_b, referent_words)
     vector_a = cluster_embeddings[cluster_a.id]
     vector_b = cluster_embeddings[cluster_b.id]
-    return cosine(vector_a, vector_b) >= PLACE_SPLIT_COSINE if vector_a && vector_b
+    return cosine(vector_a, vector_b) >= SPLIT_COSINE if vector_a && vector_b
 
     # The place's own name is subtracted before comparing: every member of a
     # place group mentions the place, so that overlap carries no information --
     # it is exactly the signal that glued the quake to the football club.
-    sets_a = comparison_word_sets(cluster_a, place_words)
-    sets_b = comparison_word_sets(cluster_b, place_words)
+    sets_a = comparison_word_sets(cluster_a, referent_words)
+    sets_b = comparison_word_sets(cluster_b, referent_words)
     return true if sets_a.empty? || sets_b.empty?
 
     pairs = sets_a.product(sets_b).map { |a, b| (a & b).size.to_f / (a | b).size }
     (pairs.sum / pairs.size) >= COHERENCE_FLOOR
   end
 
-  def comparison_word_sets(cluster, place_words)
+  def comparison_word_sets(cluster, referent_words)
     titles = article_titles_by_cluster[cluster.id].to_a
     titles = [ cluster.canonical_title ] if titles.empty?
-    titles.map { |title| content_words(title) - place_words.to_a }.reject(&:empty?)
+    titles.map { |title| content_words(title) - referent_words.to_a }.reject(&:empty?)
   end
 
   # Mean of the member headlines' vectors, per in-window cluster; one query,

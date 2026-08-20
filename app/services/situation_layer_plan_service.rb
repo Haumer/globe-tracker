@@ -285,10 +285,25 @@ class SituationLayerPlanService
   # The anchor's own country plus any country the curator's affected regions
   # reach into -- an earthquake or a cross-border exchange is not confined to
   # the country the anchor happens to sit in.
+  # Most registry entities never got a country_code, so the anchor coordinate
+  # itself is the fallback: whichever admin-1 region contains it names the
+  # country. Without this, a situation whose curator returned no regions had
+  # no boundary sources at all.
   def boundary_country_codes
-    ([situation.dig(:concerns, :country_code)] +
+    ([situation.dig(:concerns, :country_code) || anchor_country_code] +
       curation.regions.to_a.filter_map { |region| region[:country_code] })
       .compact.uniq
+  end
+
+  def anchor_country_code
+    return @anchor_country_code if defined?(@anchor_country_code)
+
+    @anchor_country_code =
+      if anchor[:lat].nil? || anchor[:lng].nil?
+        nil
+      else
+        AnchorRegionService.country_code_for(lat: anchor[:lat], lng: anchor[:lng])
+      end
   end
 
   def boundary_status
@@ -308,7 +323,8 @@ class SituationLayerPlanService
       shared = Rails.cache.fetch("situation-layers:availability:v1", expires_in: AVAILABILITY_CACHE_TTL) do
         probe_availability
       end
-      shared.merge("boundaries" => situation.dig(:concerns, :country_code).present? ? "ready" : "empty")
+      shared.merge("boundaries" =>
+        (situation.dig(:concerns, :country_code) || anchor_country_code).present? ? "ready" : "empty")
     end
   end
 

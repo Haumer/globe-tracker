@@ -19,6 +19,21 @@ class WarmSituationLayersJob < ApplicationJob
     Rails.cache.delete("situation-board:v1:#{SituationBuilder::WINDOW_DAYS}")
 
     situations = SituationLayerPlanService.board[:situations] || []
+
+    # Region resolution walks a precision ladder (district datasets, then
+    # admin-1) whose fetches and point-in-polygon scans belong here, not in a
+    # request: after this, /api/situations/regions and the plan service's
+    # country-code fallback read warm per-anchor caches.
+    begin
+      anchors = situations.filter_map do |situation|
+        anchor = situation[:anchor]
+        anchor && { id: situation[:id], lat: anchor[:lat], lng: anchor[:lng] }
+      end
+      AnchorRegionService.features_for(anchors)
+    rescue StandardError => error
+      Rails.logger.warn("[WarmSituationLayersJob] region warm: #{error.class}: #{error.message}")
+    end
+
     warmed = 0
 
     situations.each do |situation|

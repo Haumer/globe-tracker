@@ -35,7 +35,12 @@ class Api::SituationLayersControllerTest < ActionDispatch::IntegrationTest
     )
     OntologyEventEntity.create!(ontology_event: event, ontology_entity: entity, role: "in_situation")
 
-    get "/api/situations/#{entity.id}/layers"
+    # The situation has no concerns entity, so the plan falls back to
+    # resolving the anchor's country; stubbed so no boundary dataset is
+    # fetched here.
+    AnchorRegionService.stub(:country_code_for, nil) do
+      get "/api/situations/#{entity.id}/layers"
+    end
 
     assert_response :success
     plan = JSON.parse(response.body)

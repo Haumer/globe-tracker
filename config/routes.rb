@@ -83,6 +83,7 @@ Rails.application.routes.draw do
     resources :insights, only: [:index]
     resources :situation_surfaces, only: [:index]
     resources :situations, only: [:index]
+    get "situations/regions", to: "situations#regions"
     get "situations/:id/layers", to: "situation_layers#show"
     get "node_context", to: "node_contexts#show"
     get "situation_assessments", to: "situation_assessments#index"

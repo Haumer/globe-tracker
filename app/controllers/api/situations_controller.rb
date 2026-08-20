@@ -22,17 +22,25 @@ module Api
         { id: situation[:id], lat: anchor[:lat], lng: anchor[:lng] }
       end
 
-      features = AnchorRegionService.features_for(anchors)
-        .group_by { |_id, feature| feature["properties"].values_at("name", "country_code") }
-        .map do |_key, entries|
-          feature = entries.first.last
-          feature.merge("properties" => feature["properties"].merge(
-            "situation_ids" => entries.map(&:first).sort
-          ))
-        end
+      # Keyed on the anchors themselves, so a board rebuild mints a new entry
+      # and the old one just expires. One request per board pays resolution;
+      # the per-anchor and per-country caches underneath keep even that one
+      # cheap once the warm job has run.
+      fingerprint = Digest::SHA256.hexdigest(anchors.map { |a| [ a[:id], a[:lat], a[:lng] ] }.sort.to_json).first(16)
+      payload = Rails.cache.fetch("situation-regions:v1:#{fingerprint}", expires_in: 30.minutes) do
+        features = AnchorRegionService.features_for(anchors)
+          .group_by { |_id, feature| feature["properties"].values_at("name", "country_code") }
+          .map do |_key, entries|
+            feature = entries.first.last
+            feature.merge("properties" => feature["properties"].merge(
+              "situation_ids" => entries.map(&:first).sort
+            ))
+          end
+        { "type" => "FeatureCollection", "features" => features }
+      end
 
       expires_in 5.minutes, public: true
-      render json: { "type" => "FeatureCollection", "features" => features }
+      render json: payload
     end
 
     private

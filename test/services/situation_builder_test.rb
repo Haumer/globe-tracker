@@ -278,6 +278,69 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert_equal 1, stats[:place_groups_split]
   end
 
+  test "an actor group of unrelated stories splits instead of becoming a junk drawer" do
+    un = actor("United Nations")
+    [
+    [ "u1", "ICC condemns US sanctions", [ "ICC says US sanctions undermine the rule of law", "United Nations court slams flagrant sanctions attack" ] ],
+    [ "u2", "North Korea missile launches", [ "North Korea launches missiles as Trump seeks United Nations nuclear talks" ] ],
+    [ "u3", "South Sudan election warning", [ "South Sudan election could fuel atrocities warns United Nations commission" ] ]
+    ].each do |key, title, articles|
+      _c, event = cluster(key: key, title: title, article_titles: articles)
+      tag(event, un)
+    end
+
+    stats = SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
+      "three stories sharing only an actor mention are three singletons, not one situation"
+    assert_equal 1, stats[:actor_groups_split]
+  end
+
+  test "an actor group with a coherent core keeps it and sheds the stray" do
+    un = actor("United Nations")
+    [
+    [ "c1", "Ceasefire talks resume", [ "United Nations envoy says Gaza ceasefire talks resume in Cairo" ] ],
+    [ "c2", "Ceasefire talks stall", [ "Gaza ceasefire talks stall despite United Nations envoy push in Cairo" ] ],
+    [ "c3", "Salmonella outbreak widens", [ "Salmonella outbreak tied to jalapenos widens across three states" ] ]
+    ].each do |key, title, articles|
+      _c, event = cluster(key: key, title: title, article_titles: articles)
+      tag(event, un)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    situations = OntologyEntity.where(entity_type: "situation")
+    assert_equal 1, situations.count, "the ceasefire pair coheres; the salmonella story is a singleton"
+    assert_equal "situation:actor:#{un.id}", situations.first.canonical_key,
+      "the largest component keeps the actor's own key"
+  end
+
+  test "groups whose referents share a name merge under the strongest kind" do
+    corridor = OntologyEntity.create!(canonical_key: "corridor:hormuz", entity_type: "corridor", canonical_name: "Strait of Hormuz")
+    hormuz_place = place("Strait Of Hormuz")
+
+    [ "h1", "h2" ].each do |key|
+      _c, event = cluster(key: key, title: "Tankers rerouted around the Strait of Hormuz",
+                          article_titles: [ "Tankers rerouted around the Strait of Hormuz as talks stall" ])
+      OntologyRelationship.create!(source_node: event, target_node: corridor,
+                                  relation_type: "names_entity", confidence: 0.9, derived_by: "news_registry_link_v1")
+    end
+    [ "h3", "h4" ].each do |key|
+      _c, event = cluster(key: key, title: "Hormuz shipping grinds to a halt",
+                          article_titles: [ "Strait of Hormuz shipping grinds to a halt ahead of ceasefire expiry" ] )
+      event.update!(place_entity: hormuz_place)
+    end
+
+    stats = SituationBuilder.call(actor_specificity: 1.1)
+
+    situations = OntologyEntity.where(entity_type: "situation")
+    assert_equal 1, situations.count, "one strait, one situation"
+    assert_equal "situation:entity:#{corridor.id}", situations.first.canonical_key,
+      "the entity key wins over the place key"
+    assert_equal 4, OntologyEventEntity.where(ontology_entity: situations.first, role: "in_situation").count
+    assert_equal 1, stats[:synonym_groups_merged]
+  end
+
   test "a place group splits into components and each coherent one survives" do
     munich = place("Munich")
     [

@@ -408,6 +408,50 @@
   background: #ffb300;
 }
 
+// ── overlap chooser ──────────────────────────────────────────────────
+// Shown when one click lands on several stacked situations: a small menu at
+// the cursor, one row per candidate.
+
+.sit-overlap-chooser {
+  position: absolute;
+  z-index: 30;
+  min-width: 180px;
+  max-width: 260px;
+  background: #10151c;
+  border: 1px solid #3a4653;
+  border-radius: 4px;
+  padding: 3px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.sit-overlap-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  color: #d4dde6;
+  cursor: pointer;
+}
+
+.sit-overlap-row:hover {
+  background: #24303d;
+  color: #cfeeff;
+}
+
+.sit-overlap-row span {
+  font-size: 9px;
+  color: #6b7885;
+  white-space: nowrap;
+}
+
 // ── live layers ──────────────────────────────────────────────────────
 
 .sit-chip-row {

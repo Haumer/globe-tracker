@@ -121,6 +121,10 @@ export default class extends Controller {
     })
 
     this._layers = new SituationLayerManager(this.viewer)
+    // When the boundary layer covers the anchor with a real polygon, the
+    // nominal footprint circle is a worse duplicate of it -- hide it until the
+    // layer goes away or the selection changes.
+    this._layers.onBoundaryState = ({ anchorPolygon }) => this._setFootprintHidden(anchorPolygon)
     this._wirePicking()
     await this._fetch()
   }
@@ -398,11 +402,29 @@ export default class extends Controller {
     const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas)
 
     handler.setInputAction((click) => {
+      this._hideOverlapChooser()
       const picked = this.viewer.scene.pick(click.position)
-      // A plane is clickable on its own: track it (click again to let go)
+
+      // Layer data is clickable in its own right: planes and ships track
+      // (click again to let go), cameras and quakes open their pages --
       // without re-selecting the situation underneath.
       const flight = picked?.id?.flightRef
       if (flight) return this._layers?.trackFlight(flight)
+      const ship = picked?.id?.shipRef
+      if (ship) return this._layers?.trackShip(ship)
+      const url = picked?.id?.openUrl
+      if (url) return window.open(url, "_blank", "noopener")
+
+      // Situations pile up -- Kyiv and a mis-geocoded monument sit 6 km apart.
+      // Drill through the click: one anchor selects, several offer a choice.
+      const drilled = this.viewer.scene.drillPick(click.position, 8)
+      const anchorIds = [...new Set(drilled
+        .filter((p) => typeof p?.id?.id === "string" && p.id.id.startsWith("sit-"))
+        .map((p) => p.id.situationId)
+        .filter((sid) => sid != null))]
+
+      if (anchorIds.length > 1) return this._showOverlapChooser(anchorIds, click.position)
+      if (anchorIds.length === 1) return this.select(anchorIds[0])
 
       const id = picked?.id?.situationId
       if (id) this.select(id)
@@ -422,6 +444,43 @@ export default class extends Controller {
     this._handler = handler
   }
 
+  // The boundary polygon and the nominal circle say the same thing; when the
+  // polygon is on screen the circle only blurs it.
+  _setFootprintHidden(hidden) {
+    if (this._selectedId == null) return
+    const entity = this._anchors?.entities.getById(`sit-${this._selectedId}`)
+    if (entity?.ellipse) entity.ellipse.show = !hidden
+    this.viewer?.scene.requestRender()
+  }
+
+  _showOverlapChooser(ids, position) {
+    this._hideOverlapChooser()
+    const rows = ids.map((id) => {
+      const situation = this._situations.find((s) => s.id === id)
+      if (!situation) return ""
+      return `<button type="button" class="sit-overlap-row" data-situation-id="${situation.id}">
+        ${escapeHtml(situation.name)}<span>${situation.member_count} stories</span>
+      </button>`
+    }).join("")
+
+    const chooser = document.createElement("div")
+    chooser.className = "sit-overlap-chooser"
+    chooser.innerHTML = rows
+    chooser.style.left = `${Math.round(position.x + 12)}px`
+    chooser.style.top = `${Math.round(position.y + 12)}px`
+    chooser.addEventListener("click", (event) => {
+      const id = Number(event.target.closest("[data-situation-id]")?.dataset.situationId)
+      if (id) this.select(id)
+    })
+    this.element.appendChild(chooser)
+    this._overlapChooser = chooser
+  }
+
+  _hideOverlapChooser() {
+    this._overlapChooser?.remove()
+    this._overlapChooser = null
+  }
+
   selectFromList(event) {
     this.select(Number(event.currentTarget.dataset.situationId))
   }
@@ -430,6 +489,8 @@ export default class extends Controller {
     const situation = this._situations.find((s) => s.id === id)
     if (!situation) return
 
+    this._hideOverlapChooser()
+    this._setFootprintHidden(false)
     this._selectedId = id
     this._drawDetail(situation)
     this._renderPanel(situation)
@@ -446,6 +507,8 @@ export default class extends Controller {
   }
 
   _clearSelection() {
+    this._hideOverlapChooser()
+    this._setFootprintHidden(false)
     this._selectedId = null
     this._layers?.deactivate()
     this._detail.entities.removeAll()

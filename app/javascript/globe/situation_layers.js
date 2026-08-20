@@ -72,7 +72,11 @@ export class SituationLayerManager {
     this._on = new Set()         // keys currently enabled
     this._epoch = 0              // bumped on every (de)activate to drop stale fetches
     this._trackedFlightId = null // icao24 the camera is following, if any
+    this._trackedShipId = null   // mmsi the camera is following, if any
     this._planeIcons = new Map() // color -> canvas, drawn once
+    // The page sets this to hear whether the boundary layer drew a polygon
+    // over the anchor -- the nominal footprint circle is redundant then.
+    this.onBoundaryState = null
   }
 
   async activate(situation) {
@@ -108,6 +112,7 @@ export class SituationLayerManager {
   deactivate() {
     this._epoch++
     this._trackedFlightId = null
+    this._trackedShipId = null
     this._timers.forEach((timer) => clearInterval(timer))
     this._timers.clear()
     this._entities.forEach((list) => list.forEach((entity) => this._ds?.entities.remove(entity)))
@@ -162,6 +167,9 @@ export class SituationLayerManager {
     this._clearEntities(key)
     this._sections.delete(key)
     this._notes.delete(key)
+    if (key === "boundaries") this.onBoundaryState?.({ anchorPolygon: false })
+    if (key === "aircraft") this._trackedFlightId = null
+    if (key === "ships") this._trackedShipId = null
     this._renderSections()
     this._requestRender()
   }
@@ -303,6 +311,10 @@ export class SituationLayerManager {
       anchorName = featureName(feature)
     }
 
+    // The page hides the nominal footprint circle once a real polygon covers
+    // the anchor -- an accurate boundary beats a radius guess.
+    this.onBoundaryState?.({ anchorPolygon: !!feature })
+
     if (!anchorName && !shaded) {
       this._notes.set(layer.key, "no polygon contains the anchor")
       return
@@ -386,7 +398,7 @@ export class SituationLayerManager {
     // left the box (or landed) releases the camera rather than pinning it to
     // its last known position.
     if (this._trackedFlightId) {
-      if (tracked) this._followFlight(tracked)
+      if (tracked) this._followTarget(tracked)
       else this._trackedFlightId = null
     }
 
@@ -405,18 +417,18 @@ export class SituationLayerManager {
       return
     }
     this._trackedFlightId = ref.icao24
-    this._followFlight(ref, { approach: true })
+    this._followTarget(ref, { approach: true })
     this._renderChips()
   }
 
-  _followFlight(flight, { approach = false } = {}) {
+  _followTarget(target, { approach = false } = {}) {
     const Cesium = window.Cesium
-    if (flight.latitude == null || flight.longitude == null) return
+    if (target.latitude == null || target.longitude == null) return
     const current = this.viewer.camera.positionCartographic.height
     // First click swoops in; refreshes keep whatever height the user chose.
     const height = approach ? Math.min(current, 150_000) : current
     this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(flight.longitude, flight.latitude, Math.max(height, 20_000)),
+      destination: Cesium.Cartesian3.fromDegrees(target.longitude, target.latitude, Math.max(height, 20_000)),
       duration: approach ? 1.4 : 1.0,
     })
   }
@@ -430,25 +442,52 @@ export class SituationLayerManager {
     const Cesium = window.Cesium
     const ships = (payloads[0] || []).slice(0, MAX_SHIPS)
     const labelled = ships.length <= LABEL_BUDGET / 2
+    let tracked = null
 
     ships.forEach((ship) => {
       const naval = /military|naval|warship|law/i.test(ship.ship_type || "")
       const color = naval ? LAYER_COLORS.shipsNaval : LAYER_COLORS.ships
-      this._add(layer.key, {
+      const isTracked = this._trackedShipId && ship.mmsi === this._trackedShipId
+      if (isTracked) tracked = ship
+
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(ship.longitude, ship.latitude),
         point: {
-          pixelSize: naval ? 5 : 3.5,
+          pixelSize: isTracked ? 7 : naval ? 5 : 3.5,
           color: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          outlineColor: isTracked ? Cesium.Color.WHITE.withAlpha(0.9) : Cesium.Color.TRANSPARENT,
+          outlineWidth: isTracked ? 1.5 : 0,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: labelled && ship.name ? layerLabel(ship.name, color) : undefined,
+        label: (isTracked || (labelled && ship.name)) ? layerLabel(ship.name || String(ship.mmsi), color) : undefined,
       })
+      entity.shipRef = {
+        mmsi: ship.mmsi, name: ship.name,
+        latitude: ship.latitude, longitude: ship.longitude,
+      }
     })
+
+    if (this._trackedShipId) {
+      if (tracked) this._followTarget(tracked)
+      else this._trackedShipId = null
+    }
 
     const naval = ships.filter((s) => /military|naval|warship|law/i.test(s.ship_type || "")).length
     this._notes.set(layer.key, ships.length
-      ? `${ships.length}${ships.length === MAX_SHIPS ? "+" : ""} underway` + (naval ? ` · ${naval} naval` : "")
+      ? `${ships.length}${ships.length === MAX_SHIPS ? "+" : ""} underway` + (naval ? ` · ${naval} naval` : "") +
+        (tracked ? ` · tracking ${tracked.name || tracked.mmsi}` : "")
       : "none in the box")
+  }
+
+  trackShip(ref) {
+    if (!ref?.mmsi || this._trackedShipId === ref.mmsi) {
+      this._trackedShipId = null
+      this._renderChips()
+      return
+    }
+    this._trackedShipId = ref.mmsi
+    this._followTarget(ref, { approach: true })
+    this._renderChips()
   }
 
   // FireHotspot rows arrive as arrays:
@@ -496,7 +535,7 @@ export class SituationLayerManager {
     cams.forEach((cam) => {
       const loc = cam.location || {}
       if (loc.latitude == null) return
-      this._add(layer.key, {
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(loc.longitude, loc.latitude),
         point: {
           pixelSize: 5,
@@ -506,6 +545,8 @@ export class SituationLayerManager {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
+      // Clicking the dot opens the same watchable target the dossier row does.
+      entity.openUrl = webcamLink(cam)
     })
 
     const live = cams.filter((c) => c.live).length
@@ -556,7 +597,7 @@ export class SituationLayerManager {
 
     quakes.forEach((quake) => {
       const mag = Number(quake.mag) || 0
-      this._add(layer.key, {
+      const entity = this._add(layer.key, {
         position: Cesium.Cartesian3.fromDegrees(quake.lng, quake.lat),
         point: {
           pixelSize: 4 + mag * 1.5,
@@ -567,6 +608,7 @@ export class SituationLayerManager {
         },
         label: labelled ? layerLabel(`M${mag.toFixed(1)}`, LAYER_COLORS.quakes) : undefined,
       })
+      if (quake.url) entity.openUrl = quake.url
     })
 
     this._notes.set(layer.key, quakes.length ? `${quakes.length} of M2.5+ in 7 days` : "none of M2.5+ in 7 days")
@@ -923,14 +965,18 @@ async function computePasses(sats, anchor, epochCheck) {
 
 // Live streams first, then nearest first — a live phone stream 4 km out beats
 // a periodic resort cam at the box edge.
+// A watchable page beats a frozen JPEG: the player when there is one, the
+// Windy webcam page for Windy cams, and only then the raw still.
+function webcamLink(cam) {
+  const windyPage = cam.source === "windy" && cam.webcamId
+    ? `https://www.windy.com/webcams/${encodeURIComponent(cam.webcamId)}` : null
+  return cam.player?.live?.embed || windyPage || cam.images?.current?.preview
+}
+
 function webcamSection(ranked) {
   const rows = ranked.slice(0, 8).map(({ cam, km }) => {
     const preview = cam.images?.current?.preview
-    // A watchable page beats a frozen JPEG: the player when there is one, the
-    // Windy webcam page for Windy cams, and only then the raw still.
-    const windyPage = cam.source === "windy" && cam.webcamId
-      ? `https://www.windy.com/webcams/${encodeURIComponent(cam.webcamId)}` : null
-    const link = cam.player?.live?.embed || windyPage || preview
+    const link = webcamLink(cam)
     const badge = cam.live ? `<span class="sit-cam-live">LIVE</span>` : ""
     const place = [cam.location?.city, cam.location?.country].filter(Boolean).join(", ")
     const distance = km != null ? ` · ${Math.round(km)} km` : ""

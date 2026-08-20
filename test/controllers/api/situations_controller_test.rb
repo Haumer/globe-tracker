@@ -39,7 +39,11 @@ module Api
 
       SituationBoardService.stub(:call, board) do
         GeographyBoundaryService.stub(:fetch, dataset) do
-          get "/api/situations/regions"
+          RegionalDistrictBoundaryCatalog.stub(:all_features, []) do
+            GeoBoundariesService.stub(:adm2_features, []) do
+              get "/api/situations/regions"
+            end
+          end
         end
       end
 

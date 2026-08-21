@@ -635,7 +635,11 @@ export default class extends Controller {
       if (member.lat == null || member.lng == null) return
 
       const age = member.last_seen_at ? (newest - Date.parse(member.last_seen_at)) / span : 1
-      const alpha = 0.25 + 0.55 * (1 - Math.min(age, 1))
+      // A country-precision coordinate is a guess at national scale, not a
+      // measured point -- draw it at half strength so the eye reads the
+      // difference instead of trusting both equally.
+      const coarse = member.geo_precision === "country" || member.geo_precision === "unknown"
+      const alpha = (0.25 + 0.55 * (1 - Math.min(age, 1))) * (coarse ? 0.45 : 1)
       const positions = this._arcPositions(member, anchor)
       if (!positions) return
 
@@ -655,7 +659,7 @@ export default class extends Controller {
         id: `sit-report-${situation.id}-${index}`,
         position: Cesium.Cartesian3.fromDegrees(member.lng, member.lat),
         point: {
-          pixelSize: 4,
+          pixelSize: coarse ? 3 : 4,
           color: Cesium.Color.fromCssColorString(EVIDENCE_COLOR).withAlpha(alpha + 0.15),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -961,7 +965,13 @@ export default class extends Controller {
               ${pluralize(member.article_count, "report")} from
               ${pluralize(member.source_count, "source")} ·
               ${escapeHtml(member.event_type)}
-              ${member.lat == null ? " · no location" : ""}
+              ${member.lat == null
+                ? " · no location"
+                : member.place
+                  ? ` · ${escapeHtml(member.place)}${member.geo_precision === "country" ? " (country-level)" : ""}`
+                  : member.geo_precision === "country" || member.geo_precision === "unknown"
+                    ? " · location approximate"
+                    : ""}
             </div>
           </div>`).join("")}
       </div>

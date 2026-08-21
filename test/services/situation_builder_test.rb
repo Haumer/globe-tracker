@@ -234,10 +234,11 @@ class SituationBuilderTest < ActiveSupport::TestCase
       "prune is scoped to DERIVED_BY -- it must not sweep entities it did not build"
   end
 
-  def place(name, key: nil, lat: 35.89, lng: -5.31)
+  def place(name, key: nil, lat: 35.89, lng: -5.31, country: nil)
     OntologyEntity.create!(
       canonical_key: key || "place:#{name.parameterize}", entity_type: "place",
-      canonical_name: name, metadata: { "latitude" => lat, "longitude" => lng }
+      canonical_name: name, country_code: country,
+      metadata: { "latitude" => lat, "longitude" => lng }
     )
   end
 
@@ -339,6 +340,26 @@ class SituationBuilderTest < ActiveSupport::TestCase
       "the entity key wins over the place key"
     assert_equal 4, OntologyEventEntity.where(ontology_entity: situations.first, role: "in_situation").count
     assert_equal 1, stats[:synonym_groups_merged]
+  end
+
+  test "namesake referents in different countries do not merge" do
+    cali_co = place("Cali", key: "place:cali:co", lat: 3.45, lng: -76.53, country: "CO")
+    cali_my = place("Cali", key: "place:cali:my", lat: 3.14, lng: 101.69, country: "MY")
+
+    [ [ "co1", cali_co, "Explosion rocks Cali as cartel violence flares" ],
+      [ "co2", cali_co, "Cali under curfew after cartel explosion" ],
+      [ "my1", cali_my, "Flood waters displace hundreds outside Cali" ],
+      [ "my2", cali_my, "Cali flood waters recede as rains ease" ] ].each do |key, entity, title|
+      _c, event = cluster(key: key, title: title, article_titles: [ title ])
+      event.update!(place_entity: entity)
+    end
+
+    stats = SituationBuilder.call(actor_specificity: 1.1)
+
+    keys = OntologyEntity.where(entity_type: "situation").pluck(:canonical_key)
+    assert_includes keys, "situation:place:#{cali_co.id}"
+    assert_includes keys, "situation:place:#{cali_my.id}"
+    assert_equal 0, stats[:synonym_groups_merged], "two countries, two situations -- no merge"
   end
 
   test "a place group splits into components and each coherent one survives" do

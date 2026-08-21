@@ -143,6 +143,11 @@ class SituationBoardService
         event_family: event.event_family,
         lat: event.latitude,
         lng: event.longitude,
+        # How the coordinate was earned, so the globe can draw a city fix and
+        # a country guess differently instead of asserting both identically.
+        place: member_place_names[event.place_entity_id],
+        geo_precision: event.geo_precision,
+        geo_confidence: event.geo_confidence,
         last_seen_at: event.last_seen_at&.iso8601
       }
     end.sort_by { |member| member[:last_seen_at].to_s }.reverse
@@ -290,6 +295,13 @@ class SituationBoardService
       memberships.group_by(&:first)
         .transform_values { |rows| rows.filter_map { |_, event_id| events[event_id] } }
         .tap { |hash| hash.default = [] }
+    end
+  end
+
+  def member_place_names
+    @member_place_names ||= begin
+      ids = member_events.values.flatten.filter_map(&:place_entity_id).uniq
+      OntologyEntity.where(id: ids).pluck(:id, :canonical_name).to_h
     end
   end
 

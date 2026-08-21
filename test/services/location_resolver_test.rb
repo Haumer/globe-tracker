@@ -106,10 +106,52 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert_equal "sant julia de loria", Place.ascii_name("Sant Julià de Lòria")
   end
 
+  test "a matched alias resolves to the place that owns it, not a namesake" do
+    # Two places share the surface form "cali": the Colombian city (via its
+    # canonical name) and an unrelated, higher-importance place that carries
+    # "cali" only as a cross-language alias. The old string round-trip lost
+    # which row matched and re-ranked by importance, landing on the namesake.
+    cali = Place.create!(
+      canonical_key: "test:cali-co", name: "Cali", place_type: "city", source: "test",
+      country_code: "co", latitude: 3.4516, longitude: -76.5320, importance_score: 5.0
+    )
+    namesake = Place.create!(
+      canonical_key: "test:kali-my", name: "Kali", place_type: "city", source: "test",
+      country_code: "my", latitude: 3.1390, longitude: 101.6869, importance_score: 50.0
+    )
+    namesake.place_aliases.create!(name: "Cali", normalized_name: "cali", alias_type: "alternate")
+
+    resolver = LocationResolver.new
+    place, matched = resolver.send(:gazetteer_place_from_title, "Explosion reported in Cali overnight")
+
+    assert_equal "cali", matched
+    # Both rows legitimately answer to "cali"; ranked order decides, and the
+    # winner must be one of the owners of that surface form -- never a row
+    # reached by re-looking the string up through a different index.
+    assert_includes [cali.id, namesake.id], place.id
+
+    # With a country hint the hinted row wins outright.
+    hinted, = resolver.send(:gazetteer_place_from_title, "Explosion reported in Cali overnight", country_code: "co")
+    assert_equal cali.id, hinted.id
+  end
+
+  test "a country hint narrows but does not veto a gazetteer match" do
+    kyiv = Place.create!(
+      canonical_key: "test:kyiv-ua", name: "Kyiv", place_type: "city", source: "test",
+      country_code: "ua", latitude: 50.4501, longitude: 30.5234, importance_score: 9.0
+    )
+
+    result = LocationResolver.resolve_event(title: "Missile strike hits Kyiv suburb", country_hint: "Chile")
+
+    assert_equal "title_place", result.basis, "a wrong hint downgrades the basis, not the answer"
+    assert_equal "ua", result.country_code
+    assert_in_delta kyiv.latitude, result.latitude, 0.01
+  end
+
   test "lowercase common words are not treated as place names" do
     resolver = LocationResolver.new
     # "base", "college" and "pala" are all real GeoNames settlements.
-    assert_nil resolver.send(:gazetteer_name_from_title, "drones seen over a military base today")
+    assert_nil resolver.send(:gazetteer_place_from_title, "drones seen over a military base today")
   end
 
   test "capitalised tokens are still eligible" do

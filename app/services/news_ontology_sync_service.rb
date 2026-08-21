@@ -184,19 +184,46 @@ class NewsOntologySyncService
       return country_entity_for(resolution.country_code) if resolution.country?
 
       OntologySyncSupport.upsert_entity(
-        canonical_key: "place:#{OntologySyncSupport.slugify(resolution.name)}",
+        canonical_key: place_entity_key(resolution),
         entity_type: PLACE_ENTITY_TYPE,
         canonical_name: resolution.name,
         country_code: resolution.country_code&.upcase,
-        metadata: {
-          "latitude" => resolution.latitude,
-          "longitude" => resolution.longitude,
-          "geo_precision" => resolution.precision,
-          "geocode_basis" => resolution.basis,
-        }.compact
+        metadata: place_geo_metadata(resolution)
       ).tap do |entity|
         OntologySyncSupport.upsert_alias(entity, resolution.name, alias_type: "official")
       end
+    end
+
+    # Scoped by country when the resolution knows one, so every "Cali" on
+    # earth stops sharing a single registry row. Unscoped keys remain for
+    # countryless resolutions and for legacy rows, which retire as nothing
+    # points at them any more.
+    def place_entity_key(resolution)
+      slug = OntologySyncSupport.slugify(resolution.name)
+      country = resolution.country_code.to_s.downcase.presence
+      country ? "place:#{slug}:#{country}" : "place:#{slug}"
+    end
+
+    # upsert_entity merges metadata last-writer-wins, which let whichever
+    # cluster synced last drag a place's pin wherever its own geocode said --
+    # "Washington Post" ended up in the Strait of Hormuz that way. A stored
+    # coordinate is only replaced by one at least as confident; legacy rows
+    # without a recorded geo_confidence lose to any real resolution.
+    def place_geo_metadata(resolution)
+      candidate = {
+        "latitude" => resolution.latitude,
+        "longitude" => resolution.longitude,
+        "geo_precision" => resolution.precision,
+        "geocode_basis" => resolution.basis,
+        "geo_confidence" => resolution.confidence,
+      }.compact
+      return {} if resolution.latitude.blank? || resolution.longitude.blank?
+
+      stored = OntologyEntity.find_by(canonical_key: place_entity_key(resolution))&.metadata || {}
+      return candidate if stored["latitude"].blank?
+      return candidate if resolution.confidence.to_f >= stored["geo_confidence"].to_f
+
+      {}
     end
 
     # Members disagree about how precisely they were geocoded -- one article's

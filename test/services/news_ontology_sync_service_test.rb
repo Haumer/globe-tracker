@@ -92,7 +92,7 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
     assert_equal "BBC", source_entity.canonical_name
     assert OntologyEntityLink.exists?(ontology_entity: source_entity, linkable: article.news_source, role: "publisher")
 
-    place_entity = OntologyEntity.find_by!(canonical_key: "place:isfahan")
+    place_entity = OntologyEntity.find_by!(canonical_key: "place:isfahan:ir")
     assert_equal "place", place_entity.entity_type
     assert_equal "Isfahan", place_entity.canonical_name
 
@@ -289,6 +289,81 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
     assert_nil synced_event.longitude
   end
 
+  test "namesake places in different countries get separate registry rows" do
+    a = create_article(
+      suffix: "ontology-cali-co", publisher: "Reuters", domain: "reuters.com",
+      title: "Explosion in Cali", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(a, family: "conflict", event_type: "airstrike", claim_text: a.title)
+    cluster_a = create_cluster(a, key: "cluster:ontology-cali-co")
+    NewsEvent.where(news_article: a).update_all(
+      latitude: 3.45, longitude: -76.53, geocode_place_name: "Cali", geocode_country_code: "CO",
+      geocode_precision: "city", geocode_basis: "ai_place_country", geocode_confidence: 0.9
+    )
+
+    b = create_article(
+      suffix: "ontology-cali-my", publisher: "Reuters", domain: "reuters.com",
+      title: "Flooding near Cali", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 13, 0, 0)
+    )
+    create_claim(b, family: "hazard", event_type: "flood", claim_text: b.title)
+    cluster_b = create_cluster(b, key: "cluster:ontology-cali-my")
+    NewsEvent.where(news_article: b).update_all(
+      latitude: 3.14, longitude: 101.69, geocode_place_name: "Cali", geocode_country_code: "MY",
+      geocode_precision: "city", geocode_basis: "ai_place_country", geocode_confidence: 0.9
+    )
+
+    place_a = NewsOntologySyncService.sync_story_cluster(cluster_a.reload).place_entity
+    place_b = NewsOntologySyncService.sync_story_cluster(cluster_b.reload).place_entity
+
+    assert_not_equal place_a.id, place_b.id, "one row per (name, country), not per name"
+    assert_equal "place:cali:co", place_a.canonical_key
+    assert_equal "place:cali:my", place_b.canonical_key
+    assert_in_delta(-76.53, place_a.metadata["longitude"], 0.01)
+    assert_in_delta 101.69, place_b.metadata["longitude"], 0.01
+  end
+
+  test "a less confident resolution cannot drag a place's coordinates" do
+    a = create_article(
+      suffix: "ontology-guard-hi", publisher: "Reuters", domain: "reuters.com",
+      title: "Port strike in Valencia", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 12, 0, 0)
+    )
+    create_claim(a, family: "unrest", event_type: "strike", claim_text: a.title)
+    cluster_hi = create_cluster(a, key: "cluster:ontology-guard-hi")
+    NewsEvent.where(news_article: a).update_all(
+      latitude: 39.47, longitude: -0.38, geocode_place_name: "Valencia", geocode_country_code: "ES",
+      geocode_precision: "city", geocode_basis: "ai_place_country", geocode_confidence: 0.9
+    )
+    place = NewsOntologySyncService.sync_story_cluster(cluster_hi.reload).place_entity
+    assert_in_delta(-0.38, place.metadata["longitude"], 0.01)
+
+    b = create_article(
+      suffix: "ontology-guard-lo", publisher: "Reuters", domain: "reuters.com",
+      title: "Valencia crowds gather", source_kind: "publisher",
+      published_at: Time.utc(2026, 3, 25, 13, 0, 0)
+    )
+    create_claim(b, family: "unrest", event_type: "protest", claim_text: b.title)
+    cluster_lo = create_cluster(b, key: "cluster:ontology-guard-lo")
+    # A weaker geocode for the same (name, country) -- Venezuela's Valencia
+    # coordinates leaking in under the Spanish key must not move the pin.
+    NewsEvent.where(news_article: b).update_all(
+      latitude: 10.16, longitude: -68.0, geocode_place_name: "Valencia", geocode_country_code: "ES",
+      geocode_precision: "city", geocode_basis: "title_place", geocode_confidence: 0.4
+    )
+    NewsOntologySyncService.sync_story_cluster(cluster_lo.reload)
+
+    place.reload
+    assert_in_delta(-0.38, place.metadata["longitude"], 0.01, "lower confidence must not overwrite")
+    assert_in_delta 0.9, place.metadata["geo_confidence"], 0.001
+
+    # An equally or more confident resolution may update it.
+    NewsEvent.where(news_article: b).update_all(geocode_confidence: 0.95, latitude: 39.48, longitude: -0.37)
+    NewsOntologySyncService.sync_story_cluster(cluster_lo.reload)
+    assert_in_delta(-0.37, place.reload.metadata["longitude"], 0.01)
+  end
+
   test "anchors to an existing country entity when only a country is known" do
     country = OntologyEntity.create!(canonical_key: "country:irn", entity_type: "country",
                                      canonical_name: "Iran", country_code: "IR")
@@ -413,18 +488,16 @@ class NewsOntologySyncServiceTest < ActiveSupport::TestCase
       provenance: { "canonical_url" => article.canonical_url }
     )
 
-    israel = NewsActor.create!(
-      canonical_key: "state:il:test",
-      name: "Israel",
-      actor_type: "state",
-      country_code: "IL"
-    )
-    iran = NewsActor.create!(
-      canonical_key: "state:ir:test",
-      name: "Iran",
-      actor_type: "state",
-      country_code: "IR"
-    )
+    israel = NewsActor.find_or_create_by!(canonical_key: "state:il:test") do |actor|
+      actor.name = "Israel"
+      actor.actor_type = "state"
+      actor.country_code = "IL"
+    end
+    iran = NewsActor.find_or_create_by!(canonical_key: "state:ir:test") do |actor|
+      actor.name = "Iran"
+      actor.actor_type = "state"
+      actor.country_code = "IR"
+    end
 
     NewsClaimActor.create!(news_claim: claim, news_actor: israel, role: "initiator", position: 0, confidence: 0.93)
     NewsClaimActor.create!(news_claim: claim, news_actor: iran, role: "target", position: 1, confidence: 0.91)

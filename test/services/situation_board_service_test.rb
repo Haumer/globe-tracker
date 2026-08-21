@@ -164,6 +164,28 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal SituationBoardService::RING_LIMIT, ring[:shown].size
   end
 
+  test "members carry their place name and geocode provenance" do
+    gaza = OntologyEntity.create!(
+      canonical_key: "place:gaza-city:ps", entity_type: "place", canonical_name: "Gaza City",
+      country_code: "PS", metadata: { "latitude" => 31.5, "longitude" => 34.47 }
+    )
+    _c, event = cluster(key: "m1", title: "Strikes reported in Gaza City", lat: 31.5, lng: 34.47)
+    _c2, other = cluster(key: "m2", title: "Regional powers react", lat: 15.5, lng: 47.5)
+    event.update!(place_entity: gaza, geo_precision: "point", geo_confidence: 0.9)
+    other.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    situation(key: "situation:place:#{gaza.id}", name: "Gaza City", grouped_by: "place", events: [event, other])
+
+    members = SituationBoardService.call[:situations].first[:members]
+    placed = members.find { |m| m[:event_id] == event.id }
+    vague = members.find { |m| m[:event_id] == other.id }
+
+    assert_equal "Gaza City", placed[:place]
+    assert_equal "point", placed[:geo_precision]
+    assert_in_delta 0.9, placed[:geo_confidence], 0.001
+    assert_nil vague[:place]
+    assert_equal "unknown", vague[:geo_precision]
+  end
+
   test "counts members that never got a location instead of dropping them" do
     _a, located = cluster(key: "m1", title: "Located", lat: 10.0, lng: 10.0)
     _b, unlocated = cluster(key: "m2", title: "Not located")

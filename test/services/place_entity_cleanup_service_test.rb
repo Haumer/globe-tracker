@@ -46,6 +46,16 @@ class PlaceEntityCleanupServiceTest < ActiveSupport::TestCase
   end
 
   test "apply deletes mastheads and fires, detaches events, keeps real places" do
+    # A relationship with evidence, the chain that made the naive destroy raise.
+    relationship = OntologyRelationship.create!(
+      source_node: @event, target_node: @masthead, relation_type: "occurred_at",
+      confidence: 0.5, derived_by: "news_ontology_sync_v1"
+    )
+    OntologyRelationshipEvidence.create!(
+      ontology_relationship: relationship, evidence: @event.primary_story_cluster || @masthead,
+      evidence_role: "primary", confidence: 0.5
+    )
+
     report = PlaceEntityCleanupService.call(apply: true)
 
     assert report.applied

@@ -148,6 +148,37 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert_in_delta kyiv.latitude, result.latitude, 0.01
   end
 
+  test "a country name resolves as the country, never a namesake village" do
+    Place.create!(
+      canonical_key: "test:australia-cu", name: "Australia", place_type: "city", source: "test",
+      country_code: "cu", latitude: 22.79, longitude: -81.05, importance_score: 2.0
+    )
+
+    result = LocationResolver.resolve_event(title: "Australia announces sweeping new tariffs")
+
+    assert_not_equal "cu", result&.country_code, "the Cuban village must not claim the country's stories"
+    assert_not_equal "title_place", result&.basis
+  end
+
+  test "short all-caps tokens are organisations, not gazetteer candidates" do
+    Place.create!(
+      canonical_key: "test:un-village", name: "Un", place_type: "city", source: "test",
+      country_code: "es", latitude: 37.46, longitude: -5.34, importance_score: 1.0
+    )
+
+    karachi = Place.create!(
+      canonical_key: "test:karachi-pk", name: "Karachi", place_type: "city", source: "test",
+      country_code: "pk", latitude: 24.86, longitude: 67.0, importance_score: 8.0
+    )
+
+    resolver = LocationResolver.new
+    assert_nil resolver.send(:gazetteer_place_from_title, "UN warns of widening famine"),
+      "UN is an organisation, whatever villages share the letters"
+
+    place, = resolver.send(:gazetteer_place_from_title, "KARACHI: port workers strike")
+    assert_equal karachi.id, place&.id, "dateline caps longer than four characters still match"
+  end
+
   test "lowercase common words are not treated as place names" do
     resolver = LocationResolver.new
     # "base", "college" and "pala" are all real GeoNames settlements.

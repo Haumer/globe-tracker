@@ -43,6 +43,15 @@ class PlaceEntityCleanupService
       if apply && doomed_ids.any?
         OntologyEntity.transaction do
           OntologyEvent.where(place_entity_id: doomed_ids).update_all(place_entity_id: nil)
+          # The entity destroy delete_alls its relationships, which would strand
+          # (then violate) the evidence rows pointing at them -- clear the whole
+          # chain explicitly, evidence first.
+          relationship_ids = OntologyRelationship
+            .where(source_node_type: "OntologyEntity", source_node_id: doomed_ids)
+            .or(OntologyRelationship.where(target_node_type: "OntologyEntity", target_node_id: doomed_ids))
+            .pluck(:id)
+          OntologyRelationshipEvidence.where(ontology_relationship_id: relationship_ids).delete_all
+          OntologyRelationship.where(id: relationship_ids).delete_all
           OntologyEntity.where(id: doomed_ids).find_each(&:destroy!)
         end
       end

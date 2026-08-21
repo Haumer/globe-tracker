@@ -313,6 +313,11 @@ class LocationResolver
   def place_candidate(name:, basis:, confidence:, metadata:, country_code: nil)
     return nil unless places_available?
 
+    # "Colombia" as a name means the country unless the caller explicitly
+    # points at a different country's namesake village (country_code "cu").
+    mapped = COUNTRY_NAME_MAP[Place.normalize_name(name)]
+    return nil if mapped && (country_code.blank? || country_code == mapped)
+
     place = Place.lookup(name, country_code: country_code).first
     return nil unless place
 
@@ -395,9 +400,17 @@ class LocationResolver
     candidates = (1..MAX_PLACE_NGRAM).flat_map do |n|
       tokens.each_cons(n).filter_map do |gram|
         next unless proper_noun_gram?(gram)
+        next if n == 1 && acronym_token?(gram.first)
 
         normalized = Place.normalize_name(gram.join(" "))
-        normalized.presence
+        next if normalized.blank?
+        # A country name in a headline is the country, not its namesake
+        # village -- "Australia" must not resolve to Australia, Cuba. The
+        # country-keyword candidate downstream claims these at country
+        # precision instead.
+        next if COUNTRY_NAME_MAP.key?(normalized)
+
+        normalized
       end
     end.uniq
     return nil if candidates.empty?
@@ -418,6 +431,16 @@ class LocationResolver
     [place, best.find { |_, id| id == place.id }&.first]
   rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
     nil
+  end
+
+  # A short all-caps token is an organisation or a country code before it is
+  # a place: "UN", "EU", "NATO", "GOP". Real places written in caps are
+  # dateline style ("KARACHI:") and comfortably longer than four characters
+  # more often than not, so the guard costs little and stops org initialisms
+  # matching whichever village happens to share the letters.
+  def acronym_token?(token)
+    word = token.gsub(/\A[^[[:alnum:]]]+|[^[[:alnum:]]]+\z/, "")
+    word.length.between?(1, 4) && word == word.upcase && word != word.downcase
   end
 
   # True when every token could be part of a proper noun. A character whose

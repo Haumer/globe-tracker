@@ -19,19 +19,21 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
   # Attaches real memberships to a cluster. The article_count/source_count
   # columns are deliberately left saying something else, because that is the
   # state 474 of 2,249 live clusters are actually in.
-  def articles(cluster, publishers)
+  def articles(cluster, publishers, published: [], countries: {})
     publishers.each_with_index do |publisher, index|
       source = NewsSource.find_or_create_by!(canonical_key: "publisher:#{publisher}") do |record|
         record.name = publisher
         record.source_kind = "publisher"
         record.publisher_domain = publisher
+        record.publisher_country = countries[publisher]
       end
       article = NewsArticle.create!(
         news_source: source,
         url: "https://#{publisher}/#{cluster.cluster_key}-#{index}",
         canonical_url: "https://#{publisher}/#{cluster.cluster_key}-#{index}",
         title: "Report #{index} from #{publisher}",
-        content_scope: "core"
+        content_scope: "core",
+        published_at: published[index]
       )
       NewsStoryMembership.create!(news_story_cluster: cluster, news_article: article, match_score: 0.9)
     end
@@ -213,6 +215,61 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal [ { from: "Ukraine", to: "Russia", count: 1 } ], row[:facts][:pairs],
       "pairs count member stories, not raw reports"
     assert_equal [ { kind: "ground_operation", count: 1 } ], row[:facts][:kinds]
+  end
+
+  # The dossier's graphs. The timeline reads article stamps, not cluster
+  # last_seen_at, so it can show the hours between the first report and the
+  # pile-on; new_sources marks where corroboration arrived rather than echo.
+  test "timeline buckets stamped reports hourly and marks where new sources joined" do
+    record, event = cluster(key: "t1", title: "Blast reported", lat: 10.0, lng: 10.0)
+    base = 6.hours.ago.change(min: 0)
+    articles(record, %w[wire.com wire.com local.example],
+             published: [ base + 10.minutes, base + 1.hour, base + 3.hours + 5.minutes ])
+    situation(key: "situation:entity:t", name: "Blast situation", grouped_by: "entity", events: [event])
+
+    timeline = SituationBoardService.call[:situations].first[:timeline]
+
+    assert_equal "hour", timeline[:bucket]
+    assert_equal 4, timeline[:points].size, "one point per hour, gaps included"
+    assert_equal 3, timeline[:points].sum { |point| point[:articles] }
+    assert_equal 2, timeline[:points].sum { |point| point[:new_sources] },
+      "two outlets, so two first-report ticks -- the echo is not corroboration"
+    assert_equal 1, timeline[:points].last[:articles]
+  end
+
+  test "timeline drops republication stamps outside the window instead of stretching the axis" do
+    record, event = cluster(key: "t2", title: "Old story resurfaces", lat: 10.0, lng: 10.0)
+    articles(record, %w[wire.com local.example a.example],
+             published: [ 300.days.ago, 70.hours.ago, 2.hours.ago ])
+    situation(key: "situation:entity:t2", name: "Resurfaced situation", grouped_by: "entity", events: [event])
+
+    timeline = SituationBoardService.call[:situations].first[:timeline]
+
+    assert_equal "day", timeline[:bucket]
+    assert_equal 2, timeline[:points].sum { |point| point[:articles] }
+    assert_operator timeline[:points].size, :<=, SituationBuilder::WINDOW_DAYS + 1
+  end
+
+  # A wire appearing in three member clusters is one outlet with three
+  # reports, not three outlets -- the aggregation is per source across the
+  # whole situation, which the per-cluster counts cannot see.
+  test "sources names the heaviest outlets and counts one outlet once across clusters" do
+    record_one, event_one = cluster(key: "src1", title: "Strike one", lat: 10.0, lng: 10.0)
+    record_two, event_two = cluster(key: "src2", title: "Strike two", lat: 11.0, lng: 10.0)
+    articles(record_one, %w[wire.com wire.com local.example],
+             countries: { "wire.com" => "gb", "local.example" => "pk" })
+    articles(record_two, %w[wire.com], countries: { "wire.com" => "gb" })
+    situation(key: "situation:entity:src", name: "Strikes situation", grouped_by: "entity",
+              events: [event_one, event_two])
+
+    sources = SituationBoardService.call[:situations].first[:sources]
+
+    assert_equal 2, sources[:total]
+    assert_equal 2, sources[:countries]
+    top = sources[:top].first
+    assert_equal "wire.com", top[:name]
+    assert_equal "gb", top[:country]
+    assert_equal 3, top[:reports], "two reports in one cluster plus one in the other"
   end
 
   test "counts members that never got a location instead of dropping them" do

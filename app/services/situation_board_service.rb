@@ -100,6 +100,8 @@ class SituationBoardService
       members: members,
       facts: facts_for(members),
       daily: daily_counts(members),
+      timeline: timeline_for(members),
+      sources: sources_for(members),
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -212,6 +214,88 @@ class SituationBoardService
     span = (now.to_date - (days - 1)).upto(now.to_date).to_a
     tally = stamps.tally
     span.map { |day| { date: day.iso8601, count: tally[day].to_i } }
+  end
+
+  # How the story broke: reports per bucket from the first report to the last,
+  # hourly while the spread is under two days, daily after. new_sources marks
+  # the buckets where an outlet filed its first report -- the difference
+  # between one wire echoing and corroboration arriving. Stamps outside the
+  # window are republication noise and are dropped rather than letting one
+  # ancient published_at stretch the axis across a year.
+  def timeline_for(members)
+    window_start = now - days.days
+    rows = situation_article_rows(members).select do |row|
+      row[:published_at] && row[:published_at].between?(window_start, now)
+    end
+    return nil if rows.size < 2
+
+    stamps = rows.map { |row| row[:published_at] }
+    hourly = (stamps.max - stamps.min) <= 48.hours
+    bucket = ->(time) { hourly ? time.change(min: 0) : time.beginning_of_day }
+
+    articles = Hash.new(0)
+    rows.each { |row| articles[bucket.call(row[:published_at])] += 1 }
+    fresh = Hash.new(0)
+    rows.group_by { |row| row[:source_id] }
+      .each_value { |list| fresh[bucket.call(list.map { |row| row[:published_at] }.min)] += 1 }
+
+    step = hourly ? 1.hour : 1.day
+    at = bucket.call(stamps.min)
+    finish = bucket.call(stamps.max)
+    points = []
+    while at <= finish
+      points << { t: at.iso8601, articles: articles[at], new_sources: fresh[at] }
+      at += step
+    end
+
+    { bucket: hourly ? "hour" : "day", first_at: stamps.min.iso8601, points: points }
+  end
+
+  # Who is reporting it: the breadth behind the report count. Grouped per
+  # source across the whole situation, so a wire filing into three member
+  # clusters is one outlet with three reports -- the per-cluster counts
+  # cannot see that.
+  def sources_for(members)
+    rows = situation_article_rows(members)
+    return nil if rows.empty?
+
+    ranked = rows.group_by { |row| row[:source_id] }.map do |id, list|
+      name, country = news_sources_by_id[id]
+      { name: name || "unknown", country: country, reports: list.size }
+    end.sort_by { |row| [ -row[:reports], row[:name] ] }
+
+    {
+      total: ranked.size,
+      countries: ranked.filter_map { |row| row[:country].presence }.uniq.size,
+      top: ranked.first(6)
+    }
+  end
+
+  def situation_article_rows(members)
+    members.filter_map { |member| member[:cluster_id] }
+      .flat_map { |cluster_id| article_rows_by_cluster[cluster_id] }
+      .uniq { |row| row[:article_id] }
+  end
+
+  def article_rows_by_cluster
+    @article_rows_by_cluster ||= NewsStoryMembership
+      .where(news_story_cluster_id: cluster_ids)
+      .joins(:news_article)
+      .pluck(:news_story_cluster_id, Arel.sql("news_articles.id"),
+             Arel.sql("news_articles.published_at"), Arel.sql("news_articles.news_source_id"))
+      .group_by(&:first)
+      .transform_values do |list|
+        list.map { |_, id, at, source_id| { article_id: id, published_at: at, source_id: source_id } }
+      end
+      .tap { |hash| hash.default = [] }
+  end
+
+  def news_sources_by_id
+    @news_sources_by_id ||= begin
+      ids = article_rows_by_cluster.values.flatten.map { |row| row[:source_id] }.uniq
+      NewsSource.where(id: ids).pluck(:id, :name, :publisher_country)
+        .to_h { |id, name, country| [ id, [ name, country ] ] }
+    end
   end
 
   def rings_for(entity)

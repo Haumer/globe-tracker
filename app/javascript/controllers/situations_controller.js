@@ -325,11 +325,13 @@ export default class extends Controller {
     const facts = situation.facts
     if (!facts) return ""
 
+    const pairMax = Math.max(...(facts.pairs || []).map((pair) => pair.count), 1)
     const pairs = (facts.pairs || []).map((pair) => `
       <div class="sit-fact-row">
         <span class="sit-fact-actor">${escapeHtml(pair.from)}</span>
         <span class="sit-fact-arrow">→</span>
         <span class="sit-fact-actor">${escapeHtml(pair.to)}</span>
+        <span class="sit-fact-bar"><i style="width:${Math.round((pair.count / pairMax) * 100)}%"></i></span>
         <span class="sit-fact-count">${pair.count === 1 ? "1 story" : `${pair.count} stories`}</span>
       </div>`).join("")
 
@@ -343,6 +345,70 @@ export default class extends Controller {
       <div class="sit-facts">
         ${pairs ? `<div class="sit-section-title">Who acts on whom</div>${pairs}` : ""}
         ${kinds ? `<div class="sit-fact-kinds">${kinds}</div>` : ""}
+      </div>`
+  }
+
+  // How the story broke: one bar per hour or day of reports, an amber tick
+  // under the buckets where an outlet filed its first report. Echo grows the
+  // bars; corroboration moves the ticks. Rendered only when there are enough
+  // stamped reports to draw a shape worth reading.
+  _timelineHtml(situation) {
+    const timeline = situation.timeline
+    if (!timeline?.points?.length) return ""
+
+    const points = timeline.points
+    const width = 288
+    const chartHeight = 34
+    const height = chartHeight + 6
+    const step = width / points.length
+    const barWidth = Math.max(step - 1, 1)
+    const max = Math.max(...points.map((point) => point.articles), 1)
+
+    const bars = points.map((point, index) => {
+      const x = (index * step).toFixed(1)
+      const barHeight = Math.max((point.articles / max) * chartHeight, point.articles > 0 ? 1.5 : 0)
+      const bar = point.articles > 0
+        ? `<rect x="${x}" y="${(chartHeight - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${barHeight.toFixed(1)}" fill="#4fc3f7" opacity="0.8"></rect>`
+        : ""
+      const tick = point.new_sources > 0
+        ? `<rect x="${x}" y="${chartHeight + 3}" width="${barWidth.toFixed(1)}" height="3"
+             fill="#ffb300"></rect>`
+        : ""
+      return bar + tick
+    }).join("")
+
+    return `
+      <div class="sit-timeline">
+        <div class="sit-section-title">How it broke</div>
+        <svg width="${width}" height="${height}" aria-hidden="true">${bars}</svg>
+        <div class="sit-timeline-caption">
+          <span>${formatDay(timeline.first_at)} → ${formatDay(points[points.length - 1].t)}</span>
+          <span>reports per ${timeline.bucket} · peak ${max}
+            · <span class="sit-timeline-tick">▊</span> new source</span>
+        </div>
+      </div>`
+  }
+
+  // Who is reporting it: the breadth behind the report count. The stats line
+  // already carries the number of sources; this names the heaviest outlets
+  // and says how many countries they file from, which is the difference
+  // between one wire echoing and independent corroboration.
+  _sourcesHtml(situation) {
+    const sources = situation.sources
+    if (!sources?.total) return ""
+
+    const chips = (sources.top || []).map((source) => `
+      <span class="sit-source-chip">${escapeHtml(source.name)}${source.country
+        ? ` <span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>`
+        : ""} · ${source.reports}</span>`).join("")
+    if (!chips) return ""
+
+    return `
+      <div class="sit-sources">
+        <div class="sit-section-title">Who is reporting it${sources.countries > 1
+          ? ` · ${sources.countries} countries` : ""}</div>
+        <div class="sit-source-chips">${chips}</div>
       </div>`
   }
 
@@ -995,7 +1061,11 @@ export default class extends Controller {
         · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
       </div>
 
+      ${this._timelineHtml(situation)}
+
       ${this._factsHtml(situation)}
+
+      ${this._sourcesHtml(situation)}
 
       <div id="sit-related"></div>
 

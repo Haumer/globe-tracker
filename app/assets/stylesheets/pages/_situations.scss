@@ -348,6 +348,58 @@
   color: #6b7885;
 }
 
+.sit-member-claim {
+  margin-top: 3px;
+  font-size: 9px;
+  color: #c8d4e0;
+}
+
+// ── structured facts ─────────────────────────────────────────────────
+
+.sit-facts {
+  margin-top: 10px;
+}
+
+.sit-fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: #d4dde6;
+  border-bottom: 1px solid #1a212a;
+}
+
+.sit-fact-actor {
+  font-weight: 600;
+  color: #e8eef4;
+}
+
+.sit-fact-arrow {
+  color: #ffb300;
+}
+
+.sit-fact-count {
+  margin-left: auto;
+  font-size: 9px;
+  color: #6b7885;
+}
+
+.sit-fact-kinds {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sit-fact-kind {
+  padding: 2px 6px;
+  background: #1a212a;
+  border-radius: 2px;
+  font-size: 9px;
+  color: #c8d4e0;
+}
+
 // ── legend ───────────────────────────────────────────────────────────
 
 .sit-legend {

@@ -186,6 +186,35 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal "unknown", vague[:geo_precision]
   end
 
+  test "members carry a modal claim and the situation aggregates directed pairs" do
+    record, event = cluster(key: "c1", title: "Drone attack on refinery", lat: 55.7, lng: 37.6)
+    articles(record, [ "reuters.com", "bbc.com", "dw.com" ])
+
+    ukraine = NewsActor.create!(canonical_key: "state:ua", name: "Ukraine", actor_type: "state", country_code: "UA")
+    russia = NewsActor.create!(canonical_key: "state:ru", name: "Russia", actor_type: "state", country_code: "RU")
+    record.news_story_memberships.includes(:news_article).each_with_index do |membership, i|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict",
+        event_type: i.zero? ? "airstrike" : "ground_operation",
+        claim_text: "Drone attack on refinery", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: ukraine, role: "initiator", position: 0, confidence: 0.9)
+      NewsClaimActor.create!(news_claim: claim, news_actor: russia, role: "target", position: 1, confidence: 0.9)
+    end
+    situation(key: "situation:actor:test", name: "Refinery attacks", grouped_by: "actor", events: [event])
+
+    row = SituationBoardService.call[:situations].first
+    claim = row[:members].first[:claim]
+
+    assert_equal "ground_operation", claim[:type], "two of three claims agree"
+    assert_equal "Ukraine", claim[:initiator]
+    assert_equal "Russia", claim[:target]
+    assert_equal [ { from: "Ukraine", to: "Russia", count: 1 } ], row[:facts][:pairs],
+      "pairs count member stories, not raw reports"
+    assert_equal [ { kind: "ground_operation", count: 1 } ], row[:facts][:kinds]
+  end
+
   test "counts members that never got a location instead of dropping them" do
     _a, located = cluster(key: "m1", title: "Located", lat: 10.0, lng: 10.0)
     _b, unlocated = cluster(key: "m2", title: "Not located")

@@ -302,6 +302,50 @@ export default class extends Controller {
   //               trust least would draw the largest shapes on the globe. They
   //               stay fixed-size symbols at every zoom. The scatter is already
   //               visible on selection, as the arcs themselves.
+  // One line of structured fact under a report: who → whom, or the single
+  // named party. The event type already sits in the meta line above, so this
+  // renders only when there is an actor to show.
+  _memberClaimHtml(member) {
+    const claim = member.claim
+    if (!claim) return ""
+
+    if (claim.initiator && claim.target) {
+      return `<div class="sit-member-claim">${escapeHtml(claim.initiator)}
+        <span class="sit-fact-arrow">→</span> ${escapeHtml(claim.target)}</div>`
+    }
+    const solo = claim.initiator || claim.subject
+    return solo ? `<div class="sit-member-claim">${escapeHtml(solo)}</div>` : ""
+  }
+
+  // The structured reading of the situation: who its member stories say is
+  // acting on whom, and what kind of events they describe. Counts are member
+  // stories. Rendered only when the extraction produced something -- an empty
+  // facts box would just advertise the pipeline.
+  _factsHtml(situation) {
+    const facts = situation.facts
+    if (!facts) return ""
+
+    const pairs = (facts.pairs || []).map((pair) => `
+      <div class="sit-fact-row">
+        <span class="sit-fact-actor">${escapeHtml(pair.from)}</span>
+        <span class="sit-fact-arrow">→</span>
+        <span class="sit-fact-actor">${escapeHtml(pair.to)}</span>
+        <span class="sit-fact-count">${pair.count === 1 ? "1 story" : `${pair.count} stories`}</span>
+      </div>`).join("")
+
+    const kinds = (facts.kinds || []).map((k) =>
+      `<span class="sit-fact-kind">${escapeHtml(String(k.kind).replace(/_/g, " "))} · ${k.count}</span>`
+    ).join("")
+
+    if (!pairs && !kinds) return ""
+
+    return `
+      <div class="sit-facts">
+        ${pairs ? `<div class="sit-section-title">Who acts on whom</div>${pairs}` : ""}
+        ${kinds ? `<div class="sit-fact-kinds">${kinds}</div>` : ""}
+      </div>`
+  }
+
   _footprint(situation) {
     if (situation.anchor.kind !== "registry") {
       return { radius_m: null, basis: "none", label: "none — an actor has no extent" }
@@ -951,6 +995,8 @@ export default class extends Controller {
         · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
       </div>
 
+      ${this._factsHtml(situation)}
+
       <div id="sit-related"></div>
 
       <div class="sit-section-title">The reports this is made of</div>
@@ -973,6 +1019,7 @@ export default class extends Controller {
                     ? " · location approximate"
                     : ""}
             </div>
+            ${this._memberClaimHtml(member)}
           </div>`).join("")}
       </div>
 

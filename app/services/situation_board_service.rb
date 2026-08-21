@@ -98,6 +98,7 @@ class SituationBoardService
       first_seen_at: members.filter_map { |m| m[:last_seen_at] }.min,
       last_seen_at: members.filter_map { |m| m[:last_seen_at] }.max,
       members: members,
+      facts: facts_for(members),
       daily: daily_counts(members),
       concerns: concerns && {
         id: concerns.id,
@@ -148,6 +149,7 @@ class SituationBoardService
         place: member_place_names[event.place_entity_id],
         geo_precision: event.geo_precision,
         geo_confidence: event.geo_confidence,
+        claim: member_claim(event.primary_story_cluster_id),
         last_seen_at: event.last_seen_at&.iso8601
       }
     end.sort_by { |member| member[:last_seen_at].to_s }.reverse
@@ -303,6 +305,65 @@ class SituationBoardService
       ids = member_events.values.flatten.filter_map(&:place_entity_id).uniq
       OntologyEntity.where(id: ids).pluck(:id, :canonical_name).to_h
     end
+  end
+
+  # The structured reading of a member: what kind of event its reports
+  # describe and who they say is doing what to whom. Reports within a cluster
+  # disagree at the margins, so each slot takes the modal answer -- the type
+  # and actors most of the cluster's claims agree on.
+  def member_claim(cluster_id)
+    claims = claims_by_cluster[cluster_id]
+    return nil if claims.blank?
+
+    family, type = claims.map { |c| [ c.event_family, c.event_type ] }.tally.max_by(&:last)&.first
+    {
+      family: family,
+      type: type,
+      initiator: modal_actor(claims, "initiator"),
+      target: modal_actor(claims, "target"),
+      subject: modal_actor(claims, "subject") || modal_actor(claims, "participant"),
+    }.compact
+  end
+
+  def modal_actor(claims, role)
+    claims.flat_map { |claim| claim.news_claim_actors.select { |ca| ca.role == role } }
+      .filter_map { |ca| ca.news_actor&.name }
+      .tally.max_by(&:last)&.first
+  end
+
+  def claims_by_cluster
+    @claims_by_cluster ||= begin
+      rows = NewsStoryMembership.where(news_story_cluster_id: cluster_ids)
+        .pluck(:news_story_cluster_id, :news_article_id)
+      clusters_by_article = rows.group_by(&:last).transform_values { |pairs| pairs.map(&:first) }
+      grouped = Hash.new
+      NewsClaim.where(news_article_id: clusters_by_article.keys, primary: true)
+        .includes(news_claim_actors: :news_actor)
+        .each do |claim|
+          clusters_by_article[claim.news_article_id].each do |cluster_id|
+            (grouped[cluster_id] ||= []) << claim
+          end
+        end
+      grouped
+    end
+  end
+
+  # The situation's headline facts: the directed actor pairs its members'
+  # claims agree on, and the kinds of event they describe. Counts are members
+  # (stories), not raw reports, so one heavily syndicated article cannot
+  # dominate the reading.
+  def facts_for(members)
+    claims = members.filter_map { |member| member[:claim] }
+    return nil if claims.empty?
+
+    pairs = claims.filter_map { |c| [ c[:initiator], c[:target] ] if c[:initiator] && c[:target] }
+      .tally.sort_by { |pair, count| [ -count, pair ] }.first(5)
+      .map { |(from, to), count| { from: from, to: to, count: count } }
+    kinds = claims.filter_map { |c| c[:type] }
+      .tally.sort_by { |kind, count| [ -count, kind ] }.first(4)
+      .map { |kind, count| { kind: kind, count: count } }
+
+    { pairs: pairs, kinds: kinds }
   end
 
   def clusters_by_id

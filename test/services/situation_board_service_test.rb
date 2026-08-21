@@ -217,6 +217,34 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal [ { kind: "ground_operation", count: 1 } ], row[:facts][:kinds]
   end
 
+  # The toll curve's data: raw asserted figures in publication order, never a
+  # pre-computed maximum, so a figure that goes down -- a correction -- stays
+  # visible. One stamped figure is not a curve and ships nothing.
+  test "figures collects stamped casualty assertions per kind and needs two to ship" do
+    record, event = cluster(key: "fig1", title: "Market bombing", lat: 30.0, lng: 50.0)
+    base = 6.hours.ago.change(min: 0)
+    articles(record, %w[wire.com local.example late.example],
+             published: [ base, base + 1.hour, base + 2.hours ])
+    texts = [ "Bomb kills at least 12 in market", "Death toll rises to 69 after market bombing",
+              "Market reopens as inquiry begins" ]
+    record.news_story_memberships.includes(:news_article).each_with_index do |membership, index|
+      NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "bombing",
+        claim_text: texts[index], confidence: 0.9, primary: true, extraction_method: "heuristic",
+        verification_status: "single_source",
+        metadata: { "figures" => CasualtyFigureParser.parse(texts[index]).presence }.compact
+      )
+    end
+    situation(key: "situation:entity:fig", name: "Market situation", grouped_by: "entity", events: [event])
+
+    figures = SituationBoardService.call[:situations].first[:figures]
+
+    assert_equal %w[killed], figures.keys
+    assert_equal [ 12, 69 ], figures["killed"].map { |point| point[:value] },
+      "publication order, raw values -- the chart computes the running maximum"
+    assert_equal "at_least", figures["killed"].first[:qualifier]
+  end
+
   # The split the modal answer hides: emitted only when outlets disagree on
   # the initiator, counted per distinct outlet so a wire echo cannot
   # out-shout independent newsrooms.

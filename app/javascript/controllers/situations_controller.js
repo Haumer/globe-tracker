@@ -412,6 +412,59 @@ export default class extends Controller {
       </div>`
   }
 
+  // What the numbers are doing: each dot is a figure some stamped headline
+  // asserted, the line is the highest figure asserted so far. A dot under
+  // the line is a correction or a straggler quoting an old count -- exactly
+  // the disagreement worth seeing, so the raw dots stay visible instead of
+  // being folded into the maximum.
+  _figuresHtml(situation) {
+    const figures = situation.figures
+    if (!figures) return ""
+
+    const charts = ["killed", "injured", "missing"].filter((kind) => figures[kind]?.length)
+      .slice(0, 2).map((kind) => {
+        const points = figures[kind]
+        const width = 288
+        const chartHeight = 40
+        const times = points.map((point) => Date.parse(point.t))
+        const t0 = Math.min(...times)
+        const span = Math.max(Math.max(...times) - t0, 1)
+        const max = Math.max(...points.map((point) => point.value), 1)
+        const x = (t) => 4 + ((Date.parse(t) - t0) / span) * (width - 8)
+        const y = (v) => chartHeight - 3 - (v / max) * (chartHeight - 8)
+
+        let running = 0
+        const steps = points.map((point) => {
+          running = Math.max(running, point.value)
+          return `${x(point.t).toFixed(1)},${y(running).toFixed(1)}`
+        })
+        const line = `<polyline points="${steps.join(" ")}" fill="none" stroke="#ffb300"
+          stroke-width="1.5" opacity="0.9"></polyline>`
+        const dots = points.map((point) => `
+          <circle cx="${x(point.t).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="2.5"
+            fill="#4fc3f7" opacity="0.9"></circle>`).join("")
+        const latest = points[points.length - 1]
+        const peak = Math.max(...points.map((point) => point.value))
+
+        return `
+          <div class="sit-figures-chart">
+            <svg width="${width}" height="${chartHeight}" aria-hidden="true">${line}${dots}</svg>
+            <div class="sit-timeline-caption">
+              <span>reported ${kind}</span>
+              <span>${points[0].value} first → ${latest.value} latest${peak !== latest.value
+                ? ` · peak ${peak}` : ""}${latest.qualifier === "at_least" ? " (at least)" : ""}</span>
+            </div>
+          </div>`
+      })
+    if (!charts.length) return ""
+
+    return `
+      <div class="sit-figures">
+        <div class="sit-section-title">What the numbers are doing</div>
+        ${charts.join("")}
+      </div>`
+  }
+
   // Who is reporting it: the breadth behind the report count. The stats line
   // already carries the number of sources; this names the heaviest outlets
   // and says how many countries they file from, which is the difference
@@ -1088,6 +1141,8 @@ export default class extends Controller {
       ${this._factsHtml(situation)}
 
       ${this._attributionHtml(situation)}
+
+      ${this._figuresHtml(situation)}
 
       ${this._sourcesHtml(situation)}
 

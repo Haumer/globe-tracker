@@ -103,6 +103,7 @@ class SituationBoardService
       timeline: timeline_for(members),
       sources: sources_for(members),
       attribution: attribution_for(members),
+      figures: figures_for(members),
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -295,6 +296,36 @@ class SituationBoardService
     end.sort_by { |row| [ -row[:sources], -row[:reports], row[:actor] ] }
 
     rows.size < 2 ? nil : rows.first(4)
+  end
+
+  # What the numbers are doing: every casualty figure a stamped headline
+  # asserted, in the order the headlines landed. The chart draws the running
+  # maximum; the payload sends the raw assertions, because a figure that goes
+  # DOWN is a correction and burying it inside a pre-computed maximum would
+  # hide exactly the revision worth seeing. A kind needs two stamped figures
+  # to ship -- one number is a fact for the member row, not a curve.
+  def figures_for(members)
+    stamps = situation_article_rows(members)
+      .to_h { |row| [ row[:article_id], row[:published_at] ] }
+
+    series = Hash.new { |hash, key| hash[key] = [] }
+    members.filter_map { |member| member[:cluster_id] }.uniq.each do |cluster_id|
+      (claims_by_cluster[cluster_id] || []).each do |claim|
+        stamp = stamps[claim.news_article_id]
+        next unless stamp
+
+        Array(claim.metadata["figures"]).each do |figure|
+          next unless figure["value"].to_i.positive?
+
+          series[figure["kind"]] << { t: stamp.iso8601, value: figure["value"].to_i,
+                                      qualifier: figure["qualifier"] }.compact
+        end
+      end
+    end
+
+    kept = series.transform_values { |points| points.uniq.sort_by { |point| point[:t] } }
+      .select { |_, points| points.size >= 2 }
+    kept.empty? ? nil : kept
   end
 
   def situation_article_rows(members)

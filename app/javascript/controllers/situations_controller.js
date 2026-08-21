@@ -390,6 +390,28 @@ export default class extends Controller {
       </div>`
   }
 
+  // Who says who did it: the split the modal answer hides. The server only
+  // sends this when outlets disagree on the initiator, so its presence is
+  // itself the signal -- attribution is contested, and the bars show by how
+  // much. Sources, not reports, drive the bar: ten echoes of one wire should
+  // not out-shout three independent newsrooms.
+  _attributionHtml(situation) {
+    const rows = situation.attribution
+    if (!rows?.length) return ""
+
+    const max = Math.max(...rows.map((row) => row.sources), 1)
+    return `
+      <div class="sit-attribution">
+        <div class="sit-section-title">Who says who did it · contested</div>
+        ${rows.map((row) => `
+          <div class="sit-fact-row">
+            <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
+            <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
+            <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
+          </div>`).join("")}
+      </div>`
+  }
+
   // Who is reporting it: the breadth behind the report count. The stats line
   // already carries the number of sources; this names the heaviest outlets
   // and says how many countries they file from, which is the difference
@@ -1064,6 +1086,8 @@ export default class extends Controller {
       ${this._timelineHtml(situation)}
 
       ${this._factsHtml(situation)}
+
+      ${this._attributionHtml(situation)}
 
       ${this._sourcesHtml(situation)}
 

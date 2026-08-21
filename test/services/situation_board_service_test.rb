@@ -217,6 +217,52 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal [ { kind: "ground_operation", count: 1 } ], row[:facts][:kinds]
   end
 
+  # The split the modal answer hides: emitted only when outlets disagree on
+  # the initiator, counted per distinct outlet so a wire echo cannot
+  # out-shout independent newsrooms.
+  test "attribution splits contested initiators by outlet and stays silent on agreement" do
+    record, event = cluster(key: "at1", title: "Base attacked", lat: 30.0, lng: 50.0)
+    articles(record, %w[wire.com wire.com local.example])
+
+    us = NewsActor.create!(canonical_key: "state:us", name: "United States", actor_type: "state", country_code: "US")
+    iran = NewsActor.create!(canonical_key: "state:ir", name: "Iran", actor_type: "state", country_code: "IR")
+    memberships = record.news_story_memberships.includes(:news_article).to_a
+    memberships.each_with_index do |membership, index|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "airstrike",
+        claim_text: "Base attacked", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: index < 2 ? us : iran,
+                             role: "initiator", position: 0, confidence: 0.9)
+    end
+    situation(key: "situation:entity:at", name: "Base situation", grouped_by: "entity", events: [event])
+
+    rows = SituationBoardService.call[:situations].first[:attribution]
+
+    assert_equal 2, rows.size
+    assert_equal({ actor: "United States", reports: 2, sources: 1 }, rows.first)
+    assert_equal({ actor: "Iran", reports: 1, sources: 1 }, rows.last,
+      "each backed by one outlet -- the echo only breaks the tie, it cannot add sources")
+  end
+
+  test "attribution is nil when every outlet names the same initiator" do
+    record, event = cluster(key: "at2", title: "Port shelled", lat: 30.0, lng: 50.0)
+    articles(record, %w[wire.com local.example])
+    actor = NewsActor.create!(canonical_key: "state:xx", name: "Somebody", actor_type: "state")
+    record.news_story_memberships.includes(:news_article).each do |membership|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "shelling",
+        claim_text: "Port shelled", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: actor, role: "initiator", position: 0, confidence: 0.9)
+    end
+    situation(key: "situation:entity:at2", name: "Port situation", grouped_by: "entity", events: [event])
+
+    assert_nil SituationBoardService.call[:situations].first[:attribution]
+  end
+
   # The dossier's graphs. The timeline reads article stamps, not cluster
   # last_seen_at, so it can show the hours between the first report and the
   # pile-on; new_sources marks where corroboration arrived rather than echo.

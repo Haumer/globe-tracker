@@ -102,6 +102,7 @@ class SituationBoardService
       daily: daily_counts(members),
       timeline: timeline_for(members),
       sources: sources_for(members),
+      attribution: attribution_for(members),
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -269,6 +270,31 @@ class SituationBoardService
       countries: ranked.filter_map { |row| row[:country].presence }.uniq.size,
       top: ranked.first(6)
     }
+  end
+
+  # The distribution the modal answer throws away: which initiator each
+  # outlet's reports actually name. One row per named initiator, backed by
+  # how many distinct outlets say so. Emitted only when outlets disagree --
+  # agreement is already the first fact row, and a one-row split would just
+  # restate it.
+  def attribution_for(members)
+    source_by_article = situation_article_rows(members)
+      .to_h { |row| [ row[:article_id], row[:source_id] ] }
+
+    named = members.filter_map { |member| member[:cluster_id] }.uniq.flat_map do |cluster_id|
+      (claims_by_cluster[cluster_id] || []).filter_map do |claim|
+        initiator = claim.news_claim_actors.find { |ca| ca.role == "initiator" }&.news_actor&.name
+        [ initiator, claim.news_article_id ] if initiator
+      end
+    end.uniq
+
+    rows = named.group_by(&:first).map do |name, list|
+      articles = list.map(&:last)
+      { actor: name, reports: articles.size,
+        sources: articles.filter_map { |id| source_by_article[id] }.uniq.size }
+    end.sort_by { |row| [ -row[:sources], -row[:reports], row[:actor] ] }
+
+    rows.size < 2 ? nil : rows.first(4)
   end
 
   def situation_article_rows(members)

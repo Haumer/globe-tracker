@@ -115,6 +115,7 @@ class SituationLayerPlanService
       bbox: bbox,
       curated_by: curation.basis,
       brief: curation.brief,
+      composition: curation.composition,
       regions: curation.regions,
       related: related_rows,
       layers: CATALOG.map { |layer| present(layer, curation, default_on) }

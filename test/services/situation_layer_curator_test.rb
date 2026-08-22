@@ -98,6 +98,119 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
     assert_operator result.picks.size, :<=, SituationLayerCurator::MAX_PICKS
   end
 
+  # A situation with everything the composition can draw on, so tests can
+  # exercise the module-data guards one at a time by removing pieces.
+  def rich_situation(**overrides)
+    situation.merge(
+      article_count: 54, source_count: 27, tier: "corroborated",
+      first_seen_at: "2026-08-20T14:00:00Z", last_seen_at: "2026-08-22T09:00:00Z",
+      figures: { "killed" => [ { t: "2026-08-20T15:00:00Z", value: 20 },
+                               { t: "2026-08-22T08:00:00Z", value: 132, qualifier: "at_least" } ] },
+      attribution: [ { actor: "Iran", reports: 8, sources: 6 },
+                     { actor: "United States", reports: 4, sources: 3 } ],
+      timeline: { bucket: "hour", first_at: "2026-08-20T14:10:00Z",
+                  points: [ { t: "2026-08-20T14:00:00Z", articles: 6, new_sources: 4 } ] },
+      sources: { total: 27, countries: 9, top: [ { name: "Stuff", country: "nz", reports: 7 } ] },
+      facts: { pairs: [ { from: "Iran", to: "United States", count: 3 } ],
+               kinds: [ { kind: "airstrike", count: 3 } ] },
+      **overrides
+    )
+  end
+
+  def composition_json(extra_modules: [], **overrides)
+    {
+      "layers" => [],
+      "composition" => {
+        "treatment" => "dossier",
+        "angle" => "toll",
+        "lead" => "The toll climbed from 20 to at least 132 in two days",
+        "dek" => "Coverage from 27 outlets tracks a rising count.",
+        "modules" => [
+          { "kind" => "figures_chart", "metric" => "killed", "emphasis" => "hero",
+            "title" => "The toll passed 100 as crews reached the rubble",
+            "caption" => "Each dot is one outlet's figure",
+            "annotations" => [ { "t" => "2026-08-21T10:00:00Z", "text" => "crews reach the collapsed blocks" },
+                                { "t" => "2026-08-21T12:00:00Z", "text" => "toll passes 100" } ] },
+          *extra_modules
+        ]
+      }.merge(overrides)
+    }.to_json
+  end
+
+  test "a valid composition parses with its written strings intact" do
+    client = FakeClient.new(composition_json)
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    composition = result.composition
+    assert_equal "dossier", composition[:treatment]
+    assert_equal "The toll climbed from 20 to at least 132 in two days", composition[:lead]
+    module_row = composition[:modules].first
+    assert_equal "figures_chart", module_row[:kind]
+    assert_equal "hero", module_row[:emphasis]
+    assert_equal "killed", module_row[:metric]
+    assert_equal [ { t: "2026-08-21T10:00:00Z", text: "crews reach the collapsed blocks" } ],
+      module_row[:annotations],
+      "the rounded-milestone annotation carries a number not in the payload and is dropped alone"
+  end
+
+  test "modules without their data are dropped: no figures metric, no chart" do
+    client = FakeClient.new(composition_json(extra_modules: [
+      { "kind" => "figures_chart", "metric" => "injured", "emphasis" => "support", "title" => "x" },
+      { "kind" => "invented_module", "emphasis" => "support" }
+    ]))
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    kinds = result.composition[:modules].map { |m| [ m[:kind], m[:metric] ] }
+    assert_equal [ [ "figures_chart", "killed" ] ], kinds,
+      "the injured series does not exist in the payload and invented kinds are not in the vocabulary"
+  end
+
+  test "attribution module is dropped when outlets do not disagree" do
+    client = FakeClient.new(composition_json(extra_modules: [
+      { "kind" => "attribution_split", "emphasis" => "support", "title" => "Who names whom" }
+    ]))
+    result = SituationLayerCurator.call(
+      situation: rich_situation(attribution: nil), available_keys: ALL_KEYS, client: client)
+
+    assert_equal %w[figures_chart], result.composition[:modules].map { |m| m[:kind] }
+  end
+
+  test "only one module keeps hero emphasis" do
+    client = FakeClient.new(composition_json(extra_modules: [
+      { "kind" => "attention_timeline", "emphasis" => "hero", "title" => "Coverage spiked" }
+    ]))
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_equal %w[hero support], result.composition[:modules].map { |m| m[:emphasis] }
+  end
+
+  test "an invented number rejects the string that carries it" do
+    client = FakeClient.new(composition_json(
+      "lead" => "At least 999 dead in the collapse"))
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_nil result.composition, "a composition whose lead invents a figure is no composition"
+  end
+
+  test "small numbers pass the gate: day counts are arithmetic, not new claims" do
+    client = FakeClient.new(composition_json(
+      "lead" => "Day 3 of the recovery and the count is still moving"))
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_equal "Day 3 of the recovery and the count is still moving", result.composition[:lead]
+  end
+
+  test "a note carries no modules, whatever the model attached" do
+    client = FakeClient.new(composition_json(
+      "treatment" => "note",
+      "upgrade" => "A second outlet on the strikes upgrades this to corroborated"))
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_equal "note", result.composition[:treatment]
+    assert_equal [], result.composition[:modules]
+    assert_match(/second outlet/, result.composition[:upgrade])
+  end
+
   test "the full judgement parses: brief, clamped radius, graded regions, related from the board" do
     neighbors = [{ id: 42, name: "Bandar Abbas port", distance_km: 120.0, country: "IR" }]
     client = FakeClient.new({

@@ -36,13 +36,18 @@ class SituationLayerCurator
   MODEL = ENV.fetch("LAYER_CURATOR_MODEL", "gpt-4.1-mini").freeze
   ENDPOINT = "https://api.openai.com/v1/chat/completions".freeze
   OPEN_TIMEOUT = 10
-  READ_TIMEOUT = 30
+  # The composition roughly tripled the response size; 30s read left the
+  # model mid-sentence often enough to matter.
+  READ_TIMEOUT = 60
   MAX_PICKS = 6
   MAX_REGIONS = 6
   MAX_RELATED = 3
   MIN_RADIUS_KM = 25
   MAX_RADIUS_KM = 1200
   CACHE_TTL = 24.hours
+  # A model failure caches its heuristic stand-in briefly, not for a day:
+  # one timeout should not pin a situation to the rules until tomorrow.
+  FAILURE_TTL = 10.minutes
 
   # The composition's closed vocabulary. The model chooses, orders, titles and
   # annotates modules; it cannot invent one. Chart kinds accept annotations,
@@ -67,9 +72,17 @@ class SituationLayerCurator
   end
 
   def call
-    Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
-      ai_result || heuristic_result
+    cached = Rails.cache.read(cache_key)
+    return cached if cached
+
+    result = ai_result
+    if result
+      Rails.cache.write(cache_key, result, expires_in: CACHE_TTL)
+    else
+      result = heuristic_result
+      Rails.cache.write(cache_key, result, expires_in: FAILURE_TTL)
     end
+    result
   end
 
   private
@@ -91,9 +104,9 @@ class SituationLayerCurator
       volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
-    # v4: the call now also composes the dossier (lead, dek, modules with
-    # written titles) -- v3 judgements predate the composition contract.
-    "situation-layer-curation:v4:#{fingerprint}"
+    # v5: title/caption discipline sharpened with counter-examples -- v4
+    # compositions titled charts with axis labels.
+    "situation-layer-curation:v5:#{fingerprint}"
   end
 
   # ── model path ───────────────────────────────────────────────────────
@@ -198,9 +211,14 @@ class SituationLayerCurator
       emphasis: exactly one module is "hero" -- the one answering the
       angle's question -- everything else "support". A module re-answering
       an already-answered question is clutter: leave it out.
-      title: states the finding ("The toll tripled in two days"), never the
-      axis ("Reported killed"). caption: one short sentence of method or
-      context. annotations (chart kinds only, up to #{MAX_ANNOTATIONS}):
+      title: states a finding specific to THIS story. The test: a title that
+      would fit another story's chart is wrong. BAD (axis labels): "Coverage
+      Intensity Over Time", "Top Reporting Outlets", "Reported Killed".
+      GOOD (findings): "Coverage spiked with the second strike, not the
+      first", "Six outlets name Iran; three name Washington", "The toll
+      tripled in two days". caption: one short sentence of method or added
+      context -- never a restatement of the title or a description of what
+      the chart tracks. annotations (chart kinds only, up to #{MAX_ANNOTATIONS}):
       moments worth pinning, each {"t": iso8601 inside the coverage window,
       "text": a few words tied to a real report given above}.
       Every number in any composed text must appear verbatim in the data

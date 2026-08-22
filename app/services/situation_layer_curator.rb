@@ -36,15 +36,29 @@ class SituationLayerCurator
   MODEL = ENV.fetch("LAYER_CURATOR_MODEL", "gpt-4.1-mini").freeze
   ENDPOINT = "https://api.openai.com/v1/chat/completions".freeze
   OPEN_TIMEOUT = 10
-  READ_TIMEOUT = 30
+  # The composition roughly tripled the response size; 30s read left the
+  # model mid-sentence often enough to matter.
+  READ_TIMEOUT = 60
   MAX_PICKS = 6
   MAX_REGIONS = 6
   MAX_RELATED = 3
   MIN_RADIUS_KM = 25
   MAX_RADIUS_KM = 1200
   CACHE_TTL = 24.hours
+  # A model failure caches its heuristic stand-in briefly, not for a day:
+  # one timeout should not pin a situation to the rules until tomorrow.
+  FAILURE_TTL = 10.minutes
 
-  Result = Struct.new(:basis, :picks, :brief, :radius_km, :regions, :related, keyword_init: true)
+  # The composition's closed vocabulary. The model chooses, orders, titles and
+  # annotates modules; it cannot invent one. Chart kinds accept annotations,
+  # the rest are lists the client already knows how to draw.
+  MODULE_KINDS = %w[figures_chart attention_timeline attribution_split actor_pairs sources].freeze
+  CHART_KINDS = %w[figures_chart attention_timeline].freeze
+  MAX_MODULES = 5
+  MAX_ANNOTATIONS = 3
+
+  Result = Struct.new(:basis, :picks, :brief, :radius_km, :regions, :related, :composition,
+                      keyword_init: true)
 
   def self.call(situation:, available_keys:, neighbors: [], client: nil)
     new(situation: situation, available_keys: available_keys, neighbors: neighbors, client: client).call
@@ -58,9 +72,17 @@ class SituationLayerCurator
   end
 
   def call
-    Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
-      ai_result || heuristic_result
+    cached = Rails.cache.read(cache_key)
+    return cached if cached
+
+    result = ai_result
+    if result
+      Rails.cache.write(cache_key, result, expires_in: CACHE_TTL)
+    else
+      result = heuristic_result
+      Rails.cache.write(cache_key, result, expires_in: FAILURE_TTL)
     end
+    result
   end
 
   private
@@ -82,9 +104,9 @@ class SituationLayerCurator
       volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
-    # v3: prompt learned that picks need a concrete mechanism and routine
-    # stories need none -- cached v2 judgements predate that discipline.
-    "situation-layer-curation:v3:#{fingerprint}"
+    # v5: title/caption discipline sharpened with counter-examples -- v4
+    # compositions titled charts with axis labels.
+    "situation-layer-curation:v5:#{fingerprint}"
   end
 
   # ── model path ───────────────────────────────────────────────────────
@@ -116,7 +138,12 @@ class SituationLayerCurator
       {"brief": "...", "radius_km": <number>,
        "layers": [{"key": "...", "reason": "..."}],
        "regions": [{"name": "...", "country_code": "..", "impact": "high"}],
-       "related": [{"id": <id from the nearby list>, "reason": "..."}]}
+       "related": [{"id": <id from the nearby list>, "reason": "..."}],
+       "composition": {"treatment": "note"|"dossier", "angle": "...",
+        "lead": "...", "dek": "...", "upgrade": "...",
+        "modules": [{"kind": "...", "emphasis": "hero"|"support",
+         "metric": "...", "title": "...", "caption": "...",
+         "annotations": [{"t": "<iso8601>", "text": "..."}]}]}}
 
       brief: two or three plain sentences an analyst would want first -- what
       is happening, where it stands, what to watch. No hedging boilerplate.
@@ -155,6 +182,48 @@ class SituationLayerCurator
       board often splits one story; connecting the pieces is valuable, so
       name every genuine connection you see. At most #{MAX_RELATED}, only
       from the list given. [] if none.
+
+      composition: the dossier itself, written for THIS story. First decide
+      how much presentation the evidence carries:
+      - treatment "note" when the evidence is thin (a handful of reports,
+        one or two sources): lead + dek + upgrade only, modules []. upgrade
+        is one sentence naming what would make this more than a note (a
+        second outlet, a casualty figure, an official confirmation).
+      - treatment "dossier" when coverage is broad enough to structure.
+      angle: two or three words naming the story's central question (toll,
+      escalation, attribution, exposure, diplomacy...).
+      lead: one headline sentence that states the finding in plain words --
+      what happened and where it stands now. Never a label, never a count of
+      stories, never hedging boilerplate.
+      dek: two or three sentences: what is established, what is moving, what
+      is contested. Use only figures that appear in the data above -- a
+      number you were not given does not exist.
+      modules: at most #{MAX_MODULES}, each answering a question no other
+      module answers, kinds exactly from:
+      - figures_chart: the revision curve for one reported number; set
+        "metric" to one of the figures metrics given. Only if figures data
+        was given.
+      - attention_timeline: how coverage moved over time.
+      - attribution_split: who names whom. Only if the data shows outlets
+        disagreeing.
+      - actor_pairs: who acts on whom.
+      - sources: who is reporting.
+      emphasis: exactly one module is "hero" -- the one answering the
+      angle's question -- everything else "support". A module re-answering
+      an already-answered question is clutter: leave it out.
+      title: states a finding specific to THIS story. The test: a title that
+      would fit another story's chart is wrong. BAD (axis labels): "Coverage
+      Intensity Over Time", "Top Reporting Outlets", "Reported Killed".
+      GOOD (findings): "Coverage spiked with the second strike, not the
+      first", "Six outlets name Iran; three name Washington", "The toll
+      tripled in two days". caption: one short sentence of method or added
+      context -- never a restatement of the title or a description of what
+      the chart tracks. annotations (chart kinds only, up to #{MAX_ANNOTATIONS}):
+      moments worth pinning, each {"t": iso8601 inside the coverage window,
+      "text": a few words tied to a real report given above}.
+      Every number in any composed text must appear verbatim in the data
+      above -- rounded milestones ("passes 100") and estimates are rejected
+      by validation and the string carrying them is dropped.
     PROMPT
   end
 
@@ -182,7 +251,62 @@ class SituationLayerCurator
 
       Nearby situations:
       #{neighbor_lines.join("\n").presence || "(none)"}
+
+      Coverage: #{situation[:member_count]} stories, #{situation[:article_count]} reports from #{situation[:source_count]} sources; tier #{situation[:tier]}; #{situation[:first_seen_at]} -> #{situation[:last_seen_at]}
+      #{figures_lines.join("\n").presence || "Figures: none extracted"}
+      #{attribution_line}
+      #{facts_line}
+      #{attention_line}
+      #{sources_line}
     PROMPT
+  end
+
+  # ── evidence serialization: what the model is allowed to quote ───────
+
+  def figures_lines
+    (situation[:figures] || {}).map do |kind, points|
+      series = points.map do |point|
+        qualifier = point[:qualifier] ? " (#{point[:qualifier].tr('_', ' ')})" : ""
+        "#{point[:value]}#{qualifier} at #{point[:t]}"
+      end
+      "Figures, reported #{kind}: #{series.join('; ')}"
+    end
+  end
+
+  def attribution_line
+    rows = situation[:attribution]
+    return "Attribution: no disagreement between outlets" if rows.blank?
+
+    named = rows.map { |row| "#{row[:actor]} named by #{row[:sources]} sources (#{row[:reports]} reports)" }
+    "Attribution CONTESTED: #{named.join('; ')}"
+  end
+
+  def facts_line
+    pairs = situation.dig(:facts, :pairs) || []
+    kinds = situation.dig(:facts, :kinds) || []
+    parts = pairs.map { |pair| "#{pair[:from]} -> #{pair[:to]} x#{pair[:count]}" } +
+      kinds.map { |kind| "#{kind[:kind]} x#{kind[:count]}" }
+    "Actor pairs and kinds: #{parts.join('; ').presence || 'none'}"
+  end
+
+  def attention_line
+    timeline = situation[:timeline]
+    return "Attention: no stamped timeline" if timeline.blank?
+
+    points = timeline[:points] || []
+    peak = points.max_by { |point| point[:articles] }
+    "Attention: reports per #{timeline[:bucket]}, first at #{timeline[:first_at]}, peak #{peak&.dig(:articles)} at #{peak&.dig(:t)}, #{points.sum { |point| point[:new_sources] }} first-reports from new outlets"
+  end
+
+  def sources_line
+    sources = situation[:sources]
+    return "Sources: unknown" if sources.blank?
+
+    top = (sources[:top] || []).first(4).map do |row|
+      country = row[:country] ? " (#{row[:country]})" : ""
+      "#{row[:name]}#{country} x#{row[:reports]}"
+    end
+    "Sources: #{sources[:total]} outlets in #{sources[:countries]} countries; top: #{top.join(', ')}"
   end
 
   def catalog_lines
@@ -210,10 +334,114 @@ class SituationLayerCurator
       brief: data["brief"].to_s.strip.presence,
       radius_km: parse_radius(data["radius_km"]),
       regions: parse_regions(data["regions"]),
-      related: parse_related(data["related"])
+      related: parse_related(data["related"]),
+      composition: parse_composition(data["composition"])
     )
   rescue JSON::ParserError
     nil
+  end
+
+  # ── composition: the model edits, the data asserts ───────────────────
+
+  # Everything composed is validated before it ships: module kinds come from
+  # a closed list, a module whose data is not in the payload is dropped, at
+  # most one module keeps hero emphasis, and any composed string carrying a
+  # number that appears nowhere in the payload is rejected whole -- the model
+  # chooses and phrases; it does not get to introduce figures. A composition
+  # whose lead fails is no composition at all.
+  def parse_composition(row)
+    return nil unless row.is_a?(Hash)
+
+    treatment = row["treatment"].to_s
+    return nil unless %w[note dossier].include?(treatment)
+
+    lead = composed_text(row["lead"], 260)
+    return nil if lead.blank?
+
+    {
+      treatment: treatment,
+      angle: row["angle"].to_s.strip.presence&.slice(0, 60),
+      lead: lead,
+      dek: composed_text(row["dek"], 700),
+      upgrade: composed_text(row["upgrade"], 260),
+      modules: treatment == "note" ? [] : parse_modules(row["modules"])
+    }.compact
+  end
+
+  def parse_modules(rows)
+    hero_taken = false
+    Array(rows).first(MAX_MODULES).filter_map do |row|
+      next unless row.is_a?(Hash)
+
+      kind = row["kind"].to_s
+      next unless MODULE_KINDS.include?(kind)
+      next unless module_data_present?(kind, row)
+
+      emphasis = row["emphasis"] == "hero" && !hero_taken ? "hero" : "support"
+      hero_taken ||= emphasis == "hero"
+
+      {
+        kind: kind,
+        emphasis: emphasis,
+        metric: kind == "figures_chart" ? row["metric"].to_s : nil,
+        title: composed_text(row["title"], 140),
+        caption: composed_text(row["caption"], 180),
+        annotations: CHART_KINDS.include?(kind) ? parse_annotations(row["annotations"]) : nil
+      }.compact
+    end
+  end
+
+  # A module without its data is an empty box advertising the pipeline;
+  # attribution without disagreement would re-assert what the facts row
+  # already says. Both get dropped here rather than rendered hollow.
+  def module_data_present?(kind, row)
+    case kind
+    when "figures_chart" then (situation[:figures] || {}).key?(row["metric"].to_s)
+    when "attention_timeline" then situation.dig(:timeline, :points).present?
+    when "attribution_split" then situation[:attribution].present?
+    when "actor_pairs" then situation.dig(:facts, :pairs).present?
+    when "sources" then situation.dig(:sources, :top).present?
+    end
+  end
+
+  def parse_annotations(rows)
+    parsed = Array(rows).first(MAX_ANNOTATIONS).filter_map do |row|
+      next unless row.is_a?(Hash)
+
+      stamp = begin
+        Time.iso8601(row["t"].to_s)
+      rescue ArgumentError
+        nil
+      end
+      next unless stamp
+
+      text = composed_text(row["text"], 90)
+      next if text.blank?
+
+      { t: stamp.iso8601, text: text }
+    end
+    parsed.presence
+  end
+
+  # The number gate. Composed text may only carry numbers that exist in the
+  # payload the model was shown -- everything else in the string is the
+  # model's own wording, which is the job, but a novel figure is an invented
+  # fact and poisons the string that carries it. Small numbers pass freely:
+  # "two threads, one morning" and "day 3" are arithmetic on the payload,
+  # not new claims, and the payload cannot enumerate them.
+  def composed_text(value, max_length)
+    text = value.to_s.strip
+    return nil if text.blank?
+
+    text = text.slice(0, max_length)
+    numbers = text.scan(/\d[\d,]*/).map { |raw| raw.delete(",") }
+    return nil if numbers.any? { |number| number.to_i > 12 && !allowed_numbers.include?(number) }
+
+    text
+  end
+
+  def allowed_numbers
+    @allowed_numbers ||= JSON.generate(situation).scan(/\d+/).to_set
   end
 
   def parse_picks(rows)
@@ -273,7 +501,8 @@ class SituationLayerCurator
       brief: nil,
       radius_km: nil,
       regions: [],
-      related: []
+      related: [],
+      composition: nil
     )
   end
 

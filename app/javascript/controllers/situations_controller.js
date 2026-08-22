@@ -325,15 +325,7 @@ export default class extends Controller {
     const facts = situation.facts
     if (!facts) return ""
 
-    const pairMax = Math.max(...(facts.pairs || []).map((pair) => pair.count), 1)
-    const pairs = (facts.pairs || []).map((pair) => `
-      <div class="sit-fact-row">
-        <span class="sit-fact-actor">${escapeHtml(pair.from)}</span>
-        <span class="sit-fact-arrow">→</span>
-        <span class="sit-fact-actor">${escapeHtml(pair.to)}</span>
-        <span class="sit-fact-bar"><i style="width:${Math.round((pair.count / pairMax) * 100)}%"></i></span>
-        <span class="sit-fact-count">${pair.count === 1 ? "1 story" : `${pair.count} stories`}</span>
-      </div>`).join("")
+    const pairs = facts.pairs?.length ? this._pairRowsHtml(facts.pairs) : ""
 
     const kinds = (facts.kinds || []).map((k) =>
       `<span class="sit-fact-kind">${escapeHtml(String(k.kind).replace(/_/g, " "))} · ${k.count}</span>`
@@ -399,16 +391,10 @@ export default class extends Controller {
     const rows = situation.attribution
     if (!rows?.length) return ""
 
-    const max = Math.max(...rows.map((row) => row.sources), 1)
     return `
       <div class="sit-attribution">
         <div class="sit-section-title">Who says who did it · contested</div>
-        ${rows.map((row) => `
-          <div class="sit-fact-row">
-            <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
-            <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
-            <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
-          </div>`).join("")}
+        ${this._attributionRowsHtml(rows)}
       </div>`
   }
 
@@ -473,18 +459,196 @@ export default class extends Controller {
     const sources = situation.sources
     if (!sources?.total) return ""
 
-    const chips = (sources.top || []).map((source) => `
-      <span class="sit-source-chip">${escapeHtml(source.name)}${source.country
-        ? ` <span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>`
-        : ""} · ${source.reports}</span>`).join("")
-    if (!chips) return ""
+    if (!sources.top?.length) return ""
 
     return `
       <div class="sit-sources">
         <div class="sit-section-title">Who is reporting it${sources.countries > 1
           ? ` · ${sources.countries} countries` : ""}</div>
-        <div class="sit-source-chips">${chips}</div>
+        ${this._sourceChipsHtml(sources)}
       </div>`
+  }
+
+  _pairRowsHtml(pairs) {
+    const pairMax = Math.max(...pairs.map((pair) => pair.count), 1)
+    return pairs.map((pair) => `
+      <div class="sit-fact-row">
+        <span class="sit-fact-actor">${escapeHtml(pair.from)}</span>
+        <span class="sit-fact-arrow">→</span>
+        <span class="sit-fact-actor">${escapeHtml(pair.to)}</span>
+        <span class="sit-fact-bar"><i style="width:${Math.round((pair.count / pairMax) * 100)}%"></i></span>
+        <span class="sit-fact-count">${pair.count === 1 ? "1 story" : `${pair.count} stories`}</span>
+      </div>`).join("")
+  }
+
+  _attributionRowsHtml(rows) {
+    const max = Math.max(...rows.map((row) => row.sources), 1)
+    return rows.map((row) => `
+      <div class="sit-fact-row">
+        <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
+        <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
+        <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
+      </div>`).join("")
+  }
+
+  _sourceChipsHtml(sources) {
+    return `<div class="sit-source-chips">${(sources.top || []).map((source) => `
+      <span class="sit-source-chip">${escapeHtml(source.name)}${source.country
+        ? ` <span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>`
+        : ""} · ${source.reports}</span>`).join("")}</div>`
+  }
+
+  // ── the composed dossier: the curator edits, the data asserts ───────
+  //
+  // Everything written (lead, dek, titles, captions, annotations) arrives
+  // from the curator already validated server-side; everything numeric is
+  // drawn from the same payload the fallback sections read. Voice renders
+  // in serif, instrument in mono -- a reader can always tell which is which.
+  _composedHtml(situation, composition) {
+    const provenance = `
+      <div class="sit-composed-prov">
+        ${pluralize(situation.member_count, "story", "stories")} ·
+        ${pluralize(situation.article_count, "report")} ·
+        ${pluralize(situation.source_count, "source")} ·
+        ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}
+      </div>`
+
+    const head = `
+      <div class="sit-composed-kicker">
+        <span class="${situation.tier === "emerging" ? "sit-tier-emerging" : "sit-tier-corroborated"}">${situation.tier}</span>
+        ${composition.angle ? `<span>${escapeHtml(composition.angle)}</span>` : ""}
+      </div>
+      <h3 class="sit-composed-lead">${escapeHtml(composition.lead)}</h3>
+      ${composition.dek ? `<p class="sit-composed-dek">${escapeHtml(composition.dek)}</p>` : ""}
+      ${provenance}`
+
+    if (composition.treatment === "note") {
+      return `${head}
+        ${composition.upgrade ? `
+          <div class="sit-composed-upgrade"><b>What would change this:</b>
+          ${escapeHtml(composition.upgrade)}</div>` : ""}`
+    }
+
+    const modules = (composition.modules || [])
+      .map((module) => this._composedModuleHtml(situation, module)).join("")
+    return head + modules
+  }
+
+  _composedModuleHtml(situation, module) {
+    const body = this._composedModuleBody(situation, module)
+    if (!body) return ""
+
+    return `
+      <div class="sit-composed-module is-${module.emphasis || "support"}">
+        ${module.title ? `<div class="sit-composed-title">${escapeHtml(module.title)}</div>` : ""}
+        ${module.caption ? `<div class="sit-composed-caption">${escapeHtml(module.caption)}</div>` : ""}
+        ${body}
+      </div>`
+  }
+
+  _composedModuleBody(situation, module) {
+    switch (module.kind) {
+      case "figures_chart": {
+        const points = situation.figures?.[module.metric]
+        return points?.length
+          ? this._revisionChartSvg(points, {
+              hero: module.emphasis === "hero", annotations: module.annotations })
+          : null
+      }
+      case "attention_timeline": {
+        const timeline = situation.timeline
+        return timeline?.points?.length
+          ? this._attentionChartSvg(timeline, {
+              hero: module.emphasis === "hero", annotations: module.annotations })
+          : null
+      }
+      case "attribution_split":
+        return situation.attribution?.length ? this._attributionRowsHtml(situation.attribution) : null
+      case "actor_pairs":
+        return situation.facts?.pairs?.length ? this._pairRowsHtml(situation.facts.pairs) : null
+      case "sources":
+        return situation.sources?.top?.length ? this._sourceChipsHtml(situation.sources) : null
+      default:
+        return null
+    }
+  }
+
+  // The revision curve as a step line: an assertion holds until a new one
+  // revises it, because interpolating between two headlines would invent
+  // values nobody reported. Dots are the raw assertions, each real.
+  _revisionChartSvg(points, { hero = false, annotations = null } = {}) {
+    const width = 288
+    const chartHeight = hero ? 64 : 38
+    const padTop = annotations?.length ? 14 + (annotations.length - 1) * 11 : 4
+    const height = chartHeight + padTop + 4
+    const times = points.map((point) => Date.parse(point.t))
+    const t0 = Math.min(...times)
+    const span = Math.max(Math.max(...times) - t0, 1)
+    const max = Math.max(...points.map((point) => point.value), 1)
+    const x = (t) => 4 + ((Date.parse(t) - t0) / span) * (width - 8)
+    const y = (v) => padTop + chartHeight - 3 - (v / max) * (chartHeight - 8)
+
+    let running = 0
+    const steps = []
+    points.forEach((point) => {
+      const px = x(point.t)
+      if (steps.length) steps.push(`${px.toFixed(1)},${steps[steps.length - 1].split(",")[1]}`)
+      running = Math.max(running, point.value)
+      steps.push(`${px.toFixed(1)},${y(running).toFixed(1)}`)
+    })
+    const line = `<polyline points="${steps.join(" ")}" fill="none" stroke="#ffb300"
+      stroke-width="1.5" opacity="0.9"></polyline>`
+    const dots = points.map((point) => `
+      <circle cx="${x(point.t).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="2.5"
+        fill="#4fc3f7" opacity="0.9"></circle>`).join("")
+
+    return `<svg class="sit-composed-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      ${line}${dots}${this._annotationMarksSvg(annotations, x, padTop, chartHeight)}</svg>`
+  }
+
+  _attentionChartSvg(timeline, { hero = false, annotations = null } = {}) {
+    const points = timeline.points
+    const width = 288
+    const chartHeight = hero ? 56 : 34
+    const padTop = annotations?.length ? 14 + (annotations.length - 1) * 11 : 4
+    const height = chartHeight + padTop + 4
+    const step = width / points.length
+    const barWidth = Math.max(step - 1, 1)
+    const max = Math.max(...points.map((point) => point.articles), 1)
+    const x = (t) => {
+      const index = points.findIndex((point) => Date.parse(point.t) >= Date.parse(t))
+      return (index < 0 ? points.length - 1 : index) * step + barWidth / 2
+    }
+
+    const bars = points.map((point, index) => {
+      if (!point.articles) return ""
+      const barHeight = Math.max((point.articles / max) * chartHeight, 1.5)
+      return `<rect x="${(index * step).toFixed(1)}" y="${(padTop + chartHeight - barHeight).toFixed(1)}"
+        width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" fill="#4fc3f7" opacity="0.8"></rect>`
+    }).join("")
+
+    return `<svg class="sit-composed-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      ${bars}${this._annotationMarksSvg(annotations, x, padTop, chartHeight)}</svg>`
+  }
+
+  // Written moments pinned to the time axis. Each annotation gets its own
+  // row in the reserved strip above the chart -- staggered by index, because
+  // two moments close in time would otherwise write over each other.
+  _annotationMarksSvg(annotations, x, padTop, chartHeight) {
+    if (!annotations?.length) return ""
+
+    return annotations.map((annotation, index) => {
+      const px = Math.min(Math.max(x(annotation.t), 6), 282)
+      const anchor = px > 200 ? "end" : "start"
+      const rowY = padTop - 4 - (annotations.length - 1 - index) * 11
+      return `
+        <line x1="${px.toFixed(1)}" y1="${(rowY + 2).toFixed(1)}" x2="${px.toFixed(1)}"
+          y2="${padTop + chartHeight - 3}" stroke="#3a4656" stroke-width="1"
+          stroke-dasharray="2,2"></line>
+        <text x="${(px + (anchor === "end" ? -3 : 3)).toFixed(1)}" y="${rowY.toFixed(1)}"
+          text-anchor="${anchor}" font-size="9"
+          font-family="ui-monospace, Menlo, monospace" fill="#c3ccd6">${escapeHtml(annotation.text)}</text>`
+    }).join("")
   }
 
   _footprint(situation) {
@@ -984,8 +1148,13 @@ export default class extends Controller {
       if (ratio > 1.3 || ratio < 0.7) this._flyTo(situation, plan.radius_km)
     }
 
+    const reading = document.getElementById("sit-reading")
+    if (reading && plan.composition?.lead) {
+      reading.innerHTML = this._composedHtml(situation, plan.composition)
+    }
+
     const brief = document.getElementById("sit-brief")
-    if (brief && plan.brief) {
+    if (brief && plan.brief && !plan.composition?.lead) {
       brief.innerHTML = `${escapeHtml(plan.brief)} <span class="sit-brief-basis">AI brief</span>`
       brief.style.display = "block"
     }
@@ -1131,20 +1300,22 @@ export default class extends Controller {
 
       <div id="sit-brief" class="sit-brief" style="display:none"></div>
 
-      <div class="sit-panel-stats">
-        <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}
-        · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
+      <div id="sit-reading">
+        <div class="sit-panel-stats">
+          <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}
+          · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
+        </div>
+
+        ${this._timelineHtml(situation)}
+
+        ${this._factsHtml(situation)}
+
+        ${this._attributionHtml(situation)}
+
+        ${this._figuresHtml(situation)}
+
+        ${this._sourcesHtml(situation)}
       </div>
-
-      ${this._timelineHtml(situation)}
-
-      ${this._factsHtml(situation)}
-
-      ${this._attributionHtml(situation)}
-
-      ${this._figuresHtml(situation)}
-
-      ${this._sourcesHtml(situation)}
 
       <div id="sit-related"></div>
 

@@ -5,9 +5,11 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
   class FixedCurator
     attr_reader :neighbors_seen
 
-    def initialize(basis: "heuristic", picks: {}, brief: nil, radius_km: nil, regions: [], related: [])
+    def initialize(basis: "heuristic", picks: {}, brief: nil, radius_km: nil, regions: [], related: [],
+                   composition: nil)
       @result = SituationLayerCurator::Result.new(
-        basis: basis, picks: picks, brief: brief, radius_km: radius_km, regions: regions, related: related
+        basis: basis, picks: picks, brief: brief, radius_km: radius_km, regions: regions,
+        related: related, composition: composition
       )
     end
 
@@ -53,6 +55,21 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
       canonical_key: "place:#{name.downcase}", entity_type: "place", canonical_name: name,
       country_code: country, metadata: metadata
     )
+  end
+
+  test "the curator's composition rides the plan to the client" do
+    composition = { treatment: "dossier", lead: "The toll climbed",
+                    modules: [ { kind: "figures_chart", metric: "killed", emphasis: "hero" } ] }
+    cluster(key: "comp1", title: "Quake", lat: 0.0, lng: -30.0)
+    entity = situation(key: "situation:entity:comp", name: "Quake situation",
+                       events: [ OntologyEvent.last ])
+
+    plan = AnchorRegionService.stub(:country_code_for, nil) do
+      SituationLayerPlanService.call(
+        situation_id: entity.id, curator: FixedCurator.new(composition: composition))
+    end
+
+    assert_equal composition, plan[:composition]
   end
 
   test "returns nil for an unknown situation" do

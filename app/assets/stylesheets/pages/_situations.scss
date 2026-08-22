@@ -442,6 +442,104 @@
   width: 100%;
 }
 
+// ── the composed dossier ─────────────────────────────────────────────
+// Voice and instrument are typographically separate: serif is the curator's
+// composed reading, mono is measurement and provenance. Simple hardcoded
+// values throughout, matching the rest of this sheet.
+
+.sit-composed-kicker {
+  display: flex;
+  gap: 10px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7885;
+  margin-top: 10px;
+}
+
+.sit-tier-corroborated {
+  color: #7ed491;
+}
+
+.sit-composed-lead {
+  font-family: Charter, Georgia, "Times New Roman", serif;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #e8eef4;
+  margin: 8px 0 6px;
+}
+
+.sit-composed-dek {
+  font-family: Charter, Georgia, "Times New Roman", serif;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #c3ccd6;
+  margin: 0 0 10px;
+}
+
+.sit-composed-prov {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+  color: #6b7885;
+  border-top: 1px solid #1a212a;
+  padding-top: 8px;
+  line-height: 1.7;
+}
+
+.sit-composed-upgrade {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #131a23;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #8a97a5;
+  line-height: 1.5;
+}
+
+.sit-composed-upgrade b {
+  color: #ffb300;
+  font-weight: 600;
+}
+
+.sit-composed-module {
+  margin-top: 16px;
+}
+
+.sit-composed-module.is-hero {
+  margin-top: 20px;
+}
+
+.sit-composed-title {
+  font-family: Charter, Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8eef4;
+}
+
+.sit-composed-module.is-hero .sit-composed-title {
+  font-size: 16px;
+}
+
+.sit-composed-caption {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  color: #6b7885;
+  margin: 2px 0 8px;
+}
+
+.sit-composed-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+}
+
+.sit-composed-module.is-support .sit-composed-chart {
+  max-width: 230px;
+}
+
 .sit-sources {
   margin-top: 12px;
 }

@@ -147,10 +147,25 @@ class LocationResolver
   end
 
   def title_city_candidate(title:, country_hint:)
-    city_name = city_name_from_title(title) || gazetteer_name_from_title(title)
-    return nil unless city_name
-
     country_code = normalize_country_code(country_hint)
+    city_name = city_name_from_title(title)
+
+    if city_name.nil?
+      # The gazetteer path resolves to a Place row, never back through a bare
+      # string. The hint narrows the choice but does not veto it: a Chilean
+      # feed's country hint must not stop "Kyiv" resolving to Ukraine.
+      place, matched_text = gazetteer_place_from_title(title, country_code: country_code)
+      return nil unless place
+
+      hint_matched = country_code.present? && place.country_code == country_code
+      return place_result(
+        place,
+        basis: hint_matched ? "title_place_country" : "title_place",
+        confidence: hint_matched ? 0.91 : 0.85,
+        metadata: { "matched_text" => matched_text, "country_hint" => country_hint }.compact
+      )
+    end
+
     place = place_candidate(
       name: city_name,
       country_code: country_code,
@@ -177,11 +192,24 @@ class LocationResolver
       )
     end
 
+    # The hint narrows, it does not veto: a Chilean feed's country hint must
+    # not stop "Kyiv" resolving to Ukraine. Retry without the hint before
+    # falling back, at the unhinted basis and confidence.
+    if country_code.present?
+      place = place_candidate(
+        name: city_name,
+        basis: "title_place",
+        confidence: 0.85,
+        metadata: { "matched_text" => city_name, "country_hint" => country_hint }.compact
+      )
+      return place if place
+    end
+
     # Every gazetteer alias used to originate from CITY_COORDS, so this lookup
     # could not miss. Since the gazetteer is loaded from GeoNames that no
-    # longer holds: a matched name may have no CITY_COORDS entry, and a
-    # country hint can filter out the Place row that would otherwise have
-    # answered above. Fall through to the next candidate instead of raising.
+    # longer holds: a matched name may have no CITY_COORDS entry. Reaching
+    # here means neither the hinted nor the unhinted gazetteer knew the name,
+    # so the hint's country is an unverified guess -- claim only the city.
     coords = CITY_COORDS[city_name]
     return nil if coords.nil?
 
@@ -189,11 +217,10 @@ class LocationResolver
       lat: coords[0],
       lng: coords[1],
       place_name: city_name.titleize,
-      country_code: country_code,
-      basis: country_code.present? ? "title_city_with_country_hint" : "title_city",
+      basis: "title_city",
       precision: "city",
       kind: "event",
-      confidence: country_code.present? ? 0.87 : 0.84,
+      confidence: 0.84,
       metadata: { "matched_text" => city_name, "country_hint" => country_hint }.compact
     )
   end
@@ -286,9 +313,20 @@ class LocationResolver
   def place_candidate(name:, basis:, confidence:, metadata:, country_code: nil)
     return nil unless places_available?
 
+    # "Colombia" as a name means the country unless the caller explicitly
+    # points at a different country's namesake village (country_code "cu").
+    mapped = COUNTRY_NAME_MAP[Place.normalize_name(name)]
+    return nil if mapped && (country_code.blank? || country_code == mapped)
+
     place = Place.lookup(name, country_code: country_code).first
     return nil unless place
 
+    place_result(place, basis: basis, confidence: confidence, metadata: metadata)
+  rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
+    nil
+  end
+
+  def place_result(place, basis:, confidence:, metadata:)
     result(
       lat: place.latitude,
       lng: place.longitude,
@@ -305,8 +343,6 @@ class LocationResolver
         "place_canonical_key" => place.canonical_key
       )
     )
-  rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
-    nil
   end
 
   def places_available?
@@ -337,11 +373,20 @@ class LocationResolver
   # The latter reads every alias into Ruby and regex-tests them one by one, so
   # its cost grows with the size of the gazetteer: ~5ms per article at 630
   # aliases, which extrapolates to seconds per article once a real gazetteer
-  # is loaded. This form issues a single indexed lookup whose cost depends on
-  # the length of the title instead, so the gazetteer can grow freely.
+  # is loaded. This form issues indexed lookups whose cost depends on the
+  # length of the title instead, so the gazetteer can grow freely.
   #
-  # Longest match still wins, so "new york" beats a bare "york".
-  def gazetteer_name_from_title(title)
+  # Returns [place, matched_text], and the Place is the row whose name or
+  # alias actually matched. The previous form returned only the matched
+  # string and re-looked it up, which let an alias of one place resolve to a
+  # completely different place carrying the same surface form -- "Cali"
+  # matched via Colombia's city and resolved to a Malaysian toponym.
+  #
+  # Longest match still wins, so "new york" beats a bare "york"; among
+  # equal-length matches the ranked scope prefers country-coded rows and
+  # higher importance, so a title naming several same-named places resolves
+  # to the most prominent one every run.
+  def gazetteer_place_from_title(title, country_code: nil)
     return nil if title.blank? || !places_available?
 
     # N-grams are built from the original casing, not the normalized string,
@@ -355,24 +400,47 @@ class LocationResolver
     candidates = (1..MAX_PLACE_NGRAM).flat_map do |n|
       tokens.each_cons(n).filter_map do |gram|
         next unless proper_noun_gram?(gram)
+        next if n == 1 && acronym_token?(gram.first)
 
         normalized = Place.normalize_name(gram.join(" "))
-        normalized.presence
+        next if normalized.blank?
+        # A country name in a headline is the country, not its namesake
+        # village -- "Australia" must not resolve to Australia, Cuba. The
+        # country-keyword candidate downstream claims these at country
+        # precision instead.
+        next if COUNTRY_NAME_MAP.key?(normalized)
+
+        normalized
       end
-    end
+    end.uniq
     return nil if candidates.empty?
 
-    # Length breaks most ties; name breaks the rest so a title naming several
-    # equal-length cities resolves the same way every run. Picking the *right*
-    # one of several needs population weighting, which only becomes meaningful
-    # once a real gazetteer is loaded.
-    PlaceAlias
-      .where(normalized_name: candidates.uniq)
-      .order(Arel.sql("length(normalized_name) DESC, normalized_name ASC"))
-      .limit(1)
-      .pick(:normalized_name)
+    matches = PlaceAlias.where(normalized_name: candidates).pluck(:normalized_name, :place_id) +
+      Place.where(normalized_name: candidates).pluck(:normalized_name, :id)
+    return nil if matches.empty?
+
+    best_length = matches.map { |name, _| name.length }.max
+    best = matches.select { |name, _| name.length == best_length }
+    ids = best.map(&:last).uniq
+
+    scope = Place.where(id: ids)
+    place = (scope.where(country_code: country_code).ranked.first if country_code.present?)
+    place ||= scope.ranked.first
+    return nil unless place
+
+    [place, best.find { |_, id| id == place.id }&.first]
   rescue ActiveRecord::StatementInvalid, ActiveRecord::NoDatabaseError
     nil
+  end
+
+  # A short all-caps token is an organisation or a country code before it is
+  # a place: "UN", "EU", "NATO", "GOP". Real places written in caps are
+  # dateline style ("KARACHI:") and comfortably longer than four characters
+  # more often than not, so the guard costs little and stops org initialisms
+  # matching whichever village happens to share the letters.
+  def acronym_token?(token)
+    word = token.gsub(/\A[^[[:alnum:]]]+|[^[[:alnum:]]]+\z/, "")
+    word.length.between?(1, 4) && word == word.upcase && word != word.downcase
   end
 
   # True when every token could be part of a proper noun. A character whose

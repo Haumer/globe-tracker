@@ -339,7 +339,8 @@ class NewsClaimExtractor
         "matched_on" => matched_on,
         "actor_count" => assignments.size,
         "summary_used" => summary.present?,
-      },
+        "figures" => CasualtyFigureParser.parse(full_text).presence,
+      }.compact,
       actors: assignments,
     }
   end

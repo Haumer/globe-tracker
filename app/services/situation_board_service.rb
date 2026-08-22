@@ -98,7 +98,12 @@ class SituationBoardService
       first_seen_at: members.filter_map { |m| m[:last_seen_at] }.min,
       last_seen_at: members.filter_map { |m| m[:last_seen_at] }.max,
       members: members,
+      facts: facts_for(members),
       daily: daily_counts(members),
+      timeline: timeline_for(members),
+      sources: sources_for(members),
+      attribution: attribution_for(members),
+      figures: figures_for(members),
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -143,6 +148,12 @@ class SituationBoardService
         event_family: event.event_family,
         lat: event.latitude,
         lng: event.longitude,
+        # How the coordinate was earned, so the globe can draw a city fix and
+        # a country guess differently instead of asserting both identically.
+        place: member_place_names[event.place_entity_id],
+        geo_precision: event.geo_precision,
+        geo_confidence: event.geo_confidence,
+        claim: member_claim(event.primary_story_cluster_id),
         last_seen_at: event.last_seen_at&.iso8601
       }
     end.sort_by { |member| member[:last_seen_at].to_s }.reverse
@@ -205,6 +216,143 @@ class SituationBoardService
     span = (now.to_date - (days - 1)).upto(now.to_date).to_a
     tally = stamps.tally
     span.map { |day| { date: day.iso8601, count: tally[day].to_i } }
+  end
+
+  # How the story broke: reports per bucket from the first report to the last,
+  # hourly while the spread is under two days, daily after. new_sources marks
+  # the buckets where an outlet filed its first report -- the difference
+  # between one wire echoing and corroboration arriving. Stamps outside the
+  # window are republication noise and are dropped rather than letting one
+  # ancient published_at stretch the axis across a year.
+  def timeline_for(members)
+    window_start = now - days.days
+    rows = situation_article_rows(members).select do |row|
+      row[:published_at] && row[:published_at].between?(window_start, now)
+    end
+    return nil if rows.size < 2
+
+    stamps = rows.map { |row| row[:published_at] }
+    hourly = (stamps.max - stamps.min) <= 48.hours
+    bucket = ->(time) { hourly ? time.change(min: 0) : time.beginning_of_day }
+
+    articles = Hash.new(0)
+    rows.each { |row| articles[bucket.call(row[:published_at])] += 1 }
+    fresh = Hash.new(0)
+    rows.group_by { |row| row[:source_id] }
+      .each_value { |list| fresh[bucket.call(list.map { |row| row[:published_at] }.min)] += 1 }
+
+    step = hourly ? 1.hour : 1.day
+    at = bucket.call(stamps.min)
+    finish = bucket.call(stamps.max)
+    points = []
+    while at <= finish
+      points << { t: at.iso8601, articles: articles[at], new_sources: fresh[at] }
+      at += step
+    end
+
+    { bucket: hourly ? "hour" : "day", first_at: stamps.min.iso8601, points: points }
+  end
+
+  # Who is reporting it: the breadth behind the report count. Grouped per
+  # source across the whole situation, so a wire filing into three member
+  # clusters is one outlet with three reports -- the per-cluster counts
+  # cannot see that.
+  def sources_for(members)
+    rows = situation_article_rows(members)
+    return nil if rows.empty?
+
+    ranked = rows.group_by { |row| row[:source_id] }.map do |id, list|
+      name, country = news_sources_by_id[id]
+      { name: name || "unknown", country: country, reports: list.size }
+    end.sort_by { |row| [ -row[:reports], row[:name] ] }
+
+    {
+      total: ranked.size,
+      countries: ranked.filter_map { |row| row[:country].presence }.uniq.size,
+      top: ranked.first(6)
+    }
+  end
+
+  # The distribution the modal answer throws away: which initiator each
+  # outlet's reports actually name. One row per named initiator, backed by
+  # how many distinct outlets say so. Emitted only when outlets disagree --
+  # agreement is already the first fact row, and a one-row split would just
+  # restate it.
+  def attribution_for(members)
+    source_by_article = situation_article_rows(members)
+      .to_h { |row| [ row[:article_id], row[:source_id] ] }
+
+    named = members.filter_map { |member| member[:cluster_id] }.uniq.flat_map do |cluster_id|
+      (claims_by_cluster[cluster_id] || []).filter_map do |claim|
+        initiator = claim.news_claim_actors.find { |ca| ca.role == "initiator" }&.news_actor&.name
+        [ initiator, claim.news_article_id ] if initiator
+      end
+    end.uniq
+
+    rows = named.group_by(&:first).map do |name, list|
+      articles = list.map(&:last)
+      { actor: name, reports: articles.size,
+        sources: articles.filter_map { |id| source_by_article[id] }.uniq.size }
+    end.sort_by { |row| [ -row[:sources], -row[:reports], row[:actor] ] }
+
+    rows.size < 2 ? nil : rows.first(4)
+  end
+
+  # What the numbers are doing: every casualty figure a stamped headline
+  # asserted, in the order the headlines landed. The chart draws the running
+  # maximum; the payload sends the raw assertions, because a figure that goes
+  # DOWN is a correction and burying it inside a pre-computed maximum would
+  # hide exactly the revision worth seeing. A kind needs two stamped figures
+  # to ship -- one number is a fact for the member row, not a curve.
+  def figures_for(members)
+    stamps = situation_article_rows(members)
+      .to_h { |row| [ row[:article_id], row[:published_at] ] }
+
+    series = Hash.new { |hash, key| hash[key] = [] }
+    members.filter_map { |member| member[:cluster_id] }.uniq.each do |cluster_id|
+      (claims_by_cluster[cluster_id] || []).each do |claim|
+        stamp = stamps[claim.news_article_id]
+        next unless stamp
+
+        Array(claim.metadata["figures"]).each do |figure|
+          next unless figure["value"].to_i.positive?
+
+          series[figure["kind"]] << { t: stamp.iso8601, value: figure["value"].to_i,
+                                      qualifier: figure["qualifier"] }.compact
+        end
+      end
+    end
+
+    kept = series.transform_values { |points| points.uniq.sort_by { |point| point[:t] } }
+      .select { |_, points| points.size >= 2 }
+    kept.empty? ? nil : kept
+  end
+
+  def situation_article_rows(members)
+    members.filter_map { |member| member[:cluster_id] }
+      .flat_map { |cluster_id| article_rows_by_cluster[cluster_id] }
+      .uniq { |row| row[:article_id] }
+  end
+
+  def article_rows_by_cluster
+    @article_rows_by_cluster ||= NewsStoryMembership
+      .where(news_story_cluster_id: cluster_ids)
+      .joins(:news_article)
+      .pluck(:news_story_cluster_id, Arel.sql("news_articles.id"),
+             Arel.sql("news_articles.published_at"), Arel.sql("news_articles.news_source_id"))
+      .group_by(&:first)
+      .transform_values do |list|
+        list.map { |_, id, at, source_id| { article_id: id, published_at: at, source_id: source_id } }
+      end
+      .tap { |hash| hash.default = [] }
+  end
+
+  def news_sources_by_id
+    @news_sources_by_id ||= begin
+      ids = article_rows_by_cluster.values.flatten.map { |row| row[:source_id] }.uniq
+      NewsSource.where(id: ids).pluck(:id, :name, :publisher_country)
+        .to_h { |id, name, country| [ id, [ name, country ] ] }
+    end
   end
 
   def rings_for(entity)
@@ -291,6 +439,72 @@ class SituationBoardService
         .transform_values { |rows| rows.filter_map { |_, event_id| events[event_id] } }
         .tap { |hash| hash.default = [] }
     end
+  end
+
+  def member_place_names
+    @member_place_names ||= begin
+      ids = member_events.values.flatten.filter_map(&:place_entity_id).uniq
+      OntologyEntity.where(id: ids).pluck(:id, :canonical_name).to_h
+    end
+  end
+
+  # The structured reading of a member: what kind of event its reports
+  # describe and who they say is doing what to whom. Reports within a cluster
+  # disagree at the margins, so each slot takes the modal answer -- the type
+  # and actors most of the cluster's claims agree on.
+  def member_claim(cluster_id)
+    claims = claims_by_cluster[cluster_id]
+    return nil if claims.blank?
+
+    family, type = claims.map { |c| [ c.event_family, c.event_type ] }.tally.max_by(&:last)&.first
+    {
+      family: family,
+      type: type,
+      initiator: modal_actor(claims, "initiator"),
+      target: modal_actor(claims, "target"),
+      subject: modal_actor(claims, "subject") || modal_actor(claims, "participant"),
+    }.compact
+  end
+
+  def modal_actor(claims, role)
+    claims.flat_map { |claim| claim.news_claim_actors.select { |ca| ca.role == role } }
+      .filter_map { |ca| ca.news_actor&.name }
+      .tally.max_by(&:last)&.first
+  end
+
+  def claims_by_cluster
+    @claims_by_cluster ||= begin
+      rows = NewsStoryMembership.where(news_story_cluster_id: cluster_ids)
+        .pluck(:news_story_cluster_id, :news_article_id)
+      clusters_by_article = rows.group_by(&:last).transform_values { |pairs| pairs.map(&:first) }
+      grouped = Hash.new
+      NewsClaim.where(news_article_id: clusters_by_article.keys, primary: true)
+        .includes(news_claim_actors: :news_actor)
+        .each do |claim|
+          clusters_by_article[claim.news_article_id].each do |cluster_id|
+            (grouped[cluster_id] ||= []) << claim
+          end
+        end
+      grouped
+    end
+  end
+
+  # The situation's headline facts: the directed actor pairs its members'
+  # claims agree on, and the kinds of event they describe. Counts are members
+  # (stories), not raw reports, so one heavily syndicated article cannot
+  # dominate the reading.
+  def facts_for(members)
+    claims = members.filter_map { |member| member[:claim] }
+    return nil if claims.empty?
+
+    pairs = claims.filter_map { |c| [ c[:initiator], c[:target] ] if c[:initiator] && c[:target] }
+      .tally.sort_by { |pair, count| [ -count, pair ] }.first(5)
+      .map { |(from, to), count| { from: from, to: to, count: count } }
+    kinds = claims.filter_map { |c| c[:type] }
+      .tally.sort_by { |kind, count| [ -count, kind ] }.first(4)
+      .map { |kind, count| { kind: kind, count: count } }
+
+    { pairs: pairs, kinds: kinds }
   end
 
   def clusters_by_id

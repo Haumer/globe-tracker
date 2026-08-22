@@ -19,19 +19,21 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
   # Attaches real memberships to a cluster. The article_count/source_count
   # columns are deliberately left saying something else, because that is the
   # state 474 of 2,249 live clusters are actually in.
-  def articles(cluster, publishers)
+  def articles(cluster, publishers, published: [], countries: {})
     publishers.each_with_index do |publisher, index|
       source = NewsSource.find_or_create_by!(canonical_key: "publisher:#{publisher}") do |record|
         record.name = publisher
         record.source_kind = "publisher"
         record.publisher_domain = publisher
+        record.publisher_country = countries[publisher]
       end
       article = NewsArticle.create!(
         news_source: source,
         url: "https://#{publisher}/#{cluster.cluster_key}-#{index}",
         canonical_url: "https://#{publisher}/#{cluster.cluster_key}-#{index}",
         title: "Report #{index} from #{publisher}",
-        content_scope: "core"
+        content_scope: "core",
+        published_at: published[index]
       )
       NewsStoryMembership.create!(news_story_cluster: cluster, news_article: article, match_score: 0.9)
     end
@@ -162,6 +164,186 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
 
     assert_equal 20, ring[:total], "the panel has to be able to say '+ 8 more' honestly"
     assert_equal SituationBoardService::RING_LIMIT, ring[:shown].size
+  end
+
+  test "members carry their place name and geocode provenance" do
+    gaza = OntologyEntity.create!(
+      canonical_key: "place:gaza-city:ps", entity_type: "place", canonical_name: "Gaza City",
+      country_code: "PS", metadata: { "latitude" => 31.5, "longitude" => 34.47 }
+    )
+    _c, event = cluster(key: "m1", title: "Strikes reported in Gaza City", lat: 31.5, lng: 34.47)
+    _c2, other = cluster(key: "m2", title: "Regional powers react", lat: 15.5, lng: 47.5)
+    event.update!(place_entity: gaza, geo_precision: "point", geo_confidence: 0.9)
+    other.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    situation(key: "situation:place:#{gaza.id}", name: "Gaza City", grouped_by: "place", events: [event, other])
+
+    members = SituationBoardService.call[:situations].first[:members]
+    placed = members.find { |m| m[:event_id] == event.id }
+    vague = members.find { |m| m[:event_id] == other.id }
+
+    assert_equal "Gaza City", placed[:place]
+    assert_equal "point", placed[:geo_precision]
+    assert_in_delta 0.9, placed[:geo_confidence], 0.001
+    assert_nil vague[:place]
+    assert_equal "unknown", vague[:geo_precision]
+  end
+
+  test "members carry a modal claim and the situation aggregates directed pairs" do
+    record, event = cluster(key: "c1", title: "Drone attack on refinery", lat: 55.7, lng: 37.6)
+    articles(record, [ "reuters.com", "bbc.com", "dw.com" ])
+
+    ukraine = NewsActor.create!(canonical_key: "state:ua", name: "Ukraine", actor_type: "state", country_code: "UA")
+    russia = NewsActor.create!(canonical_key: "state:ru", name: "Russia", actor_type: "state", country_code: "RU")
+    record.news_story_memberships.includes(:news_article).each_with_index do |membership, i|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict",
+        event_type: i.zero? ? "airstrike" : "ground_operation",
+        claim_text: "Drone attack on refinery", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: ukraine, role: "initiator", position: 0, confidence: 0.9)
+      NewsClaimActor.create!(news_claim: claim, news_actor: russia, role: "target", position: 1, confidence: 0.9)
+    end
+    situation(key: "situation:actor:test", name: "Refinery attacks", grouped_by: "actor", events: [event])
+
+    row = SituationBoardService.call[:situations].first
+    claim = row[:members].first[:claim]
+
+    assert_equal "ground_operation", claim[:type], "two of three claims agree"
+    assert_equal "Ukraine", claim[:initiator]
+    assert_equal "Russia", claim[:target]
+    assert_equal [ { from: "Ukraine", to: "Russia", count: 1 } ], row[:facts][:pairs],
+      "pairs count member stories, not raw reports"
+    assert_equal [ { kind: "ground_operation", count: 1 } ], row[:facts][:kinds]
+  end
+
+  # The toll curve's data: raw asserted figures in publication order, never a
+  # pre-computed maximum, so a figure that goes down -- a correction -- stays
+  # visible. One stamped figure is not a curve and ships nothing.
+  test "figures collects stamped casualty assertions per kind and needs two to ship" do
+    record, event = cluster(key: "fig1", title: "Market bombing", lat: 30.0, lng: 50.0)
+    base = 6.hours.ago.change(min: 0)
+    articles(record, %w[wire.com local.example late.example],
+             published: [ base, base + 1.hour, base + 2.hours ])
+    texts = [ "Bomb kills at least 12 in market", "Death toll rises to 69 after market bombing",
+              "Market reopens as inquiry begins" ]
+    record.news_story_memberships.includes(:news_article).each_with_index do |membership, index|
+      NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "bombing",
+        claim_text: texts[index], confidence: 0.9, primary: true, extraction_method: "heuristic",
+        verification_status: "single_source",
+        metadata: { "figures" => CasualtyFigureParser.parse(texts[index]).presence }.compact
+      )
+    end
+    situation(key: "situation:entity:fig", name: "Market situation", grouped_by: "entity", events: [event])
+
+    figures = SituationBoardService.call[:situations].first[:figures]
+
+    assert_equal %w[killed], figures.keys
+    assert_equal [ 12, 69 ], figures["killed"].map { |point| point[:value] },
+      "publication order, raw values -- the chart computes the running maximum"
+    assert_equal "at_least", figures["killed"].first[:qualifier]
+  end
+
+  # The split the modal answer hides: emitted only when outlets disagree on
+  # the initiator, counted per distinct outlet so a wire echo cannot
+  # out-shout independent newsrooms.
+  test "attribution splits contested initiators by outlet and stays silent on agreement" do
+    record, event = cluster(key: "at1", title: "Base attacked", lat: 30.0, lng: 50.0)
+    articles(record, %w[wire.com wire.com local.example])
+
+    us = NewsActor.create!(canonical_key: "state:us", name: "United States", actor_type: "state", country_code: "US")
+    iran = NewsActor.create!(canonical_key: "state:ir", name: "Iran", actor_type: "state", country_code: "IR")
+    memberships = record.news_story_memberships.includes(:news_article).to_a
+    memberships.each_with_index do |membership, index|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "airstrike",
+        claim_text: "Base attacked", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: index < 2 ? us : iran,
+                             role: "initiator", position: 0, confidence: 0.9)
+    end
+    situation(key: "situation:entity:at", name: "Base situation", grouped_by: "entity", events: [event])
+
+    rows = SituationBoardService.call[:situations].first[:attribution]
+
+    assert_equal 2, rows.size
+    assert_equal({ actor: "United States", reports: 2, sources: 1 }, rows.first)
+    assert_equal({ actor: "Iran", reports: 1, sources: 1 }, rows.last,
+      "each backed by one outlet -- the echo only breaks the tie, it cannot add sources")
+  end
+
+  test "attribution is nil when every outlet names the same initiator" do
+    record, event = cluster(key: "at2", title: "Port shelled", lat: 30.0, lng: 50.0)
+    articles(record, %w[wire.com local.example])
+    actor = NewsActor.create!(canonical_key: "state:xx", name: "Somebody", actor_type: "state")
+    record.news_story_memberships.includes(:news_article).each do |membership|
+      claim = NewsClaim.create!(
+        news_article: membership.news_article, event_family: "conflict", event_type: "shelling",
+        claim_text: "Port shelled", confidence: 0.9, primary: true,
+        extraction_method: "model", verification_status: "single_source"
+      )
+      NewsClaimActor.create!(news_claim: claim, news_actor: actor, role: "initiator", position: 0, confidence: 0.9)
+    end
+    situation(key: "situation:entity:at2", name: "Port situation", grouped_by: "entity", events: [event])
+
+    assert_nil SituationBoardService.call[:situations].first[:attribution]
+  end
+
+  # The dossier's graphs. The timeline reads article stamps, not cluster
+  # last_seen_at, so it can show the hours between the first report and the
+  # pile-on; new_sources marks where corroboration arrived rather than echo.
+  test "timeline buckets stamped reports hourly and marks where new sources joined" do
+    record, event = cluster(key: "t1", title: "Blast reported", lat: 10.0, lng: 10.0)
+    base = 6.hours.ago.change(min: 0)
+    articles(record, %w[wire.com wire.com local.example],
+             published: [ base + 10.minutes, base + 1.hour, base + 3.hours + 5.minutes ])
+    situation(key: "situation:entity:t", name: "Blast situation", grouped_by: "entity", events: [event])
+
+    timeline = SituationBoardService.call[:situations].first[:timeline]
+
+    assert_equal "hour", timeline[:bucket]
+    assert_equal 4, timeline[:points].size, "one point per hour, gaps included"
+    assert_equal 3, timeline[:points].sum { |point| point[:articles] }
+    assert_equal 2, timeline[:points].sum { |point| point[:new_sources] },
+      "two outlets, so two first-report ticks -- the echo is not corroboration"
+    assert_equal 1, timeline[:points].last[:articles]
+  end
+
+  test "timeline drops republication stamps outside the window instead of stretching the axis" do
+    record, event = cluster(key: "t2", title: "Old story resurfaces", lat: 10.0, lng: 10.0)
+    articles(record, %w[wire.com local.example a.example],
+             published: [ 300.days.ago, 70.hours.ago, 2.hours.ago ])
+    situation(key: "situation:entity:t2", name: "Resurfaced situation", grouped_by: "entity", events: [event])
+
+    timeline = SituationBoardService.call[:situations].first[:timeline]
+
+    assert_equal "day", timeline[:bucket]
+    assert_equal 2, timeline[:points].sum { |point| point[:articles] }
+    assert_operator timeline[:points].size, :<=, SituationBuilder::WINDOW_DAYS + 1
+  end
+
+  # A wire appearing in three member clusters is one outlet with three
+  # reports, not three outlets -- the aggregation is per source across the
+  # whole situation, which the per-cluster counts cannot see.
+  test "sources names the heaviest outlets and counts one outlet once across clusters" do
+    record_one, event_one = cluster(key: "src1", title: "Strike one", lat: 10.0, lng: 10.0)
+    record_two, event_two = cluster(key: "src2", title: "Strike two", lat: 11.0, lng: 10.0)
+    articles(record_one, %w[wire.com wire.com local.example],
+             countries: { "wire.com" => "gb", "local.example" => "pk" })
+    articles(record_two, %w[wire.com], countries: { "wire.com" => "gb" })
+    situation(key: "situation:entity:src", name: "Strikes situation", grouped_by: "entity",
+              events: [event_one, event_two])
+
+    sources = SituationBoardService.call[:situations].first[:sources]
+
+    assert_equal 2, sources[:total]
+    assert_equal 2, sources[:countries]
+    top = sources[:top].first
+    assert_equal "wire.com", top[:name]
+    assert_equal "gb", top[:country]
+    assert_equal 3, top[:reports], "two reports in one cluster plus one in the other"
   end
 
   test "counts members that never got a location instead of dropping them" do

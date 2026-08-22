@@ -302,6 +302,191 @@ export default class extends Controller {
   //               trust least would draw the largest shapes on the globe. They
   //               stay fixed-size symbols at every zoom. The scatter is already
   //               visible on selection, as the arcs themselves.
+  // One line of structured fact under a report: who → whom, or the single
+  // named party. The event type already sits in the meta line above, so this
+  // renders only when there is an actor to show.
+  _memberClaimHtml(member) {
+    const claim = member.claim
+    if (!claim) return ""
+
+    if (claim.initiator && claim.target) {
+      return `<div class="sit-member-claim">${escapeHtml(claim.initiator)}
+        <span class="sit-fact-arrow">→</span> ${escapeHtml(claim.target)}</div>`
+    }
+    const solo = claim.initiator || claim.subject
+    return solo ? `<div class="sit-member-claim">${escapeHtml(solo)}</div>` : ""
+  }
+
+  // The structured reading of the situation: who its member stories say is
+  // acting on whom, and what kind of events they describe. Counts are member
+  // stories. Rendered only when the extraction produced something -- an empty
+  // facts box would just advertise the pipeline.
+  _factsHtml(situation) {
+    const facts = situation.facts
+    if (!facts) return ""
+
+    const pairMax = Math.max(...(facts.pairs || []).map((pair) => pair.count), 1)
+    const pairs = (facts.pairs || []).map((pair) => `
+      <div class="sit-fact-row">
+        <span class="sit-fact-actor">${escapeHtml(pair.from)}</span>
+        <span class="sit-fact-arrow">→</span>
+        <span class="sit-fact-actor">${escapeHtml(pair.to)}</span>
+        <span class="sit-fact-bar"><i style="width:${Math.round((pair.count / pairMax) * 100)}%"></i></span>
+        <span class="sit-fact-count">${pair.count === 1 ? "1 story" : `${pair.count} stories`}</span>
+      </div>`).join("")
+
+    const kinds = (facts.kinds || []).map((k) =>
+      `<span class="sit-fact-kind">${escapeHtml(String(k.kind).replace(/_/g, " "))} · ${k.count}</span>`
+    ).join("")
+
+    if (!pairs && !kinds) return ""
+
+    return `
+      <div class="sit-facts">
+        ${pairs ? `<div class="sit-section-title">Who acts on whom</div>${pairs}` : ""}
+        ${kinds ? `<div class="sit-fact-kinds">${kinds}</div>` : ""}
+      </div>`
+  }
+
+  // How the story broke: one bar per hour or day of reports, an amber tick
+  // under the buckets where an outlet filed its first report. Echo grows the
+  // bars; corroboration moves the ticks. Rendered only when there are enough
+  // stamped reports to draw a shape worth reading.
+  _timelineHtml(situation) {
+    const timeline = situation.timeline
+    if (!timeline?.points?.length) return ""
+
+    const points = timeline.points
+    const width = 288
+    const chartHeight = 34
+    const height = chartHeight + 6
+    const step = width / points.length
+    const barWidth = Math.max(step - 1, 1)
+    const max = Math.max(...points.map((point) => point.articles), 1)
+
+    const bars = points.map((point, index) => {
+      const x = (index * step).toFixed(1)
+      const barHeight = Math.max((point.articles / max) * chartHeight, point.articles > 0 ? 1.5 : 0)
+      const bar = point.articles > 0
+        ? `<rect x="${x}" y="${(chartHeight - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${barHeight.toFixed(1)}" fill="#4fc3f7" opacity="0.8"></rect>`
+        : ""
+      const tick = point.new_sources > 0
+        ? `<rect x="${x}" y="${chartHeight + 3}" width="${barWidth.toFixed(1)}" height="3"
+             fill="#ffb300"></rect>`
+        : ""
+      return bar + tick
+    }).join("")
+
+    return `
+      <div class="sit-timeline">
+        <div class="sit-section-title">How it broke</div>
+        <svg width="${width}" height="${height}" aria-hidden="true">${bars}</svg>
+        <div class="sit-timeline-caption">
+          <span>${formatDay(timeline.first_at)} → ${formatDay(points[points.length - 1].t)}</span>
+          <span>reports per ${timeline.bucket} · peak ${max}
+            · <span class="sit-timeline-tick">▊</span> new source</span>
+        </div>
+      </div>`
+  }
+
+  // Who says who did it: the split the modal answer hides. The server only
+  // sends this when outlets disagree on the initiator, so its presence is
+  // itself the signal -- attribution is contested, and the bars show by how
+  // much. Sources, not reports, drive the bar: ten echoes of one wire should
+  // not out-shout three independent newsrooms.
+  _attributionHtml(situation) {
+    const rows = situation.attribution
+    if (!rows?.length) return ""
+
+    const max = Math.max(...rows.map((row) => row.sources), 1)
+    return `
+      <div class="sit-attribution">
+        <div class="sit-section-title">Who says who did it · contested</div>
+        ${rows.map((row) => `
+          <div class="sit-fact-row">
+            <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
+            <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
+            <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
+          </div>`).join("")}
+      </div>`
+  }
+
+  // What the numbers are doing: each dot is a figure some stamped headline
+  // asserted, the line is the highest figure asserted so far. A dot under
+  // the line is a correction or a straggler quoting an old count -- exactly
+  // the disagreement worth seeing, so the raw dots stay visible instead of
+  // being folded into the maximum.
+  _figuresHtml(situation) {
+    const figures = situation.figures
+    if (!figures) return ""
+
+    const charts = ["killed", "injured", "missing"].filter((kind) => figures[kind]?.length)
+      .slice(0, 2).map((kind) => {
+        const points = figures[kind]
+        const width = 288
+        const chartHeight = 40
+        const times = points.map((point) => Date.parse(point.t))
+        const t0 = Math.min(...times)
+        const span = Math.max(Math.max(...times) - t0, 1)
+        const max = Math.max(...points.map((point) => point.value), 1)
+        const x = (t) => 4 + ((Date.parse(t) - t0) / span) * (width - 8)
+        const y = (v) => chartHeight - 3 - (v / max) * (chartHeight - 8)
+
+        let running = 0
+        const steps = points.map((point) => {
+          running = Math.max(running, point.value)
+          return `${x(point.t).toFixed(1)},${y(running).toFixed(1)}`
+        })
+        const line = `<polyline points="${steps.join(" ")}" fill="none" stroke="#ffb300"
+          stroke-width="1.5" opacity="0.9"></polyline>`
+        const dots = points.map((point) => `
+          <circle cx="${x(point.t).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="2.5"
+            fill="#4fc3f7" opacity="0.9"></circle>`).join("")
+        const latest = points[points.length - 1]
+        const peak = Math.max(...points.map((point) => point.value))
+
+        return `
+          <div class="sit-figures-chart">
+            <svg width="${width}" height="${chartHeight}" aria-hidden="true">${line}${dots}</svg>
+            <div class="sit-timeline-caption">
+              <span>reported ${kind}</span>
+              <span>${points[0].value} first → ${latest.value} latest${peak !== latest.value
+                ? ` · peak ${peak}` : ""}${latest.qualifier === "at_least" ? " (at least)" : ""}</span>
+            </div>
+          </div>`
+      })
+    if (!charts.length) return ""
+
+    return `
+      <div class="sit-figures">
+        <div class="sit-section-title">What the numbers are doing</div>
+        ${charts.join("")}
+      </div>`
+  }
+
+  // Who is reporting it: the breadth behind the report count. The stats line
+  // already carries the number of sources; this names the heaviest outlets
+  // and says how many countries they file from, which is the difference
+  // between one wire echoing and independent corroboration.
+  _sourcesHtml(situation) {
+    const sources = situation.sources
+    if (!sources?.total) return ""
+
+    const chips = (sources.top || []).map((source) => `
+      <span class="sit-source-chip">${escapeHtml(source.name)}${source.country
+        ? ` <span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>`
+        : ""} · ${source.reports}</span>`).join("")
+    if (!chips) return ""
+
+    return `
+      <div class="sit-sources">
+        <div class="sit-section-title">Who is reporting it${sources.countries > 1
+          ? ` · ${sources.countries} countries` : ""}</div>
+        <div class="sit-source-chips">${chips}</div>
+      </div>`
+  }
+
   _footprint(situation) {
     if (situation.anchor.kind !== "registry") {
       return { radius_m: null, basis: "none", label: "none — an actor has no extent" }
@@ -635,7 +820,11 @@ export default class extends Controller {
       if (member.lat == null || member.lng == null) return
 
       const age = member.last_seen_at ? (newest - Date.parse(member.last_seen_at)) / span : 1
-      const alpha = 0.25 + 0.55 * (1 - Math.min(age, 1))
+      // A country-precision coordinate is a guess at national scale, not a
+      // measured point -- draw it at half strength so the eye reads the
+      // difference instead of trusting both equally.
+      const coarse = member.geo_precision === "country" || member.geo_precision === "unknown"
+      const alpha = (0.25 + 0.55 * (1 - Math.min(age, 1))) * (coarse ? 0.45 : 1)
       const positions = this._arcPositions(member, anchor)
       if (!positions) return
 
@@ -655,7 +844,7 @@ export default class extends Controller {
         id: `sit-report-${situation.id}-${index}`,
         position: Cesium.Cartesian3.fromDegrees(member.lng, member.lat),
         point: {
-          pixelSize: 4,
+          pixelSize: coarse ? 3 : 4,
           color: Cesium.Color.fromCssColorString(EVIDENCE_COLOR).withAlpha(alpha + 0.15),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -947,6 +1136,16 @@ export default class extends Controller {
         · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
       </div>
 
+      ${this._timelineHtml(situation)}
+
+      ${this._factsHtml(situation)}
+
+      ${this._attributionHtml(situation)}
+
+      ${this._figuresHtml(situation)}
+
+      ${this._sourcesHtml(situation)}
+
       <div id="sit-related"></div>
 
       <div class="sit-section-title">The reports this is made of</div>
@@ -961,8 +1160,15 @@ export default class extends Controller {
               ${pluralize(member.article_count, "report")} from
               ${pluralize(member.source_count, "source")} ·
               ${escapeHtml(member.event_type)}
-              ${member.lat == null ? " · no location" : ""}
+              ${member.lat == null
+                ? " · no location"
+                : member.place
+                  ? ` · ${escapeHtml(member.place)}${member.geo_precision === "country" ? " (country-level)" : ""}`
+                  : member.geo_precision === "country" || member.geo_precision === "unknown"
+                    ? " · location approximate"
+                    : ""}
             </div>
+            ${this._memberClaimHtml(member)}
           </div>`).join("")}
       </div>
 

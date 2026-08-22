@@ -174,6 +174,14 @@ class SituationBuilder
     grouped.group_by { |key, _| normalized_referent_name(key.last) }.flat_map do |name, entries|
       next entries if name.blank? || entries.size == 1
 
+      # Same name in two different countries is two different things: place
+      # entities are country-scoped, so "Cali" (CO) and a Malaysian namesake
+      # must stay apart. Referents without a country (corridors, actors)
+      # still merge freely -- the Hormuz corridor/place pair is the point of
+      # this method -- so only a genuine two-country conflict blocks a merge.
+      countries = entries.filter_map { |key, _| referent_country(key.last) }.uniq
+      next entries if countries.size > 1
+
       winner = entries.min_by { |key, members| [ SYNONYM_KIND_RANK.fetch(key.first, 9), -members.size ] }
       merged = entries.flat_map(&:last)
       @stats[:synonym_groups_merged] += entries.size - 1
@@ -184,14 +192,20 @@ class SituationBuilder
   SYNONYM_KIND_RANK = { entity: 0, actor: 1, place: 2 }.freeze
 
   # Every grouping reference -- entity, actor or place -- is an OntologyEntity
-  # id, so one preloaded name map serves both the synonym merge and the
-  # referent-name subtraction in the splitter.
+  # id, so one preloaded map serves the synonym merge, its country guard, and
+  # the referent-name subtraction in the splitter.
   def preload_referent_names(ids)
-    @referent_names = OntologyEntity.where(id: ids.uniq).pluck(:id, :canonical_name).to_h
+    rows = OntologyEntity.where(id: ids.uniq).pluck(:id, :canonical_name, :country_code)
+    @referent_names = rows.to_h { |id, name, _| [ id, name ] }
+    @referent_countries = rows.to_h { |id, _, country| [ id, country.presence ] }
   end
 
   def referent_name(reference)
     (@referent_names || {})[reference]
+  end
+
+  def referent_country(reference)
+    (@referent_countries || {})[reference]
   end
 
   def normalized_referent_name(reference)

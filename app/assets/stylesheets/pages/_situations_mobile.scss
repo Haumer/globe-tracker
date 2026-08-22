@@ -1,0 +1,97 @@
+// Mobile treatment for the situations globe. Everything lives inside one
+// media query and is scoped under #situations-page — .sit-header/.sit-list
+// are also class names on the home right panel, and desktop keeps its
+// rail-and-panel layout untouched. On a phone the desktop overlays fight
+// for the same 390px: the 300px rail and the legend bury the globe, the
+// 380px dossier hangs off the left edge, and the legend paints on top of
+// it. Mobile gets its own shape instead: globe on top, list as a bottom
+// sheet, dossier as a full-screen sheet.
+
+@media (max-width: 640px) {
+  // Nothing sits above the page here — the fixed canvas covers the navbar
+  // on this route — so the header hugs the top. Stack title over counts
+  // instead of the desktop side-by-side bar.
+  #situations-page .sit-header {
+    display: block;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 12px 8px;
+  }
+
+  #situations-page .sit-header-sub {
+    margin-top: 3px;
+  }
+
+  // The list becomes a bottom sheet under the globe instead of a left rail.
+  #situations-page .sit-list {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    height: 44vh;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(10, 12, 16, 0.92);
+    border: 1px solid #232b35;
+    border-radius: 6px;
+  }
+
+  #situations-page .sit-row {
+    min-height: 44px;
+    padding: 9px 10px;
+  }
+
+  // Explanatory reading, not worth half a phone screen.
+  #situations-page .sit-legend {
+    display: none;
+  }
+
+  // The dossier takes the whole screen. It must sit above every other
+  // overlay — on desktop panel and legend never meet, on mobile they do.
+  #situations-page .sit-panel {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    z-index: 40;
+    border: none;
+    border-radius: 0;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    background: #0a0c10;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  // Long curator "reason" text is flex: 0 0 auto on desktop and drags the
+  // panel into horizontal scroll on a phone — let it shrink and wrap.
+  #situations-page .sit-ring-detail {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  #situations-page .sit-panel-close {
+    font-size: 24px;
+    padding: 8px 12px;
+    margin: -8px -10px 0 0;
+  }
+
+  // Layer chips are toggles — give fingers something to hit.
+  #situations-page .sit-chip {
+    padding: 7px 10px;
+  }
+
+  // Fallback (non-composed) charts are fixed 288px wide; guard the odd
+  // viewport narrower than that.
+  #situations-page .sit-timeline svg,
+  #situations-page .sit-figures-chart svg {
+    max-width: 100%;
+  }
+
+  #situations-page .sit-overlap-chooser {
+    z-index: 50;
+  }
+}

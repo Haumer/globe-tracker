@@ -101,3 +101,26 @@
     }
   }
 }
+
+// Small screens: the links row is wider than the viewport and drags the
+// whole document wider with it (a phantom horizontal scroll even on pages
+// whose fixed content covers the nav). Contain it and let it scroll inside
+// the bar instead.
+@media (max-width: 640px) {
+  .globe-nav {
+    padding: 0 12px;
+  }
+
+  .globe-nav-links {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .globe-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+}

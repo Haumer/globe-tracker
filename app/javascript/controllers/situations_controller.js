@@ -36,6 +36,13 @@ const NOMINAL_FACILITY_RADIUS_M = 6_000
 const FOOTPRINT_MIN_PX = 26
 const LOCATOR_RADIUS_PX = 3.5
 
+// Screen-space label declutter. Char width is the JetBrains Mono advance at
+// the 12px label size -- mono, so a name's box is its length. The gap is
+// between label boxes.
+const LABEL_CHAR_PX = 7.2
+const LABEL_LINE_PX = 16
+const LABEL_MIN_GAP = 4
+
 export default class extends Controller {
   static targets = ["list", "panel", "status"]
   static values = { cesiumToken: String }
@@ -126,6 +133,8 @@ export default class extends Controller {
     // layer goes away or the selection changes.
     this._layers.onBoundaryState = ({ anchorPolygon }) => this._setFootprintHidden(anchorPolygon)
     this._wirePicking()
+    // Labels are placed from screen geometry, which the camera just changed.
+    this.viewer.camera.moveEnd.addEventListener(() => this._declutterAnchorLabels())
     await this._fetch()
   }
 
@@ -178,7 +187,7 @@ export default class extends Controller {
       // it rather than clearing a disc that is no longer drawn.
       const offset = swap ? 16 : this._glyphRadius(situation) + 10
 
-      this._anchors.entities.add({
+      const entity = this._anchors.entities.add({
         id: `sit-${situation.id}`,
         position: Cesium.Cartesian3.fromDegrees(lng, lat),
         // A measured extent is drawn on the globe at every distance, so it lies
@@ -227,6 +236,14 @@ export default class extends Controller {
         },
         situationId: situation.id,
       })
+      // What the declutter needs to reserve this label's screen box without
+      // measuring rendered glyphs.
+      entity._labelPin = {
+        halfWidth: (situation.name.length * LABEL_CHAR_PX) / 2,
+        lineHeight: LABEL_LINE_PX,
+        below,
+        offset,
+      }
     })
 
     this._applyAnchorStyling()
@@ -259,10 +276,13 @@ export default class extends Controller {
           .withAlpha(dimmed ? 0.25 : 0.85)
       }
 
-      entity.label.show = selected != null
+      entity._labelWanted = selected != null
         ? isSelected
         : registry || isHovered
+      entity._labelPriority = isSelected ? 0 : isHovered ? 1 : 2
     })
+
+    this._declutterAnchorLabels()
 
     // Regions dim with their anchors so the selected story stays the loudest
     // shape on the globe.
@@ -279,6 +299,60 @@ export default class extends Controller {
     })
 
     this.viewer.scene.requestRender()
+  }
+
+  // The alternation above separates a pair of neighbours; it does nothing for
+  // eleven situations anchored to the same Bangkok centroid, which painted two
+  // rows of overprinted names. Styling decides which labels deserve to exist
+  // (_labelWanted); this decides which of those fit on screen -- selected
+  // first, then hovered, then rail order, keeping a label only when its box
+  // clears everything already kept and its anchor is on the near side of the
+  // globe. A name that loses its slot is still one hover away.
+  _declutterAnchorLabels() {
+    const Cesium = window.Cesium
+    const scene = this.viewer?.scene
+    const entities = this._anchors?.entities.values
+    if (!Cesium || !scene || !entities?.length) return
+
+    const toWindow = Cesium.SceneTransforms.worldToWindowCoordinates
+      || Cesium.SceneTransforms.wgs84ToWindowCoordinates
+    const time = this.viewer.clock.currentTime
+    const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, scene.camera.positionWC)
+    const candidates = entities
+      .filter((entity) => entity.label && entity._labelPin)
+      .sort((a, b) => (a._labelPriority ?? 2) - (b._labelPriority ?? 2))
+    const kept = []
+
+    for (const entity of candidates) {
+      if (!entity._labelWanted) {
+        entity.label.show = false
+        continue
+      }
+      const position = entity.position?.getValue(time)
+      const win = position && occluder.isPointVisible(position) && toWindow(scene, position)
+      if (!win) {
+        entity.label.show = false
+        continue
+      }
+      const pin = entity._labelPin
+      const top = pin.below ? win.y + pin.offset : win.y - pin.offset - pin.lineHeight
+      const box = {
+        left: win.x - pin.halfWidth,
+        right: win.x + pin.halfWidth,
+        top,
+        bottom: top + pin.lineHeight,
+      }
+      const clear = !kept.some((other) => (
+        box.left < other.right + LABEL_MIN_GAP
+        && box.right + LABEL_MIN_GAP > other.left
+        && box.top < other.bottom + LABEL_MIN_GAP
+        && box.bottom + LABEL_MIN_GAP > other.top
+      ))
+      entity.label.show = clear
+      if (clear) kept.push(box)
+    }
+
+    scene.requestRender()
   }
 
   // Both symbols are fixed. Nothing drawn on this globe is sized by report

@@ -71,13 +71,28 @@ class SituationLayerCurator
     @client = client
   end
 
+  # The latest composed dossier for a situation, by id alone -- no fingerprint
+  # needed, so the board can embed it without redoing availability or
+  # neighbors. May trail the fingerprint cache by one rethink; the plan fetch
+  # remains the authority and reconciles on selection.
+  def self.latest_composition(situation_id)
+    Rails.cache.read("situation-layer-curation:latest:#{situation_id}")
+  end
+
   def call
     cached = Rails.cache.read(cache_key)
-    return cached if cached
+    if cached
+      # A hit still refreshes the id-keyed pointer: it can be missing while
+      # the fingerprint cache is valid (eviction, or a deploy that predates
+      # the pointer), and the board reads only the pointer.
+      write_latest(cached)
+      return cached
+    end
 
     result = ai_result
     if result
       Rails.cache.write(cache_key, result, expires_in: CACHE_TTL)
+      write_latest(result)
     else
       result = heuristic_result
       Rails.cache.write(cache_key, result, expires_in: FAILURE_TTL)
@@ -107,6 +122,15 @@ class SituationLayerCurator
     # v5: title/caption discipline sharpened with counter-examples -- v4
     # compositions titled charts with axis labels.
     "situation-layer-curation:v5:#{fingerprint}"
+  end
+
+  # Only a real composition moves the pointer -- a heuristic stand-in (nil
+  # composition) must not clobber the last good dossier the board still shows.
+  def write_latest(result)
+    return if result.composition.blank?
+
+    Rails.cache.write("situation-layer-curation:latest:#{situation[:id]}",
+      result.composition, expires_in: CACHE_TTL)
   end
 
   # ── model path ───────────────────────────────────────────────────────
@@ -162,7 +186,7 @@ class SituationLayerCurator
       will be drawn, the rest are offered as suggestions. A pick needs a
       concrete mechanism in THIS story: ships because the story is about
       vessels or a waterway, aircraft because an actual flight or airspace
-      matters, heat because something is burning or being struck. Never pick
+      matters. Never pick
       a layer because it is generically nearby -- ships for a landlocked
       city, airspace for a story with no aviation angle. A routine story
       (sports, entertainment, culture, ordinary politics) usually needs
@@ -521,10 +545,8 @@ class SituationLayerCurator
     unrest = types.any? { |t| t.match?(/protest|unrest|riot|demonstration|strike_action/) }
 
     if conflict
-      picks["fires"] = "Thermal anomalies can corroborate reported strikes"
       picks["conflict_events"] = "Recorded conflict events give the pattern this fits"
       picks["aircraft"] = "Airspace activity and gaps are telling around active conflict"
-      picks["military_bases"] = "Installations near the anchor frame the reports"
       picks["notams"] = "Airspace closures often confirm what reports claim"
     end
     if maritime
@@ -537,7 +559,6 @@ class SituationLayerCurator
     end
     if hazard
       picks["weather_alerts"] = "Active alerts for the same area"
-      picks["fires"] ||= "Hotspots track wildfire and damage" unless quake
     end
     if unrest || hazard
       picks["webcams"] = "Someone may be pointing a camera at this right now"

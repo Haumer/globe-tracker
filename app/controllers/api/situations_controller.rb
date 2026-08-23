@@ -6,7 +6,9 @@ module Api
     MAX_DAYS = 90
 
     def index
-      render json: SituationBoardService.call(days: window_days)
+      # Serves the cached JSON string straight through -- the board is ~700KB
+      # and re-encoding it per request cost a second before this.
+      render json: SituationBoardService.cached_json(days: window_days)
     end
 
     # The admin-1 region containing each situation's anchor, deduped -- Hamas
@@ -15,7 +17,7 @@ module Api
     # region contains (sea anchors, unresolvable coordinates) are absent and
     # keep their dot.
     def regions
-      situations = SituationBoardService.call(days: window_days)[:situations] || []
+      situations = SituationBoardService.cached(days: window_days)[:situations] || []
       anchors = situations.filter_map do |situation|
         anchor = situation[:anchor]
         next unless anchor

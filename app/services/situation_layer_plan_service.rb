@@ -35,15 +35,11 @@ class SituationLayerPlanService
   # rest ship with their reason and render as suggested-but-off chips.
   DEFAULT_ON_LIMIT = 3
 
-  BOARD_CACHE_TTL = 2.minutes
   AVAILABILITY_CACHE_TTL = 5.minutes
 
-  # Time scoping per layer. The situation itself is a 3-day story, so live
-  # corroboration (fires) matches its window; UCDP is an annual-release
-  # historical dataset released annually — a tight window can trail the latest
-  # release and blank the layer. Two years always contains one full release;
-  # the client renders age, so old events cannot pass as current.
-  FIRES_WINDOW = SituationBuilder::WINDOW_DAYS.days
+  # UCDP is a historical dataset released annually — a tight window can trail
+  # the latest release and blank the layer. Two years always contains one full
+  # release; the client renders age, so old events cannot pass as current.
   CONFLICT_WINDOW = 2.years
 
   # meaning: is written for two readers at once -- the curator's prompt and the
@@ -53,8 +49,6 @@ class SituationLayerPlanService
   CATALOG = [
     { key: "boundaries", title: "Boundary", kind: "boundaries", baseline: true, refresh_seconds: 0,
       meaning: "the administrative boundary containing the anchor, drawn instead of a nominal circle" },
-    { key: "fires", title: "Heat", kind: "fires", refresh_seconds: 300,
-      meaning: "satellite thermal anomalies (NASA FIRMS) — wildfires, and possible strikes in conflict zones" },
     { key: "aircraft", title: "Aircraft", kind: "aircraft", refresh_seconds: 12,
       meaning: "live aircraft positions from ADS-B, military traffic flagged" },
     { key: "ships", title: "Ships", kind: "ships", refresh_seconds: 60,
@@ -69,8 +63,6 @@ class SituationLayerPlanService
       meaning: "active severe-weather alerts for the area" },
     { key: "notams", title: "Airspace", kind: "notams", refresh_seconds: 0,
       meaning: "airspace restrictions and no-fly zones" },
-    { key: "military_bases", title: "Bases", kind: "military_bases", refresh_seconds: 0,
-      meaning: "known military installations" },
     { key: "infrastructure", title: "Infra", kind: "infrastructure", refresh_seconds: 0,
       meaning: "pipelines and submarine cables running through the area" },
     { key: "satellites", title: "Sat passes", kind: "satellites", refresh_seconds: 0,
@@ -88,9 +80,7 @@ class SituationLayerPlanService
   # The board is what /api/situations already serves; a layer plan should not
   # cost a second full build per click.
   def self.board(now: Time.current)
-    Rails.cache.fetch("situation-board:v1:#{SituationBuilder::WINDOW_DAYS}", expires_in: BOARD_CACHE_TTL) do
-      SituationBoardService.call(now: now)
-    end
+    SituationBoardService.cached(now: now)
   end
 
   def initialize(situation:, siblings: [], curator: SituationLayerCurator, now: Time.current)
@@ -251,9 +241,6 @@ class SituationLayerPlanService
         { url: "/api/regional_district_boundaries", params: { country_codes: country_codes } },
         { url: "/api/geography/boundaries", params: { dataset: "admin1", country_codes: country_codes } }
       ]
-    when "fires"
-      [{ url: "/api/fire_hotspots",
-         params: aviation_bbox.merge(from: (now - FIRES_WINDOW).iso8601, to: now.iso8601) }]
     when "aircraft"
       [{ url: "/api/flights", params: aviation_bbox }]
     when "ships"
@@ -269,8 +256,6 @@ class SituationLayerPlanService
       [{ url: "/api/weather_alerts", params: aviation_bbox }]
     when "notams"
       [{ url: "/api/notams", params: aviation_bbox }]
-    when "military_bases"
-      [{ url: "/api/military_bases", params: compass_bbox }]
     when "infrastructure"
       [
         { url: "/api/pipelines", params: {} },
@@ -321,7 +306,7 @@ class SituationLayerPlanService
     @availability ||= begin
       # The probes are deployment-wide facts and cacheable; the boundary status
       # depends on this situation's anchor country and must never be shared.
-      shared = Rails.cache.fetch("situation-layers:availability:v1", expires_in: AVAILABILITY_CACHE_TTL) do
+      shared = Rails.cache.fetch("situation-layers:availability:v2", expires_in: AVAILABILITY_CACHE_TTL) do
         probe_availability
       end
       shared.merge("boundaries" =>
@@ -331,7 +316,6 @@ class SituationLayerPlanService
 
   def probe_availability
     {
-      "fires" => probe(FireHotspot.in_range(Time.current - FIRES_WINDOW, Time.current), key: ENV["FIRMS_MAP_KEY"].presence || ENV["FIRMS_MAP_API_KEY"]),
       "aircraft" => Flight.where("updated_at > ?", 10.minutes.ago).exists? ? "ready" : "empty",
       "ships" => probe(Ship.where("updated_at > ?", 6.hours.ago), key: ENV["AISSTREAM_API_KEY"]),
       "webcams" => webcams_status,
@@ -340,7 +324,6 @@ class SituationLayerPlanService
       "weather_alerts" => WeatherAlert.active.exists? ? "ready" : "empty",
       # The NOTAM layer always has its static global no-fly zones.
       "notams" => "ready",
-      "military_bases" => MilitaryBase.exists? ? "ready" : "empty",
       "infrastructure" => (Pipeline.exists? || SubmarineCable.exists?) ? "ready" : "empty",
       "satellites" => Satellite.observation_capable.exists? ? "ready" : "empty"
     }

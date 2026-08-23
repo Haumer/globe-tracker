@@ -177,25 +177,24 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     event = cluster(key: "p8", title: "Strike", lat: 50.4, lng: 30.5)
     entity = situation(key: "situation:place:8", name: "Kyiv situation", events: [event], concerns: place)
 
-    # Make four more layers genuinely ready so the cap, not availability,
+    # Make three more layers genuinely ready so the cap, not availability,
     # is what limits the defaults.
-    MilitaryBase.create!(external_id: "mb1", latitude: 50.0, longitude: 30.0, base_type: "air_force")
     Pipeline.create!(pipeline_id: "pl1", name: "Test line")
     Camera.create!(webcam_id: "cam1", source: "windy", latitude: 50.0, longitude: 30.0, status: "active")
     ConflictEvent.create!(external_id: "ce1", latitude: 50.0, longitude: 30.0, date_start: 1.month.ago)
 
     curator = FixedCurator.new(basis: "ai", picks: {
-      "notams" => "first", "military_bases" => "second", "conflict_events" => "third",
-      "infrastructure" => "fourth", "webcams" => "fifth"
+      "notams" => "first", "conflict_events" => "second",
+      "infrastructure" => "third", "webcams" => "fourth"
     })
     plan = SituationLayerPlanService.call(situation_id: entity.id, curator: curator)
     layers = plan[:layers].index_by { |l| l[:key] }
 
     on = plan[:layers].reject { |l| l[:baseline] }.select { |l| l[:on_by_default] }.map { |l| l[:key] }
-    assert_equal %w[conflict_events military_bases notams], on.sort
+    assert_equal %w[conflict_events infrastructure notams], on.sort
 
-    assert_not layers["infrastructure"][:on_by_default]
-    assert_equal "fourth", layers["infrastructure"][:reason], "an over-limit pick keeps its reason as a suggestion"
+    assert_not layers["webcams"][:on_by_default]
+    assert_equal "fourth", layers["webcams"][:reason], "an over-limit pick keeps its reason as a suggestion"
   end
 
   test "bbox params speak each endpoint's dialect" do
@@ -211,10 +210,6 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
 
     webcams = layers["webcams"][:sources].first[:params]
     assert webcams.key?(:north) && webcams.key?(:west), "webcams speak compass"
-
-    fires = layers["fires"][:sources].first[:params]
-    assert fires.key?(:lamin), "fires are box-scoped server-side now"
-    assert fires.key?(:from), "fires are scoped to the situation's window"
 
     conflict = layers["conflict_events"][:sources].first[:params]
     assert conflict.key?(:from), "UCDP history is bounded, not all-time"
@@ -300,7 +295,7 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
                  "the curator is offered the board's other situations, never itself"
   end
 
-  test "fires window matches the situation window and conflict gets a year of context" do
+  test "conflict history gets a bounded window, never all-time" do
     place = place_entity
     event = cluster(key: "p7", title: "Strike", lat: 50.4, lng: 30.5)
     entity = situation(key: "situation:place:7", name: "Kyiv situation", events: [event], concerns: place)
@@ -311,9 +306,6 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
       curator: FixedCurator.new, now: now
     ).call
     layers = plan[:layers].index_by { |l| l[:key] }
-
-    fires_from = Time.parse(layers["fires"][:sources].first[:params][:from])
-    assert_in_delta (now - SituationLayerPlanService::FIRES_WINDOW).to_f, fires_from.to_f, 60
 
     conflict_from = Time.parse(layers["conflict_events"][:sources].first[:params][:from])
     assert_in_delta (now - SituationLayerPlanService::CONFLICT_WINDOW).to_f, conflict_from.to_f, 60

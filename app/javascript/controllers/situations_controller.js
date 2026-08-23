@@ -43,8 +43,44 @@ const LABEL_CHAR_PX = 7.2
 const LABEL_LINE_PX = 16
 const LABEL_MIN_GAP = 4
 
+// Heat: hours since the story's last report, rendered as brightness -- never
+// size; nothing on this globe is sized by report volume. The tiers give a
+// just-reported story full presence and let a stale one recede without
+// disappearing.
+const HEAT_TIERS = [
+  { maxHours: 6, alpha: 1.0 },
+  { maxHours: 24, alpha: 0.85 },
+  { maxHours: 48, alpha: 0.6 },
+  { maxHours: Infinity, alpha: 0.35 },
+]
+// The label needs a legibility floor a cold dot does not.
+const HEAT_LABEL_FLOOR = 0.5
+
+// The flare pulse: an expanding halo reserved for situations whose report
+// rate is above their own normal RIGHT NOW. Pulses must stay rare to mean
+// anything, so nothing else on the page animates.
+const PULSE_PERIOD_MS = 2600
+const PULSE_MIN_PX = 7
+const PULSE_MAX_PX = 26
+// Scrubbing across a recorded flare relights its pulse for this much story
+// time on either side of the moment it fired.
+const REPLAY_FLARE_WINDOW_MS = 3 * 3600 * 1000
+const REPLAY_MAX_DAYS = 60
+
+// The escalation ripple: when a refresh finds a situation MORE interesting
+// than before -- quiet to active, active to flaring, or newly on the board --
+// three ground rings expand to this radius and fade. A wave, not an area:
+// outline only and gone in under three seconds, so it never reads as a
+// measured extent.
+const RIPPLE_RADIUS_M = 50_000
+const RIPPLE_WAVE_MS = 1600
+const RIPPLE_STAGGER_MS = 400
+const RIPPLE_WAVES = 3
+const REFRESH_MS = 90_000
+const ATTENTION_RANK = { quiet: 0, active: 1, flaring: 2 }
+
 export default class extends Controller {
-  static targets = ["list", "panel", "status"]
+  static targets = ["list", "panel", "status", "scrub", "scrubRange", "scrubTime"]
   static values = { cesiumToken: String }
 
   connect() {
@@ -57,6 +93,10 @@ export default class extends Controller {
   }
 
   disconnect() {
+    if (this._refreshTimer) clearInterval(this._refreshTimer)
+    this._refreshTimer = null
+    if (this._pulseRaf != null) cancelAnimationFrame(this._pulseRaf)
+    this._pulseRaf = null
     this._layers?.deactivate()
     try { this.viewer?.destroy() } catch {}
     this.viewer = null
@@ -136,6 +176,9 @@ export default class extends Controller {
     // Labels are placed from screen geometry, which the camera just changed.
     this.viewer.camera.moveEnd.addEventListener(() => this._declutterAnchorLabels())
     await this._fetch()
+    // The board changes when the builder runs; polling picks that up so
+    // attention escalations announce themselves without a reload.
+    this._refreshTimer = setInterval(() => this._fetch(), REFRESH_MS)
   }
 
   async _fetch() {
@@ -143,10 +186,18 @@ export default class extends Controller {
       const resp = await fetch("/api/situations")
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
+      const previous = this._attentionSeen
       this._situations = data.situations || []
       this._windowDays = data.window_days
+      this._attentionSeen = new Map(this._situations.map((situation) => [
+        situation.id, ATTENTION_RANK[situation.attention?.state] ?? 0,
+      ]))
       this._renderAnchors()
       this._renderList()
+      this._initScrub()
+      // After the render: _renderAnchors clears the datasource the ripples
+      // live in, so announcing first would kill them at birth.
+      this._announceEscalations(previous)
       this._setStatus(this._summary())
       this._fetchRegions()
     } catch (error) {
@@ -168,6 +219,8 @@ export default class extends Controller {
   _renderAnchors() {
     const Cesium = window.Cesium
     this._anchors.entities.removeAll()
+    // removeAll just took the halo entities with it.
+    this._pulses?.clear()
 
     // Anchors cluster hard -- JAZAN, Najran and Bab el-Mandeb sit within a few
     // hundred km of each other -- and Cesium will happily stack their labels.
@@ -265,8 +318,15 @@ export default class extends Controller {
       const isSelected = situation.id === selected
       const isHovered = situation.id === this._hoveredId
 
+      const at = this._replayAt
+      const born = this._bornBy(situation, at)
+      const heat = this._heatAlpha(situation, at)
+      // An unborn situation (scrubbed before its first report) takes its whole
+      // entity off the globe -- footprint, glyph and label together.
+      entity.show = born
+
       const dimmed = selected != null && !isSelected
-      entity.billboard.color = Cesium.Color.WHITE.withAlpha(dimmed ? 0.25 : 1)
+      entity.billboard.color = Cesium.Color.WHITE.withAlpha(dimmed ? 0.25 : heat)
 
       // Only anchors with a measurable extent carry a footprint.
       if (entity.ellipse) {
@@ -276,11 +336,25 @@ export default class extends Controller {
           .withAlpha(dimmed ? 0.25 : 0.85)
       }
 
-      entity._labelWanted = selected != null
+      entity.label.fillColor = Cesium.Color
+        .fromCssColorString(registry ? "#ffe0a3" : "#c8d4e0")
+        .withAlpha(dimmed ? 0.4 : Math.max(heat, HEAT_LABEL_FLOOR))
+
+      entity._labelWanted = born && (selected != null
         ? isSelected
-        : registry || isHovered
-      entity._labelPriority = isSelected ? 0 : isHovered ? 1 : 2
+        : registry || isHovered)
+      // Hotter stories win label slots: a flare outranks fresh outranks stale,
+      // below the absolute claims of selection and hover.
+      const flaring = this._flaringAt(situation, at)
+      entity._labelPriority = isSelected ? 0
+        : isHovered ? 1
+        : flaring ? 2
+        : heat >= 0.85 ? 3
+        : heat >= 0.6 ? 4
+        : 5
     })
+
+    this._syncPulses()
 
     this._declutterAnchorLabels()
 
@@ -324,7 +398,7 @@ export default class extends Controller {
     const kept = []
 
     for (const entity of candidates) {
-      if (!entity._labelWanted) {
+      if (!entity._labelWanted || entity.show === false) {
         entity.label.show = false
         continue
       }
@@ -353,6 +427,224 @@ export default class extends Controller {
     }
 
     scene.requestRender()
+  }
+
+  // ── time, heat and flares ───────────────────────────────────────────
+  //
+  // One clock for the whole page: _replayAt is null in live mode, or the
+  // scrubbed moment in ms. Every visual channel below answers "as of when?"
+  // with the same value, which is what makes the scrubber a replay rather
+  // than a filter.
+
+  // When the story last filed, as of `at`. Live mode reads the payload's
+  // cluster stamps; replay reads the per-day history the builder accumulated,
+  // so precision degrades gracefully from hours (live) to days (deep past).
+  _lastActivityAt(situation, at) {
+    if (at == null) {
+      return situation.last_seen_at ? Date.parse(situation.last_seen_at) : null
+    }
+    let last = null
+    for (const [day, tally] of Object.entries(situation.history || {})) {
+      if (!tally?.a) continue
+      const start = Date.parse(`${day}T00:00:00Z`)
+      if (start > at) continue
+      // Day-resolution data: activity on a day counts up to the scrub point
+      // inside that day, or the day's end once the scrubber has passed it.
+      last = Math.max(last ?? 0, Math.min(start + 86_400_000, at))
+    }
+    return last
+  }
+
+  _heatAlpha(situation, at) {
+    const reference = at ?? Date.now()
+    const last = this._lastActivityAt(situation, at)
+    if (last == null) return HEAT_TIERS[HEAT_TIERS.length - 1].alpha
+
+    const hours = (reference - last) / 3_600_000
+    return HEAT_TIERS.find((tier) => hours < tier.maxHours).alpha
+  }
+
+  // Whether the situation existed yet at the scrub point. born_at is the
+  // row's creation; the first history day can precede it (history backfills
+  // the whole window on the first build), so the earlier of the two wins.
+  _bornBy(situation, at) {
+    if (at == null) return true
+    const days = Object.keys(situation.history || {}).sort()
+    const first = Math.min(
+      situation.born_at ? Date.parse(situation.born_at) : Infinity,
+      days.length ? Date.parse(`${days[0]}T00:00:00Z`) : Infinity
+    )
+    return first === Infinity || first <= at
+  }
+
+  // Live: the board's own verdict. Replay: the recorded flare moments, each
+  // relighting as the scrubber crosses it.
+  _flaringAt(situation, at) {
+    if (at == null) return situation.attention?.state === "flaring"
+    return (situation.flares || []).some((stamp) => {
+      const t = Date.parse(stamp)
+      return Math.abs(at - t) < REPLAY_FLARE_WINDOW_MS
+    })
+  }
+
+  // ── the flare pulse ─────────────────────────────────────────────────
+  //
+  // The only animation on the page, so it runs its own requestAnimationFrame
+  // pump only while at least one halo exists -- this viewer renders on
+  // request, and an idle board must stay idle.
+
+  _syncPulses() {
+    const Cesium = window.Cesium
+    if (!Cesium || !this._anchors) return
+    this._pulses ??= new Map()
+
+    const at = this._replayAt
+    const selected = this._selectedId
+    const wanted = new Map()
+    this._situations.forEach((situation) => {
+      const { lat, lng } = situation.anchor
+      if (lat == null || lng == null) return
+      if (!this._bornBy(situation, at) || !this._flaringAt(situation, at)) return
+      // A selection owns the globe; other situations' pulses yield with the
+      // rest of their presence.
+      if (selected != null && situation.id !== selected) return
+      wanted.set(situation.id, situation)
+    })
+
+    for (const [id, entity] of this._pulses) {
+      if (!wanted.has(id)) {
+        this._anchors.entities.remove(entity)
+        this._pulses.delete(id)
+      }
+    }
+
+    for (const [id, situation] of wanted) {
+      if (this._pulses.has(id)) continue
+      // Staggered phase per situation so simultaneous flares breathe apart.
+      const phase0 = ((id % 7) / 7) * PULSE_PERIOD_MS
+      const entity = this._anchors.entities.add({
+        id: `sit-pulse-${id}`,
+        position: Cesium.Cartesian3.fromDegrees(situation.anchor.lng, situation.anchor.lat),
+        point: {
+          pixelSize: new Cesium.CallbackProperty(() => {
+            const phase = ((performance.now() + phase0) % PULSE_PERIOD_MS) / PULSE_PERIOD_MS
+            return PULSE_MIN_PX + phase * (PULSE_MAX_PX - PULSE_MIN_PX)
+          }, false),
+          color: new Cesium.CallbackProperty(() => {
+            const phase = ((performance.now() + phase0) % PULSE_PERIOD_MS) / PULSE_PERIOD_MS
+            return Cesium.Color.fromCssColorString(REGISTRY_COLOR).withAlpha(0.5 * (1 - phase))
+          }, false),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+      this._pulses.set(id, entity)
+    }
+
+    if (this._pulses.size && this._pulseRaf == null) this._pulsePump()
+  }
+
+  _pulsePump() {
+    if (!this.viewer || (!this._pulses?.size && !this._ripples?.size)) {
+      this._pulseRaf = null
+      return
+    }
+    this.viewer.scene.requestRender()
+    this._pulseRaf = requestAnimationFrame(() => this._pulsePump())
+  }
+
+  // ── the escalation ripple ───────────────────────────────────────────
+
+  // Which situations became more interesting since the last refresh. The
+  // first fetch has nothing to compare against -- a page load is not news.
+  _announceEscalations(previous) {
+    if (!previous || this._replayAt != null) return
+    this._situations.forEach((situation) => {
+      const rank = ATTENTION_RANK[situation.attention?.state] ?? 0
+      const before = previous.get(situation.id)
+      if (before == null ? rank > 0 : rank > before) this._ripple(situation)
+    })
+  }
+
+  _ripple(situation) {
+    const Cesium = window.Cesium
+    const { lat, lng } = situation.anchor
+    if (!Cesium || lat == null || lng == null) return
+    this._ripples ??= new Set()
+
+    for (let wave = 0; wave < RIPPLE_WAVES; wave++) {
+      const start = performance.now() + wave * RIPPLE_STAGGER_MS
+      // Cesium rejects a zero-radius ellipse; the floor also keeps the wave
+      // visible for its whole first frame.
+      const radiusAt = () => {
+        const phase = (performance.now() - start) / RIPPLE_WAVE_MS
+        return Math.max(2_000, Math.min(phase, 1) * RIPPLE_RADIUS_M)
+      }
+      const entity = this._anchors.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lng, lat),
+        ellipse: {
+          semiMajorAxis: new Cesium.CallbackProperty(radiusAt, false),
+          semiMinorAxis: new Cesium.CallbackProperty(radiusAt, false),
+          material: Cesium.Color.TRANSPARENT,
+          outline: true,
+          outlineColor: new Cesium.CallbackProperty(() => {
+            const phase = (performance.now() - start) / RIPPLE_WAVE_MS
+            return Cesium.Color.fromCssColorString(REGISTRY_COLOR)
+              .withAlpha(phase < 0 ? 0 : Math.max(0, 0.85 * (1 - phase)))
+          }, false),
+          outlineWidth: 2,
+          height: 0,
+        },
+      })
+      this._ripples.add(entity)
+      setTimeout(() => {
+        this._anchors.entities.remove(entity)
+        this._ripples.delete(entity)
+      }, wave * RIPPLE_STAGGER_MS + RIPPLE_WAVE_MS + 100)
+    }
+
+    if (this._pulseRaf == null) this._pulsePump()
+  }
+
+  // ── replay ──────────────────────────────────────────────────────────
+
+  // The scrubber spans the deepest biography on the board -- a three-week
+  // story lets you drag back three weeks; younger situations pop in along the
+  // way. Under half a day of depth there is nothing to replay yet and the
+  // control stays hidden.
+  _initScrub() {
+    if (!this.hasScrubTarget) return
+    let earliest = Infinity
+    this._situations.forEach((situation) => {
+      const days = Object.keys(situation.history || {}).sort()
+      if (days.length) earliest = Math.min(earliest, Date.parse(`${days[0]}T00:00:00Z`))
+      if (situation.born_at) earliest = Math.min(earliest, Date.parse(situation.born_at))
+    })
+    const now = Date.now()
+    this._scrubStart = Math.max(earliest, now - REPLAY_MAX_DAYS * 86_400_000)
+    this._scrubEnd = now
+    this.scrubTarget.style.display =
+      (earliest === Infinity || now - this._scrubStart < 12 * 3_600_000) ? "none" : ""
+  }
+
+  scrub() {
+    const value = Number(this.scrubRangeTarget.value)
+    if (value >= 1000) return this.scrubLive()
+
+    this._replayAt = this._scrubStart + (value / 1000) * (this._scrubEnd - this._scrubStart)
+    const stamp = new Date(this._replayAt)
+    this.scrubTimeTarget.textContent = `${stamp.toISOString().slice(0, 10)} ${stamp.toISOString().slice(11, 16)} UTC`
+    this.element.classList.add("is-replaying")
+    this._applyAnchorStyling()
+    this._renderList()
+  }
+
+  scrubLive() {
+    this._replayAt = null
+    if (this.hasScrubRangeTarget) this.scrubRangeTarget.value = 1000
+    if (this.hasScrubTimeTarget) this.scrubTimeTarget.textContent = "now"
+    this.element.classList.remove("is-replaying")
+    this._applyAnchorStyling()
+    this._renderList()
   }
 
   // Both symbols are fixed. Nothing drawn on this globe is sized by report
@@ -1222,9 +1514,16 @@ export default class extends Controller {
       if (ratio > 1.3 || ratio < 0.7) this._flyTo(situation, plan.radius_km)
     }
 
+    // The board already painted its cached composition; replacing identical
+    // markup would only flash the panel. Swap only when the plan's fresher
+    // read actually differs.
     const reading = document.getElementById("sit-reading")
-    if (reading && plan.composition?.lead) {
+    if (reading && plan.composition?.lead
+      && JSON.stringify(plan.composition) !== JSON.stringify(situation.composition)) {
       reading.innerHTML = this._composedHtml(situation, plan.composition)
+      // Written back so reselecting this situation first-paints the composed
+      // dossier instead of flashing the fallback and swapping again.
+      situation.composition = plan.composition
     }
 
     const brief = document.getElementById("sit-brief")
@@ -1276,8 +1575,12 @@ export default class extends Controller {
     // The payload arrives corroborated-first; emerging situations render below
     // a divider, dimmed, instead of being hidden — thin sourcing is a signal
     // worth seeing, just not one worth leading with.
-    const corroborated = this._situations.filter((s) => s.tier !== "emerging")
-    const emerging = this._situations.filter((s) => s.tier === "emerging")
+    // Within each tier, flaring situations lead -- attention is the one
+    // thing allowed to reorder the board's own ranking.
+    const flareFirst = (rows) => [...rows].sort((a, b) =>
+      Number(this._flaringAt(b, this._replayAt)) - Number(this._flaringAt(a, this._replayAt)))
+    const corroborated = flareFirst(this._situations.filter((s) => s.tier !== "emerging"))
+    const emerging = flareFirst(this._situations.filter((s) => s.tier === "emerging"))
 
     this.listTarget.innerHTML = [
       corroborated.map((situation) => this._listRow(situation)).join(""),
@@ -1290,14 +1593,16 @@ export default class extends Controller {
     const registry = situation.anchor.kind === "registry"
     const selected = situation.id === this._selectedId
     const reach = situation.rings.ring3_countries.total
+    const flaring = this._flaringAt(situation, this._replayAt)
+    const unborn = !this._bornBy(situation, this._replayAt)
 
     return `
-      <button type="button" class="sit-row ${selected ? "is-selected" : ""} ${situation.tier === "emerging" ? "is-emerging" : ""}"
+      <button type="button" class="sit-row ${selected ? "is-selected" : ""} ${situation.tier === "emerging" ? "is-emerging" : ""} ${unborn ? "is-unborn" : ""}"
               data-situation-id="${situation.id}"
               data-action="click->situations#selectFromList">
         <span class="sit-row-dot ${registry ? "is-registry" : "is-medoid"}"></span>
         <span class="sit-row-body">
-          <span class="sit-row-name">${escapeHtml(situation.name)}</span>
+          <span class="sit-row-name">${escapeHtml(situation.name)}${flaring ? `<span class="sit-row-flare">flaring</span>` : ""}</span>
           <span class="sit-row-meta">
             ${pluralize(situation.member_count, "story", "stories")}
             ${reach > 0 ? `· ${reach} countries exposed` : ""}
@@ -1374,7 +1679,7 @@ export default class extends Controller {
 
       <div id="sit-brief" class="sit-brief" style="display:none"></div>
 
-      <div id="sit-reading">
+      <div id="sit-reading">${situation.composition?.lead ? this._composedHtml(situation, situation.composition) : `
         <div class="sit-panel-stats">
           <div><b>${situation.member_count}</b> stories · <b>${situation.article_count}</b> reports · <b>${situation.source_count}</b> sources${situation.tier === "emerging" ? ` · <span class="sit-tier-emerging">emerging</span>` : ""}
           · ${formatDay(situation.first_seen_at)} → ${formatDay(situation.last_seen_at)}</div>
@@ -1388,7 +1693,7 @@ export default class extends Controller {
 
         ${this._figuresHtml(situation)}
 
-        ${this._sourcesHtml(situation)}
+        ${this._sourcesHtml(situation)}`}
       </div>
 
       <div id="sit-related"></div>

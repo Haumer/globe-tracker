@@ -69,6 +69,18 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     assert_equal "Strait of Hormuz", row[:name], "the trailing 'situation' is redundant on a globe"
   end
 
+  test "each row embeds the curator's cached composition, read-only" do
+    _c, event = cluster(key: "comp1", title: "Strike hits depot", lat: 50.4, lng: 30.5)
+    entity = situation(key: "situation:place:comp1", name: "Kyiv situation",
+                       grouped_by: "place", events: [event])
+
+    composed = { treatment: "note", lead: "A depot burned." }
+    SituationLayerCurator.stub(:latest_composition, ->(id) { id == entity.id ? composed : nil }) do
+      row = SituationBoardService.call[:situations].first
+      assert_equal composed, row[:composition]
+    end
+  end
+
   # The anchor is the only derived coordinate in the payload, so it has to be a
   # real member position rather than an average that could land in open ocean.
   test "anchors an actor-keyed situation on a member, never on a computed centroid" do

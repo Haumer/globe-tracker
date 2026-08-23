@@ -44,8 +44,38 @@ class SituationBoardService
   CORROBORATED_MIN_ARTICLES = 5
   CORROBORATED_MIN_SOURCES = 3
 
+  # The board only changes when SituationBuilder rewrites the situations, and
+  # WarmSituationLayersJob invalidates both caches right after every build --
+  # so the TTL is a backstop against a dead worker, not the refresh mechanism.
+  # The JSON cache exists because the payload is ~700KB: re-encoding it on
+  # every request cost more than the cache read it followed.
+  CACHE_TTL = 1.hour
+
   def self.call(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
     new(days: days, now: now).call
+  end
+
+  def self.cached(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
+    Rails.cache.fetch(cache_key(days), expires_in: CACHE_TTL) { call(days: days, now: now) }
+  end
+
+  def self.cached_json(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
+    Rails.cache.fetch(json_cache_key(days), expires_in: CACHE_TTL) do
+      cached(days: days, now: now).to_json
+    end
+  end
+
+  def self.invalidate(days: SituationBuilder::WINDOW_DAYS)
+    Rails.cache.delete(cache_key(days))
+    Rails.cache.delete(json_cache_key(days))
+  end
+
+  def self.cache_key(days)
+    "situation-board:v1:#{days}"
+  end
+
+  def self.json_cache_key(days)
+    "situation-board:v1:json:#{days}"
   end
 
   def initialize(days: SituationBuilder::WINDOW_DAYS, now: Time.current)
@@ -97,6 +127,14 @@ class SituationBoardService
       geo_member_count: members.count { |member| member[:lat] },
       first_seen_at: members.filter_map { |m| m[:last_seen_at] }.min,
       last_seen_at: members.filter_map { |m| m[:last_seen_at] }.max,
+      # The situation's biography, accumulated by SituationHistoryService
+      # across builds -- per-day report tallies as deep as the story has run,
+      # not just this window. born_at is the row's own age: true even before
+      # any history accumulates.
+      born_at: situation.created_at&.iso8601,
+      history: situation.metadata["history"] || {},
+      flares: situation.metadata["flares"] || [],
+      attention: attention_for(situation, members),
       members: members,
       facts: facts_for(members),
       daily: daily_counts(members),
@@ -104,6 +142,11 @@ class SituationBoardService
       sources: sources_for(members),
       attribution: attribution_for(members),
       figures: figures_for(members),
+      # The curator's last composed dossier, read from cache only -- never a
+      # model call. Riding on the board lets the panel's first paint be the
+      # final dossier; the plan fetch stays the authority and swaps it out in
+      # the rare case the cached copy is behind.
+      composition: SituationLayerCurator.latest_composition(situation.id),
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -207,6 +250,29 @@ class SituationBoardService
     return [nil, nil] unless entity
 
     [entity.metadata["latitude"]&.to_f, entity.metadata["longitude"]&.to_f]
+  end
+
+  # Recomputed live rather than read from metadata: the persisted verdict is
+  # up to a build cycle old, and "flaring" on screen should mean now. Same
+  # formula either way -- SituationAttention is the single author.
+  def attention_for(situation, members)
+    window_start = now - days.days
+    rows = situation_article_rows(members)
+      .select { |row| row[:published_at]&.between?(window_start, now) }
+    observation = SituationAttention.observe(rows, now: now)
+    assessment = SituationAttention.assess(
+      observation,
+      baseline_daily: SituationAttention.baseline_daily(
+        situation.metadata["history"].to_h, today: now.utc.to_date
+      ),
+      now: now
+    )
+
+    {
+      state: assessment[:state],
+      ratio: assessment[:ratio],
+      last_flare_at: situation.metadata["flares"].to_a.last
+    }
   end
 
   def daily_counts(members)

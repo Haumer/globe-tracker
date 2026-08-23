@@ -17,6 +17,11 @@ class BuildSituationsJob < ApplicationJob
   def perform
     HazardOccurrenceLinkService.sync_recent
     SituationBuilder.call
+    # The builder decided who is on the board; this folds the run's report
+    # tallies into each survivor's metadata history and stamps flare moments.
+    # It must run before the layer warm below rebuilds the board cache, so
+    # the cached board embeds the history this run just wrote.
+    SituationHistoryService.call
     # Curation (the per-situation model call) is cached on a membership
     # fingerprint; warming it now means selecting a situation never waits on
     # a live model call. Enqueued rather than inlined so a slow or failing

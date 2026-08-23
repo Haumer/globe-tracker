@@ -12,6 +12,14 @@
 
   <div class="sit-panel" data-situations-target="panel" style="display:none;"></div>
 
+  <div class="sit-scrub" data-situations-target="scrub" style="display:none;">
+    <button type="button" class="sit-scrub-live" data-action="click->situations#scrubLive">LIVE</button>
+    <input type="range" class="sit-scrub-range" min="0" max="1000" value="1000"
+           data-situations-target="scrubRange" data-action="input->situations#scrub"
+           aria-label="Replay: drag back in time">
+    <span class="sit-scrub-time" data-situations-target="scrubTime">now</span>
+  </div>
+
   <div class="sit-legend">
     <div class="sit-legend-row">
       <span class="sit-swatch sit-swatch-registry"></span>
@@ -40,7 +48,7 @@
       small to see yet.
     </div>
     <div class="sit-legend-note">
-      Selecting a situation adds live layers — aircraft, ships, heat, cameras,
+      Selecting a situation adds live layers — aircraft, ships, cameras,
       quakes and more. A curator picks which start on; the chips in the dossier
       override it.
     </div>

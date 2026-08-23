@@ -893,3 +893,99 @@
 .sit-exposure[open] summary::before {
   content: "▾ ";
 }
+
+// ── replay scrubber ─────────────────────────────────────────────────
+// Bottom center, same panel chrome as everything else on the page. LIVE on
+// the left because that is where you return to; the timestamp reads out what
+// moment the globe is showing.
+
+.sit-scrub {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid #232b35;
+  border-radius: 6px;
+  z-index: 30;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.sit-scrub-live {
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: #ffe0a3;
+  background: transparent;
+  border: 1px solid #3a4654;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#situations-page.is-replaying .sit-scrub-live {
+  color: #6b7885;
+}
+
+.sit-scrub-range {
+  width: 260px;
+  accent-color: #ffc44d;
+}
+
+// The default blue focus ring fights the page; keyboard users keep a visible
+// ring in the page's own accent.
+.sit-scrub-range:focus {
+  outline: none;
+}
+
+.sit-scrub-range:focus-visible {
+  outline: 1px solid #ffc44d;
+  outline-offset: 2px;
+}
+
+// Floats above the bar instead of sitting in it: reserving its width inline
+// left an empty shelf next to "now", and letting it push the slider mid-drag
+// would move the track under the cursor. Hidden while live -- the lit LIVE
+// button already says which moment this is.
+.sit-scrub-time {
+  display: none;
+  position: absolute;
+  top: -30px;
+  right: 0;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: #ffe0a3;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid #232b35;
+  border-radius: 4px;
+}
+
+#situations-page.is-replaying .sit-scrub-time {
+  display: block;
+}
+
+// ── attention in the rail ───────────────────────────────────────────
+
+.sit-row-flare {
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #0a0c10;
+  background: #ffc44d;
+  border-radius: 3px;
+  vertical-align: 1px;
+}
+
+// A situation not yet born at the scrubbed moment stays listed -- the rail is
+// the index -- but visibly out of that moment.
+.sit-row.is-unborn {
+  opacity: 0.3;
+}

@@ -94,4 +94,19 @@
   #situations-page .sit-overlap-chooser {
     z-index: 50;
   }
+
+  // The bottom sheet owns the bottom edge; the scrubber rides just above it.
+  #situations-page .sit-scrub {
+    bottom: calc(44vh + 16px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    justify-content: space-between;
+  }
+
+  #situations-page .sit-scrub-range {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
 }

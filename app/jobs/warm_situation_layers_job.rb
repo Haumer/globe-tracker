@@ -14,9 +14,9 @@ class WarmSituationLayersJob < ApplicationJob
   tracks_polling source: "situations:layer_warm", poll_type: "ontology"
 
   def perform
-    # The builder just rewrote the situations; a board cached up to 2 minutes
-    # ago would warm plans for rows that no longer exist.
-    Rails.cache.delete("situation-board:v1:#{SituationBuilder::WINDOW_DAYS}")
+    # The builder just rewrote the situations; the cached board would warm
+    # plans for rows that no longer exist.
+    SituationBoardService.invalidate
 
     situations = SituationLayerPlanService.board[:situations] || []
 
@@ -42,6 +42,12 @@ class WarmSituationLayersJob < ApplicationJob
     rescue StandardError => error
       Rails.logger.warn("[WarmSituationLayersJob] situation #{situation[:id]}: #{error.class}: #{error.message}")
     end
+
+    # The plans just warmed rewrote the composition pointers the board embeds,
+    # so the board cached at the top of this job is already behind. Rebuild it
+    # here -- with fresh compositions -- so no user request ever pays it.
+    SituationBoardService.invalidate
+    SituationBoardService.cached_json
 
     { records_fetched: situations.size, records_stored: warmed }
   end

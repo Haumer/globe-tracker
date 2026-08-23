@@ -44,11 +44,11 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
   end
 
   test "model picks are filtered to the available catalog" do
-    client = FakeClient.new('{"layers": [{"key": "fires", "reason": "corroborates strikes"}, {"key": "made_up", "reason": "x"}]}')
+    client = FakeClient.new('{"layers": [{"key": "conflict_events", "reason": "corroborates strikes"}, {"key": "made_up", "reason": "x"}]}')
     result = SituationLayerCurator.call(situation: situation, available_keys: ALL_KEYS, client: client)
 
     assert_equal "ai", result.basis
-    assert_equal({ "fires" => "corroborates strikes" }, result.picks)
+    assert_equal({ "conflict_events" => "corroborates strikes" }, result.picks)
   end
 
   test "a broken model response falls back to the rules, never raises" do
@@ -62,7 +62,7 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
     result = SituationLayerCurator.call(situation: situation, available_keys: ALL_KEYS, client: ExplodingClient.new)
 
     assert_equal "heuristic", result.basis
-    assert result.picks.key?("fires"), "an airstrike situation should default the heat layer on"
+    assert result.picks.key?("conflict_events"), "an airstrike situation should default the conflict record on"
   end
 
   test "heuristics read the story: maritime stories get ships, quakes get the instrument record" do
@@ -79,7 +79,7 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
     )
     assert quake.picks.key?("earthquakes")
     assert quake.picks.key?("webcams"), "hazards are exactly when someone points a camera"
-    assert_not quake.picks.key?("military_bases")
+    assert_not quake.picks.key?("conflict_events")
   end
 
   test "heuristic picks respect availability" do
@@ -216,7 +216,7 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
     client = FakeClient.new({
       brief: "Strikes continue around the strait. Watch tanker transits.",
       radius_km: 5_000,
-      layers: [{ key: "fires", reason: "corroborates" }],
+      layers: [{ key: "conflict_events", reason: "corroborates" }],
       regions: [
         { name: "Hormozgan", country_code: "ir", impact: "high" },
         { name: "Dubai", country_code: "AE", impact: "catastrophic" },

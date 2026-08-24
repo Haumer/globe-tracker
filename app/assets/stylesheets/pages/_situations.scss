@@ -614,6 +614,40 @@
   background: #4fc3f7;
 }
 
+// ── ghosts: where the curator's content will land ────────────────────
+// Static placeholders, deliberately unanimated: on this page only flares
+// are allowed to move.
+
+.sit-ghosts {
+  margin-top: 12px;
+}
+
+.sit-ghost {
+  height: 13px;
+  margin-bottom: 6px;
+  background: #131a23;
+  border-radius: 2px;
+}
+
+.sit-ghost.is-thin {
+  height: 8px;
+  margin-bottom: 5px;
+}
+
+.sit-ghosts-label {
+  margin-top: 4px;
+  font-size: 8.5px;
+  color: #55626f;
+}
+
+.sit-ghost-chip {
+  display: inline-block;
+  height: 19px;
+  background: #131a23;
+  border: 1px solid #1e2630;
+  border-radius: 3px;
+}
+
 // ── folds: sections that earn their space on demand ──────────────────
 
 .sit-fold summary {

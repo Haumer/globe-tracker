@@ -858,7 +858,7 @@ export default class extends Controller {
             <span class="sit-fact-actor">${escapeHtml(source.name)}</span>
             ${source.country ? `<span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>` : ""}
             <span class="sit-fact-bar is-evidence"><i style="width:${Math.round((source.reports / max) * 100)}%"></i></span>
-            <span class="sit-fact-count">${pluralize(source.reports, "report")}</span>
+            <span class="sit-fact-count">×${source.reports}</span>
           </div>`).join("")}
         ${more > 0 ? `<div class="sit-ring-more">+ ${pluralize(more, "more outlet")}</div>` : ""}
       </details>`
@@ -882,7 +882,7 @@ export default class extends Controller {
       <div class="sit-fact-row">
         <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
         <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
-        <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
+        <span class="sit-fact-count">${pluralize(row.sources, "outlet")}</span>
       </div>`).join("")
   }
 
@@ -901,7 +901,7 @@ export default class extends Controller {
       ${comp.angle ? `<div class="sit-angle">${escapeHtml(comp.angle)}</div>` : ""}
       <h3 class="sit-lead">${escapeHtml(comp.lead)}</h3>
       ${comp.dek ? `<p class="sit-dek is-clamped" title="tap to expand"
-        data-action="click->situations#toggleDek">${escapeHtml(comp.dek)}</p>` : ""}` : ""
+        data-action="click->situations#toggleDek">${escapeHtml(comp.dek)}</p>` : ""}` : this._ghostEditorialHtml()
 
     return `
       ${editorial}
@@ -927,9 +927,9 @@ export default class extends Controller {
     const countries = situation.sources?.countries || 0
 
     const parts = [
-      pluralize(situation.member_count, "story", "stories"),
-      pluralize(situation.article_count, "report"),
-      `${pluralize(situation.source_count, "source")}${countries > 1 ? ` / ${countries} countries` : ""}`,
+      `<span title="stories: clusters of reports about one event">${pluralize(situation.member_count, "story", "stories")}</span>`,
+      `<span title="reports: individual published articles">${pluralize(situation.article_count, "report")}</span>`,
+      `<span title="outlets: distinct publications filing">${pluralize(situation.source_count, "outlet")}${countries > 1 ? ` / ${countries} countries` : ""}</span>`,
       `${humanizeSpan(spanMs)} span`,
       `last ${timeAgo(situation.last_seen_at)}`,
       dayN ? `day ${dayN}` : null,
@@ -957,7 +957,7 @@ export default class extends Controller {
 
     const meters = [
       { label: "reports", have: situation.article_count, need: 5 },
-      { label: "sources", have: situation.source_count, need: 3 },
+      { label: "outlets", have: situation.source_count, need: 3 },
     ].map(({ label, have, need }) => `
       <div class="sit-meter-row">
         <span class="sit-meter-label">${label}</span>
@@ -1346,6 +1346,10 @@ export default class extends Controller {
     this._hideOverlapChooser()
     this._setFootprintHidden(false)
     this._selectedId = id
+    // The plan kicks off before the panel renders: activate's synchronous
+    // prologue clears the previous chip bar, and the ghost chips the panel
+    // paints next must survive until the real ones arrive.
+    const planPromise = this._layers?.activate(situation)
     this._drawDetail(situation)
     this._renderPanel(situation)
     this._renderList()
@@ -1355,9 +1359,12 @@ export default class extends Controller {
     // the chip bar reports its own failures. When the plan does arrive it
     // carries the curator's judgement -- prose brief, story scope, related
     // situations -- which refines what is already on screen.
-    this._layers?.activate(situation)
-      .then((plan) => { if (plan && this._selectedId === id) this._applyPlan(situation, plan) })
-      .catch((error) => console.error("Layers failed", error))
+    planPromise
+      ?.then((plan) => { if (plan && this._selectedId === id) this._applyPlan(situation, plan) })
+      .catch((error) => {
+        console.error("Layers failed", error)
+        this._clearEditorialGhost()
+      })
   }
 
   _clearSelection() {
@@ -1568,6 +1575,8 @@ export default class extends Controller {
       reading.innerHTML = this._readingHtml(situation)
     }
 
+    this._clearEditorialGhost()
+
     const brief = document.getElementById("sit-brief")
     if (brief && plan.brief && !plan.composition?.lead) {
       brief.innerHTML = `${escapeHtml(plan.brief)} <span class="sit-brief-basis">AI brief</span>`
@@ -1729,7 +1738,15 @@ export default class extends Controller {
 
       ${this._membersHtml(situation)}
 
-      <div id="sit-layer-chips"></div>
+      <div id="sit-layer-chips">
+        <div class="sit-section-title">Live layers</div>
+        <div class="sit-chip-row">
+          <span class="sit-ghost-chip" style="width:78px"></span>
+          <span class="sit-ghost-chip" style="width:64px"></span>
+          <span class="sit-ghost-chip" style="width:92px"></span>
+          <span class="sit-ghost-chip" style="width:58px"></span>
+        </div>
+      </div>
       <div id="sit-layer-sections"></div>
 
       <details class="sit-exposure">
@@ -1791,8 +1808,8 @@ export default class extends Controller {
           ? "location approx" : ""
     const meta = [
       formatShort(member.last_seen_at),
-      `${pluralize(member.article_count, "report")}${member.source_count > 1
-        ? ` · ${member.source_count} sources` : ""}`,
+      `${pluralize(member.article_count, "report")}${member.source_count < member.article_count
+        ? ` / ${pluralize(member.source_count, "outlet")}` : ""}`,
       member.event_type ? String(member.event_type).replace(/_/g, " ") : "",
       geo,
     ].filter(Boolean).map((part) => escapeHtml(part)).join(" · ")
@@ -1805,6 +1822,26 @@ export default class extends Controller {
         <div class="sit-member-meta">${meta}${fact
           ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}</div>
       </div>`
+  }
+
+  // Placeholder shapes where the curator's lead and dek will land -- the
+  // reader sees that a reading is coming and where, instead of the panel
+  // reflowing when it arrives. Static on purpose: on this page only flares
+  // are allowed to animate.
+  _ghostEditorialHtml() {
+    return `
+      <div id="sit-ghost-editorial" class="sit-ghosts">
+        <div class="sit-ghost" style="width:88%"></div>
+        <div class="sit-ghost" style="width:62%"></div>
+        <div class="sit-ghost is-thin" style="width:100%"></div>
+        <div class="sit-ghost is-thin" style="width:94%"></div>
+        <div class="sit-ghost is-thin" style="width:55%"></div>
+        <div class="sit-ghosts-label">curator reading the story…</div>
+      </div>`
+  }
+
+  _clearEditorialGhost() {
+    document.getElementById("sit-ghost-editorial")?.remove()
   }
 
   toggleDek(event) {

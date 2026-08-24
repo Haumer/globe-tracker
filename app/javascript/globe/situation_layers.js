@@ -81,6 +81,7 @@ export class SituationLayerManager {
 
   async activate(situation) {
     this.deactivate()
+    this._chipsExpanded = false
     const epoch = ++this._epoch
     this._situation = situation
 
@@ -765,7 +766,15 @@ export class SituationLayerManager {
     }
     const ordered = [...this._plan.layers].sort((a, b) => rank(a) - rank(b))
 
-    const chips = ordered.map((layer) => {
+    // A dead chip nobody toggles is pure noise: only chips that are on,
+    // suggested by the curator, or baseline show by default; the tail folds
+    // behind a count. If nothing qualifies, everything shows.
+    const lead = ordered.filter((layer) => this._on.has(layer.key) ||
+      layer.baseline || (layer.status === "ready" && layer.reason))
+    const visible = (this._chipsExpanded || !lead.length) ? ordered : lead
+    const hidden = ordered.length - visible.length
+
+    const chips = visible.map((layer) => {
       const on = this._on.has(layer.key)
       const unavailable = layer.status !== "ready"
       const note = on ? this._notes.get(layer.key) : null
@@ -783,16 +792,27 @@ export class SituationLayerManager {
       </button>`
     }).join("")
 
+    const moreChip = hidden > 0
+      ? `<button type="button" class="sit-chip is-more" data-chip-more>+${hidden} more</button>`
+      : this._chipsExpanded && ordered.length > lead.length
+        ? `<button type="button" class="sit-chip is-more" data-chip-more>fewer</button>`
+        : ""
+
     const basis = this._plan.curated_by === "ai" ? "AI-curated" : "rule-curated"
     container.innerHTML = `
       <div class="sit-section-title">Live layers <span class="sit-chip-basis">${basis}</span></div>
-      <div class="sit-chip-row">${chips}</div>`
+      <div class="sit-chip-row">${chips}${moreChip}</div>`
 
     container.querySelectorAll(".sit-chip[data-layer-key]").forEach((button) => {
       button.addEventListener("click", (event) => {
         event.stopPropagation()
         this.toggle(button.dataset.layerKey)
       })
+    })
+    container.querySelector("[data-chip-more]")?.addEventListener("click", (event) => {
+      event.stopPropagation()
+      this._chipsExpanded = !this._chipsExpanded
+      this._renderChips()
     })
   }
 

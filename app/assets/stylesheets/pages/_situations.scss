@@ -189,13 +189,13 @@
   padding: 0 2px;
 }
 
-// ── status strip: tier, attention, freshness ─────────────────────────
+// ── vitals: one calm line of state ───────────────────────────────────
 
-.sit-status {
+.sit-vitals {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px 10px;
+  gap: 5px 8px;
   margin-top: 9px;
   font-size: 9px;
 }
@@ -230,44 +230,9 @@
 .sit-att.is-active { color: #7ed491; }
 .sit-att.is-flaring { color: #ffb300; }
 
-.sit-status-item {
+.sit-vitals-line {
   color: #7d8b99;
-}
-
-// ── stat grid: the counts as an instrument row ───────────────────────
-
-.sit-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1px;
-  margin-top: 10px;
-  background: #1e2630;
-  border: 1px solid #1e2630;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.sit-stat {
-  padding: 6px 8px;
-  background: #10151c;
-}
-
-.sit-stat b {
-  display: block;
-  font-size: 14px;
-  color: #e6edf3;
-}
-
-.sit-stat span {
-  display: block;
-  margin-top: 1px;
-  font-size: 8px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: #6b7885;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.6;
 }
 
 // The ring chain reads as one line or not at all — wrapped, the arrows point
@@ -570,6 +535,14 @@
   line-height: 1.5;
   color: #b9c3cd;
   margin: 0;
+  cursor: pointer;
+}
+
+.sit-dek.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sit-tier-emerging {
@@ -641,22 +614,55 @@
   background: #4fc3f7;
 }
 
-.sit-fact-kinds {
-  margin-top: 6px;
+// ── folds: sections that earn their space on demand ──────────────────
+
+.sit-fold summary {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.sit-fact-kind {
-  padding: 2px 6px;
-  background: #1a212a;
-  border-radius: 2px;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
   font-size: 9px;
-  color: #c8d4e0;
+  color: #7d8b99;
 }
 
-// ── legend ───────────────────────────────────────────────────────────
+.sit-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.sit-fold summary::before {
+  content: "▸";
+  flex: 0 0 auto;
+  color: #55626f;
+  font-size: 8px;
+}
+
+.sit-fold[open] summary::before {
+  content: "▾";
+}
+
+.sit-fold summary b {
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.sit-fold summary span {
+  font-size: 8.5px;
+  color: #55626f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sit-fold[open] > summary {
+  margin-bottom: 4px;
+}
+
+.sit-members .sit-fold {
+  margin-top: 6px;
+}
 
 .sit-legend {
   position: absolute;
@@ -883,6 +889,11 @@
 
 // A layer the curator found relevant but did not start: visibly offered,
 // clearly not drawn.
+.sit-chip.is-more {
+  border-style: dashed;
+  color: #7d8b99;
+}
+
 .sit-chip.is-suggested {
   border-style: dashed;
   border-color: #7a6a3a;

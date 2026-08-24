@@ -682,19 +682,13 @@ export default class extends Controller {
   // stories. Rendered only when the extraction produced something -- an empty
   // facts box would just advertise the pipeline.
   _factsHtml(situation) {
-    const facts = situation.facts
-    if (!facts) return ""
-
-    const pairs = facts.pairs?.length ? this._pairRowsHtml(facts.pairs) : ""
-    const kinds = (facts.kinds || []).map((k) =>
-      `<span class="sit-fact-kind">${escapeHtml(String(k.kind).replace(/_/g, " "))} · ${k.count}</span>`
-    ).join("")
-    if (!pairs && !kinds) return ""
+    const pairs = situation.facts?.pairs
+    if (!pairs?.length) return ""
 
     return `
       <div class="sit-block">
-        ${pairs ? `<div class="sit-section-title">Who acts on whom</div>${pairs}` : ""}
-        ${kinds ? `<div class="sit-fact-kinds">${kinds}</div>` : ""}
+        <div class="sit-section-title">Who acts on whom</div>
+        ${this._pairRowsHtml(pairs)}
       </div>`
   }
 
@@ -810,7 +804,11 @@ export default class extends Controller {
     if (!figures) return ""
 
     const domain = this._timeDomain(situation)
-    const kinds = ["killed", "injured", "missing"].filter((kind) => figures[kind]?.length).slice(0, 2)
+    // A flat line of identical dots is a fact for the member rows, not a
+    // chart -- only figures that were actually revised earn the space.
+    const kinds = ["killed", "injured", "missing"]
+      .filter((kind) => new Set((figures[kind] || []).map((point) => point.value)).size > 1)
+      .slice(0, 2)
     if (!kinds.length) return ""
 
     const charts = kinds.map((kind) => {
@@ -839,21 +837,22 @@ export default class extends Controller {
       </div>`
   }
 
-  // Who is reporting it: the breadth behind the report count. One row per
-  // outlet with its share of the reporting as a bar -- the difference between
-  // one wire echoing and independent corroboration is visible as row count,
-  // not just asserted in a number.
+  // Who is reporting it: a one-line summary -- breadth plus the leading
+  // outlets -- with the ranked rows folded behind it. When attribution is
+  // contested, WHO says it is the story, so the rows start open.
   _sourcesHtml(situation) {
     const sources = situation.sources
     if (!sources?.total || !sources.top?.length) return ""
 
     const max = Math.max(...sources.top.map((source) => source.reports), 1)
     const more = sources.total - sources.top.length
+    const leaders = sources.top.slice(0, 3).map((source) => source.name).join(", ")
+
     return `
-      <div class="sit-block">
-        <div class="sit-section-title">Who is reporting it
-          <span class="sit-section-note">${pluralize(sources.total, "outlet")}${sources.countries > 1
-            ? ` · ${sources.countries} countries` : ""}</span></div>
+      <details class="sit-fold sit-block"${situation.attribution?.length ? " open" : ""}>
+        <summary><b>Who is reporting it</b>
+          <span>${pluralize(sources.total, "outlet")}${sources.countries > 1
+            ? ` · ${sources.countries} countries` : ""} — ${escapeHtml(leaders)} lead</span></summary>
         ${sources.top.map((source) => `
           <div class="sit-fact-row">
             <span class="sit-fact-actor">${escapeHtml(source.name)}</span>
@@ -862,7 +861,7 @@ export default class extends Controller {
             <span class="sit-fact-count">${pluralize(source.reports, "report")}</span>
           </div>`).join("")}
         ${more > 0 ? `<div class="sit-ring-more">+ ${pluralize(more, "more outlet")}</div>` : ""}
-      </div>`
+      </details>`
   }
 
   _pairRowsHtml(pairs) {
@@ -901,11 +900,11 @@ export default class extends Controller {
     const editorial = comp?.lead ? `
       ${comp.angle ? `<div class="sit-angle">${escapeHtml(comp.angle)}</div>` : ""}
       <h3 class="sit-lead">${escapeHtml(comp.lead)}</h3>
-      ${comp.dek ? `<p class="sit-dek">${escapeHtml(comp.dek)}</p>` : ""}` : ""
+      ${comp.dek ? `<p class="sit-dek is-clamped" title="tap to expand"
+        data-action="click->situations#toggleDek">${escapeHtml(comp.dek)}</p>` : ""}` : ""
 
     return `
       ${editorial}
-      ${this._statStripHtml(situation)}
       ${this._activityHtml(situation)}
       ${this._figuresHtml(situation)}
       ${this._factsHtml(situation)}
@@ -914,38 +913,35 @@ export default class extends Controller {
       ${this._corroborationHtml(situation)}`
   }
 
-  // What state this situation is in RIGHT NOW: tier, attention against its
-  // own baseline, freshness, age, flare count. The one line the old panel
-  // never answered -- "is this still happening?"
-  _statusStripHtml(situation) {
+  // Every vital on one calm mono line: tier, attention against its own
+  // baseline, volume, span, freshness, age. Replaces a status strip and a
+  // tile grid that spent 80px saying the same six numbers.
+  _vitalsHtml(situation) {
     const attention = situation.attention || {}
     const state = attention.state || "quiet"
     const ratio = Number(attention.ratio)
     const flares = (situation.flares || []).length
     const born = situation.born_at || situation.first_seen_at
     const dayN = born ? Math.max(1, Math.floor((Date.now() - Date.parse(born)) / 86_400_000) + 1) : null
+    const spanMs = Date.parse(situation.last_seen_at) - Date.parse(situation.first_seen_at)
+    const countries = situation.sources?.countries || 0
+
+    const parts = [
+      pluralize(situation.member_count, "story", "stories"),
+      pluralize(situation.article_count, "report"),
+      `${pluralize(situation.source_count, "source")}${countries > 1 ? ` / ${countries} countries` : ""}`,
+      `${humanizeSpan(spanMs)} span`,
+      `last ${timeAgo(situation.last_seen_at)}`,
+      dayN ? `day ${dayN}` : null,
+      flares ? pluralize(flares, "flare") : null,
+    ].filter(Boolean)
 
     return `
-      <div class="sit-status">
+      <div class="sit-vitals">
         <span class="sit-tier is-${situation.tier}">${situation.tier}</span>
         <span class="sit-att is-${state}" title="report rate vs this situation's own baseline">${state}${
           state !== "quiet" && isFinite(ratio) && ratio > 0 ? ` ${ratio.toFixed(1)}×` : ""}</span>
-        <span class="sit-status-item">last report ${timeAgo(situation.last_seen_at)}</span>
-        ${dayN ? `<span class="sit-status-item">day ${dayN}</span>` : ""}
-        ${flares ? `<span class="sit-status-item">${pluralize(flares, "flare")}</span>` : ""}
-      </div>`
-  }
-
-  // The counts as an instrument row, not a sentence.
-  _statStripHtml(situation) {
-    const spanMs = Date.parse(situation.last_seen_at) - Date.parse(situation.first_seen_at)
-    const countries = situation.sources?.countries || 0
-    return `
-      <div class="sit-stats-grid">
-        <div class="sit-stat"><b>${situation.member_count}</b><span>${situation.member_count === 1 ? "story" : "stories"}</span></div>
-        <div class="sit-stat"><b>${situation.article_count}</b><span>reports</span></div>
-        <div class="sit-stat"><b>${situation.source_count}</b><span>${countries > 1 ? `sources · ${countries}c` : "sources"}</span></div>
-        <div class="sit-stat"><b>${humanizeSpan(spanMs)}</b><span>span</span></div>
+        <span class="sit-vitals-line">${parts.join(" · ")}</span>
       </div>`
   }
 
@@ -1723,7 +1719,7 @@ export default class extends Controller {
         <button type="button" class="sit-panel-close" data-action="click->situations#close">&times;</button>
       </div>
 
-      ${this._statusStripHtml(situation)}
+      ${this._vitalsHtml(situation)}
 
       <div id="sit-brief" class="sit-brief" style="display:none"></div>
 
@@ -1731,33 +1727,7 @@ export default class extends Controller {
 
       <div id="sit-related"></div>
 
-      <div class="sit-section-title">The reports this is made of
-        <span class="sit-count">${situation.member_count}</span></div>
-      <div class="sit-members">
-        ${situation.members.map((member) => {
-          const fact = this._memberFactText(member)
-          const geo = member.lat == null ? "no location"
-            : member.place
-              ? `${member.place}${member.geo_precision === "country" ? " (approx)" : ""}`
-              : (member.geo_precision === "country" || member.geo_precision === "unknown")
-                ? "location approx" : ""
-          const meta = [
-            formatShort(member.last_seen_at),
-            `${pluralize(member.article_count, "report")}${member.source_count > 1
-              ? ` · ${member.source_count} sources` : ""}`,
-            member.event_type ? String(member.event_type).replace(/_/g, " ") : "",
-            geo,
-          ].filter(Boolean).map((part) => escapeHtml(part)).join(" · ")
-          return `
-          <div class="sit-member">
-            <div class="sit-member-head">${member.url
-              ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
-              : escapeHtml(member.headline || "(untitled cluster)")}</div>
-            <div class="sit-member-meta">${meta}${fact
-              ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}</div>
-          </div>`
-        }).join("")}
-      </div>
+      ${this._membersHtml(situation)}
 
       <div id="sit-layer-chips"></div>
       <div id="sit-layer-sections"></div>
@@ -1789,6 +1759,56 @@ export default class extends Controller {
 
     this.panelTarget.style.display = "block"
     this.panelTarget.scrollTop = 0
+  }
+
+  // Newest reports lead -- they are what changed the story -- and the tail
+  // folds away instead of stretching the panel.
+  _membersHtml(situation) {
+    const members = [...situation.members].sort((a, b) =>
+      Date.parse(b.last_seen_at || 0) - Date.parse(a.last_seen_at || 0))
+    const lead = members.slice(0, 4)
+    const rest = members.slice(4)
+
+    return `
+      <div class="sit-section-title">The reports this is made of
+        <span class="sit-count">${situation.member_count}</span></div>
+      <div class="sit-members">
+        ${lead.map((member) => this._memberRowHtml(member)).join("")}
+        ${rest.length ? `
+        <details class="sit-fold">
+          <summary><span>show ${pluralize(rest.length, "older report")}</span></summary>
+          ${rest.map((member) => this._memberRowHtml(member)).join("")}
+        </details>` : ""}
+      </div>`
+  }
+
+  _memberRowHtml(member) {
+    const fact = this._memberFactText(member)
+    const geo = member.lat == null ? "no location"
+      : member.place
+        ? `${member.place}${member.geo_precision === "country" ? " (approx)" : ""}`
+        : (member.geo_precision === "country" || member.geo_precision === "unknown")
+          ? "location approx" : ""
+    const meta = [
+      formatShort(member.last_seen_at),
+      `${pluralize(member.article_count, "report")}${member.source_count > 1
+        ? ` · ${member.source_count} sources` : ""}`,
+      member.event_type ? String(member.event_type).replace(/_/g, " ") : "",
+      geo,
+    ].filter(Boolean).map((part) => escapeHtml(part)).join(" · ")
+
+    return `
+      <div class="sit-member">
+        <div class="sit-member-head">${member.url
+          ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
+          : escapeHtml(member.headline || "(untitled cluster)")}</div>
+        <div class="sit-member-meta">${meta}${fact
+          ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}</div>
+      </div>`
+  }
+
+  toggleDek(event) {
+    event.currentTarget.classList.toggle("is-clamped")
   }
 
   _ringSection(title, ring, rowTemplate) {

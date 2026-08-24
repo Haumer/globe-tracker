@@ -19,6 +19,17 @@ const ASSET_COLOR = "#ff7043"      // ring 1: assets beside the anchor
 const REGISTRY_COLOR = "#ffc44d"
 const MEDOID_COLOR = "#8fa3b8"
 
+// One fixed hue per thread kind, matching the server's closed set. Assigned
+// by identity, never cycled -- a thread keeps its color across situations.
+const THREAD_COLORS = {
+  kinetic: "#ff7043",
+  talks: "#4fc3f7",
+  pressure: "#ffb300",
+  human: "#7ed491",
+  hazard: "#c792ea",
+  context: "#7d8b99",
+}
+
 // Arc apex as a fraction of ground distance, capped so a Washington-to-Hormuz
 // arc does not leave the atmosphere.
 const ARC_PEAK_RATIO = 0.22
@@ -682,19 +693,13 @@ export default class extends Controller {
   // stories. Rendered only when the extraction produced something -- an empty
   // facts box would just advertise the pipeline.
   _factsHtml(situation) {
-    const facts = situation.facts
-    if (!facts) return ""
-
-    const pairs = facts.pairs?.length ? this._pairRowsHtml(facts.pairs) : ""
-    const kinds = (facts.kinds || []).map((k) =>
-      `<span class="sit-fact-kind">${escapeHtml(String(k.kind).replace(/_/g, " "))} · ${k.count}</span>`
-    ).join("")
-    if (!pairs && !kinds) return ""
+    const pairs = situation.facts?.pairs
+    if (!pairs?.length) return ""
 
     return `
       <div class="sit-block">
-        ${pairs ? `<div class="sit-section-title">Who acts on whom</div>${pairs}` : ""}
-        ${kinds ? `<div class="sit-fact-kinds">${kinds}</div>` : ""}
+        <div class="sit-section-title">Who acts on whom</div>
+        ${this._pairRowsHtml(pairs)}
       </div>`
   }
 
@@ -715,8 +720,8 @@ export default class extends Controller {
     return `
       <div class="sit-block">
         <div class="sit-section-title">How it broke
-          <span class="sit-section-note">per ${timeline.bucket} · peak ${peak}
-            · <span class="sit-tick-key">▪</span> new source</span></div>
+          <span class="sit-section-note">per ${timeline.bucket} · peak ${peak} ·
+            <span class="sit-tick-key" title="a report from an outlet filing on this story for the first time">▮ new outlet</span></span></div>
         ${module?.title ? `<div class="sit-block-caption">${escapeHtml(module.title)}</div>` : ""}
         ${this._activityChartSvg(situation, points, {
           hero: module?.emphasis === "hero", annotations: module?.annotations, bucket: timeline.bucket })}
@@ -729,11 +734,60 @@ export default class extends Controller {
 
   _activityChartSvg(situation, points, { hero = false, annotations = null, bucket = "hour" } = {}) {
     const width = 332
+    const max = Math.max(...points.map((point) => point.articles), 1)
+    // Two forms by density. With a peak of one or two, bars are all full
+    // height and read as floating pillars -- a handful of reports is a
+    // sequence of events, so it draws as dots on a timeline. Only when
+    // volume gives the heights meaning does it become a bar chart.
+    return max <= 2
+      ? this._activityDotsSvg(situation, points, { width, annotations, bucket })
+      : this._activityBarsSvg(situation, points, { width, max, hero, annotations, bucket })
+  }
+
+  // Dots on a timeline: each dot one report, amber when it was that
+  // outlet's first filing on the story.
+  _activityDotsSvg(situation, points, { width, annotations, bucket }) {
+    const chartHeight = 26
+    const padTop = Math.max(annotations?.length ? 14 + (annotations.length - 1) * 11 : 0, 8)
+    const baseline = padTop + chartHeight - 6
+    const height = padTop + chartHeight
+    const step = width / points.length
+    const bucketMs = bucket === "hour" ? 3_600_000 : 86_400_000
+    const xForTime = (t) => {
+      const stamp = Date.parse(t)
+      const index = points.findIndex((point) => Date.parse(point.t) + bucketMs > stamp)
+      return (index < 0 ? points.length - 0.5 : index + 0.5) * step
+    }
+
+    const marks = points.map((point, index) => {
+      if (!point.articles) return ""
+      const cx = (index + 0.5) * step
+      const dots = Array.from({ length: Math.min(point.articles, 2) }, (_, n) => {
+        const fresh = n < point.new_sources
+        return `<circle cx="${cx.toFixed(1)}" cy="${(baseline - n * 9).toFixed(1)}" r="3.5"
+          fill="${fresh ? "#ffb300" : "#4fc3f7"}" opacity="0.95"></circle>`
+      }).join("")
+      const hit = `<rect x="${(index * step).toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
+          height="${chartHeight}" fill="transparent">
+          <title>${formatStamp(point.t)} UTC · ${pluralize(point.articles, "report")}${point.new_sources
+            ? ` · ${pluralize(point.new_sources, "new outlet")}` : ""}</title></rect>`
+      return dots + hit
+    }).join("")
+
+    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
+      ${marks}${this._flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs)}
+      ${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight - 8)}</svg>`
+  }
+
+  // Stacked bars: the bar is the hour's reports; its amber base is the share
+  // that were a new outlet's first filing. Echo grows the blue, fresh voices
+  // grow the amber -- one mark, nothing to cross-reference.
+  _activityBarsSvg(situation, points, { width, max, hero, annotations, bucket }) {
     const chartHeight = hero ? 56 : 40
     const padTop = Math.max(annotations?.length ? 14 + (annotations.length - 1) * 11 : 0, 8)
     const baseline = padTop + chartHeight
-    const height = baseline + 7
-    const max = Math.max(...points.map((point) => point.articles), 1)
+    const height = baseline + 3
     const step = width / points.length
     const barWidth = Math.max(Math.min(step - 2, 9), 1)
     const bucketMs = bucket === "hour" ? 3_600_000 : 86_400_000
@@ -746,25 +800,34 @@ export default class extends Controller {
     const columns = points.map((point, index) => {
       const left = index * step
       const x = left + (step - barWidth) / 2
-      const barHeight = point.articles > 0 ? Math.max((point.articles / max) * (chartHeight - 4), 1.5) : 0
-      const bar = point.articles > 0
-        ? `<rect x="${x.toFixed(1)}" y="${(baseline - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
-             height="${barHeight.toFixed(1)}" rx="1" fill="#4fc3f7" opacity="0.85"></rect>`
-        : ""
-      const tickWidth = Math.min(barWidth, 5)
-      const tick = point.new_sources > 0
-        ? `<rect x="${(left + (step - tickWidth) / 2).toFixed(1)}" y="${baseline + 3}"
-             width="${tickWidth.toFixed(1)}" height="2" fill="#ffb300"></rect>`
-        : ""
-      // The whole column is the hover target; a 3px bar is not.
+      if (!point.articles) return `<rect x="${left.toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
+          height="${chartHeight}" fill="transparent">
+          <title>${formatStamp(point.t)} UTC · no reports</title></rect>`
+
+      const fullHeight = Math.max((point.articles / max) * (chartHeight - 4), 2)
+      const freshHeight = Math.min(point.new_sources, point.articles) / point.articles * fullHeight
+      const echoHeight = fullHeight - freshHeight
+      const echo = echoHeight > 0.5
+        ? `<rect x="${x.toFixed(1)}" y="${(baseline - fullHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${echoHeight.toFixed(1)}" rx="1" fill="#4fc3f7" opacity="0.85"></rect>` : ""
+      const fresh = freshHeight > 0.5
+        ? `<rect x="${x.toFixed(1)}" y="${(baseline - freshHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${freshHeight.toFixed(1)}" rx="1" fill="#ffb300" opacity="0.9"></rect>` : ""
       const hit = `<rect x="${left.toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
-          height="${(chartHeight + 6).toFixed(1)}" fill="transparent">
+          height="${chartHeight}" fill="transparent">
           <title>${formatStamp(point.t)} UTC · ${pluralize(point.articles, "report")}${point.new_sources
-            ? ` · ${pluralize(point.new_sources, "new source")}` : ""}</title></rect>`
-      return bar + tick + hit
+            ? ` · ${pluralize(point.new_sources, "new outlet")}` : ""}</title></rect>`
+      return echo + fresh + hit
     }).join("")
 
-    const flares = (situation.flares || []).filter((t) => {
+    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
+      ${columns}${this._flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs)}
+      ${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight)}</svg>`
+  }
+
+  _flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs) {
+    return (situation.flares || []).filter((t) => {
       const stamp = Date.parse(t)
       return stamp >= Date.parse(points[0].t) && stamp < Date.parse(points[points.length - 1].t) + bucketMs
     }).map((t) => {
@@ -775,10 +838,6 @@ export default class extends Controller {
         <path d="M ${(px - 3.2).toFixed(1)} ${padTop} L ${(px + 3.2).toFixed(1)} ${padTop} L ${px.toFixed(1)} ${padTop + 5} Z"
           fill="#ffb300" opacity="0.9"><title>flare · ${formatStamp(t)} UTC</title></path>`
     }).join("")
-
-    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
-      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
-      ${columns}${flares}${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight)}</svg>`
   }
 
   // Who says who did it: the split the modal answer hides. The server only
@@ -810,7 +869,11 @@ export default class extends Controller {
     if (!figures) return ""
 
     const domain = this._timeDomain(situation)
-    const kinds = ["killed", "injured", "missing"].filter((kind) => figures[kind]?.length).slice(0, 2)
+    // A flat line of identical dots is a fact for the member rows, not a
+    // chart -- only figures that were actually revised earn the space.
+    const kinds = ["killed", "injured", "missing"]
+      .filter((kind) => new Set((figures[kind] || []).map((point) => point.value)).size > 1)
+      .slice(0, 2)
     if (!kinds.length) return ""
 
     const charts = kinds.map((kind) => {
@@ -839,30 +902,31 @@ export default class extends Controller {
       </div>`
   }
 
-  // Who is reporting it: the breadth behind the report count. One row per
-  // outlet with its share of the reporting as a bar -- the difference between
-  // one wire echoing and independent corroboration is visible as row count,
-  // not just asserted in a number.
+  // Who is reporting it: a one-line summary -- breadth plus the leading
+  // outlets -- with the ranked rows folded behind it. When attribution is
+  // contested, WHO says it is the story, so the rows start open.
   _sourcesHtml(situation) {
     const sources = situation.sources
     if (!sources?.total || !sources.top?.length) return ""
 
     const max = Math.max(...sources.top.map((source) => source.reports), 1)
     const more = sources.total - sources.top.length
+    const leaders = sources.top.slice(0, 3).map((source) => source.name).join(", ")
+
     return `
-      <div class="sit-block">
-        <div class="sit-section-title">Who is reporting it
-          <span class="sit-section-note">${pluralize(sources.total, "outlet")}${sources.countries > 1
-            ? ` · ${sources.countries} countries` : ""}</span></div>
+      <details class="sit-fold sit-block"${situation.attribution?.length ? " open" : ""}>
+        <summary><b>Who is reporting it</b>
+          <span>${pluralize(sources.total, "outlet")}${sources.countries > 1
+            ? ` · ${sources.countries} countries` : ""} — ${escapeHtml(leaders)} lead</span></summary>
         ${sources.top.map((source) => `
           <div class="sit-fact-row">
             <span class="sit-fact-actor">${escapeHtml(source.name)}</span>
             ${source.country ? `<span class="sit-source-cc">${escapeHtml(String(source.country).toUpperCase())}</span>` : ""}
             <span class="sit-fact-bar is-evidence"><i style="width:${Math.round((source.reports / max) * 100)}%"></i></span>
-            <span class="sit-fact-count">${pluralize(source.reports, "report")}</span>
+            <span class="sit-fact-count">×${source.reports}</span>
           </div>`).join("")}
         ${more > 0 ? `<div class="sit-ring-more">+ ${pluralize(more, "more outlet")}</div>` : ""}
-      </div>`
+      </details>`
   }
 
   _pairRowsHtml(pairs) {
@@ -883,7 +947,7 @@ export default class extends Controller {
       <div class="sit-fact-row">
         <span class="sit-fact-actor">${escapeHtml(row.actor)}</span>
         <span class="sit-fact-bar"><i style="width:${Math.round((row.sources / max) * 100)}%"></i></span>
-        <span class="sit-fact-count">${pluralize(row.sources, "source")} · ${pluralize(row.reports, "report")}</span>
+        <span class="sit-fact-count">${pluralize(row.sources, "outlet")}</span>
       </div>`).join("")
   }
 
@@ -901,11 +965,11 @@ export default class extends Controller {
     const editorial = comp?.lead ? `
       ${comp.angle ? `<div class="sit-angle">${escapeHtml(comp.angle)}</div>` : ""}
       <h3 class="sit-lead">${escapeHtml(comp.lead)}</h3>
-      ${comp.dek ? `<p class="sit-dek">${escapeHtml(comp.dek)}</p>` : ""}` : ""
+      ${comp.dek ? `<p class="sit-dek is-clamped" title="tap to expand"
+        data-action="click->situations#toggleDek">${escapeHtml(comp.dek)}</p>` : ""}` : this._ghostEditorialHtml()
 
     return `
       ${editorial}
-      ${this._statStripHtml(situation)}
       ${this._activityHtml(situation)}
       ${this._figuresHtml(situation)}
       ${this._factsHtml(situation)}
@@ -914,38 +978,35 @@ export default class extends Controller {
       ${this._corroborationHtml(situation)}`
   }
 
-  // What state this situation is in RIGHT NOW: tier, attention against its
-  // own baseline, freshness, age, flare count. The one line the old panel
-  // never answered -- "is this still happening?"
-  _statusStripHtml(situation) {
+  // Every vital on one calm mono line: tier, attention against its own
+  // baseline, volume, span, freshness, age. Replaces a status strip and a
+  // tile grid that spent 80px saying the same six numbers.
+  _vitalsHtml(situation) {
     const attention = situation.attention || {}
     const state = attention.state || "quiet"
     const ratio = Number(attention.ratio)
     const flares = (situation.flares || []).length
     const born = situation.born_at || situation.first_seen_at
     const dayN = born ? Math.max(1, Math.floor((Date.now() - Date.parse(born)) / 86_400_000) + 1) : null
+    const spanMs = Date.parse(situation.last_seen_at) - Date.parse(situation.first_seen_at)
+    const countries = situation.sources?.countries || 0
+
+    const parts = [
+      `<span title="stories: clusters of reports about one event (duplicate clusters folded)">${pluralize(situation.members.filter((m) => !m.duplicate_of).length, "story", "stories")}</span>`,
+      `<span title="reports: individual published articles">${pluralize(situation.article_count, "report")}</span>`,
+      `<span title="outlets: distinct publications filing">${pluralize(situation.source_count, "outlet")}${countries > 1 ? ` / ${countries} countries` : ""}</span>`,
+      `${humanizeSpan(spanMs)} span`,
+      `last ${timeAgo(situation.last_seen_at)}`,
+      dayN ? `day ${dayN}` : null,
+      flares ? pluralize(flares, "flare") : null,
+    ].filter(Boolean)
 
     return `
-      <div class="sit-status">
+      <div class="sit-vitals">
         <span class="sit-tier is-${situation.tier}">${situation.tier}</span>
         <span class="sit-att is-${state}" title="report rate vs this situation's own baseline">${state}${
           state !== "quiet" && isFinite(ratio) && ratio > 0 ? ` ${ratio.toFixed(1)}×` : ""}</span>
-        <span class="sit-status-item">last report ${timeAgo(situation.last_seen_at)}</span>
-        ${dayN ? `<span class="sit-status-item">day ${dayN}</span>` : ""}
-        ${flares ? `<span class="sit-status-item">${pluralize(flares, "flare")}</span>` : ""}
-      </div>`
-  }
-
-  // The counts as an instrument row, not a sentence.
-  _statStripHtml(situation) {
-    const spanMs = Date.parse(situation.last_seen_at) - Date.parse(situation.first_seen_at)
-    const countries = situation.sources?.countries || 0
-    return `
-      <div class="sit-stats-grid">
-        <div class="sit-stat"><b>${situation.member_count}</b><span>${situation.member_count === 1 ? "story" : "stories"}</span></div>
-        <div class="sit-stat"><b>${situation.article_count}</b><span>reports</span></div>
-        <div class="sit-stat"><b>${situation.source_count}</b><span>${countries > 1 ? `sources · ${countries}c` : "sources"}</span></div>
-        <div class="sit-stat"><b>${humanizeSpan(spanMs)}</b><span>span</span></div>
+        <span class="sit-vitals-line">${parts.join(" · ")}</span>
       </div>`
   }
 
@@ -953,25 +1014,24 @@ export default class extends Controller {
   // drawn as two meters rather than described. Thresholds mirror
   // SituationBoardService::CORROBORATED_MIN_ARTICLES / _MIN_SOURCES.
   _corroborationHtml(situation) {
+    if (situation.tier !== "emerging") return ""
     const upgrade = situation.composition?.upgrade
-    if (situation.tier !== "emerging") {
-      return upgrade
-        ? `<div class="sit-upgrade"><b>What would change this:</b> ${escapeHtml(upgrade)}</div>` : ""
-    }
 
     const meters = [
       { label: "reports", have: situation.article_count, need: 5 },
-      { label: "sources", have: situation.source_count, need: 3 },
+      { label: "outlets", have: situation.source_count, need: 3 },
     ].map(({ label, have, need }) => `
       <div class="sit-meter-row">
         <span class="sit-meter-label">${label}</span>
         <span class="sit-meter"><i style="width:${Math.min(100, Math.round((have / need) * 100))}%"></i></span>
-        <span class="sit-meter-count">${have}/${need}</span>
+        <span class="sit-meter-count">${have} of ${need}</span>
       </div>`).join("")
 
     return `
       <div class="sit-upgrade">
-        <div class="sit-section-title">Path to corroborated</div>
+        <div class="sit-section-title">How solid is this?</div>
+        <div class="sit-upgrade-intro">Thinly sourced so far. It takes 5 reports from 3 independent
+          outlets before this board treats a story as corroborated.</div>
         ${meters}
         ${upgrade ? `<div class="sit-upgrade-note">${escapeHtml(upgrade)}</div>` : ""}
       </div>`
@@ -1350,6 +1410,10 @@ export default class extends Controller {
     this._hideOverlapChooser()
     this._setFootprintHidden(false)
     this._selectedId = id
+    // The plan kicks off before the panel renders: activate's synchronous
+    // prologue clears the previous chip bar, and the ghost chips the panel
+    // paints next must survive until the real ones arrive.
+    const planPromise = this._layers?.activate(situation)
     this._drawDetail(situation)
     this._renderPanel(situation)
     this._renderList()
@@ -1359,9 +1423,12 @@ export default class extends Controller {
     // the chip bar reports its own failures. When the plan does arrive it
     // carries the curator's judgement -- prose brief, story scope, related
     // situations -- which refines what is already on screen.
-    this._layers?.activate(situation)
-      .then((plan) => { if (plan && this._selectedId === id) this._applyPlan(situation, plan) })
-      .catch((error) => console.error("Layers failed", error))
+    planPromise
+      ?.then((plan) => { if (plan && this._selectedId === id) this._applyPlan(situation, plan) })
+      .catch((error) => {
+        console.error("Layers failed", error)
+        this._clearEditorialGhost()
+      })
   }
 
   _clearSelection() {
@@ -1572,6 +1639,8 @@ export default class extends Controller {
       reading.innerHTML = this._readingHtml(situation)
     }
 
+    this._clearEditorialGhost()
+
     const brief = document.getElementById("sit-brief")
     if (brief && plan.brief && !plan.composition?.lead) {
       brief.innerHTML = `${escapeHtml(plan.brief)} <span class="sit-brief-basis">AI brief</span>`
@@ -1723,7 +1792,7 @@ export default class extends Controller {
         <button type="button" class="sit-panel-close" data-action="click->situations#close">&times;</button>
       </div>
 
-      ${this._statusStripHtml(situation)}
+      ${this._vitalsHtml(situation)}
 
       <div id="sit-brief" class="sit-brief" style="display:none"></div>
 
@@ -1731,35 +1800,17 @@ export default class extends Controller {
 
       <div id="sit-related"></div>
 
-      <div class="sit-section-title">The reports this is made of
-        <span class="sit-count">${situation.member_count}</span></div>
-      <div class="sit-members">
-        ${situation.members.map((member) => {
-          const fact = this._memberFactText(member)
-          const geo = member.lat == null ? "no location"
-            : member.place
-              ? `${member.place}${member.geo_precision === "country" ? " (approx)" : ""}`
-              : (member.geo_precision === "country" || member.geo_precision === "unknown")
-                ? "location approx" : ""
-          const meta = [
-            formatShort(member.last_seen_at),
-            `${pluralize(member.article_count, "report")}${member.source_count > 1
-              ? ` · ${member.source_count} sources` : ""}`,
-            member.event_type ? String(member.event_type).replace(/_/g, " ") : "",
-            geo,
-          ].filter(Boolean).map((part) => escapeHtml(part)).join(" · ")
-          return `
-          <div class="sit-member">
-            <div class="sit-member-head">${member.url
-              ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
-              : escapeHtml(member.headline || "(untitled cluster)")}</div>
-            <div class="sit-member-meta">${meta}${fact
-              ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}</div>
-          </div>`
-        }).join("")}
-      </div>
+      ${this._membersHtml(situation)}
 
-      <div id="sit-layer-chips"></div>
+      <div id="sit-layer-chips">
+        <div class="sit-section-title">Live layers</div>
+        <div class="sit-chip-row">
+          <span class="sit-ghost-chip" style="width:78px"></span>
+          <span class="sit-ghost-chip" style="width:64px"></span>
+          <span class="sit-ghost-chip" style="width:92px"></span>
+          <span class="sit-ghost-chip" style="width:58px"></span>
+        </div>
+      </div>
       <div id="sit-layer-sections"></div>
 
       <details class="sit-exposure">
@@ -1789,6 +1840,116 @@ export default class extends Controller {
 
     this.panelTarget.style.display = "block"
     this.panelTarget.scrollTop = 0
+  }
+
+  // The member list answers "same story or adjacent?": when the server
+  // computed threads, stories group by what kind of thing they report --
+  // the talks spine, the attacks, the fallout -- each newest-first with its
+  // own freshness. A single-thread or thin situation keeps the flat list.
+  // Duplicate clusters the server folded stay hidden; their survivor says
+  // how many it carries.
+  _membersHtml(situation) {
+    const live = situation.members.filter((member) => !member.duplicate_of)
+    const newestFirst = (a, b) => Date.parse(b.last_seen_at || 0) - Date.parse(a.last_seen_at || 0)
+
+    const title = `
+      <div class="sit-section-title">The reports this is made of
+        <span class="sit-count">${live.length}</span></div>`
+
+    if (!situation.threads?.length) {
+      const members = [...live].sort(newestFirst)
+      const lead = members.slice(0, 4)
+      const rest = members.slice(4)
+      return `${title}
+      <div class="sit-members">
+        ${lead.map((member) => this._memberRowHtml(member)).join("")}
+        ${rest.length ? `
+        <details class="sit-fold">
+          <summary><span>show ${pluralize(rest.length, "older report")}</span></summary>
+          ${rest.map((member) => this._memberRowHtml(member)).join("")}
+        </details>` : ""}
+      </div>`
+    }
+
+    const total = situation.threads.reduce((sum, thread) => sum + thread.story_count, 0)
+    const mixBar = `
+      <div class="sit-thread-bar">${situation.threads.map((thread) => `
+        <i style="width:${((thread.story_count / total) * 100).toFixed(1)}%;background:${THREAD_COLORS[thread.key] || THREAD_COLORS.context}"
+          title="${escapeAttr(`${thread.label} · ${thread.story_count} stories`)}"></i>`).join("")}
+      </div>`
+
+    const groups = situation.threads.map((thread) => {
+      const members = live.filter((member) => member.thread === thread.key).sort(newestFirst)
+      const lead = members.slice(0, 3)
+      const rest = members.slice(3)
+      return `
+      <div class="sit-thread">
+        <div class="sit-thread-head">
+          <span class="sit-thread-dot" style="background:${THREAD_COLORS[thread.key] || THREAD_COLORS.context}"></span>
+          <span class="sit-thread-label">${escapeHtml(thread.label)}</span>
+          <span class="sit-thread-meta">${pluralize(thread.story_count, "story", "stories")}
+            · moved ${timeAgo(thread.last_seen_at)}</span>
+        </div>
+        ${lead.map((member) => this._memberRowHtml(member)).join("")}
+        ${rest.length ? `
+        <details class="sit-fold">
+          <summary><span>show ${pluralize(rest.length, "more")}</span></summary>
+          ${rest.map((member) => this._memberRowHtml(member)).join("")}
+        </details>` : ""}
+      </div>`
+    }).join("")
+
+    return `${title}${mixBar}<div class="sit-members">${groups}</div>`
+  }
+
+  _memberRowHtml(member) {
+    const fact = this._memberFactText(member)
+    const geo = member.lat == null ? "no location"
+      : member.place
+        ? `${member.place}${member.geo_precision === "country" ? " (approx)" : ""}`
+        : (member.geo_precision === "country" || member.geo_precision === "unknown")
+          ? "location approx" : ""
+    const meta = [
+      formatShort(member.last_seen_at),
+      `${pluralize(member.article_count, "report")}${member.source_count < member.article_count
+        ? ` / ${pluralize(member.source_count, "outlet")}` : ""}`,
+      member.event_type ? String(member.event_type).replace(/_/g, " ") : "",
+      geo,
+    ].filter(Boolean).map((part) => escapeHtml(part)).join(" · ")
+
+    return `
+      <div class="sit-member">
+        <div class="sit-member-head">${member.url
+          ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
+          : escapeHtml(member.headline || "(untitled cluster)")}</div>
+        <div class="sit-member-meta">${meta}${fact
+          ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}${member.duplicates
+          ? ` · +${member.duplicates} duplicate${member.duplicates === 1 ? "" : "s"} folded` : ""}</div>
+      </div>`
+  }
+
+  // Placeholder shapes where the curator's lead and dek will land -- the
+  // reader sees that a reading is coming and where, instead of the panel
+  // reflowing when it arrives. Static on purpose: on this page only flares
+  // are allowed to animate.
+  _ghostEditorialHtml() {
+    return `
+      <div id="sit-ghost-editorial" class="sit-ghosts">
+        <div class="sit-ghost" style="width:88%"></div>
+        <div class="sit-ghost" style="width:62%"></div>
+        <div class="sit-ghost is-thin" style="width:100%"></div>
+        <div class="sit-ghost is-thin" style="width:94%"></div>
+        <div class="sit-ghost is-thin" style="width:55%"></div>
+        <div class="sit-ghosts-label">curator reading the story…</div>
+      </div>`
+  }
+
+  _clearEditorialGhost() {
+    document.getElementById("sit-ghost-editorial")?.remove()
+  }
+
+  toggleDek(event) {
+    event.currentTarget.classList.toggle("is-clamped")
   }
 
   _ringSection(title, ring, rowTemplate) {

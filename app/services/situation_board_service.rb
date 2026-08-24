@@ -136,6 +136,9 @@ class SituationBoardService
       flares: situation.metadata["flares"] || [],
       attention: attention_for(situation, members),
       members: members,
+      # Tags members in place (thread, duplicate folding) and summarizes; nil
+      # when the situation is single-thread or too thin to group.
+      threads: SituationThreads.call(members),
       facts: facts_for(members),
       daily: daily_counts(members),
       timeline: timeline_for(members),

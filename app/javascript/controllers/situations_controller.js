@@ -19,6 +19,17 @@ const ASSET_COLOR = "#ff7043"      // ring 1: assets beside the anchor
 const REGISTRY_COLOR = "#ffc44d"
 const MEDOID_COLOR = "#8fa3b8"
 
+// One fixed hue per thread kind, matching the server's closed set. Assigned
+// by identity, never cycled -- a thread keeps its color across situations.
+const THREAD_COLORS = {
+  kinetic: "#ff7043",
+  talks: "#4fc3f7",
+  pressure: "#ffb300",
+  human: "#7ed491",
+  hazard: "#c792ea",
+  context: "#7d8b99",
+}
+
 // Arc apex as a fraction of ground distance, capped so a Washington-to-Hormuz
 // arc does not leave the atmosphere.
 const ARC_PEAK_RATIO = 0.22
@@ -981,7 +992,7 @@ export default class extends Controller {
     const countries = situation.sources?.countries || 0
 
     const parts = [
-      `<span title="stories: clusters of reports about one event">${pluralize(situation.member_count, "story", "stories")}</span>`,
+      `<span title="stories: clusters of reports about one event (duplicate clusters folded)">${pluralize(situation.members.filter((m) => !m.duplicate_of).length, "story", "stories")}</span>`,
       `<span title="reports: individual published articles">${pluralize(situation.article_count, "report")}</span>`,
       `<span title="outlets: distinct publications filing">${pluralize(situation.source_count, "outlet")}${countries > 1 ? ` / ${countries} countries` : ""}</span>`,
       `${humanizeSpan(spanMs)} span`,
@@ -1003,11 +1014,8 @@ export default class extends Controller {
   // drawn as two meters rather than described. Thresholds mirror
   // SituationBoardService::CORROBORATED_MIN_ARTICLES / _MIN_SOURCES.
   _corroborationHtml(situation) {
+    if (situation.tier !== "emerging") return ""
     const upgrade = situation.composition?.upgrade
-    if (situation.tier !== "emerging") {
-      return upgrade
-        ? `<div class="sit-upgrade"><b>What would change this:</b> ${escapeHtml(upgrade)}</div>` : ""
-    }
 
     const meters = [
       { label: "reports", have: situation.article_count, need: 5 },
@@ -1834,17 +1842,25 @@ export default class extends Controller {
     this.panelTarget.scrollTop = 0
   }
 
-  // Newest reports lead -- they are what changed the story -- and the tail
-  // folds away instead of stretching the panel.
+  // The member list answers "same story or adjacent?": when the server
+  // computed threads, stories group by what kind of thing they report --
+  // the talks spine, the attacks, the fallout -- each newest-first with its
+  // own freshness. A single-thread or thin situation keeps the flat list.
+  // Duplicate clusters the server folded stay hidden; their survivor says
+  // how many it carries.
   _membersHtml(situation) {
-    const members = [...situation.members].sort((a, b) =>
-      Date.parse(b.last_seen_at || 0) - Date.parse(a.last_seen_at || 0))
-    const lead = members.slice(0, 4)
-    const rest = members.slice(4)
+    const live = situation.members.filter((member) => !member.duplicate_of)
+    const newestFirst = (a, b) => Date.parse(b.last_seen_at || 0) - Date.parse(a.last_seen_at || 0)
 
-    return `
+    const title = `
       <div class="sit-section-title">The reports this is made of
-        <span class="sit-count">${situation.member_count}</span></div>
+        <span class="sit-count">${live.length}</span></div>`
+
+    if (!situation.threads?.length) {
+      const members = [...live].sort(newestFirst)
+      const lead = members.slice(0, 4)
+      const rest = members.slice(4)
+      return `${title}
       <div class="sit-members">
         ${lead.map((member) => this._memberRowHtml(member)).join("")}
         ${rest.length ? `
@@ -1853,6 +1869,37 @@ export default class extends Controller {
           ${rest.map((member) => this._memberRowHtml(member)).join("")}
         </details>` : ""}
       </div>`
+    }
+
+    const total = situation.threads.reduce((sum, thread) => sum + thread.story_count, 0)
+    const mixBar = `
+      <div class="sit-thread-bar">${situation.threads.map((thread) => `
+        <i style="width:${((thread.story_count / total) * 100).toFixed(1)}%;background:${THREAD_COLORS[thread.key] || THREAD_COLORS.context}"
+          title="${escapeAttr(`${thread.label} · ${thread.story_count} stories`)}"></i>`).join("")}
+      </div>`
+
+    const groups = situation.threads.map((thread) => {
+      const members = live.filter((member) => member.thread === thread.key).sort(newestFirst)
+      const lead = members.slice(0, 3)
+      const rest = members.slice(3)
+      return `
+      <div class="sit-thread">
+        <div class="sit-thread-head">
+          <span class="sit-thread-dot" style="background:${THREAD_COLORS[thread.key] || THREAD_COLORS.context}"></span>
+          <span class="sit-thread-label">${escapeHtml(thread.label)}</span>
+          <span class="sit-thread-meta">${pluralize(thread.story_count, "story", "stories")}
+            · moved ${timeAgo(thread.last_seen_at)}</span>
+        </div>
+        ${lead.map((member) => this._memberRowHtml(member)).join("")}
+        ${rest.length ? `
+        <details class="sit-fold">
+          <summary><span>show ${pluralize(rest.length, "more")}</span></summary>
+          ${rest.map((member) => this._memberRowHtml(member)).join("")}
+        </details>` : ""}
+      </div>`
+    }).join("")
+
+    return `${title}${mixBar}<div class="sit-members">${groups}</div>`
   }
 
   _memberRowHtml(member) {
@@ -1876,7 +1923,8 @@ export default class extends Controller {
           ? `<a href="${escapeAttr(member.url)}" target="_blank" rel="noopener">${escapeHtml(member.headline || "(untitled cluster)")}</a>`
           : escapeHtml(member.headline || "(untitled cluster)")}</div>
         <div class="sit-member-meta">${meta}${fact
-          ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}</div>
+          ? ` · <span class="sit-member-fact">${escapeHtml(fact)}</span>` : ""}${member.duplicates
+          ? ` · +${member.duplicates} duplicate${member.duplicates === 1 ? "" : "s"} folded` : ""}</div>
       </div>`
   }
 

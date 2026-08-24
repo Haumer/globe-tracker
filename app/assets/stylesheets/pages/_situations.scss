@@ -705,6 +705,56 @@
   margin-top: 6px;
 }
 
+// ── threads: the saga's structure ────────────────────────────────────
+
+.sit-thread-bar {
+  display: flex;
+  gap: 1px;
+  height: 5px;
+  margin: 4px 0 2px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sit-thread-bar i {
+  display: block;
+  height: 100%;
+}
+
+.sit-thread {
+  margin-top: 9px;
+}
+
+.sit-thread-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #232b35;
+}
+
+.sit-thread-dot {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.sit-thread-label {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #c8d4e0;
+}
+
+.sit-thread-meta {
+  margin-left: auto;
+  font-size: 8.5px;
+  color: #55626f;
+  white-space: nowrap;
+}
+
 .sit-legend {
   position: absolute;
   left: 16px;

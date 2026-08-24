@@ -119,9 +119,12 @@ class SituationLayerCurator
       volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
+    # v6: computed threads feed the prompt and the dek contract became
+    # one-sentence-per-thread; a v5 composition blends threads and reads as
+    # soup next to the thread-grouped member list.
     # v5: title/caption discipline sharpened with counter-examples -- v4
     # compositions titled charts with axis labels.
-    "situation-layer-curation:v5:#{fingerprint}"
+    "situation-layer-curation:v6:#{fingerprint}"
   end
 
   # Only a real composition moves the pointer -- a heuristic stand-in (nil
@@ -219,9 +222,12 @@ class SituationLayerCurator
       lead: one headline sentence that states the finding in plain words --
       what happened and where it stands now. Never a label, never a count of
       stories, never hedging boilerplate.
-      dek: two or three sentences: what is established, what is moving, what
-      is contested. Use only figures that appear in the data above -- a
-      number you were not given does not exist.
+      dek: if computed threads are given in the data, exactly one sentence
+      per thread -- what that thread has established and what last moved --
+      never blending two threads in one sentence; skip a thread with nothing
+      to say. Without threads, two or three sentences: what is established,
+      what is moving, what is contested. Use only figures that appear in the
+      data above -- a number you were not given does not exist.
       modules: at most #{MAX_MODULES}, each answering a question no other
       module answers, kinds exactly from:
       - figures_chart: the revision curve for one reported number; set
@@ -277,6 +283,7 @@ class SituationLayerCurator
       #{neighbor_lines.join("\n").presence || "(none)"}
 
       Coverage: #{situation[:member_count]} stories, #{situation[:article_count]} reports from #{situation[:source_count]} sources; tier #{situation[:tier]}; #{situation[:first_seen_at]} -> #{situation[:last_seen_at]}
+      #{threads_line}
       #{figures_lines.join("\n").presence || "Figures: none extracted"}
       #{attribution_line}
       #{facts_line}
@@ -286,6 +293,16 @@ class SituationLayerCurator
   end
 
   # ── evidence serialization: what the model is allowed to quote ───────
+
+  def threads_line
+    rows = situation[:threads]
+    return "Threads: none computed (single-thread or thin)" if rows.blank?
+
+    parts = rows.map do |row|
+      "#{row[:label]}: #{row[:story_count]} stories, last moved #{row[:last_seen_at]}"
+    end
+    "Threads (computed from claims): #{parts.join('; ')}"
+  end
 
   def figures_lines
     (situation[:figures] || {}).map do |kind, points|

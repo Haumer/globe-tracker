@@ -253,7 +253,10 @@ class SituationLayerCurator
       "text": a few words tied to a real report given above}.
       Every number in any composed text must appear verbatim in the data
       above -- rounded milestones ("passes 100") and estimates are rejected
-      by validation and the string carrying them is dropped.
+      by validation and the string carrying them is dropped. ISO timestamps
+      in the data are anchors for annotation "t" fields only: composed prose
+      never contains one -- recency is written in words ("about 15 hours
+      ago", "early on August 9").
     PROMPT
   end
 
@@ -282,7 +285,7 @@ class SituationLayerCurator
       Nearby situations:
       #{neighbor_lines.join("\n").presence || "(none)"}
 
-      Coverage: #{situation[:member_count]} stories, #{situation[:article_count]} reports from #{situation[:source_count]} sources; tier #{situation[:tier]}; #{situation[:first_seen_at]} -> #{situation[:last_seen_at]}
+      Coverage: #{situation[:member_count]} stories, #{situation[:article_count]} reports from #{situation[:source_count]} sources; tier #{situation[:tier]}; #{coverage_span}
       #{threads_line}
       #{figures_lines.join("\n").presence || "Figures: none extracted"}
       #{attribution_line}
@@ -294,12 +297,27 @@ class SituationLayerCurator
 
   # ── evidence serialization: what the model is allowed to quote ───────
 
+  # Prose-friendly recency; the raw stamps stay in the figures/attention
+  # lines where annotations need them as anchors.
+  def coverage_span
+    first, last = situation[:first_seen_at], situation[:last_seen_at]
+    return "span unknown" unless first && last
+
+    days = ((Time.current - Time.parse(first)) / 86_400).round
+    hours = ((Time.current - Time.parse(last)) / 3600).round
+    "running #{days < 1 ? "less than a day" : "#{days} days"}, last report ~#{hours}h ago"
+  end
+
   def threads_line
     rows = situation[:threads]
     return "Threads: none computed (single-thread or thin)" if rows.blank?
 
+    # Recency is given relative, not as an ISO stamp -- the model quotes what
+    # it is fed, and "2026-08-23T23:31:32Z" belongs in provenance, not prose.
     parts = rows.map do |row|
-      "#{row[:label]}: #{row[:story_count]} stories, last moved #{row[:last_seen_at]}"
+      hours = row[:last_seen_at] ? ((Time.current - Time.parse(row[:last_seen_at])) / 3600).round : nil
+      recency = hours.nil? ? "" : hours < 1 ? ", moved within the hour" : ", last moved ~#{hours}h ago"
+      "#{row[:label]}: #{row[:story_count]} stories#{recency}"
     end
     "Threads (computed from claims): #{parts.join('; ')}"
   end

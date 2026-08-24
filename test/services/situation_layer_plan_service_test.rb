@@ -128,7 +128,7 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     assert_equal "ai", plan[:curated_by]
   end
 
-  test "baseline boundaries need an anchor country and never depend on curation" do
+  test "boundaries resolve their sources but no longer start on" do
     place = place_entity
     event = cluster(key: "p4", title: "Strike", lat: 50.4, lng: 30.5)
     entity = situation(key: "situation:place:4", name: "Kyiv situation", events: [event], concerns: place)
@@ -136,9 +136,9 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     plan = SituationLayerPlanService.call(situation_id: entity.id, curator: FixedCurator.new)
     boundaries = plan[:layers].find { |l| l[:key] == "boundaries" }
 
-    assert boundaries[:baseline]
+    assert_not boundaries[:baseline]
     assert_equal "ready", boundaries[:status]
-    assert boundaries[:on_by_default]
+    assert_not boundaries[:on_by_default], "nothing draws on click; the chip opts in"
     assert_equal 2, boundaries[:sources].size, "districts first, admin1 fallback"
     assert boundaries[:sources].all? { |s| s[:params][:country_codes] == "UA" }
   end

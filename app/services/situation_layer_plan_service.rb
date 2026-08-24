@@ -42,7 +42,9 @@ class SituationLayerPlanService
   # refresh_seconds: 0 means fetch once per selection; anything else is a live
   # layer the client re-polls while it is on.
   CATALOG = [
-    { key: "boundaries", title: "Boundary", kind: "boundaries", baseline: true, refresh_seconds: 0,
+    # Not baseline: outlining a whole province on every click read as a claim
+    # about extent, so the boundary draws only when asked for via its chip.
+    { key: "boundaries", title: "Boundary", kind: "boundaries", refresh_seconds: 0,
       meaning: "the administrative boundary containing the anchor, drawn instead of a nominal circle" },
     { key: "aircraft", title: "Aircraft", kind: "aircraft", refresh_seconds: 12,
       meaning: "live aircraft positions from ADS-B, military traffic flagged" },

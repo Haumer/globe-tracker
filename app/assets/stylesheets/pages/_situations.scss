@@ -189,18 +189,85 @@
   padding: 0 2px;
 }
 
-.sit-panel-stats {
+// ── status strip: tier, attention, freshness ─────────────────────────
+
+.sit-status {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin: 10px 0;
-  font-size: 10px;
-  color: #8b9aa8;
+  align-items: center;
+  gap: 5px 10px;
+  margin-top: 9px;
+  font-size: 9px;
 }
 
-.sit-panel-stats b {
+.sit-tier {
+  padding: 1px 6px;
+  border-radius: 2px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.sit-tier.is-emerging {
+  color: #ffc44d;
+  border: 1px solid #4a3c18;
+  background: rgba(255, 179, 0, 0.08);
+}
+
+.sit-tier.is-corroborated {
+  color: #7ed491;
+  border: 1px solid #23492e;
+  background: rgba(126, 212, 145, 0.08);
+}
+
+.sit-att {
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.sit-att.is-quiet { color: #55626f; }
+.sit-att.is-active { color: #7ed491; }
+.sit-att.is-flaring { color: #ffb300; }
+
+.sit-status-item {
+  color: #7d8b99;
+}
+
+// ── stat grid: the counts as an instrument row ───────────────────────
+
+.sit-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 10px;
+  background: #1e2630;
+  border: 1px solid #1e2630;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sit-stat {
+  padding: 6px 8px;
+  background: #10151c;
+}
+
+.sit-stat b {
+  display: block;
+  font-size: 14px;
   color: #e6edf3;
-  font-size: 12px;
+}
+
+.sit-stat span {
+  display: block;
+  margin-top: 1px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #6b7885;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 // The ring chain reads as one line or not at all — wrapped, the arrows point
@@ -286,11 +353,58 @@
 }
 
 .sit-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
   margin: 14px 0 6px;
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: #7d8b99;
+}
+
+.sit-section-note {
+  font-size: 8.5px;
+  letter-spacing: 0.4px;
+  text-transform: none;
+  text-align: right;
+  color: #55626f;
+}
+
+.sit-tick-key {
+  color: #ffb300;
+}
+
+.sit-block {
+  margin-top: 12px;
+}
+
+.sit-block .sit-section-title {
+  margin-top: 0;
+}
+
+.sit-block-caption {
+  margin: 2px 0 4px;
+  font-size: 9px;
+  color: #6b7885;
+  line-height: 1.4;
+}
+
+.sit-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 2px;
+}
+
+.sit-axis-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 8.5px;
+  color: #55626f;
 }
 
 .sit-count {
@@ -332,7 +446,7 @@
 }
 
 .sit-member {
-  padding: 6px 0;
+  padding: 5px 0;
   border-bottom: 1px solid #1a212a;
 }
 
@@ -344,21 +458,15 @@
 
 .sit-member-meta {
   margin-top: 2px;
-  font-size: 9px;
+  font-size: 8.5px;
   color: #6b7885;
 }
 
-.sit-member-claim {
-  margin-top: 3px;
-  font-size: 9px;
+.sit-member-fact {
   color: #c8d4e0;
 }
 
 // ── structured facts ─────────────────────────────────────────────────
-
-.sit-facts {
-  margin-top: 10px;
-}
 
 .sit-fact-row {
   display: flex;
@@ -402,165 +510,135 @@
   white-space: nowrap;
 }
 
-.sit-timeline {
-  margin-top: 12px;
+.sit-figures-chart {
+  margin-top: 6px;
 }
 
-.sit-timeline svg {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-}
-
-.sit-timeline-caption {
+.sit-figure-head {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
-  margin-top: 3px;
+}
+
+.sit-figure-kind {
   font-size: 9px;
-  color: #6b7885;
-}
-
-.sit-timeline-tick {
-  color: #ffb300;
-}
-
-.sit-attribution {
-  margin-top: 12px;
-}
-
-.sit-figures {
-  margin-top: 12px;
-}
-
-.sit-figures-chart {
-  margin-top: 4px;
-}
-
-.sit-figures-chart svg {
-  display: block;
-  width: 100%;
-}
-
-// ── the composed dossier ─────────────────────────────────────────────
-// Voice and instrument are typographically separate: serif is the curator's
-// composed reading, mono is measurement and provenance. Simple hardcoded
-// values throughout, matching the rest of this sheet.
-
-.sit-composed-kicker {
-  display: flex;
-  gap: 10px;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 1px;
   text-transform: uppercase;
+  color: #c8d4e0;
+}
+
+.sit-figure-latest {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffd98a;
+}
+
+.sit-figure-latest em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 8.5px;
+  letter-spacing: 0.5px;
   color: #6b7885;
-  margin-top: 10px;
 }
 
-.sit-tier-corroborated {
-  color: #7ed491;
+// ── the curator's voice ──────────────────────────────────────────────
+// Voice and instrument are typographically separate: serif is the curator's
+// composed reading, mono is measurement and provenance. The voice sits on
+// top of the instrument stack; it never replaces it.
+
+.sit-angle {
+  margin-top: 12px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #ffc44d;
 }
 
-.sit-composed-lead {
+.sit-lead {
   font-family: Charter, Georgia, "Times New Roman", serif;
-  font-size: 21px;
+  font-size: 16.5px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.3;
   color: #e8eef4;
-  margin: 8px 0 6px;
+  margin: 5px 0 4px;
 }
 
-.sit-composed-dek {
+.sit-dek {
   font-family: Charter, Georgia, "Times New Roman", serif;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.5;
-  color: #c3ccd6;
-  margin: 0 0 10px;
+  color: #b9c3cd;
+  margin: 0;
 }
 
-.sit-composed-prov {
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 10.5px;
-  color: #6b7885;
-  border-top: 1px solid #1a212a;
-  padding-top: 8px;
-  line-height: 1.7;
+.sit-tier-emerging {
+  color: #ffc44d;
 }
 
-.sit-composed-upgrade {
+// ── corroboration meters + upgrade note ──────────────────────────────
+
+.sit-upgrade {
   margin-top: 14px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   background: #131a23;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 11px;
   color: #8a97a5;
   line-height: 1.5;
 }
 
-.sit-composed-upgrade b {
+.sit-upgrade b {
   color: #ffb300;
   font-weight: 600;
 }
 
-.sit-composed-module {
-  margin-top: 16px;
+.sit-upgrade .sit-section-title {
+  margin: 0 0 5px;
 }
 
-.sit-composed-module.is-hero {
-  margin-top: 20px;
-}
-
-.sit-composed-title {
-  font-family: Charter, Georgia, "Times New Roman", serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: #e8eef4;
-}
-
-.sit-composed-module.is-hero .sit-composed-title {
-  font-size: 16px;
-}
-
-.sit-composed-caption {
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 10px;
-  color: #6b7885;
-  margin: 2px 0 8px;
-}
-
-.sit-composed-chart {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin-top: 4px;
-}
-
-.sit-composed-module.is-support .sit-composed-chart {
-  max-width: 230px;
-}
-
-.sit-sources {
-  margin-top: 12px;
-}
-
-.sit-source-chips {
+.sit-meter-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 9px;
 }
 
-.sit-source-chip {
-  padding: 2px 6px;
+.sit-meter-label {
+  width: 52px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #7d8b99;
+}
+
+.sit-meter {
+  flex: 1;
+  height: 4px;
   background: #1a212a;
   border-radius: 2px;
-  font-size: 9px;
+  overflow: hidden;
+}
+
+.sit-meter i {
+  display: block;
+  height: 100%;
+  background: #ffb300;
+  opacity: 0.75;
+}
+
+.sit-meter-count {
   color: #c8d4e0;
 }
 
 .sit-source-cc {
+  flex: 0 0 auto;
+  font-size: 8px;
   color: #6b7885;
+}
+
+.sit-fact-bar.is-evidence i {
+  background: #4fc3f7;
 }
 
 .sit-fact-kinds {
@@ -847,17 +925,27 @@
 }
 
 .sit-related-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  display: block;
   width: 100%;
-  padding: 5px 6px;
+  padding: 4px 6px;
   background: none;
   border: none;
   border-bottom: 1px solid #1a212a;
   font-family: inherit;
+  font-size: 10px;
   text-align: left;
   cursor: pointer;
+}
+
+.sit-related-row .sit-ring-name {
+  display: block;
+}
+
+.sit-related-row .sit-ring-detail {
+  display: block;
+  margin-top: 1px;
+  font-size: 8.5px;
+  text-align: left;
 }
 
 .sit-related-row:hover {

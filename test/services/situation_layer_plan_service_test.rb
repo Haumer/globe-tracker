@@ -119,11 +119,11 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
 
     notams = plan[:layers].find { |l| l[:key] == "notams" }
     assert_equal "ready", notams[:status], "static no-fly zones are always servable"
-    assert notams[:on_by_default]
+    assert_not notams[:on_by_default], "picks are suggestions -- nothing curated starts on"
     assert_equal "airspace matters here", notams[:reason]
 
     ships = plan[:layers].find { |l| l[:key] == "ships" }
-    assert_not ships[:on_by_default], "a picked layer whose source is #{ships[:status]} must not start on"
+    assert_not ships[:on_by_default]
 
     assert_equal "ai", plan[:curated_by]
   end
@@ -172,7 +172,7 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     assert_not boundaries[:on_by_default]
   end
 
-  test "at most DEFAULT_ON_LIMIT curated layers start on; the rest stay suggested" do
+  test "no curated pick starts on; every pick ships as a suggestion with its reason" do
     place = place_entity
     event = cluster(key: "p8", title: "Strike", lat: 50.4, lng: 30.5)
     entity = situation(key: "situation:place:8", name: "Kyiv situation", events: [event], concerns: place)
@@ -191,10 +191,11 @@ class SituationLayerPlanServiceTest < ActiveSupport::TestCase
     layers = plan[:layers].index_by { |l| l[:key] }
 
     on = plan[:layers].reject { |l| l[:baseline] }.select { |l| l[:on_by_default] }.map { |l| l[:key] }
-    assert_equal %w[conflict_events infrastructure notams], on.sort
+    assert_empty on, "curated picks suggest; they never draw uninvited"
 
-    assert_not layers["webcams"][:on_by_default]
-    assert_equal "fourth", layers["webcams"][:reason], "an over-limit pick keeps its reason as a suggestion"
+    %w[notams conflict_events infrastructure webcams].each do |key|
+      assert layers[key][:reason].present?, "#{key} keeps its reason as a suggestion"
+    end
   end
 
   test "bbox params speak each endpoint's dialect" do

@@ -30,11 +30,6 @@ class SituationLayerPlanService
   NEIGHBOR_LIMIT = 8
   NEIGHBOR_MAX_KM = 3000.0
 
-  # The curator may find five layers relevant; drawing five at once buries the
-  # situation's own evidence arcs. Only the strongest picks start on -- the
-  # rest ship with their reason and render as suggested-but-off chips.
-  DEFAULT_ON_LIMIT = 3
-
   AVAILABILITY_CACHE_TTL = 5.minutes
 
   # UCDP is a historical dataset released annually — a tight window can trail
@@ -93,10 +88,6 @@ class SituationLayerPlanService
   def call
     return nil unless anchor[:lat] && anchor[:lng]
 
-    default_on = curation.picks.keys
-      .select { |key| availability[key] == "ready" }
-      .first(DEFAULT_ON_LIMIT)
-
     {
       situation_id: situation[:id],
       generated_at: now.iso8601,
@@ -108,7 +99,7 @@ class SituationLayerPlanService
       composition: curation.composition,
       regions: curation.regions,
       related: related_rows,
-      layers: CATALOG.map { |layer| present(layer, curation, default_on) }
+      layers: CATALOG.map { |layer| present(layer, curation) }
     }
   end
 
@@ -120,7 +111,7 @@ class SituationLayerPlanService
     situation[:anchor] || {}
   end
 
-  def present(layer, curation, default_on)
+  def present(layer, curation)
     # The boundary layer can outgrow the anchor's own country once the curator
     # names affected regions across a border (Hormuz strikes land in Iran and
     # the UAE), so its readiness is judged here -- after curation -- rather
@@ -135,7 +126,12 @@ class SituationLayerPlanService
       meaning: layer[:meaning],
       baseline: layer[:baseline] || false,
       status: status,
-      on_by_default: (layer[:baseline] || default_on.include?(layer[:key])) && status == "ready",
+      # Curated picks used to auto-enable (capped at three), which
+      # drew pipelines and no-fly polygons nobody asked for over every
+      # selection. Picks are suggestions now -- the chip glows, the reason
+      # explains, one click applies -- and only the baseline boundary starts
+      # on.
+      on_by_default: layer[:baseline] && status == "ready",
       # A pick beyond the on-limit keeps its reason: the chip renders as
       # suggested rather than on, and the tooltip still says why.
       reason: reason,

@@ -270,61 +270,29 @@ export class SituationLayerManager {
     }
   }
 
-  // The boundary that contains the anchor, drawn instead of guessed at --
-  // plus the regions the curator judged affected, shaded by grade. District
-  // boundaries are tried first (finer), admin1 as the fallback; if neither
-  // polygon set contains the anchor and no named region matches, the layer
-  // says so and draws nothing, because highlighting the wrong district is
-  // worse than a circle.
+  // The boundary that contains the anchor, drawn instead of guessed at.
+  // District boundaries are tried first (finer), admin1 as the fallback; if
+  // neither polygon set contains the anchor the layer says so and draws
+  // nothing, because highlighting the wrong district is worse than a circle.
+  //
+  // The curator's "affected regions" shading is deliberately NOT drawn for
+  // now: painting a whole province amber asserted an extent nobody measured,
+  // and the shapes were not clickable. Both need rethinking before they
+  // return; the plan still carries the list.
   async _renderBoundaries(layer, payloads) {
     const anchor = this._plan.anchor
     const [districts, admin1] = payloads
-    const drawnNames = new Set()
-
-    // The curator names affected regions ("Hormozgan", "Balochistan") with a
-    // grade; matching is by normalized name against both polygon sets, and a
-    // region that matches nothing is skipped rather than guessed at -- but
-    // counted, so the note admits what could not be drawn.
-    let shaded = 0
-    let unmatched = 0
-    ;(this._plan.regions || []).forEach((region) => {
-      const feature = this._featureByName(districts, region.name) || this._featureByName(admin1, region.name)
-      if (!feature) { unmatched++; return }
-
-      // Two visibly different shades: heavy fill for high impact, light for
-      // moderate. Anything fainter disappears against the dark basemap.
-      const high = region.impact === "high"
-      this._drawBoundaryFeature(layer.key, feature, {
-        fillAlpha: high ? 0.3 : 0.14,
-        outlineAlpha: high ? 1.0 : 0.7,
-        width: high ? 2.5 : 2,
-      })
-      drawnNames.add(normalizeName(featureName(feature)))
-      shaded++
-    })
 
     const feature = this._containingFeature(districts, anchor) || this._containingFeature(admin1, anchor)
-    let anchorName = null
-    if (feature && !drawnNames.has(normalizeName(featureName(feature)))) {
+    if (feature) {
       this._drawBoundaryFeature(layer.key, feature, { fillAlpha: 0.05, outlineAlpha: 0.85, width: 2 })
-      anchorName = featureName(feature)
-    } else if (feature) {
-      anchorName = featureName(feature)
     }
 
     // The page hides the nominal footprint circle once a real polygon covers
     // the anchor -- an accurate boundary beats a radius guess.
     this.onBoundaryState?.({ anchorPolygon: !!feature })
 
-    if (!anchorName && !shaded) {
-      this._notes.set(layer.key, "no polygon contains the anchor")
-      return
-    }
-    this._notes.set(layer.key, [
-      anchorName,
-      shaded ? `${shaded} affected shaded` : null,
-      unmatched ? `${unmatched} unmatched` : null,
-    ].filter(Boolean).join(" · "))
+    this._notes.set(layer.key, feature ? featureName(feature) : "no polygon contains the anchor")
   }
 
   _drawBoundaryFeature(key, feature, { fillAlpha, outlineAlpha, width }) {

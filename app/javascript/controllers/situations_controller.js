@@ -709,8 +709,8 @@ export default class extends Controller {
     return `
       <div class="sit-block">
         <div class="sit-section-title">How it broke
-          <span class="sit-section-note">per ${timeline.bucket} · peak ${peak}
-            · <span class="sit-tick-key">▪</span> new source</span></div>
+          <span class="sit-section-note">per ${timeline.bucket} · peak ${peak} ·
+            <span class="sit-tick-key" title="a report from an outlet filing on this story for the first time">▮ new outlet</span></span></div>
         ${module?.title ? `<div class="sit-block-caption">${escapeHtml(module.title)}</div>` : ""}
         ${this._activityChartSvg(situation, points, {
           hero: module?.emphasis === "hero", annotations: module?.annotations, bucket: timeline.bucket })}
@@ -723,11 +723,60 @@ export default class extends Controller {
 
   _activityChartSvg(situation, points, { hero = false, annotations = null, bucket = "hour" } = {}) {
     const width = 332
+    const max = Math.max(...points.map((point) => point.articles), 1)
+    // Two forms by density. With a peak of one or two, bars are all full
+    // height and read as floating pillars -- a handful of reports is a
+    // sequence of events, so it draws as dots on a timeline. Only when
+    // volume gives the heights meaning does it become a bar chart.
+    return max <= 2
+      ? this._activityDotsSvg(situation, points, { width, annotations, bucket })
+      : this._activityBarsSvg(situation, points, { width, max, hero, annotations, bucket })
+  }
+
+  // Dots on a timeline: each dot one report, amber when it was that
+  // outlet's first filing on the story.
+  _activityDotsSvg(situation, points, { width, annotations, bucket }) {
+    const chartHeight = 26
+    const padTop = Math.max(annotations?.length ? 14 + (annotations.length - 1) * 11 : 0, 8)
+    const baseline = padTop + chartHeight - 6
+    const height = padTop + chartHeight
+    const step = width / points.length
+    const bucketMs = bucket === "hour" ? 3_600_000 : 86_400_000
+    const xForTime = (t) => {
+      const stamp = Date.parse(t)
+      const index = points.findIndex((point) => Date.parse(point.t) + bucketMs > stamp)
+      return (index < 0 ? points.length - 0.5 : index + 0.5) * step
+    }
+
+    const marks = points.map((point, index) => {
+      if (!point.articles) return ""
+      const cx = (index + 0.5) * step
+      const dots = Array.from({ length: Math.min(point.articles, 2) }, (_, n) => {
+        const fresh = n < point.new_sources
+        return `<circle cx="${cx.toFixed(1)}" cy="${(baseline - n * 9).toFixed(1)}" r="3.5"
+          fill="${fresh ? "#ffb300" : "#4fc3f7"}" opacity="0.95"></circle>`
+      }).join("")
+      const hit = `<rect x="${(index * step).toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
+          height="${chartHeight}" fill="transparent">
+          <title>${formatStamp(point.t)} UTC · ${pluralize(point.articles, "report")}${point.new_sources
+            ? ` · ${pluralize(point.new_sources, "new outlet")}` : ""}</title></rect>`
+      return dots + hit
+    }).join("")
+
+    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
+      ${marks}${this._flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs)}
+      ${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight - 8)}</svg>`
+  }
+
+  // Stacked bars: the bar is the hour's reports; its amber base is the share
+  // that were a new outlet's first filing. Echo grows the blue, fresh voices
+  // grow the amber -- one mark, nothing to cross-reference.
+  _activityBarsSvg(situation, points, { width, max, hero, annotations, bucket }) {
     const chartHeight = hero ? 56 : 40
     const padTop = Math.max(annotations?.length ? 14 + (annotations.length - 1) * 11 : 0, 8)
     const baseline = padTop + chartHeight
-    const height = baseline + 7
-    const max = Math.max(...points.map((point) => point.articles), 1)
+    const height = baseline + 3
     const step = width / points.length
     const barWidth = Math.max(Math.min(step - 2, 9), 1)
     const bucketMs = bucket === "hour" ? 3_600_000 : 86_400_000
@@ -740,25 +789,34 @@ export default class extends Controller {
     const columns = points.map((point, index) => {
       const left = index * step
       const x = left + (step - barWidth) / 2
-      const barHeight = point.articles > 0 ? Math.max((point.articles / max) * (chartHeight - 4), 1.5) : 0
-      const bar = point.articles > 0
-        ? `<rect x="${x.toFixed(1)}" y="${(baseline - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
-             height="${barHeight.toFixed(1)}" rx="1" fill="#4fc3f7" opacity="0.85"></rect>`
-        : ""
-      const tickWidth = Math.min(barWidth, 5)
-      const tick = point.new_sources > 0
-        ? `<rect x="${(left + (step - tickWidth) / 2).toFixed(1)}" y="${baseline + 3}"
-             width="${tickWidth.toFixed(1)}" height="2" fill="#ffb300"></rect>`
-        : ""
-      // The whole column is the hover target; a 3px bar is not.
+      if (!point.articles) return `<rect x="${left.toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
+          height="${chartHeight}" fill="transparent">
+          <title>${formatStamp(point.t)} UTC · no reports</title></rect>`
+
+      const fullHeight = Math.max((point.articles / max) * (chartHeight - 4), 2)
+      const freshHeight = Math.min(point.new_sources, point.articles) / point.articles * fullHeight
+      const echoHeight = fullHeight - freshHeight
+      const echo = echoHeight > 0.5
+        ? `<rect x="${x.toFixed(1)}" y="${(baseline - fullHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${echoHeight.toFixed(1)}" rx="1" fill="#4fc3f7" opacity="0.85"></rect>` : ""
+      const fresh = freshHeight > 0.5
+        ? `<rect x="${x.toFixed(1)}" y="${(baseline - freshHeight).toFixed(1)}" width="${barWidth.toFixed(1)}"
+             height="${freshHeight.toFixed(1)}" rx="1" fill="#ffb300" opacity="0.9"></rect>` : ""
       const hit = `<rect x="${left.toFixed(1)}" y="${padTop}" width="${step.toFixed(1)}"
-          height="${(chartHeight + 6).toFixed(1)}" fill="transparent">
+          height="${chartHeight}" fill="transparent">
           <title>${formatStamp(point.t)} UTC · ${pluralize(point.articles, "report")}${point.new_sources
-            ? ` · ${pluralize(point.new_sources, "new source")}` : ""}</title></rect>`
-      return bar + tick + hit
+            ? ` · ${pluralize(point.new_sources, "new outlet")}` : ""}</title></rect>`
+      return echo + fresh + hit
     }).join("")
 
-    const flares = (situation.flares || []).filter((t) => {
+    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
+      ${columns}${this._flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs)}
+      ${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight)}</svg>`
+  }
+
+  _flareMarksSvg(situation, points, xForTime, padTop, baseline, bucketMs) {
+    return (situation.flares || []).filter((t) => {
       const stamp = Date.parse(t)
       return stamp >= Date.parse(points[0].t) && stamp < Date.parse(points[points.length - 1].t) + bucketMs
     }).map((t) => {
@@ -769,10 +827,6 @@ export default class extends Controller {
         <path d="M ${(px - 3.2).toFixed(1)} ${padTop} L ${(px + 3.2).toFixed(1)} ${padTop} L ${px.toFixed(1)} ${padTop + 5} Z"
           fill="#ffb300" opacity="0.9"><title>flare · ${formatStamp(t)} UTC</title></path>`
     }).join("")
-
-    return `<svg class="sit-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">
-      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="#232b35" stroke-width="1"></line>
-      ${columns}${flares}${this._annotationMarksSvg(annotations, xForTime, padTop, chartHeight)}</svg>`
   }
 
   // Who says who did it: the split the modal answer hides. The server only
@@ -962,12 +1016,14 @@ export default class extends Controller {
       <div class="sit-meter-row">
         <span class="sit-meter-label">${label}</span>
         <span class="sit-meter"><i style="width:${Math.min(100, Math.round((have / need) * 100))}%"></i></span>
-        <span class="sit-meter-count">${have}/${need}</span>
+        <span class="sit-meter-count">${have} of ${need}</span>
       </div>`).join("")
 
     return `
       <div class="sit-upgrade">
-        <div class="sit-section-title">Path to corroborated</div>
+        <div class="sit-section-title">How solid is this?</div>
+        <div class="sit-upgrade-intro">Thinly sourced so far. It takes 5 reports from 3 independent
+          outlets before this board treats a story as corroborated.</div>
         ${meters}
         ${upgrade ? `<div class="sit-upgrade-note">${escapeHtml(upgrade)}</div>` : ""}
       </div>`

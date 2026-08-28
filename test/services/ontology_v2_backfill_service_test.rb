@@ -65,6 +65,42 @@ class OntologyV2BackfillServiceTest < ActiveSupport::TestCase
     assert_nil captured, "the periodic full sweep must not be windowed"
   end
 
+  test "the deadline reaches the event graph stages" do
+    captured = nil
+    stub = ->(**opts) {
+      captured = opts
+      { records_fetched: 0, records_stored: 0, complete: true }
+    }
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 110
+
+    OntologyV2EventGraphService.stub(:sync_batch, stub) do
+      OntologyV2BackfillService.run(stage: "event_graph_full", batch_size: 500, deadline: deadline)
+    end
+
+    assert_equal deadline, captured[:deadline]
+  end
+
+  test "a deadline-cut batch continues the chain instead of advancing the stage" do
+    stub = ->(**_opts) {
+      {
+        records_fetched: 500,
+        records_stored: 12,
+        complete: false,
+        next_cursor: 4200,
+        deadline_hit: true,
+      }
+    }
+
+    result = OntologyV2EventGraphService.stub(:sync_batch, stub) do
+      OntologyV2BackfillService.run(stage: "event_graph_full", batch_size: 500)
+    end
+
+    assert result[:deadline_hit]
+    assert_equal 4200, result[:next_cursor]
+    assert_nil result[:next_stage], "a partial batch must resume, not move on"
+    assert_equal false, result[:complete]
+  end
+
   test "the windowed and full event graph passes sit on different chains" do
     assert_equal "live", OntologyV2BackfillService.group_for("event_graph")
     assert_equal "reference", OntologyV2BackfillService.group_for("event_graph_full")

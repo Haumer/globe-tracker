@@ -11,7 +11,15 @@ class OntologyV2BackfillJob < ApplicationJob
     poll_type: "ontology"
   )
 
-  JOB_TIMEOUT = 110.seconds
+  # Enforced cooperatively: the service checks it between rows and returns
+  # partial progress, rather than Timeout.timeout cutting the thread wherever
+  # it happens to be. Timeout kills via Thread#raise, and an exception landing
+  # inside a libpq call or while the connection-pool mutex is held can wedge
+  # the whole process -- during the 2026-08-27 worker freeze this job was
+  # exactly what was running. A deadline the service honors between rows can
+  # only ever stop at a row boundary, and the chain resumes from the returned
+  # cursor instead of being dropped.
+  JOB_DEADLINE = 110.seconds
   DEFAULT_BATCH_SIZE = 500
 
   # Takes a positional options hash so the poller, which enqueues with
@@ -24,19 +32,16 @@ class OntologyV2BackfillJob < ApplicationJob
     cursor = options[:cursor]
     batch_size = options[:batch_size] || DEFAULT_BATCH_SIZE
 
-    result = Timeout.timeout(JOB_TIMEOUT) do
-      OntologyV2BackfillService.run(stage: stage, cursor: cursor, batch_size: batch_size)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + JOB_DEADLINE
+    result = OntologyV2BackfillService.run(stage: stage, cursor: cursor, batch_size: batch_size, deadline: deadline)
+    if result[:deadline_hit]
+      Rails.logger.warn(
+        "[OntologyV2BackfillJob] deadline hit at stage=#{stage} cursor=#{cursor} " \
+          "after #{result[:events]} rows; chain resumes from #{result[:next_cursor]}"
+      )
     end
     enqueue_next_batch(result, batch_size: batch_size)
     result
-  rescue Timeout::Error
-    Rails.logger.warn("[OntologyV2BackfillJob] Timed out after #{JOB_TIMEOUT}s at stage=#{stage} cursor=#{cursor}")
-    record_timeout(stage: stage, cursor: cursor)
-    # Raise rather than return. Polling telemetry marks a failure only when a
-    # job raises, so swallowing this would report success for a stage that did
-    # nothing -- and it also drops the chain, since the next batch is only
-    # enqueued on the success path. Re-running resumes from the same cursor.
-    raise
   end
 
   private
@@ -50,15 +55,4 @@ class OntologyV2BackfillJob < ApplicationJob
     end
   end
 
-  def record_timeout(stage:, cursor:)
-    SourceFeedStatusRecorder.record(
-      provider: OntologyV2BackfillService::PROVIDER,
-      display_name: "Ontology v2 #{stage.to_s.tr("_", " ")}",
-      feed_kind: OntologyV2BackfillService::FEED_KIND,
-      endpoint_url: "ontology-v2://#{stage}",
-      status: "error",
-      error_message: "Timed out after #{JOB_TIMEOUT}s at cursor=#{cursor}",
-      metadata: { stage: stage, cursor: cursor, timeout_seconds: JOB_TIMEOUT.to_i }.compact
-    )
-  end
 end

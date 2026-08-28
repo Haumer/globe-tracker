@@ -55,8 +55,8 @@ class OntologyV2BackfillService
   end
 
   class << self
-    def run(stage: STAGES.first, cursor: nil, batch_size: 500, now: Time.current)
-      new(now: now).run(stage: stage, cursor: cursor, batch_size: batch_size)
+    def run(stage: STAGES.first, cursor: nil, batch_size: 500, now: Time.current, deadline: nil)
+      new(now: now).run(stage: stage, cursor: cursor, batch_size: batch_size, deadline: deadline)
     end
   end
 
@@ -64,11 +64,11 @@ class OntologyV2BackfillService
     @now = now
   end
 
-  def run(stage:, cursor: nil, batch_size: 500)
+  def run(stage:, cursor: nil, batch_size: 500, deadline: nil)
     stage = stage.to_s
     raise ArgumentError, "unknown ontology v2 backfill stage: #{stage}" unless STAGES.include?(stage)
 
-    result = normalize_stage_result(stage: stage, cursor: cursor, payload: run_stage(stage, cursor: cursor, batch_size: batch_size))
+    result = normalize_stage_result(stage: stage, cursor: cursor, payload: run_stage(stage, cursor: cursor, batch_size: batch_size, deadline: deadline))
     record_feed_status(stage: stage, status: "success", result: result)
     result
   rescue StandardError => e
@@ -80,7 +80,11 @@ class OntologyV2BackfillService
 
   attr_reader :now
 
-  def run_stage(stage, cursor:, batch_size:)
+  # The deadline only reaches the event-graph stages: they are the heavy
+  # sweeps (event_graph_full walks the whole ~210k-row events table), and the
+  # only stage a batch has ever been caught running when the worker froze.
+  # The other stages are cheap per row and bounded by batch_size.
+  def run_stage(stage, cursor:, batch_size:, deadline: nil)
     if stage == "identity"
       return sync_identity
     end
@@ -101,12 +105,13 @@ class OntologyV2BackfillService
         cursor: cursor,
         batch_size: batch_size,
         updated_after: now - LIVE_EVENT_WINDOW,
-        now: now
+        now: now,
+        deadline: deadline
       )
     when "event_graph_full"
       # Unwindowed sweep on the slow chain, so a derivation change eventually
       # reaches events that have long since stopped being updated.
-      OntologyV2EventGraphService.sync_batch(cursor: cursor, batch_size: batch_size, now: now)
+      OntologyV2EventGraphService.sync_batch(cursor: cursor, batch_size: batch_size, now: now, deadline: deadline)
     when "infrastructure_impact"
       OntologyV2InfrastructureImpactService.sync_batch(cursor: cursor, batch_size: batch_size, now: now)
     end

@@ -28,8 +28,8 @@ class OntologyV2EventGraphService
       new(now: now).sync
     end
 
-    def sync_batch(cursor: nil, batch_size: 500, updated_after: nil, now: Time.current)
-      new(now: now).sync_batch(cursor: cursor, batch_size: batch_size, updated_after: updated_after)
+    def sync_batch(cursor: nil, batch_size: 500, updated_after: nil, now: Time.current, deadline: nil)
+      new(now: now).sync_batch(cursor: cursor, batch_size: batch_size, updated_after: updated_after, deadline: deadline)
     end
 
     def health_report(limit: 50)
@@ -67,7 +67,13 @@ class OntologyV2EventGraphService
   # `updated_after` narrows a pass to events that have actually changed. Without
   # it every pass re-derives the whole table, which on production is 210,833
   # events to pick up the ~900 that moved in a day.
-  def sync_batch(cursor: nil, batch_size: 500, updated_after: nil)
+  #
+  # `deadline` is a CLOCK_MONOTONIC instant. It is checked between events, so
+  # a batch that slows down stops at a row boundary and reports where it got
+  # to, instead of an outside Timeout killing the thread mid-query. At least
+  # one event is always processed, so a chain under a hopeless deadline still
+  # makes progress rather than re-enqueueing the same cursor forever.
+  def sync_batch(cursor: nil, batch_size: 500, updated_after: nil, deadline: nil)
     limit = batch_size.to_i.clamp(1, 5_000)
     events = event_scope
       .where(cursor.present? ? ["ontology_events.id > ?", cursor.to_i] : nil)
@@ -93,6 +99,12 @@ class OntologyV2EventGraphService
 
     ActiveRecord::Base.transaction do
       events.each do |event|
+        if deadline.present? && result[:events].positive? &&
+           Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+          result[:deadline_hit] = true
+          break
+        end
+
         payload = sync_event(event)
         result[:records_stored] += payload.fetch(:place_relationships) + payload.fetch(:entity_relationships)
         result[:events] += 1
@@ -100,6 +112,11 @@ class OntologyV2EventGraphService
         result[:entity_relationships] += payload.fetch(:entity_relationships)
         result[:relationship_evidences] += payload.fetch(:relationship_evidences)
       end
+    end
+
+    if result[:deadline_hit]
+      result[:next_cursor] = events[result[:events] - 1].id
+      result[:complete] = false
     end
 
     result

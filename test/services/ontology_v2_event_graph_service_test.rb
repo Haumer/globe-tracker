@@ -103,6 +103,42 @@ class OntologyV2EventGraphServiceTest < ActiveSupport::TestCase
     assert_not OntologyRelationship.exists?(source_node: actor, target_node: second, relation_type: "initiated_event")
   end
 
+  test "an expired deadline stops a batch at a row boundary and reports where it got to" do
+    place = create_entity("place:tehran", "place", "Tehran")
+    events = 3.times.map { |i| create_event("event:deadline-#{i}", place_entity: place) }
+
+    result = OntologyV2EventGraphService.sync_batch(
+      batch_size: 3,
+      deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) - 1
+    )
+
+    # At least one event is always processed so the chain makes progress.
+    assert_equal 1, result.fetch(:events)
+    assert result.fetch(:deadline_hit)
+    assert_equal false, result.fetch(:complete)
+    assert_equal events.first.id, result.fetch(:next_cursor)
+
+    # Resuming from the returned cursor picks up exactly the unprocessed rows.
+    resumed = OntologyV2EventGraphService.sync_batch(batch_size: 3, cursor: result.fetch(:next_cursor))
+    assert_equal 2, resumed.fetch(:events)
+    assert resumed.fetch(:complete)
+  end
+
+  test "a generous deadline changes nothing about a full batch" do
+    place = create_entity("place:tehran", "place", "Tehran")
+    2.times { |i| create_event("event:calm-#{i}", place_entity: place) }
+
+    result = OntologyV2EventGraphService.sync_batch(
+      batch_size: 10,
+      deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + 110
+    )
+
+    assert_equal 2, result.fetch(:events)
+    assert result.fetch(:complete)
+    assert_nil result[:deadline_hit]
+    assert_nil result.fetch(:next_cursor)
+  end
+
   private
 
   def create_event(canonical_key, place_entity: nil)

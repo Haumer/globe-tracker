@@ -19,6 +19,16 @@ Sidekiq.configure_server do |config|
         Thread.current.name = "embedded-poller" if Thread.current.respond_to?(:name=)
         PollerRuntime.run_supervised
       end
+
+      # The watchdog only makes sense in the process that owns the poller:
+      # exiting some other process over this one's stale heartbeat would
+      # restart the wrong container.
+      if WorkerWatchdog.enabled?
+        Thread.new do
+          Thread.current.name = "worker-watchdog" if Thread.current.respond_to?(:name=)
+          WorkerWatchdog.run
+        end
+      end
     end
 
     # Both hooks stop only this process's loop. They used to call

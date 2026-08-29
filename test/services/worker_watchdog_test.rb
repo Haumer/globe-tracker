@@ -59,6 +59,33 @@ class WorkerWatchdogTest < ActiveSupport::TestCase
     assert_match(/unreadable/, reason)
   end
 
+  test "pool summary reports live connection-pool stats" do
+    summary = @watchdog.pool_summary
+
+    assert_match(/pool busy=\d+ idle=\d+ dead=\d+ waiting=\d+ size=\d+/, summary)
+  end
+
+  test "thread signature groups by name and first non-gem frame" do
+    thread = Thread.new { sleep }
+    thread.name = "sig-test"
+    sleep 0.05 until thread.status == "sleep"
+
+    signature = @watchdog.thread_signature(thread)
+
+    assert_match(/\Asig-test @ /, signature)
+    assert_no_match(/vendor\/bundle/, signature)
+  ensure
+    thread&.kill
+    thread&.join
+  end
+
+  test "a dead thread still yields a signature" do
+    thread = Thread.new {}
+    thread.join
+
+    assert_match(/@ no backtrace\z/, @watchdog.thread_signature(thread))
+  end
+
   test "watchdog can be disabled by env" do
     original = ENV["WORKER_WATCHDOG"]
     ENV["WORKER_WATCHDOG"] = "0"

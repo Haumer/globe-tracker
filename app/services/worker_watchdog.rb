@@ -75,13 +75,42 @@ class WorkerWatchdog
     rss = current_rss_mb
 
     if rss && (@ticks % RSS_LOG_EVERY_TICKS).zero?
-      Rails.logger.info("[watchdog] worker RSS #{rss}MB (cap #{self.class.max_rss_mb}MB)")
+      Rails.logger.info(
+        "[watchdog] worker RSS #{rss}MB (cap #{self.class.max_rss_mb}MB) " \
+          "threads=#{Thread.list.size} #{pool_summary}"
+      )
     end
 
     reason = assess(rss_mb: rss, poller: read_poller_status)
     die!(reason) if reason
   rescue StandardError => e
     Rails.logger.warn("[watchdog] check failed: #{e.class}: #{e.message}")
+  end
+
+  # One line: how the AR pool is doing. The 2026-08-29 08:35 exit fired on
+  # "status unreadable" with RSS at a calm 1720MB -- the pool starves before
+  # memory does, so the periodic line has to show both.
+  def pool_summary
+    stat = ActiveRecord::Base.connection_pool.stat
+    "pool busy=#{stat[:busy]} idle=#{stat[:idle]} dead=#{stat[:dead]} " \
+      "waiting=#{stat[:waiting]} size=#{stat[:size]}"
+  rescue StandardError
+    "pool unavailable"
+  end
+
+  # Collapses a thread to "name @ anchor frame" so the exit dump groups the
+  # hundred copies of the same stuck thread into one countable line. Prefers
+  # the first frame in our own code over gem/stdlib frames.
+  def thread_signature(thread)
+    name = begin
+      thread.name.presence
+    rescue StandardError
+      nil
+    end
+    frames = Array(thread.backtrace)
+    anchor = frames.find { |f| !f.include?("vendor/bundle") && !f.include?("/ruby/") } ||
+      frames.first || "no backtrace"
+    "#{name || "unnamed"} @ #{anchor}"
   end
 
   # The whole decision, side-effect free, so tests can drive it without
@@ -140,10 +169,31 @@ class WorkerWatchdog
 
   def die!(reason)
     message = "[watchdog] #{reason} -- exiting so the container supervisor restarts the worker"
+    dump_state_at_exit
     Rails.logger.error(message)
     # The logger can be buffered or wedged in exactly the states we exit on;
     # stderr goes straight to the container log.
     warn(message)
     Process.exit!(1)
+  end
+
+  # The exit happens at the exact moment the sickness is at its worst -- 20
+  # connections pinned, threads stuck wherever they are stuck. Photograph it:
+  # this dump is the evidence the postmortem needs, grouped so a hundred
+  # copies of the same stuck thread read as one line. Every line goes to both
+  # the logger and stderr; nothing here may prevent the exit.
+  def dump_state_at_exit
+    emit = ->(line) do
+      Rails.logger.error(line) rescue nil
+      warn(line)
+    end
+
+    emit.call("[watchdog] state at exit: threads=#{Thread.list.size} #{pool_summary}")
+    census = Thread.list.group_by { |thread| thread_signature(thread) }
+    census.sort_by { |_signature, threads| -threads.size }.first(25).each do |signature, threads|
+      emit.call("[watchdog]   x#{threads.size} #{signature}")
+    end
+  rescue StandardError => e
+    warn("[watchdog] state dump failed: #{e.class}: #{e.message}")
   end
 end

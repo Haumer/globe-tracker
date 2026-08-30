@@ -163,6 +163,7 @@ export function applySituationalEventMethods(GlobeController) {
         if (this.earthquakesVisible && !this._timelineActive) this.fetchEarthquakes()
       })
       this.renderEarthquakes()
+      this._markFresh("earthquakes")
       this._updateStats()
       this._toastHide()
     } catch (e) {
@@ -530,6 +531,7 @@ export function applySituationalEventMethods(GlobeController) {
         if (this.naturalEventsVisible && !this._timelineActive) this.fetchNaturalEvents()
       })
       this.renderNaturalEvents()
+      this._markFresh("naturalEvents")
       this._updateStats()
       this._toastHide()
     } catch (e) {

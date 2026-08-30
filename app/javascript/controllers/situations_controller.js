@@ -1893,7 +1893,7 @@ export default class extends Controller {
         ${lead.map((member) => this._memberRowHtml(member)).join("")}
         ${rest.length ? `
         <details class="sit-fold">
-          <summary><span>show ${pluralize(rest.length, "more")}</span></summary>
+          <summary><span>show ${rest.length} more</span></summary>
           ${rest.map((member) => this._memberRowHtml(member)).join("")}
         </details>` : ""}
       </div>`

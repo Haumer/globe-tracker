@@ -23,6 +23,7 @@ export function applyFlightRenderingMethods(GlobeController) {
       }
 
       this.renderFlights(flights)
+      this._markFresh("flights")
       this._toastHide()
     } catch (e) {
       console.error("Failed to fetch flights:", e)

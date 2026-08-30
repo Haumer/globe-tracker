@@ -54,6 +54,7 @@ export function applyConflictsMethods(GlobeController) {
         })
       }
       this.renderConflicts()
+      this._markFresh("conflicts")
       this._updateStats()
       this._toastHide()
     } catch (e) {

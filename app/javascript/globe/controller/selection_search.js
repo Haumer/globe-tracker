@@ -141,7 +141,14 @@ export function applySelectionSearchMethods(GlobeController) {
       fields: (item) => [item.name, item.conflict],
       toResult: (item) => ({
         name: item.name || item.conflict,
-        detail: item.conflict || "",
+        // Conflict rows carry no `name`, so name fell back to `conflict` and detail
+        // repeated the same string -- every result in a conflict rendered identically.
+        // The belligerents, place and start date are what tell them apart.
+        detail: [
+          item.side_a && item.side_b ? `${item.side_a} vs ${item.side_b}` : null,
+          item.location || item.country,
+          item.date_start,
+        ].filter(Boolean).join(" \u00b7 "),
         lat: item.lat, lng: item.lng, alt: 300000,
         data: item,
       }),

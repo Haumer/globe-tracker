@@ -22,6 +22,7 @@ export function applyMaritimeMethods(GlobeController) {
       }
 
       this.renderShips(ships)
+      this._markFresh("ships")
       if (ships.length === 0) {
         this._toast(
           sourceConfigured ? "No recent ship positions in this local workspace" : "AIS stream is not configured locally",

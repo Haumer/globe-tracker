@@ -231,17 +231,21 @@ class SituationBoardService
   def anchor_for(situation, members, composition = nil)
     entity = concerns_entity(situation)
     lat, lng = coordinates(entity)
+    registry = lat && lng &&
+      { lat: lat, lng: lng, kind: "registry", label: entity.canonical_name,
+        entity_type: entity.entity_type }
 
-    if lat && lng
-      return { lat: lat, lng: lng, kind: "registry", label: entity.canonical_name,
-               entity_type: entity.entity_type }
-    end
+    return registry if registry && !fallback_centroid?(entity, lat, lng)
 
     medoid = medoid_of(members)
-    return unless medoid
+    if medoid
+      return { lat: medoid[:lat], lng: medoid[:lng], kind: "medoid",
+               label: display_name(situation, composition), entity_type: nil }
+    end
 
-    { lat: medoid[:lat], lng: medoid[:lng], kind: "medoid", label: display_name(situation, composition),
-      entity_type: nil }
+    # Nothing was measured anywhere. A country centroid still beats dropping
+    # the situation off the board entirely.
+    registry || nil
   end
 
   # A member whose own geocode came back empty still carries a coordinate: the
@@ -261,6 +265,22 @@ class SituationBoardService
       next member if member[:lat].blank? || trusted_coordinate?(member)
 
       member.merge(lat: anchor[:lat], lng: anchor[:lng], geo_inherited: true)
+    end
+  end
+
+  # A registry coordinate sitting exactly on a country centroid is not a
+  # surveyed point; it is the same fallback inherit_anchor_coordinates exists to
+  # overwrite, written onto the entity by a resolution that had nothing better.
+  # As an anchor it does far more damage than it does on one member, because
+  # every inherited member then follows it: the Grand Canyon place entity picked
+  # up [38.9, -77.0] this way and took five flash-flood reports to Washington DC
+  # while two members that were properly geocoded sat in the canyon. A country
+  # legitimately sits on its own centroid; a canyon does not.
+  def fallback_centroid?(entity, lat, lng)
+    return false if entity.nil? || entity.entity_type.to_s == "country"
+
+    NewsGeocodable::COUNTRY_COORDS.any? do |_code, (clat, clng)|
+      (clat - lat).abs < 1e-6 && (clng - lng).abs < 1e-6
     end
   end
 

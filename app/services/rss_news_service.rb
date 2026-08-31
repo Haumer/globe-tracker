@@ -741,7 +741,8 @@ class RssNewsService
       location = LocationResolver.resolve_event(
         title: adapted[:title],
         summary: adapted[:summary],
-        url: adapted[:url]
+        url: adapted[:url],
+        publisher: item_publisher(item, source_name)
       )
       next unless location&.coordinates
 
@@ -857,6 +858,18 @@ class RssNewsService
     elsif item.respond_to?(:content_encoded) && item.content_encoded.present?
       item.content_encoded.to_s
     end
+  end
+
+  # Who filed the story, for the sole purpose of keeping their masthead out of
+  # the geocoder. Google News appends the publisher to every headline and names
+  # it in <source>, which is the accurate answer on the mixed topic feeds where
+  # the feed name is "World". A single-site feed has no <source>, and there the
+  # feed name is the publisher.
+  def item_publisher(item, source_name)
+    google = item.source&.content&.to_s&.squish if item.respond_to?(:source)
+    google.presence || source_name
+  rescue StandardError
+    source_name
   end
 
   def rss_item_payload(item, raw_link)

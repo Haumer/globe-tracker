@@ -469,4 +469,92 @@ class SituationBuilderTest < ActiveSupport::TestCase
     assert_equal 0, OntologyEntity.where(entity_type: "situation").count,
       "a story last seen #{SituationBuilder::WINDOW_DAYS + 2} days ago is not happening"
   end
+  # ── the story gate ──────────────────────────────────────────────────
+  #
+  # MINIMUM_MEMBERS only asks that two clusters agreed on a key, and a shared
+  # place mention satisfies that with no story behind it. On a live board of 84
+  # situations 45 failed one of the three tests below, and between them they
+  # held 7% of the window's reports.
+
+  def report(cluster, source, title, index: 0)
+    article = NewsArticle.create!(
+      news_source: source, title: title,
+      url: "https://#{source.canonical_key}/#{cluster.cluster_key}-#{index}",
+      canonical_url: "https://#{source.canonical_key}/#{cluster.cluster_key}-#{index}",
+      published_at: 1.day.ago, fetched_at: 1.day.ago
+    )
+    NewsStoryMembership.create!(news_story_cluster: cluster, news_article: article)
+  end
+
+  test "two reports from one newsroom are not a situation" do
+    lagos = place("Lagos")
+    solo = NewsSource.create!(canonical_key: "publisher:solo", name: "Solo Wire")
+    [ "one", "two" ].each do |key|
+      record, event = cluster(key: key, title: "Power restored across Lagos districts")
+      event.update!(place_entity: lagos)
+      report(record, solo, "Power restored across Lagos districts")
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_nil OntologyEntity.find_by(entity_type: "situation"),
+      "one outlet filing twice is one outlet, not corroboration"
+  end
+
+  test "a thin group whose members disagree on the event family is not a situation" do
+    sydney = place("Sydney")
+    [
+      [ "d1", "Officials meet in Sydney", "diplomacy" ],
+      [ "d2", "Relief supplies reach Sydney", "humanitarian" ]
+    ].each_with_index do |(key, title, family), index|
+      record, event = cluster(key: key, title: title)
+      record.update!(event_family: family)
+      event.update!(place_entity: sydney, event_family: family)
+      report(record, NewsSource.create!(canonical_key: "publisher:#{key}", name: "Wire #{key}"), title, index: index)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_nil OntologyEntity.find_by(entity_type: "situation"),
+      "a diplomatic contact and an aid delivery sharing a city are two stories"
+  end
+
+  # situation_name titles a split-off component with one of its headlines,
+  # because the place name stays with the main component. That is a fair name
+  # for a story big enough to have earned one and a lie for two reports -- the
+  # live board carried a situation called "FTSE Russell Restores Nigeria to
+  # Frontier Market Status".
+  test "a thin split-off component named by its own headline is not a situation" do
+    munich = place("Munich")
+    main = [ "a1", "a2", "a3" ].map { |key| [ key, "Bayern midfielder collapses during training session" ] }
+    offshoot = [ "b1", "b2" ].map { |key| [ key, "Vietnam ministry seeks cooperation over flight incident probe" ] }
+
+    (main + offshoot).each_with_index do |(key, title), index|
+      record, event = cluster(key: key, title: title)
+      event.update!(place_entity: munich)
+      report(record, NewsSource.create!(canonical_key: "publisher:#{key}", name: "Wire #{key}"), title, index: index)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    names = OntologyEntity.where(entity_type: "situation").pluck(:canonical_name)
+    assert_equal [ "Munich situation" ], names,
+      "the component that keeps the place keeps its name; the headline-named split-off is not a situation"
+  end
+
+  test "a corroborated group of the same event family still becomes a situation" do
+    ceuta = place("Ceuta")
+    [ "k1", "k2" ].each_with_index do |key, index|
+      record, event = cluster(key: key, title: "Migrant arrivals strain Ceuta services")
+      event.update!(place_entity: ceuta)
+      report(record, NewsSource.create!(canonical_key: "publisher:#{key}", name: "Wire #{key}"),
+             "Migrant arrivals strain Ceuta services", index: index)
+    end
+
+    SituationBuilder.call(actor_specificity: 1.1)
+
+    assert_equal "Ceuta situation",
+      OntologyEntity.find_by(entity_type: "situation")&.canonical_name,
+      "the gate must not reject two newsrooms agreeing on one story"
+  end
 end

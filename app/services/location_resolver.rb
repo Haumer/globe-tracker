@@ -76,8 +76,8 @@ class LocationResolver
 
   def resolve_event(title:, summary: nil, country_hint: nil, url: nil, city: nil, country: nil,
                     provided_latitude: nil, provided_longitude: nil, provided_place_name: nil,
-                    provided_basis: nil)
-    title_for_matching = title_without_publisher_suffix(title)
+                    provided_basis: nil, publisher: nil)
+    title_for_matching = title_without_publisher_suffix(title, publisher)
 
     candidates = [
       ai_city_candidate(city: city, country: country),
@@ -474,8 +474,26 @@ class LocationResolver
     normalized
   end
 
-  def title_without_publisher_suffix(title)
-    title.to_s.squish.sub(PUBLISHER_SUFFIX_PATTERN, "").squish
+  # LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES names ten mastheads by hand, and every
+  # publisher missing from it geocoded its own articles to the place in its
+  # name. On a live board "Jerusalem" was a 48-member situation, 74% of it
+  # Jerusalem Post, matched at confidence 0.82 -- and it held "Ukraine war
+  # transforms European security architecture" and "US military chiefs warn
+  # Hegseth". Bangalore was 83% Deccan Herald, Karachi 100% DAWN. The list does
+  # not need to be guessed at: Google News names the publisher on every item and
+  # a single-site feed is its own publisher, so the caller passes the name it
+  # already has and the suffix comes off before anything matches a gazetteer.
+  def title_without_publisher_suffix(title, publisher = nil)
+    stripped = title.to_s.squish.sub(PUBLISHER_SUFFIX_PATTERN, "").squish
+    return stripped if publisher.blank?
+
+    # A title that is nothing but its publisher keeps its text: there is no
+    # story left to match either way, and an empty string is harder to debug.
+    stripped.sub(publisher_suffix_pattern(publisher), "").squish.presence || stripped
+  end
+
+  def publisher_suffix_pattern(publisher)
+    /(?:\s+(?:-|\||:|–|—)\s*|\s+)#{Regexp.escape(publisher.to_s.squish)}\z/i
   end
 
   def result(lat:, lng:, basis:, precision:, kind:, confidence:, place_name: nil, country_code: nil, admin_area: nil, metadata: {})

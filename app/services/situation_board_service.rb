@@ -104,9 +104,13 @@ class SituationBoardService
     members = members_for(situation)
     return if members.empty?
 
-    anchor = anchor_for(situation, members)
+    # The curator's last composed dossier, read from cache only -- never a
+    # model call. Read before the anchor because it also carries the name.
+    composition = SituationLayerCurator.latest_composition(situation.id)
+    anchor = anchor_for(situation, members, composition)
     return unless anchor
 
+    members = inherit_anchor_coordinates(members, anchor)
     concerns = concerns_entity(situation)
     article_count = members.sum { |member| member[:article_count].to_i }
     source_count = distinct_source_count(members)
@@ -114,7 +118,7 @@ class SituationBoardService
     {
       id: situation.id,
       key: situation.canonical_key,
-      name: display_name(situation),
+      name: display_name(situation, composition),
       grouped_by: situation.metadata["grouped_by"],
       anchor: anchor,
       member_count: members.size,
@@ -145,11 +149,10 @@ class SituationBoardService
       sources: sources_for(members),
       attribution: attribution_for(members),
       figures: figures_for(members),
-      # The curator's last composed dossier, read from cache only -- never a
-      # model call. Riding on the board lets the panel's first paint be the
-      # final dossier; the plan fetch stays the authority and swaps it out in
-      # the rare case the cached copy is behind.
-      composition: SituationLayerCurator.latest_composition(situation.id),
+      # Riding on the board lets the panel's first paint be the final dossier;
+      # the plan fetch stays the authority and swaps it out in the rare case
+      # the cached copy is behind.
+      composition: composition,
       concerns: concerns && {
         id: concerns.id,
         name: concerns.canonical_name,
@@ -171,8 +174,19 @@ class SituationBoardService
 
   # "Strait of Hormuz situation" is what the builder stores; on a globe the word
   # is redundant with the layer itself.
-  def display_name(situation)
-    situation.canonical_name.to_s.sub(/\s+situation\z/i, "")
+  #
+  # The deeper problem is which name it stores. SituationBuilder names a
+  # situation after whichever registry entity its reports keyed on, and that
+  # entity is frequently not the story: the
+  # 126-report dossier on the Nepal-China floods was filed under "19 km NW of
+  # Fuji, China" -- an earthquake epicentre 2,000 km from the flooding -- and a
+  # multilateral defence pact under the city of Mecca. The curator has read the
+  # reports and already writes the lead; naming the thing it just described
+  # costs nothing and is right far more often. The keyed name remains the
+  # fallback, and it is what shows until the first composition lands.
+  def display_name(situation, composition = nil)
+    composed = composition.is_a?(Hash) ? composition[:title].presence : nil
+    composed || situation.canonical_name.to_s.sub(/\s+situation\z/i, "")
   end
 
   def members_for(situation)
@@ -214,7 +228,7 @@ class SituationBoardService
   # that sits in open ocean, it takes the medoid, the member report nearest all
   # the others. That is still a real anchor somebody geocoded, and the caller is
   # told which of the two it got.
-  def anchor_for(situation, members)
+  def anchor_for(situation, members, composition = nil)
     entity = concerns_entity(situation)
     lat, lng = coordinates(entity)
 
@@ -226,12 +240,43 @@ class SituationBoardService
     medoid = medoid_of(members)
     return unless medoid
 
-    { lat: medoid[:lat], lng: medoid[:lng], kind: "medoid", label: display_name(situation),
+    { lat: medoid[:lat], lng: medoid[:lng], kind: "medoid", label: display_name(situation, composition),
       entity_type: nil }
   end
 
+  # A member whose own geocode came back empty still carries a coordinate: the
+  # country centroid COUNTRY_COORDS hands back, which for the US is Washington
+  # DC. Four of the seven reports on the Grand Canyon flash flood were drawn in
+  # DC that way -- 2,400km from the canyon their own headlines named -- and 138
+  # of 885 board members were displaced a median 1,951km the same way. The
+  # situation's anchor is a better answer than a national capital for every one
+  # of them: it is where the rest of the story already sits. The confidence
+  # stays 0 and geo_inherited records where the coordinate came from, so no
+  # caller can mistake this for a geocode.
+  #
+  # Members that never had a coordinate keep none. Borrowing the anchor for
+  # them would inflate geo_member_count with reports nobody located.
+  def inherit_anchor_coordinates(members, anchor)
+    members.map do |member|
+      next member if member[:lat].blank? || trusted_coordinate?(member)
+
+      member.merge(lat: anchor[:lat], lng: anchor[:lng], geo_inherited: true)
+    end
+  end
+
+  # Zero is not a low score here, it is the absence of one: every resolver path
+  # that finds anything at all records a confidence, and only the country
+  # fallbacks land on exactly 0.0. So this separates "geocoded coarsely" -- a
+  # country-precision answer worth keeping -- from "never geocoded".
+  def trusted_coordinate?(member)
+    member[:lat].present? && member[:geo_confidence].to_f > 0
+  end
+
   def medoid_of(members)
-    located = members.select { |member| member[:lat] && member[:lng] }
+    # The medoid is what an actor situation sits on, so it must not be dragged
+    # by the same centroids inherit_anchor_coordinates exists to overwrite.
+    located = members.select { |member| trusted_coordinate?(member) }
+    located = members.select { |member| member[:lat] && member[:lng] } if located.empty?
     return if located.empty?
     return located.first if located.size == 1
 

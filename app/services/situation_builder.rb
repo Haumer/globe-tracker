@@ -33,6 +33,24 @@ class SituationBuilder
   # A story needs corroboration to be a story.
   MINIMUM_MEMBERS = 2
 
+  # MINIMUM_MEMBERS only asks that two clusters agreed on a key, and a shared
+  # place mention satisfies that without any story existing. Replayed against a
+  # live board of 84 situations, 34 failed one of the tests in `story?` and
+  # between them held 4.9% of the window's reports -- 40% of the board for a
+  # twentieth of the evidence. "Sydney" was one diplomatic contact and one aid
+  # delivery from a single outlet, and the composed dossier said so: "two
+  # reports from a single source describe diplomatic engagement and aid
+  # delivery in Sydney". Nothing is discarded by failing here; the clusters keep
+  # their reports and regroup as soon as a real key forms.
+  #
+  # Two reports are corroboration only if two newsrooms filed them. One outlet
+  # filing twice is one outlet.
+  SINGLE_SOURCE_FLOOR = 2
+
+  # Below this a group is too small to absorb a disagreement: three reports that
+  # cannot agree on the event family are sharing a name, not a story.
+  THIN_MEMBERS = 3
+
   # Place and actor are weak keys: they assert only that two stories share a
   # location or a participant. Munich glued a footballer's injury to a
   # Vietnamese flight probe; "United Nations" glued ICC sanctions to North
@@ -97,6 +115,7 @@ class SituationBuilder
     built_keys = []
     split_weak_groups(merge_synonym_groups(grouped)).each do |key, suffix, members|
       next @stats[:too_small] += 1 if members.size < MINIMUM_MEMBERS
+      next @stats[:not_a_story] += 1 unless story?(key, members, suffix: suffix)
 
       built_keys << persist(key, members, suffix: suffix).canonical_key
       @stats[:situations] += 1
@@ -462,6 +481,52 @@ class SituationBuilder
     return "#{subject} situation" if subject.present?
 
     members.first.first.canonical_title.to_s.first(80)
+  end
+
+  # The gate between "these clusters share a key" and "this is a situation".
+  # coherent? already runs per cluster; this runs on the assembled group, where
+  # the failure modes above are only visible.
+  def story?(key, members, suffix: nil)
+    clusters = members.map(&:first)
+    return false if group_source_count(clusters) < SINGLE_SOURCE_FLOOR
+    return false if members.size <= THIN_MEMBERS && clusters.map(&:event_family).uniq.size > 1
+    return false if members.size <= THIN_MEMBERS && headline_named?(key, suffix: suffix)
+
+    true
+  end
+
+  # Distinct newsrooms across the whole group, not the sum of per-cluster
+  # counts: the same outlet filing on two clusters of the same group is one
+  # source, and summing would score that as corroboration.
+  def group_source_count(clusters)
+    ids = clusters.flat_map { |cluster| source_ids_by_cluster[cluster.id] }
+    # A cluster is assembled out of articles, so in the corpus this is never
+    # empty. Where it is, the answer is "unknown" rather than "no newsrooms" --
+    # the gate must not reject on absent data.
+    return SINGLE_SOURCE_FLOOR if ids.empty?
+
+    ids.uniq.size
+  end
+
+  def source_ids_by_cluster
+    @source_ids_by_cluster ||= NewsStoryMembership
+      .where(news_story_cluster_id: clusters.map(&:id))
+      .joins(:news_article)
+      .distinct
+      .pluck(:news_story_cluster_id, Arel.sql("news_articles.news_source_id"))
+      .group_by(&:first)
+      .transform_values { |rows| rows.filter_map(&:last) }
+      .tap { |hash| hash.default = [] }
+  end
+
+  # Mirrors situation_name's fallback: a split-off component, or a reference
+  # with no registry name, gets titled with a member's headline. That is a good
+  # name for a story big enough to have one and a lie for three unrelated
+  # reports -- "FTSE Russell Restores Nigeria to Frontier Market Status" was a
+  # two-member situation on the live board.
+  def headline_named?(key, suffix: nil)
+    return true if suffix
+    referent_name(key.last).blank?
   end
 
   def coherent?(cluster)

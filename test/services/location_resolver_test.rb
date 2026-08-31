@@ -198,4 +198,36 @@ class LocationResolverTest < ActiveSupport::TestCase
     assert resolver.send(:proper_noun_gram?, [ "القاهرة" ])
     assert resolver.send(:proper_noun_gram?, [ "北京" ])
   end
+  # LOCATION_AMBIGUOUS_PUBLISHER_SUFFIXES names ten mastheads by hand, and every
+  # publisher missing from it geocoded its own articles to the place in its
+  # name. On a live board "Jerusalem" was a 48-member situation, 74% of it
+  # Jerusalem Post, matched at confidence 0.82 -- and it held "Ukraine war
+  # transforms European security architecture".
+  test "a publisher's own masthead does not geocode its articles" do
+    title = "Ukraine war transforms European security architecture - The Jerusalem Post"
+
+    leaked = LocationResolver.resolve_event(title: title, url: "https://news.google.com/x")
+    guarded = LocationResolver.resolve_event(title: title, url: "https://news.google.com/x",
+                                             publisher: "The Jerusalem Post")
+
+    assert_equal "Jerusalem", leaked&.place_name, "fixture guard: this is the bug being fixed"
+    refute_equal "Jerusalem", guarded&.place_name,
+      "the newsroom's city is not the story's city"
+  end
+
+  test "the publisher guard only strips a trailing masthead" do
+    result = LocationResolver.resolve_event(
+      title: "Jerusalem municipality approves new housing - Deccan Herald",
+      publisher: "Deccan Herald"
+    )
+
+    assert_equal "Jerusalem", result&.place_name,
+      "a place named in the headline itself still resolves"
+  end
+
+  test "a headline that is only its publisher keeps its text" do
+    result = LocationResolver.resolve_event(title: "Deccan Herald", publisher: "Deccan Herald")
+
+    assert_nil result&.place_name
+  end
 end

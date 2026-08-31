@@ -246,4 +246,41 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
     assert_empty result.regions
     assert_empty result.related
   end
+  # The board arrives named after whichever registry entity its reports keyed
+  # on, which is often not the story: the live board filed the Nepal-China
+  # floods under "19 km NW of Fuji, China", an earthquake epicentre.
+  test "the composition carries a name for the situation" do
+    client = FakeClient.new(composition_json("title" => "Nepal-China border floods"))
+
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_equal "Nepal-China border floods", result.composition[:title]
+  end
+
+  test "a title written as a sentence is refused rather than truncated" do
+    client = FakeClient.new(composition_json(
+      "title" => "Floods and a glacier collapse near the border have killed hundreds of people this week"
+    ))
+
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_nil result.composition[:title], "the keyed name is the safe fallback, not half a sentence"
+    assert_equal "dossier", result.composition[:treatment], "the rest of the composition survives"
+  end
+
+  test "a title stating a figure the payload does not hold is refused" do
+    client = FakeClient.new(composition_json("title" => "Border floods kill 4000"))
+
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_nil result.composition[:title], "a title is a composed string and may not introduce a number"
+  end
+
+  test "a title keeps a figure the payload does hold" do
+    client = FakeClient.new(composition_json("title" => "Border floods kill 132"))
+
+    result = SituationLayerCurator.call(situation: rich_situation, available_keys: ALL_KEYS, client: client)
+
+    assert_equal "Border floods kill 132", result.composition[:title]
+  end
 end

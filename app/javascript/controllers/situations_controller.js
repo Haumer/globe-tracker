@@ -1465,7 +1465,7 @@ export default class extends Controller {
       // A country-precision coordinate is a guess at national scale, not a
       // measured point -- draw it at half strength so the eye reads the
       // difference instead of trusting both equally.
-      const coarse = member.geo_precision === "country" || member.geo_precision === "unknown"
+      const coarse = member.geo_inherited || member.geo_precision === "country" || member.geo_precision === "unknown"
       const alpha = (0.25 + 0.55 * (1 - Math.min(age, 1))) * (coarse ? 0.45 : 1)
       const positions = this._arcPositions(member, anchor)
       if (!positions) return
@@ -1904,7 +1904,10 @@ export default class extends Controller {
 
   _memberRowHtml(member) {
     const fact = this._memberFactText(member)
+    // An inherited coordinate is the situation's anchor, not this report's:
+    // say so rather than repeating a place name the report never earned.
     const geo = member.lat == null ? "no location"
+      : member.geo_inherited ? "location not reported"
       : member.place
         ? `${member.place}${member.geo_precision === "country" ? " (approx)" : ""}`
         : (member.geo_precision === "country" || member.geo_precision === "unknown")

@@ -119,12 +119,15 @@ class SituationLayerCurator
       volume_bucket,
       available_keys.sort.join(",")
     ].join(":")
+    # v7: the composition names the situation. A v6 composition has no title,
+    # so the board would keep showing the keyed entity's name until the entry
+    # aged out.
     # v6: computed threads feed the prompt and the dek contract became
     # one-sentence-per-thread; a v5 composition blends threads and reads as
     # soup next to the thread-grouped member list.
     # v5: title/caption discipline sharpened with counter-examples -- v4
     # compositions titled charts with axis labels.
-    "situation-layer-curation:v6:#{fingerprint}"
+    "situation-layer-curation:v7:#{fingerprint}"
   end
 
   # Only a real composition moves the pointer -- a heuristic stand-in (nil
@@ -166,8 +169,8 @@ class SituationLayerCurator
        "layers": [{"key": "...", "reason": "..."}],
        "regions": [{"name": "...", "country_code": "..", "impact": "high"}],
        "related": [{"id": <id from the nearby list>, "reason": "..."}],
-       "composition": {"treatment": "note"|"dossier", "angle": "...",
-        "lead": "...", "dek": "...", "upgrade": "...",
+       "composition": {"treatment": "note"|"dossier", "title": "...",
+        "angle": "...", "lead": "...", "dek": "...", "upgrade": "...",
         "modules": [{"kind": "...", "emphasis": "hero"|"support",
          "metric": "...", "title": "...", "caption": "...",
          "annotations": [{"t": "<iso8601>", "text": "..."}]}]}}
@@ -217,6 +220,15 @@ class SituationLayerCurator
         is one sentence naming what would make this more than a note (a
         second outlet, a casualty figure, an official confirmation).
       - treatment "dossier" when coverage is broad enough to structure.
+      title: what to call this situation on the board -- three to six words,
+      the place or actors and what happened ("Nepal-China border floods",
+      "Strait of Hormuz tanker seizures"). The name the board arrives with
+      is whichever registry entity the reports keyed on, which is often not
+      the story: the 126-report dossier on the Nepal floods was filed under
+      "19 km NW of Fuji, China", an earthquake epicentre 2,000 km away, and
+      a defence pact was filed under the city of Mecca. Correct it. Never a
+      headline, never a sentence, no trailing punctuation. If the name given
+      in the data already describes the story, repeat it unchanged.
       angle: two or three words naming the story's central question (toll,
       escalation, attribution, exposure, diplomacy...).
       lead: one headline sentence that states the finding in plain words --
@@ -419,6 +431,9 @@ class SituationLayerCurator
 
     {
       treatment: treatment,
+      # Held to the same number gate as the prose: a title is a composed
+      # string like any other and does not get to introduce a figure.
+      title: composed_title(row["title"]),
       angle: row["angle"].to_s.strip.presence&.slice(0, 60),
       lead: lead,
       dek: composed_text(row["dek"], 700),
@@ -488,6 +503,17 @@ class SituationLayerCurator
   # fact and poisons the string that carries it. Small numbers pass freely:
   # "two threads, one morning" and "day 3" are arithmetic on the payload,
   # not new claims, and the payload cannot enumerate them.
+  # A board name, not prose: trailing punctuation stripped, and anything that
+  # arrived as a sentence rejected rather than truncated mid-clause. Falling
+  # back to the entity name the board already had is the safe failure.
+  def composed_title(value)
+    text = composed_text(value, 80)&.sub(/[.;:,\s]+\z/, "")
+    return nil if text.blank?
+    return nil if text.split.size > 9
+
+    text
+  end
+
   def composed_text(value, max_length)
     text = value.to_s.strip
     return nil if text.blank?

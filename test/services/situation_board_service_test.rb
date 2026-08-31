@@ -515,4 +515,93 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
 
     assert_equal "- Reuters", member[:headline]
   end
+  # A member whose own geocode came back empty still carried a coordinate: the
+  # country centroid, which for the US is Washington DC. Four of the seven
+  # reports on the Grand Canyon flash flood were drawn in DC that way, and 138
+  # of 885 live board members were displaced a median 1,951km.
+  test "a member with no geocode of its own is drawn at the anchor, not a country centroid" do
+    canyon = OntologyEntity.create!(
+      canonical_key: "place:grand-canyon:us", entity_type: "place", canonical_name: "Grand Canyon",
+      country_code: "US", metadata: { "latitude" => 36.098, "longitude" => -112.096 }
+    )
+    _c, placed = cluster(key: "g1", title: "Flash flood strands hikers", lat: 36.098, lng: -112.096)
+    _c2, fallback = cluster(key: "g2", title: "Dozens evacuated from the Grand Canyon", lat: 38.9, lng: -77.0)
+    placed.update!(geo_precision: "point", geo_confidence: 0.82)
+    fallback.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    entity = situation(key: "situation:place:canyon", name: "Grand Canyon", grouped_by: "place",
+                       events: [ placed, fallback ])
+    OntologyRelationship.create!(source_node: entity, target_node: canyon, relation_type: "concerns",
+                                confidence: 0.8, derived_by: "situation_builder_v1")
+
+    members = SituationBoardService.call[:situations].first[:members]
+    inherited = members.find { |m| m[:event_id] == fallback.id }
+    measured = members.find { |m| m[:event_id] == placed.id }
+
+    assert_equal 36.098, inherited[:lat], "the anchor beats a national capital 2,400km away"
+    assert_equal(-112.096, inherited[:lng])
+    assert inherited[:geo_inherited], "the borrowed coordinate says where it came from"
+    assert_in_delta 0.0, inherited[:geo_confidence], 0.001, "borrowing is not geocoding"
+    assert_equal 36.098, measured[:lat], "a measured coordinate is left alone"
+    assert_nil measured[:geo_inherited]
+  end
+
+  test "a member that was never located stays unlocated" do
+    _c, placed = cluster(key: "u1", title: "Strike on depot", lat: 50.4, lng: 30.5)
+    _c2, nowhere = cluster(key: "u2", title: "Reaction from allies")
+    placed.update!(geo_precision: "point", geo_confidence: 0.82)
+    situation(key: "situation:place:u", name: "Kyiv situation", grouped_by: "place", events: [ placed, nowhere ])
+
+    row = SituationBoardService.call[:situations].first
+    unlocated = row[:members].find { |m| m[:event_id] == nowhere.id }
+
+    assert_nil unlocated[:lat], "borrowing here would inflate geo_member_count with reports nobody located"
+    assert_equal 1, row[:geo_member_count]
+  end
+
+  # The medoid is what an actor situation sits on, so it must not be dragged by
+  # the same centroids the inheritance exists to overwrite.
+  test "the medoid anchor ignores members that were never geocoded" do
+    _c, one = cluster(key: "md1", title: "Talks open", lat: 50.4, lng: 30.5)
+    _c2, two = cluster(key: "md2", title: "Talks continue", lat: 50.5, lng: 30.6)
+    _c3, drag = cluster(key: "md3", title: "Analysts weigh in", lat: 38.9, lng: -77.0)
+    one.update!(geo_precision: "point", geo_confidence: 0.82)
+    two.update!(geo_precision: "point", geo_confidence: 0.82)
+    drag.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    situation(key: "situation:actor:1", name: "NATO situation", grouped_by: "actor", events: [ one, two, drag ])
+
+    anchor = SituationBoardService.call[:situations].first[:anchor]
+
+    assert_equal "medoid", anchor[:kind]
+    assert_in_delta 50.4, anchor[:lat], 0.2, "a Washington fallback must not pull the anchor across the Atlantic"
+  end
+
+  # SituationBuilder names a situation after whichever registry entity its
+  # reports keyed on, and that entity is often not the story: the live board
+  # filed a 126-report dossier on the Nepal-China floods under "19 km NW of
+  # Fuji, China", an earthquake epicentre 2,000km from the flooding.
+  test "a composed title replaces the keyed entity's name" do
+    quake = OntologyEntity.create!(
+      canonical_key: "occurrence:quake", entity_type: "place", canonical_name: "19 km NW of Fuji, China",
+      metadata: { "latitude" => 29.27, "longitude" => 105.22 }
+    )
+    _c, event = cluster(key: "n1", title: "Glacier collapse floods border valleys", lat: 29.27, lng: 105.22)
+    entity = situation(key: "situation:entity:n1", name: "19 km NW of Fuji, China situation",
+                       grouped_by: "entity", events: [ event ])
+    OntologyRelationship.create!(source_node: entity, target_node: quake, relation_type: "concerns",
+                                confidence: 0.8, derived_by: "situation_builder_v1")
+
+    composed = { treatment: "dossier", title: "Nepal-China border floods", lead: "Floods killed hundreds." }
+    SituationLayerCurator.stub(:latest_composition, ->(_id) { composed }) do
+      assert_equal "Nepal-China border floods", SituationBoardService.call[:situations].first[:name]
+    end
+  end
+
+  test "without a composed title the keyed entity's name still shows" do
+    _c, event = cluster(key: "f1", title: "Strike on depot", lat: 50.4, lng: 30.5)
+    situation(key: "situation:place:f1", name: "Kyiv situation", grouped_by: "place", events: [ event ])
+
+    SituationLayerCurator.stub(:latest_composition, ->(_id) { { treatment: "note", lead: "A depot burned." } }) do
+      assert_equal "Kyiv", SituationBoardService.call[:situations].first[:name]
+    end
+  end
 end

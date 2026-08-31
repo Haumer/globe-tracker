@@ -604,4 +604,63 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
       assert_equal "Kyiv", SituationBoardService.call[:situations].first[:name]
     end
   end
+  # Observed on prod after the inheritance shipped: the Grand Canyon place
+  # entity's own stored coordinate had become [38.9, -77.0], so the anchor was
+  # a country centroid and every inherited member faithfully followed it to
+  # Washington DC while two properly geocoded members sat in the canyon.
+  test "an anchor sitting on a country centroid loses to a measured medoid" do
+    poisoned = OntologyEntity.create!(
+      canonical_key: "place:grand-canyon:us", entity_type: "place", canonical_name: "Grand Canyon",
+      country_code: "US", metadata: { "latitude" => 38.9, "longitude" => -77.0 }
+    )
+    _c, measured = cluster(key: "gc1", title: "Flash flood strands hikers", lat: 36.098, lng: -112.096)
+    _c2, fallback = cluster(key: "gc2", title: "Dozens evacuated", lat: 38.9, lng: -77.0)
+    measured.update!(geo_precision: "point", geo_confidence: 0.82)
+    fallback.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    entity = situation(key: "situation:place:gc", name: "Grand Canyon", grouped_by: "place",
+                       events: [ measured, fallback ])
+    OntologyRelationship.create!(source_node: entity, target_node: poisoned, relation_type: "concerns",
+                                confidence: 0.8, derived_by: "situation_builder_v1")
+
+    row = SituationBoardService.call[:situations].first
+
+    assert_equal "medoid", row[:anchor][:kind], "a canyon does not sit on the US centroid"
+    assert_in_delta 36.098, row[:anchor][:lat], 0.001
+    inherited = row[:members].find { |m| m[:event_id] == fallback.id }
+    assert_in_delta 36.098, inherited[:lat], 0.001, "the inherited member follows the corrected anchor"
+  end
+
+  test "a country situation keeps its own centroid as the anchor" do
+    country = OntologyEntity.create!(
+      canonical_key: "country:us", entity_type: "country", canonical_name: "United States",
+      country_code: "US", metadata: { "latitude" => 38.9, "longitude" => -77.0 }
+    )
+    _c, event = cluster(key: "us1", title: "Federal ruling lands", lat: 41.0, lng: -96.0)
+    event.update!(geo_precision: "point", geo_confidence: 0.82)
+    entity = situation(key: "situation:entity:us", name: "United States", grouped_by: "entity", events: [ event ])
+    OntologyRelationship.create!(source_node: entity, target_node: country, relation_type: "concerns",
+                                confidence: 0.8, derived_by: "situation_builder_v1")
+
+    anchor = SituationBoardService.call[:situations].first[:anchor]
+
+    assert_equal "registry", anchor[:kind], "a country legitimately sits on its own centroid"
+    assert_equal 38.9, anchor[:lat]
+  end
+
+  test "a centroid anchor survives when nothing at all was measured" do
+    poisoned = OntologyEntity.create!(
+      canonical_key: "place:nowhere:us", entity_type: "place", canonical_name: "Nowhere",
+      country_code: "US", metadata: { "latitude" => 38.9, "longitude" => -77.0 }
+    )
+    _c, event = cluster(key: "nw1", title: "Something happened", lat: 38.9, lng: -77.0)
+    event.update!(geo_precision: "unknown", geo_confidence: 0.0)
+    entity = situation(key: "situation:place:nw", name: "Nowhere", grouped_by: "place", events: [ event ])
+    OntologyRelationship.create!(source_node: entity, target_node: poisoned, relation_type: "concerns",
+                                confidence: 0.8, derived_by: "situation_builder_v1")
+
+    row = SituationBoardService.call[:situations].first
+
+    assert_not_nil row, "a bad anchor is still better than dropping the situation off the board"
+    assert_equal 38.9, row[:anchor][:lat]
+  end
 end

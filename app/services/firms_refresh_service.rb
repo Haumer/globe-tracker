@@ -43,8 +43,16 @@ class FirmsRefreshService
     all_records
   end
 
+  # FIRMS hands back the same pixel more than once per fetch -- overlapping
+  # granules within a source, and a rounded lat/lng collapsing two detections
+  # onto one id. Two rows with one external_id in a single upsert_all make
+  # Postgres raise "ON CONFLICT DO UPDATE command cannot affect row a second
+  # time", and it logs the whole multi-megabyte statement with the error. That
+  # log line, repeated every 15 minutes since April, is what filled the prod
+  # disk. The later row wins, as the row-by-row upsert would have had it.
   def upsert_records(records)
-    FireHotspot.upsert_all(records, unique_by: :external_id)
+    unique = records.reverse.uniq { |record| record[:external_id] }.reverse
+    FireHotspot.upsert_all(unique, unique_by: :external_id)
   end
 
   def after_upsert(records)

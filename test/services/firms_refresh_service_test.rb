@@ -77,4 +77,19 @@ class FirmsRefreshServiceTest < ActiveSupport::TestCase
     assert_not TimelineEvent.exists?(stale_timeline.id)
     assert FireHotspot.exists?(recent.id)
   end
+
+  test "upsert_records folds duplicate external_ids so Postgres never sees one row twice" do
+    now = Time.current
+    base = { latitude: 22.8, longitude: 92.5, acq_datetime: now, fetched_at: now, created_at: now, updated_at: now }
+    records = [
+      base.merge(external_id: "Suomi NPP_22.8_92.5_d_t", brightness: 300.0),
+      base.merge(external_id: "NOAA-20_22.8_92.5_d_t", brightness: 310.0),
+      base.merge(external_id: "Suomi NPP_22.8_92.5_d_t", brightness: 342.0),
+    ]
+
+    assert_nothing_raised { @service.send(:upsert_records, records) }
+
+    assert_equal 2, FireHotspot.where(external_id: records.map { |r| r[:external_id] }).count
+    assert_equal 342.0, FireHotspot.find_by(external_id: "Suomi NPP_22.8_92.5_d_t").brightness
+  end
 end

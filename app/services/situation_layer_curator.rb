@@ -683,7 +683,9 @@ class SituationLayerCurator
       }.to_json
 
       response = http.request(request)
-      raise "OpenAI #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+      # The body names the cause -- a bare 429 reads as rate limiting, while
+      # "credit_balance_exhausted" is a billing action nobody will take unseen.
+      raise "OpenAI #{response.code} #{response.body.to_s[0..200]}" unless response.is_a?(Net::HTTPSuccess)
 
       JSON.parse(response.body).dig("choices", 0, "message", "content")
     end

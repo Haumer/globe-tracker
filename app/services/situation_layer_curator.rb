@@ -75,8 +75,28 @@ class SituationLayerCurator
   # needed, so the board can embed it without redoing availability or
   # neighbors. May trail the fingerprint cache by one rethink; the plan fetch
   # remains the authority and reconciles on selection.
-  def self.latest_composition(situation_id)
-    Rails.cache.read("situation-layer-curation:latest:#{situation_id}")
+  #
+  # The cache is the fast path, not the record. Every composition is also
+  # written to the situation row's metadata, because a 24h TTL, an eviction
+  # or a Redis restart used to turn the whole board back into keyed place
+  # names until the warm job had re-run the model over every situation --
+  # a 16-day outage in October 2026 did exactly that. The row is read only on
+  # a cache miss, and re-warms the pointer so the next board build is cheap.
+  def self.latest_composition(situation_id, entity: nil)
+    cached = Rails.cache.read(latest_key(situation_id))
+    return cached if cached
+
+    entity ||= OntologyEntity.find_by(id: situation_id)
+    persisted = entity&.metadata&.dig("composition")
+    return nil unless persisted.is_a?(Hash) && persisted.present?
+
+    composition = persisted.deep_symbolize_keys
+    Rails.cache.write(latest_key(situation_id), composition, expires_in: CACHE_TTL)
+    composition
+  end
+
+  def self.latest_key(situation_id)
+    "situation-layer-curation:latest:#{situation_id}"
   end
 
   def call
@@ -135,8 +155,20 @@ class SituationLayerCurator
   def write_latest(result)
     return if result.composition.blank?
 
-    Rails.cache.write("situation-layer-curation:latest:#{situation[:id]}",
+    Rails.cache.write(self.class.latest_key(situation[:id]),
       result.composition, expires_in: CACHE_TTL)
+    persist_composition(result.composition)
+  end
+
+  # A jsonb merge rather than a model save: SituationBuilder and
+  # SituationHistoryService rewrite other keys of the same metadata column on
+  # their own schedules, and a read-modify-write here would race them.
+  def persist_composition(composition)
+    patch = { "composition" => composition, "composed_at" => Time.current.utc.iso8601 }
+    OntologyEntity.where(id: situation[:id])
+      .update_all(["metadata = metadata || ?::jsonb", patch.to_json])
+  rescue StandardError => e
+    Rails.logger.warn("SituationLayerCurator: could not persist composition for #{situation[:id]}: #{e.class} #{e.message}")
   end
 
   # ── model path ───────────────────────────────────────────────────────

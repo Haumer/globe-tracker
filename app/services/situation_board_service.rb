@@ -106,7 +106,7 @@ class SituationBoardService
 
     # The curator's last composed dossier, read from cache only -- never a
     # model call. Read before the anchor because it also carries the name.
-    composition = SituationLayerCurator.latest_composition(situation.id)
+    composition = SituationLayerCurator.latest_composition(situation.id, entity: situation)
     anchor = anchor_for(situation, members, composition)
     return unless anchor
 

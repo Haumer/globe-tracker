@@ -283,4 +283,46 @@ class SituationLayerCuratorTest < ActiveSupport::TestCase
 
     assert_equal "Border floods kill 132", result.composition[:title]
   end
+
+  test "a composition outlives the cache: written to the situation row, read back on a miss" do
+    entity = OntologyEntity.create!(
+      canonical_key: "situation:place:test-kyiv", entity_type: "situation",
+      canonical_name: "Kyiv situation", metadata: { "history" => { "2026-08-18" => 3 } }
+    )
+    composition = {
+      treatment: "dossier", title: "Depot strike widens to the rail hub", lead: "A depot burned.",
+      modules: [{ kind: "sources", emphasis: "support", title: "Who is filing" }]
+    }
+    curator = SituationLayerCurator.new(situation: situation.merge(id: entity.id), available_keys: ALL_KEYS)
+
+    curator.send(:write_latest, SituationLayerCurator::Result.new(composition: composition))
+
+    entity.reload
+    assert_equal "Depot strike widens to the rail hub", entity.metadata.dig("composition", "title")
+    assert entity.metadata["composed_at"].present?
+    assert_equal({ "2026-08-18" => 3 }, entity.metadata["history"], "merge must keep the other keys")
+
+    # The test cache is a null store, so this read is the row fallback.
+    assert_equal composition, SituationLayerCurator.latest_composition(entity.id)
+    assert_equal composition, SituationLayerCurator.latest_composition(entity.id, entity: entity)
+  end
+
+  test "a heuristic stand-in with no composition leaves the persisted dossier alone" do
+    entity = OntologyEntity.create!(
+      canonical_key: "situation:place:test-odesa", entity_type: "situation",
+      canonical_name: "Odesa situation", metadata: { "composition" => { "treatment" => "note", "lead" => "Kept." } }
+    )
+    curator = SituationLayerCurator.new(situation: situation.merge(id: entity.id), available_keys: ALL_KEYS)
+
+    curator.send(:write_latest, SituationLayerCurator::Result.new(composition: nil))
+
+    assert_equal "Kept.", entity.reload.metadata.dig("composition", "lead")
+    assert_equal({ treatment: "note", lead: "Kept." }, SituationLayerCurator.latest_composition(entity.id))
+  end
+
+  test "latest_composition is nil for a situation that was never composed" do
+    entity = OntologyEntity.create!(canonical_key: "situation:place:test-bare", entity_type: "situation", canonical_name: "Bare")
+    assert_nil SituationLayerCurator.latest_composition(entity.id)
+    assert_nil SituationLayerCurator.latest_composition(-1)
+  end
 end

@@ -75,7 +75,7 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
                        grouped_by: "place", events: [event])
 
     composed = { treatment: "note", lead: "A depot burned." }
-    SituationLayerCurator.stub(:latest_composition, ->(id) { id == entity.id ? composed : nil }) do
+    SituationLayerCurator.stub(:latest_composition, ->(id, **) { id == entity.id ? composed : nil }) do
       row = SituationBoardService.call[:situations].first
       assert_equal composed, row[:composition]
     end
@@ -591,7 +591,7 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
                                 confidence: 0.8, derived_by: "situation_builder_v1")
 
     composed = { treatment: "dossier", title: "Nepal-China border floods", lead: "Floods killed hundreds." }
-    SituationLayerCurator.stub(:latest_composition, ->(_id) { composed }) do
+    SituationLayerCurator.stub(:latest_composition, ->(_id, **) { composed }) do
       assert_equal "Nepal-China border floods", SituationBoardService.call[:situations].first[:name]
     end
   end
@@ -600,7 +600,7 @@ class SituationBoardServiceTest < ActiveSupport::TestCase
     _c, event = cluster(key: "f1", title: "Strike on depot", lat: 50.4, lng: 30.5)
     situation(key: "situation:place:f1", name: "Kyiv situation", grouped_by: "place", events: [ event ])
 
-    SituationLayerCurator.stub(:latest_composition, ->(_id) { { treatment: "note", lead: "A depot burned." } }) do
+    SituationLayerCurator.stub(:latest_composition, ->(_id, **) { { treatment: "note", lead: "A depot burned." } }) do
       assert_equal "Kyiv", SituationBoardService.call[:situations].first[:name]
     end
   end

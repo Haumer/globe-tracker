@@ -105,17 +105,16 @@ class PurgeStaleDataJob < ApplicationJob
 
     # Raw payload table, 8.9 GB in production. Only drop an ingest once
     # nothing still points at it — articles can outlive their fetch batch.
-    # The NOT IN subqueries exclude NULLs explicitly: a single NULL would
-    # otherwise make the whole predicate unknown and delete nothing.
     counts[:news_ingests] += delete_in_batches(
-      NewsIngest.where(fetched_at: ...cutoff)
-        .where.not(id: NewsArticle.where.not(news_ingest_id: nil).select(:news_ingest_id))
-        .where.not(id: NewsEvent.where.not(news_ingest_id: nil).select(:news_ingest_id))
+      unreferenced(
+        unreferenced(NewsIngest.where(fetched_at: ...cutoff), :id, by: NewsArticle, through: :news_ingest_id),
+        :id, by: NewsEvent, through: :news_ingest_id
+      )
     )
 
     # Actors are only reachable through claims; drop the ones nothing cites.
     counts[:news_actors] += delete_in_batches(
-      NewsActor.where(created_at: ...cutoff).where.not(id: NewsClaimActor.select(:news_actor_id))
+      unreferenced(NewsActor.where(created_at: ...cutoff), :id, by: NewsClaimActor, through: :news_actor_id)
     )
 
     counts
@@ -174,12 +173,28 @@ class PurgeStaleDataJob < ApplicationJob
         # Distinct key from the observation pass, which already reports
         # timeline_events under its own name — merging would drop one count.
         counts[:"#{model.table_name}_orphaned"] += delete_in_batches(
-          model.where(type_column => type_name).where.not(id_column => owner.select(:id))
+          unreferenced(model.where(type_column => type_name), id_column, by: owner, through: :id)
         )
       end
     end
 
     counts
+  end
+
+  # Rows of `relation` whose `column` no row of `by` points at via `through`.
+  #
+  # Written as a correlated NOT EXISTS rather than `where.not(column: by.select(...))`.
+  # Postgres only hashes a NOT IN list while it fits in work_mem; past that it
+  # rescans the materialised list once per candidate row, and the
+  # timeline_events sweep against 450k news_events ids ran for over an hour
+  # per 25k-row batch in production. An anti-join against the owner's index
+  # stays fast however large either side grows, and NULLs on the owner side
+  # cannot poison it the way they do NOT IN.
+  def unreferenced(relation, column, by:, through:)
+    table = relation.klass.quoted_table_name
+    owner_table = by.quoted_table_name
+    owner_rows = by.unscoped.where("#{owner_table}.#{by.connection.quote_column_name(through)} = #{table}.#{relation.klass.connection.quote_column_name(column)}")
+    relation.where.not(owner_rows.arel.exists)
   end
 
   # Chunked so no single statement holds a long lock, and capped so one table

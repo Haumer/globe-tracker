@@ -199,3 +199,33 @@ class PurgeStaleDataJobTest < ActiveSupport::TestCase
     )
   end
 end
+
+class PurgeStaleDataJobUnreferencedTest < ActiveSupport::TestCase
+  # Postgres only hashes a NOT IN list while it fits in work_mem; the orphan
+  # sweep against hundreds of thousands of owner ids ran for an hour per
+  # batch in production. The predicate has to stay an anti-join.
+  test "orphan predicates are correlated NOT EXISTS, not NOT IN" do
+    job = PurgeStaleDataJob.new
+    sql = job.send(:unreferenced, TimelineEvent.where(eventable_type: "NewsEvent"), :eventable_id, by: NewsEvent, through: :id).to_sql
+
+    assert_match(/NOT \(EXISTS \(SELECT .*"news_events"\."id" = "timeline_events"\."eventable_id"/m, sql)
+    assert_no_match(/NOT IN/, sql)
+  end
+
+  test "an owner row with a NULL reference does not shield unrelated rows" do
+    source = NewsSource.create!(canonical_key: "purge-src-null", name: "Reuters", source_kind: "publisher")
+    orphan_ingest = NewsIngest.create!(
+      source_feed: "purge-feed-null", source_endpoint_url: "https://example.com/feed-null",
+      fetched_at: 1.day.ago, payload_format: "rss", content_hash: "purge-hash-null"
+    )
+    NewsArticle.create!(
+      news_source: source, news_ingest: nil,
+      url: "https://example.com/null-ingest", canonical_url: "https://example.com/null-ingest",
+      normalization_status: "normalized", content_scope: "core", published_at: 1.hour.ago
+    )
+
+    remaining = PurgeStaleDataJob.new.send(:unreferenced, NewsIngest.where(id: orphan_ingest.id), :id, by: NewsArticle, through: :news_ingest_id)
+
+    assert_equal [orphan_ingest.id], remaining.pluck(:id)
+  end
+end

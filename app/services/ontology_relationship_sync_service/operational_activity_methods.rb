@@ -149,11 +149,12 @@ class OntologyRelationshipSyncService
         closest_cable = cable_index.nearest(ship.latitude, ship.longitude, within_km: SHIP_CABLE_DISTANCE_KM)
         next if closest_cable.nil?
 
+        # Entities are synced only for the few winners below: cables run
+        # through the same anchorages ships sit in, so this list can hold
+        # thousands of ships and each sync is several round trips.
         {
           record: ship,
-          entity: OperationalOntologySyncService.sync_ship(ship),
           cable: closest_cable.cable,
-          cable_entity: sync_submarine_cable_entity(closest_cable.cable),
           distance_km: closest_cable.distance_km,
           freshness_tier: freshness_tier,
           confidence: submarine_cable_ship_activity_confidence(
@@ -171,8 +172,8 @@ class OntologyRelationshipSyncService
           ship = candidate.fetch(:record)
           cable = candidate.fetch(:cable)
           relationship = OntologySyncSupport.upsert_relationship(
-            source_node: candidate.fetch(:entity),
-            target_node: candidate.fetch(:cable_entity),
+            source_node: OperationalOntologySyncService.sync_ship(ship),
+            target_node: sync_submarine_cable_entity(cable),
             relation_type: "operational_activity",
             confidence: candidate.fetch(:confidence),
             fresh_until: operational_relationship_fresh_until(

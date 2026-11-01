@@ -129,7 +129,15 @@ class OntologyRelationshipSyncService
       recent_ships = Ship.where("updated_at >= ? AND COALESCE(speed, 0) >= 0 AND COALESCE(speed, 0) <= ?", now - RECENT_SHIP_WINDOW, 2.0)
         .where.not(latitude: nil, longitude: nil)
 
-      candidates = recent_ships.filter_map do |ship|
+      # Built once per run. Tens of thousands of anchored ships pass through
+      # this loop; scanning every cable vertex for each of them is what made
+      # this job run for hours and starve the live queues.
+      cable_index = SubmarineCableProximityIndex.build(SubmarineCable.find_each) do |cable|
+        cable_coordinate_points(cable)
+      end
+      return 0 if cable_index.size.zero?
+
+      candidates = recent_ships.find_each.filter_map do |ship|
         freshness_tier = operational_freshness_tier(
           ship.updated_at,
           now: now,
@@ -138,25 +146,19 @@ class OntologyRelationshipSyncService
         )
         next if freshness_tier.blank?
 
-        closest_cable = SubmarineCable.find_each.filter_map do |cable|
-          distance = submarine_cable_distance_km(cable, ship.latitude, ship.longitude)
-          next if distance.blank?
-
-          { cable: cable, distance_km: distance }
-        end.min_by { |payload| payload.fetch(:distance_km) }
-        next if closest_cable.blank?
-        next if closest_cable.fetch(:distance_km) > SHIP_CABLE_DISTANCE_KM
+        closest_cable = cable_index.nearest(ship.latitude, ship.longitude, within_km: SHIP_CABLE_DISTANCE_KM)
+        next if closest_cable.nil?
 
         {
           record: ship,
           entity: OperationalOntologySyncService.sync_ship(ship),
-          cable: closest_cable.fetch(:cable),
-          cable_entity: sync_submarine_cable_entity(closest_cable.fetch(:cable)),
-          distance_km: closest_cable.fetch(:distance_km),
+          cable: closest_cable.cable,
+          cable_entity: sync_submarine_cable_entity(closest_cable.cable),
+          distance_km: closest_cable.distance_km,
           freshness_tier: freshness_tier,
           confidence: submarine_cable_ship_activity_confidence(
             ship,
-            closest_cable.fetch(:distance_km),
+            closest_cable.distance_km,
             freshness_tier: freshness_tier
           ),
         }
